@@ -33,3 +33,7 @@ coverage.out
 # Rust
 target/
 Cargo.lock
+
+# CI artifacts
+.ci/artifacts/*
+!.ci/artifacts/.gitkeep
