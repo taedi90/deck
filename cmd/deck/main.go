@@ -162,7 +162,10 @@ func runServer(args []string) error {
 		}
 	}
 
-	h := server.NewHandler(*root)
+	h, err := server.NewHandler(*root)
+	if err != nil {
+		return err
+	}
 	if certPath != "" {
 		fmt.Fprintf(os.Stdout, "server start: listening on https://%s (root=%s)\n", *addr, *root)
 		return http.ListenAndServeTLS(*addr, certPath, keyPath, h)

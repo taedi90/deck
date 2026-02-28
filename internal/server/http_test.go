@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -24,7 +25,10 @@ func TestNewHandler(t *testing.T) {
 		t.Fatalf("write packages entry: %v", err)
 	}
 
-	h := NewHandler(root)
+	h, err := NewHandler(root)
+	if err != nil {
+		t.Fatalf("NewHandler: %v", err)
+	}
 
 	t.Run("serves files", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/files/a.txt", nil)
@@ -86,6 +90,34 @@ func TestNewHandler(t *testing.T) {
 		}
 		if !strings.Contains(rr.Body.String(), `"status":"ok"`) {
 			t.Fatalf("unexpected lease response: %q", rr.Body.String())
+		}
+	})
+
+	t.Run("writes audit logs", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", rr.Code)
+		}
+
+		auditPath := filepath.Join(root, ".deck", "logs", "server-audit.log")
+		raw, err := os.ReadFile(auditPath)
+		if err != nil {
+			t.Fatalf("read audit log: %v", err)
+		}
+		lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
+		if len(lines) == 0 {
+			t.Fatalf("expected at least one audit log line")
+		}
+		var entry map[string]any
+		if err := json.Unmarshal([]byte(lines[len(lines)-1]), &entry); err != nil {
+			t.Fatalf("parse audit log json: %v", err)
+		}
+		for _, k := range []string{"timestamp", "method", "path", "status", "duration_ms"} {
+			if _, ok := entry[k]; !ok {
+				t.Fatalf("missing audit field %s in %+v", k, entry)
+			}
 		}
 	})
 }
