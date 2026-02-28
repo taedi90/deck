@@ -26,10 +26,33 @@
         "source": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["url"],
+          "anyOf": [
+            { "required": ["url"] },
+            { "required": ["path"] }
+          ],
           "properties": {
             "url": { "type": "string", "format": "uri" },
+            "path": { "type": "string", "minLength": 1 },
             "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" }
+          }
+        },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "strategy": { "type": "string", "enum": ["fallback"] },
+            "sources": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["type", "path"],
+                "properties": {
+                  "type": { "type": "string", "enum": ["local", "bundle"] },
+                  "path": { "type": "string", "minLength": 1 }
+                }
+              }
+            }
           }
         },
         "output": {

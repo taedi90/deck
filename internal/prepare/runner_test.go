@@ -2,6 +2,8 @@ package prepare
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -278,6 +280,92 @@ func TestRun_DownloadPackagesContainerNoArtifacts(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "E_PREPARE_NO_ARTIFACTS") {
 		t.Fatalf("expected no-artifacts error code, got: %v", err)
+	}
+}
+
+func TestRun_DownloadFileFallbackLocalThenBundle(t *testing.T) {
+	bundleOut := t.TempDir()
+	localCache := t.TempDir()
+	bundleCache := t.TempDir()
+
+	relSource := filepath.ToSlash(filepath.Join("files", "artifact.bin"))
+	bundleOnlyPath := filepath.Join(bundleCache, filepath.FromSlash(relSource))
+	if err := os.MkdirAll(filepath.Dir(bundleOnlyPath), 0o755); err != nil {
+		t.Fatalf("mkdir bundle cache path: %v", err)
+	}
+	if err := os.WriteFile(bundleOnlyPath, []byte("from-bundle-source"), 0o644); err != nil {
+		t.Fatalf("write bundle cache source: %v", err)
+	}
+	sum := sha256.Sum256([]byte("from-bundle-source"))
+
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "prepare",
+			Steps: []config.Step{{
+				ID:   "download-file",
+				Kind: "DownloadFile",
+				Spec: map[string]any{
+					"source": map[string]any{
+						"path":   relSource,
+						"sha256": hex.EncodeToString(sum[:]),
+					},
+					"fetch": map[string]any{
+						"strategy": "fallback",
+						"sources": []any{
+							map[string]any{"type": "local", "path": localCache},
+							map[string]any{"type": "bundle", "path": bundleCache},
+						},
+					},
+					"output": map[string]any{"path": "files/fetched.bin"},
+				},
+			}},
+		}},
+	}
+
+	if err := Run(wf, RunOptions{BundleRoot: bundleOut}); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	raw, err := os.ReadFile(filepath.Join(bundleOut, "files", "fetched.bin"))
+	if err != nil {
+		t.Fatalf("read fetched output: %v", err)
+	}
+	if string(raw) != "from-bundle-source" {
+		t.Fatalf("unexpected fetched content: %q", string(raw))
+	}
+}
+
+func TestRun_DownloadFileFallbackSourceMissing(t *testing.T) {
+	bundleOut := t.TempDir()
+
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "prepare",
+			Steps: []config.Step{{
+				ID:   "download-file",
+				Kind: "DownloadFile",
+				Spec: map[string]any{
+					"source": map[string]any{
+						"path": "files/missing.bin",
+					},
+					"fetch": map[string]any{
+						"strategy": "fallback",
+						"sources":  []any{map[string]any{"type": "local", "path": t.TempDir()}},
+					},
+					"output": map[string]any{"path": "files/out.bin"},
+				},
+			}},
+		}},
+	}
+
+	err := Run(wf, RunOptions{BundleRoot: bundleOut})
+	if err == nil {
+		t.Fatalf("expected source not found error")
+	}
+	if !strings.Contains(err.Error(), "E_PREPARE_SOURCE_NOT_FOUND") {
+		t.Fatalf("expected E_PREPARE_SOURCE_NOT_FOUND, got %v", err)
 	}
 }
 

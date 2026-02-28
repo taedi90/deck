@@ -59,6 +59,8 @@ const (
 	errCodePrepareRuntimeUnsupported = "E_PREPARE_RUNTIME_UNSUPPORTED"
 	errCodePrepareArtifactsEmpty     = "E_PREPARE_NO_ARTIFACTS"
 	errCodePrepareSkopeoMissing      = "E_PREPARE_SKOPEO_NOT_FOUND"
+	errCodePrepareSourceNotFound     = "E_PREPARE_SOURCE_NOT_FOUND"
+	errCodePrepareChecksumMismatch   = "E_PREPARE_CHECKSUM_MISMATCH"
 )
 
 func Run(wf *config.Workflow, opts RunOptions) error {
@@ -154,18 +156,14 @@ func runDownloadFile(bundleRoot string, spec map[string]any) (string, error) {
 	source := mapValue(spec, "source")
 	output := mapValue(spec, "output")
 	url := stringValue(source, "url")
+	sourcePath := stringValue(source, "path")
+	expectedSHA := strings.ToLower(stringValue(source, "sha256"))
 	outPath := stringValue(output, "path")
-	if strings.TrimSpace(url) == "" || strings.TrimSpace(outPath) == "" {
-		return "", fmt.Errorf("DownloadFile requires source.url and output.path")
+	if strings.TrimSpace(outPath) == "" {
+		return "", fmt.Errorf("DownloadFile requires output.path")
 	}
-
-	resp, err := http.Get(url) //nolint:gosec
-	if err != nil {
-		return "", fmt.Errorf("download %s: %w", url, err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("download %s: unexpected status %d", url, resp.StatusCode)
+	if strings.TrimSpace(sourcePath) == "" && strings.TrimSpace(url) == "" {
+		return "", fmt.Errorf("DownloadFile requires source.path or source.url")
 	}
 
 	target := filepath.Join(bundleRoot, outPath)
@@ -179,8 +177,41 @@ func runDownloadFile(bundleRoot string, spec map[string]any) (string, error) {
 	}
 	defer f.Close()
 
-	if _, err := io.Copy(f, resp.Body); err != nil {
-		return "", fmt.Errorf("write output file: %w", err)
+	if sourcePath != "" {
+		resolvedPath, err := resolveLocalSourcePath(spec, sourcePath)
+		if err == nil {
+			src, err := os.Open(resolvedPath)
+			if err != nil {
+				return "", fmt.Errorf("open source file %s: %w", resolvedPath, err)
+			}
+			defer src.Close()
+			if _, err := io.Copy(f, src); err != nil {
+				return "", fmt.Errorf("write output file: %w", err)
+			}
+		} else {
+			if url == "" {
+				return "", err
+			}
+			if _, err := f.Seek(0, 0); err != nil {
+				return "", fmt.Errorf("reset output file cursor: %w", err)
+			}
+			if err := f.Truncate(0); err != nil {
+				return "", fmt.Errorf("truncate output file: %w", err)
+			}
+			if err := downloadURLToFile(f, url); err != nil {
+				return "", err
+			}
+		}
+	} else {
+		if err := downloadURLToFile(f, url); err != nil {
+			return "", err
+		}
+	}
+
+	if expectedSHA != "" {
+		if err := verifyFileSHA256(target, expectedSHA); err != nil {
+			return "", err
+		}
 	}
 
 	if modeRaw := stringValue(output, "chmod"); modeRaw != "" {
@@ -194,6 +225,73 @@ func runDownloadFile(bundleRoot string, spec map[string]any) (string, error) {
 	}
 
 	return outPath, nil
+}
+
+func downloadURLToFile(target *os.File, url string) error {
+	resp, err := http.Get(url) //nolint:gosec
+	if err != nil {
+		return fmt.Errorf("download %s: %w", url, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("download %s: unexpected status %d", url, resp.StatusCode)
+	}
+	if _, err := io.Copy(target, resp.Body); err != nil {
+		return fmt.Errorf("write output file: %w", err)
+	}
+	return nil
+}
+
+func resolveLocalSourcePath(spec map[string]any, sourcePath string) (string, error) {
+	fetch := mapValue(spec, "fetch")
+	sourcesRaw, ok := fetch["sources"].([]any)
+	if ok && len(sourcesRaw) > 0 {
+		for _, raw := range sourcesRaw {
+			s, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			typeName := stringValue(s, "type")
+			if typeName != "local" && typeName != "bundle" {
+				continue
+			}
+			base := stringValue(s, "path")
+			if base == "" {
+				continue
+			}
+			candidate := filepath.Join(base, filepath.FromSlash(sourcePath))
+			if fileExists(candidate) {
+				return candidate, nil
+			}
+		}
+		return "", fmt.Errorf("%s: source.path %s not found in configured fetch sources", errCodePrepareSourceNotFound, sourcePath)
+	}
+
+	if fileExists(sourcePath) {
+		return sourcePath, nil
+	}
+	return "", fmt.Errorf("%s: source.path %s not found", errCodePrepareSourceNotFound, sourcePath)
+}
+
+func verifyFileSHA256(path, expected string) error {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read downloaded file for checksum: %w", err)
+	}
+	sum := sha256.Sum256(raw)
+	actual := hex.EncodeToString(sum[:])
+	if !strings.EqualFold(actual, expected) {
+		return fmt.Errorf("%s: expected %s got %s", errCodePrepareChecksumMismatch, expected, actual)
+	}
+	return nil
+}
+
+func fileExists(path string) bool {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return !fi.IsDir()
 }
 
 func runDownloadPackages(runner CommandRunner, bundleRoot string, spec map[string]any, defaultDir string) ([]string, error) {
