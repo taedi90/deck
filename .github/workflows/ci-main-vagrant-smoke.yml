@@ -10,6 +10,8 @@ jobs:
   vagrant-smoke:
     runs-on: [self-hosted, linux, x64, vagrant]
     timeout-minutes: 90
+    env:
+      DECK_VAGRANT_PROVIDER: ${{ vars.DECK_VAGRANT_PROVIDER }}
 
     steps:
       - name: Checkout
