@@ -54,6 +54,12 @@ type alphaJobQueue struct {
 	jobs []alphaJob
 }
 
+type alphaReportStore struct {
+	mu      sync.Mutex
+	max     int
+	reports []map[string]any
+}
+
 func (q *alphaJobQueue) enqueue(job alphaJob) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -71,6 +77,29 @@ func (q *alphaJobQueue) dequeue() (alphaJob, bool) {
 	return job, true
 }
 
+func (s *alphaReportStore) add(report map[string]any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.reports = append(s.reports, report)
+	if len(s.reports) > s.max {
+		s.reports = s.reports[len(s.reports)-s.max:]
+	}
+}
+
+func (s *alphaReportStore) list() []map[string]any {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]map[string]any, 0, len(s.reports))
+	for _, r := range s.reports {
+		c := map[string]any{}
+		for k, v := range r {
+			c[k] = v
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
 func (r *statusRecorder) WriteHeader(code int) {
 	r.status = code
 	r.ResponseWriter.WriteHeader(code)
@@ -84,6 +113,7 @@ func NewHandler(root string) (http.Handler, error) {
 
 	mux := http.NewServeMux()
 	queue := &alphaJobQueue{jobs: []alphaJob{}}
+	reports := &alphaReportStore{max: 200, reports: []map[string]any{}}
 
 	filesDir := filepath.Join(root, "files")
 	packagesDir := filepath.Join(root, "packages")
@@ -150,12 +180,40 @@ func NewHandler(root string) (http.Handler, error) {
 	})
 
 	mux.HandleFunc("/api/agent/report", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
+		switch r.Method {
+		case http.MethodPost:
+			defer r.Body.Close()
+			var report map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&report); err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(map[string]string{"status": "bad_request"})
+				return
+			}
+			report["received_at"] = time.Now().UTC().Format(time.RFC3339)
+			reports.add(report)
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]string{"status": "accepted"})
+		case http.MethodGet:
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"status":  "ok",
+				"reports": reports.list(),
+			})
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/agent/reports", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]string{"status": "accepted"})
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status":  "ok",
+			"reports": reports.list(),
+		})
 	})
 
 	mux.Handle("/files/", http.StripPrefix("/files/", http.FileServer(http.Dir(filesDir))))

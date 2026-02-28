@@ -143,6 +143,25 @@ func TestNewHandler(t *testing.T) {
 		}
 	})
 
+	t.Run("lists recent agent reports", func(t *testing.T) {
+		postReq := httptest.NewRequest(http.MethodPost, "/api/agent/report", strings.NewReader(`{"job_id":"j-2","job_type":"echo","status":"success","detail":"hello"}`))
+		postRR := httptest.NewRecorder()
+		h.ServeHTTP(postRR, postReq)
+		if postRR.Code != http.StatusOK {
+			t.Fatalf("expected report post 200, got %d", postRR.Code)
+		}
+
+		getReq := httptest.NewRequest(http.MethodGet, "/api/agent/reports", nil)
+		getRR := httptest.NewRecorder()
+		h.ServeHTTP(getRR, getReq)
+		if getRR.Code != http.StatusOK {
+			t.Fatalf("expected reports get 200, got %d", getRR.Code)
+		}
+		if !strings.Contains(getRR.Body.String(), `"status":"ok"`) || !strings.Contains(getRR.Body.String(), `"job_id":"j-2"`) {
+			t.Fatalf("unexpected reports response: %q", getRR.Body.String())
+		}
+	})
+
 	t.Run("writes audit logs", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
 		rr := httptest.NewRecorder()
