@@ -247,6 +247,14 @@ func TestRunServerTLSFlagValidation(t *testing.T) {
 	if !strings.Contains(err.Error(), "--tls-self-signed cannot be combined") {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
+	err = run([]string{"server", "start", "--report-max", "0"})
+	if err == nil {
+		t.Fatalf("expected report-max validation error")
+	}
+	if !strings.Contains(err.Error(), "--report-max must be > 0") {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestRunAgent(t *testing.T) {

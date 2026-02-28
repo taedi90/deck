@@ -25,7 +25,7 @@ func TestNewHandler(t *testing.T) {
 		t.Fatalf("write packages entry: %v", err)
 	}
 
-	h, err := NewHandler(root)
+	h, err := NewHandler(root, HandlerOptions{})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestNewHandler(t *testing.T) {
 			t.Fatalf("expected report 200, got %d", repRR.Code)
 		}
 
-		h2, err := NewHandler(root)
+		h2, err := NewHandler(root, HandlerOptions{})
 		if err != nil {
 			t.Fatalf("NewHandler restart: %v", err)
 		}
@@ -257,6 +257,59 @@ func TestNewHandler(t *testing.T) {
 		}
 		if !strings.Contains(getRR.Body.String(), `"status":"invalid_limit"`) {
 			t.Fatalf("unexpected invalid limit response: %q", getRR.Body.String())
+		}
+	})
+
+	t.Run("filters reports by job_type and status", func(t *testing.T) {
+		req1 := httptest.NewRequest(http.MethodPost, "/api/agent/report", strings.NewReader(`{"job_id":"j-t1","job_type":"echo","status":"success"}`))
+		rr1 := httptest.NewRecorder()
+		h.ServeHTTP(rr1, req1)
+
+		req2 := httptest.NewRequest(http.MethodPost, "/api/agent/report", strings.NewReader(`{"job_id":"j-t2","job_type":"noop","status":"failed"}`))
+		rr2 := httptest.NewRecorder()
+		h.ServeHTTP(rr2, req2)
+
+		getReq := httptest.NewRequest(http.MethodGet, "/api/agent/reports?job_type=echo&status=success", nil)
+		getRR := httptest.NewRecorder()
+		h.ServeHTTP(getRR, getReq)
+		if getRR.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", getRR.Code)
+		}
+		if !strings.Contains(getRR.Body.String(), `"job_id":"j-t1"`) || strings.Contains(getRR.Body.String(), `"job_id":"j-t2"`) {
+			t.Fatalf("unexpected filtered response: %q", getRR.Body.String())
+		}
+	})
+
+	t.Run("applies report max retention option", func(t *testing.T) {
+		root2 := t.TempDir()
+		h2, err := NewHandler(root2, HandlerOptions{ReportMax: 2})
+		if err != nil {
+			t.Fatalf("NewHandler: %v", err)
+		}
+		for i := 0; i < 3; i++ {
+			req := httptest.NewRequest(http.MethodPost, "/api/agent/report", strings.NewReader(`{"job_id":"j-ret","job_type":"echo","status":"success"}`))
+			rr := httptest.NewRecorder()
+			h2.ServeHTTP(rr, req)
+			if rr.Code != http.StatusOK {
+				t.Fatalf("expected report post 200, got %d", rr.Code)
+			}
+		}
+
+		getReq := httptest.NewRequest(http.MethodGet, "/api/agent/reports", nil)
+		getRR := httptest.NewRecorder()
+		h2.ServeHTTP(getRR, getReq)
+		if getRR.Code != http.StatusOK {
+			t.Fatalf("expected reports 200, got %d", getRR.Code)
+		}
+		var payload struct {
+			Status  string           `json:"status"`
+			Reports []map[string]any `json:"reports"`
+		}
+		if err := json.Unmarshal(getRR.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("parse reports payload: %v", err)
+		}
+		if len(payload.Reports) != 2 {
+			t.Fatalf("expected 2 retained reports, got %d", len(payload.Reports))
 		}
 	})
 

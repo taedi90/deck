@@ -131,13 +131,14 @@ func runApply(args []string) error {
 
 func runServer(args []string) error {
 	if len(args) == 0 || args[0] != "start" {
-		return errors.New("usage: deck server start --root <dir> --addr <host:port> [--tls-cert <crt> --tls-key <key> | --tls-self-signed]")
+		return errors.New("usage: deck server start --root <dir> --addr <host:port> [--report-max <n>] [--tls-cert <crt> --tls-key <key> | --tls-self-signed]")
 	}
 
 	fs := flag.NewFlagSet("server start", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	root := fs.String("root", "./bundle", "server content root")
 	addr := fs.String("addr", ":8080", "server listen address")
+	reportMax := fs.Int("report-max", 200, "max retained in-memory reports")
 	tlsCert := fs.String("tls-cert", "", "TLS certificate path")
 	tlsKey := fs.String("tls-key", "", "TLS private key path")
 	tlsSelfSigned := fs.Bool("tls-self-signed", false, "auto-generate and use self-signed TLS cert")
@@ -151,6 +152,9 @@ func runServer(args []string) error {
 	if *tlsSelfSigned && (*tlsCert != "" || *tlsKey != "") {
 		return errors.New("--tls-self-signed cannot be combined with --tls-cert/--tls-key")
 	}
+	if *reportMax <= 0 {
+		return errors.New("--report-max must be > 0")
+	}
 
 	certPath := *tlsCert
 	keyPath := *tlsKey
@@ -162,7 +166,7 @@ func runServer(args []string) error {
 		}
 	}
 
-	h, err := server.NewHandler(*root)
+	h, err := server.NewHandler(*root, server.HandlerOptions{ReportMax: *reportMax})
 	if err != nil {
 		return err
 	}

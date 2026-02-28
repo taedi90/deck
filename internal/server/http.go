@@ -66,6 +66,10 @@ type alphaServerState struct {
 	Reports []map[string]any `json:"reports"`
 }
 
+type HandlerOptions struct {
+	ReportMax int
+}
+
 func (q *alphaJobQueue) enqueue(job alphaJob) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -141,17 +145,31 @@ func (s *alphaReportStore) setReports(reports []map[string]any) {
 	}
 }
 
-func (s *alphaReportStore) listFiltered(limit int, jobID string) []map[string]any {
+func (s *alphaReportStore) listFiltered(limit int, jobID, jobType, status string) []map[string]any {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	jobID = strings.TrimSpace(jobID)
+	jobType = strings.TrimSpace(jobType)
+	status = strings.TrimSpace(status)
 	out := make([]map[string]any, 0)
 	for i := len(s.reports) - 1; i >= 0; i-- {
 		r := s.reports[i]
 		if jobID != "" {
 			rid, ok := r["job_id"].(string)
 			if !ok || strings.TrimSpace(rid) != jobID {
+				continue
+			}
+		}
+		if jobType != "" {
+			rtype, ok := r["job_type"].(string)
+			if !ok || strings.TrimSpace(rtype) != jobType {
+				continue
+			}
+		}
+		if status != "" {
+			rstatus, ok := r["status"].(string)
+			if !ok || strings.TrimSpace(rstatus) != status {
 				continue
 			}
 		}
@@ -173,15 +191,19 @@ func (r *statusRecorder) WriteHeader(code int) {
 	r.ResponseWriter.WriteHeader(code)
 }
 
-func NewHandler(root string) (http.Handler, error) {
+func NewHandler(root string, opts HandlerOptions) (http.Handler, error) {
 	logger, err := newAuditLogger(root)
 	if err != nil {
 		return nil, err
 	}
+	reportMax := opts.ReportMax
+	if reportMax <= 0 {
+		reportMax = 200
+	}
 
 	mux := http.NewServeMux()
 	queue := &alphaJobQueue{jobs: []alphaJob{}}
-	reports := &alphaReportStore{max: 200, reports: []map[string]any{}}
+	reports := &alphaReportStore{max: reportMax, reports: []map[string]any{}}
 
 	state, err := loadAlphaServerState(root)
 	if err != nil {
@@ -308,6 +330,8 @@ func NewHandler(root string) (http.Handler, error) {
 		}
 
 		jobID := strings.TrimSpace(r.URL.Query().Get("job_id"))
+		jobType := strings.TrimSpace(r.URL.Query().Get("job_type"))
+		status := strings.TrimSpace(r.URL.Query().Get("status"))
 		limit := 0
 		if rawLimit := strings.TrimSpace(r.URL.Query().Get("limit")); rawLimit != "" {
 			parsed, err := strconv.Atoi(rawLimit)
@@ -322,7 +346,7 @@ func NewHandler(root string) (http.Handler, error) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"status":  "ok",
-			"reports": reports.listFiltered(limit, jobID),
+			"reports": reports.listFiltered(limit, jobID, jobType, status),
 		})
 	})
 
