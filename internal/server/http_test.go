@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNewHandler(t *testing.T) {
@@ -160,6 +161,15 @@ func TestNewHandler(t *testing.T) {
 		}
 	})
 
+	t.Run("rejects invalid retry_delay_sec", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/agent/job", strings.NewReader(`{"id":"j-bad-delay","type":"noop","retry_delay_sec":-1}`))
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d", rr.Code)
+		}
+	})
+
 	t.Run("requeues failed job when attempts remain", func(t *testing.T) {
 		rootRetry := t.TempDir()
 		hRetry, err := NewHandler(rootRetry, HandlerOptions{})
@@ -238,6 +248,70 @@ func TestNewHandler(t *testing.T) {
 		}
 		if strings.Contains(jobsRR.Body.String(), `"id":"j-final"`) {
 			t.Fatalf("expected exhausted job not requeued: %q", jobsRR.Body.String())
+		}
+	})
+
+	t.Run("delays retry lease until next eligible time", func(t *testing.T) {
+		rootDelay := t.TempDir()
+		hDelay, err := NewHandler(rootDelay, HandlerOptions{})
+		if err != nil {
+			t.Fatalf("NewHandler: %v", err)
+		}
+
+		enqReq := httptest.NewRequest(http.MethodPost, "/api/agent/job", strings.NewReader(`{"id":"j-delay","type":"noop","max_attempts":2,"retry_delay_sec":1}`))
+		enqRR := httptest.NewRecorder()
+		hDelay.ServeHTTP(enqRR, enqReq)
+		if enqRR.Code != http.StatusOK {
+			t.Fatalf("expected enqueue 200, got %d", enqRR.Code)
+		}
+
+		leaseReq1 := httptest.NewRequest(http.MethodPost, "/api/agent/lease", strings.NewReader(`{"agent":"x"}`))
+		leaseRR1 := httptest.NewRecorder()
+		hDelay.ServeHTTP(leaseRR1, leaseReq1)
+		if leaseRR1.Code != http.StatusOK {
+			t.Fatalf("expected first lease 200, got %d", leaseRR1.Code)
+		}
+		if !strings.Contains(leaseRR1.Body.String(), `"id":"j-delay"`) {
+			t.Fatalf("expected first lease job payload: %q", leaseRR1.Body.String())
+		}
+
+		repReq := httptest.NewRequest(http.MethodPost, "/api/agent/report", strings.NewReader(`{"job_id":"j-delay","status":"failed"}`))
+		repRR := httptest.NewRecorder()
+		hDelay.ServeHTTP(repRR, repReq)
+		if repRR.Code != http.StatusOK {
+			t.Fatalf("expected failed report 200, got %d", repRR.Code)
+		}
+
+		jobsReq := httptest.NewRequest(http.MethodGet, "/api/agent/jobs", nil)
+		jobsRR := httptest.NewRecorder()
+		hDelay.ServeHTTP(jobsRR, jobsReq)
+		if jobsRR.Code != http.StatusOK {
+			t.Fatalf("expected jobs 200, got %d", jobsRR.Code)
+		}
+		if !strings.Contains(jobsRR.Body.String(), `"id":"j-delay"`) || !strings.Contains(jobsRR.Body.String(), `"next_eligible_at"`) {
+			t.Fatalf("expected queued delayed job with scheduling metadata: %q", jobsRR.Body.String())
+		}
+
+		leaseReq2 := httptest.NewRequest(http.MethodPost, "/api/agent/lease", strings.NewReader(`{"agent":"x"}`))
+		leaseRR2 := httptest.NewRecorder()
+		hDelay.ServeHTTP(leaseRR2, leaseReq2)
+		if leaseRR2.Code != http.StatusOK {
+			t.Fatalf("expected immediate second lease 200, got %d", leaseRR2.Code)
+		}
+		if !strings.Contains(leaseRR2.Body.String(), `"job":null`) {
+			t.Fatalf("expected no lease before retry delay elapses: %q", leaseRR2.Body.String())
+		}
+
+		time.Sleep(1100 * time.Millisecond)
+
+		leaseReq3 := httptest.NewRequest(http.MethodPost, "/api/agent/lease", strings.NewReader(`{"agent":"x"}`))
+		leaseRR3 := httptest.NewRecorder()
+		hDelay.ServeHTTP(leaseRR3, leaseReq3)
+		if leaseRR3.Code != http.StatusOK {
+			t.Fatalf("expected delayed third lease 200, got %d", leaseRR3.Code)
+		}
+		if !strings.Contains(leaseRR3.Body.String(), `"id":"j-delay"`) || !strings.Contains(leaseRR3.Body.String(), `"attempt":2`) {
+			t.Fatalf("expected lease after delay with second attempt: %q", leaseRR3.Body.String())
 		}
 	})
 

@@ -64,11 +64,13 @@ type statusRecorder struct {
 }
 
 type alphaJob struct {
-	ID          string `json:"id"`
-	Type        string `json:"type"`
-	Message     string `json:"message,omitempty"`
-	Attempt     int    `json:"attempt,omitempty"`
-	MaxAttempts int    `json:"max_attempts,omitempty"`
+	ID             string `json:"id"`
+	Type           string `json:"type"`
+	Message        string `json:"message,omitempty"`
+	Attempt        int    `json:"attempt,omitempty"`
+	MaxAttempts    int    `json:"max_attempts,omitempty"`
+	RetryDelaySec  int    `json:"retry_delay_sec,omitempty"`
+	NextEligibleAt string `json:"next_eligible_at,omitempty"`
 }
 
 type alphaJobQueue struct {
@@ -102,15 +104,29 @@ func (q *alphaJobQueue) enqueue(job alphaJob) {
 	q.jobs = append(q.jobs, job)
 }
 
-func (q *alphaJobQueue) dequeue() (alphaJob, bool) {
+func (q *alphaJobQueue) dequeueEligible(now time.Time) (alphaJob, bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	if len(q.jobs) == 0 {
-		return alphaJob{}, false
+	for i := 0; i < len(q.jobs); i++ {
+		job := q.jobs[i]
+		if !isJobEligible(job, now) {
+			continue
+		}
+		q.jobs = append(q.jobs[:i], q.jobs[i+1:]...)
+		return job, true
 	}
-	job := q.jobs[0]
-	q.jobs = q.jobs[1:]
-	return job, true
+	return alphaJob{}, false
+}
+
+func isJobEligible(job alphaJob, now time.Time) bool {
+	if strings.TrimSpace(job.NextEligibleAt) == "" {
+		return true
+	}
+	readyAt, err := time.Parse(time.RFC3339, job.NextEligibleAt)
+	if err != nil {
+		return true
+	}
+	return !now.Before(readyAt)
 }
 
 func (f *alphaInFlightJobs) set(job alphaJob) {
@@ -288,13 +304,14 @@ func NewHandler(root string, opts HandlerOptions) (http.Handler, error) {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
-		job, ok := queue.dequeue()
+		job, ok := queue.dequeueEligible(time.Now().UTC())
 		var jobPayload any
 		if ok {
 			job.Attempt++
 			if job.MaxAttempts <= 0 {
 				job.MaxAttempts = 1
 			}
+			job.NextEligibleAt = ""
 			inFlight.set(job)
 			writeAlphaLifecycleAudit(logger, auditEventJobLeased, job, "leased")
 			jobPayload = job
@@ -336,10 +353,16 @@ func NewHandler(root string, opts HandlerOptions) (http.Handler, error) {
 			_ = json.NewEncoder(w).Encode(map[string]string{"status": "invalid_job"})
 			return
 		}
+		if job.RetryDelaySec < 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{"status": "invalid_job"})
+			return
+		}
 		if job.MaxAttempts == 0 {
 			job.MaxAttempts = 1
 		}
 		job.Attempt = 0
+		job.NextEligibleAt = ""
 
 		queue.enqueue(job)
 		writeAlphaLifecycleAudit(logger, auditEventJobEnqueued, job, "accepted")
@@ -381,6 +404,12 @@ func NewHandler(root string, opts HandlerOptions) (http.Handler, error) {
 			status, _ := report["status"].(string)
 			if leasedJob, ok := inFlight.pop(strings.TrimSpace(jobID)); ok {
 				if strings.EqualFold(strings.TrimSpace(status), "failed") && leasedJob.Attempt < leasedJob.MaxAttempts {
+					if leasedJob.RetryDelaySec > 0 {
+						next := time.Now().UTC().Add(time.Duration(leasedJob.RetryDelaySec) * time.Second)
+						leasedJob.NextEligibleAt = next.Format(time.RFC3339)
+					} else {
+						leasedJob.NextEligibleAt = ""
+					}
 					queue.enqueue(leasedJob)
 					writeAlphaLifecycleAudit(logger, auditEventJobRequeued, leasedJob, "retry")
 				} else if strings.EqualFold(strings.TrimSpace(status), "failed") {
