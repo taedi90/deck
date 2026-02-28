@@ -496,9 +496,184 @@ func TestRun_DownloadFileOfflinePolicyBlocksDirectURL(t *testing.T) {
 	}
 }
 
+func TestRun_WhenAndRegisterSemantics(t *testing.T) {
+	bundle := t.TempDir()
+	localCache := t.TempDir()
+
+	sourceRel := filepath.ToSlash(filepath.Join("files", "a.bin"))
+	sourceAbs := filepath.Join(localCache, filepath.FromSlash(sourceRel))
+	if err := os.MkdirAll(filepath.Dir(sourceAbs), 0o755); err != nil {
+		t.Fatalf("mkdir source dir: %v", err)
+	}
+	if err := os.WriteFile(sourceAbs, []byte("hello"), 0o644); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+
+	wf := &config.Workflow{
+		Version: "v1",
+		Vars:    map[string]any{"role": "control-plane"},
+		Phases: []config.Phase{{
+			Name: "prepare",
+			Steps: []config.Step{
+				{
+					ID:   "download-a",
+					Kind: "DownloadFile",
+					Spec: map[string]any{
+						"source": map[string]any{"path": sourceRel},
+						"fetch":  map[string]any{"sources": []any{map[string]any{"type": "local", "path": localCache}}},
+						"output": map[string]any{"path": "files/a-out.bin"},
+					},
+					Register: map[string]string{"downloaded": "path"},
+				},
+				{
+					ID:   "download-b",
+					Kind: "DownloadFile",
+					When: "role == \"control-plane\"",
+					Spec: map[string]any{
+						"source": map[string]any{"path": "{ .runtime.downloaded }"},
+						"fetch":  map[string]any{"sources": []any{map[string]any{"type": "bundle", "path": bundle}}},
+						"output": map[string]any{"path": "files/b-out.bin"},
+					},
+				},
+				{
+					ID:   "skip-worker-only",
+					Kind: "DownloadFile",
+					When: "role == \"worker\"",
+					Spec: map[string]any{
+						"source": map[string]any{"path": sourceRel},
+						"fetch":  map[string]any{"sources": []any{map[string]any{"type": "local", "path": localCache}}},
+						"output": map[string]any{"path": "files/skip.bin"},
+					},
+				},
+			},
+		}},
+	}
+
+	if err := Run(wf, RunOptions{BundleRoot: bundle}); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(bundle, "files", "a-out.bin")); err != nil {
+		t.Fatalf("expected a-out artifact: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(bundle, "files", "b-out.bin")); err != nil {
+		t.Fatalf("expected b-out artifact: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(bundle, "files", "skip.bin")); err == nil {
+		t.Fatalf("expected skipped artifact to not exist")
+	}
+}
+
+func TestRun_RetrySemantics(t *testing.T) {
+	t.Run("retry succeeds on second attempt", func(t *testing.T) {
+		bundle := t.TempDir()
+		runner := &failOnceRunner{}
+		wf := &config.Workflow{
+			Version: "v1",
+			Phases: []config.Phase{{
+				Name: "prepare",
+				Steps: []config.Step{{
+					ID:    "retry-packages",
+					Kind:  "DownloadPackages",
+					Retry: 1,
+					Spec: map[string]any{
+						"packages": []any{"containerd"},
+						"backend": map[string]any{
+							"mode":    "container",
+							"runtime": "docker",
+							"image":   "ubuntu:22.04",
+						},
+					},
+				}},
+			}},
+		}
+
+		if err := Run(wf, RunOptions{BundleRoot: bundle, CommandRunner: runner}); err != nil {
+			t.Fatalf("expected retry success, got %v", err)
+		}
+		if runner.calls != 2 {
+			t.Fatalf("expected 2 attempts, got %d", runner.calls)
+		}
+	})
+
+	t.Run("retry exhausted keeps failure", func(t *testing.T) {
+		bundle := t.TempDir()
+
+		wf := &config.Workflow{
+			Version: "v1",
+			Phases: []config.Phase{{
+				Name: "prepare",
+				Steps: []config.Step{{
+					ID:    "retry-fail",
+					Kind:  "DownloadFile",
+					Retry: 1,
+					Spec: map[string]any{
+						"source": map[string]any{"path": "files/missing.bin"},
+						"fetch":  map[string]any{"sources": []any{map[string]any{"type": "local", "path": t.TempDir()}}},
+						"output": map[string]any{"path": "files/retry-fail.bin"},
+					},
+				}},
+			}},
+		}
+
+		err := Run(wf, RunOptions{BundleRoot: bundle})
+		if err == nil {
+			t.Fatalf("expected failure after retry exhaustion")
+		}
+		if !strings.Contains(err.Error(), "E_PREPARE_SOURCE_NOT_FOUND") {
+			t.Fatalf("expected E_PREPARE_SOURCE_NOT_FOUND, got %v", err)
+		}
+	})
+}
+
+func TestRun_WhenInvalidExpression(t *testing.T) {
+	bundle := t.TempDir()
+	wf := &config.Workflow{
+		Version: "v1",
+		Vars:    map[string]any{"role": "worker"},
+		Phases: []config.Phase{{
+			Name: "prepare",
+			Steps: []config.Step{{
+				ID:   "bad-when",
+				Kind: "DownloadPackages",
+				When: "role = \"worker\"",
+				Spec: map[string]any{"packages": []any{"containerd"}},
+			}},
+		}},
+	}
+
+	err := Run(wf, RunOptions{BundleRoot: bundle})
+	if err == nil {
+		t.Fatalf("expected condition eval error")
+	}
+	if !strings.Contains(err.Error(), "E_CONDITION_EVAL") {
+		t.Fatalf("expected E_CONDITION_EVAL, got %v", err)
+	}
+}
+
 type fakeRunner struct{}
 
+type failOnceRunner struct {
+	calls int
+}
+
 type noRuntimeRunner struct{}
+
+func (f *failOnceRunner) LookPath(file string) (string, error) {
+	if file == "docker" || file == "podman" || file == "skopeo" {
+		return "/usr/bin/" + file, nil
+	}
+	return "", fmt.Errorf("not found")
+}
+
+func (f *failOnceRunner) Run(ctx context.Context, name string, args ...string) error {
+	f.calls++
+	if f.calls == 1 {
+		return fmt.Errorf("intentional first failure")
+	}
+	fr := &fakeRunner{}
+	return fr.Run(ctx, name, args...)
+}
 
 func (n *noRuntimeRunner) LookPath(_ string) (string, error) {
 	return "", fmt.Errorf("not found")
