@@ -21,13 +21,24 @@
     "spec": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["kubernetesVersion", "components", "distro", "output"],
+      "required": ["components"],
       "properties": {
-        "kubernetesVersion": { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "kubernetesVersion": { "type": "string", "minLength": 1 },
         "components": {
           "type": "array",
           "minItems": 1,
           "items": { "type": "string", "enum": ["kubelet", "kubeadm", "kubectl"] }
+        },
+        "backend": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "runtime", "image"],
+          "properties": {
+            "mode": { "const": "container" },
+            "runtime": { "type": "string", "enum": ["auto", "docker", "podman"] },
+            "image": { "type": "string", "minLength": 1 },
+            "sandbox": { "type": "boolean", "default": true }
+          }
         },
         "distro": {
           "type": "object",
@@ -42,7 +53,6 @@
         "output": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["dir", "manifest"],
           "properties": {
             "dir": { "type": "string" },
             "manifest": { "type": "string" }

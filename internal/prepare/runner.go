@@ -1,6 +1,7 @@
 package prepare
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -18,7 +20,26 @@ import (
 )
 
 type RunOptions struct {
-	BundleRoot string
+	BundleRoot    string
+	CommandRunner CommandRunner
+}
+
+type CommandRunner interface {
+	Run(ctx context.Context, name string, args ...string) error
+	LookPath(file string) (string, error)
+}
+
+type osCommandRunner struct{}
+
+func (o osCommandRunner) Run(ctx context.Context, name string, args ...string) error {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+func (o osCommandRunner) LookPath(file string) (string, error) {
+	return exec.LookPath(file)
 }
 
 type manifestFile struct {
@@ -50,6 +71,11 @@ func Run(wf *config.Workflow, opts RunOptions) error {
 		return fmt.Errorf("create bundle root: %w", err)
 	}
 
+	runner := opts.CommandRunner
+	if runner == nil {
+		runner = osCommandRunner{}
+	}
+
 	runtimeVars := map[string]any{}
 	entries := make([]manifestEntry, 0)
 	preparePhase, found := findPhase(wf, "prepare")
@@ -69,19 +95,19 @@ func Run(wf *config.Workflow, opts RunOptions) error {
 			}
 			stepFiles = append(stepFiles, f)
 		case "DownloadPackages":
-			files, err := runDownloadPackages(bundleRoot, rendered, "packages/os")
+			files, err := runDownloadPackages(runner, bundleRoot, rendered, "packages/os")
 			if err != nil {
 				return fmt.Errorf("step %s (%s): %w", step.ID, step.Kind, err)
 			}
 			stepFiles = append(stepFiles, files...)
 		case "DownloadK8sPackages":
-			files, err := runDownloadK8sPackages(bundleRoot, rendered)
+			files, err := runDownloadK8sPackages(runner, bundleRoot, rendered)
 			if err != nil {
 				return fmt.Errorf("step %s (%s): %w", step.ID, step.Kind, err)
 			}
 			stepFiles = append(stepFiles, files...)
 		case "DownloadImages":
-			files, err := runDownloadImages(bundleRoot, rendered)
+			files, err := runDownloadImages(runner, bundleRoot, rendered)
 			if err != nil {
 				return fmt.Errorf("step %s (%s): %w", step.ID, step.Kind, err)
 			}
@@ -101,7 +127,7 @@ func Run(wf *config.Workflow, opts RunOptions) error {
 
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Path < entries[j].Path })
 	manifestPath := filepath.Join(bundleRoot, "manifest.json")
-	if err := writeManifest(manifestPath, entries); err != nil {
+	if err := writeManifest(manifestPath, dedupeEntries(entries)); err != nil {
 		return err
 	}
 
@@ -163,7 +189,7 @@ func runDownloadFile(bundleRoot string, spec map[string]any) (string, error) {
 	return outPath, nil
 }
 
-func runDownloadPackages(bundleRoot string, spec map[string]any, defaultDir string) ([]string, error) {
+func runDownloadPackages(runner CommandRunner, bundleRoot string, spec map[string]any, defaultDir string) ([]string, error) {
 	output := mapValue(spec, "output")
 	dir := stringValue(output, "dir")
 	if dir == "" {
@@ -175,58 +201,137 @@ func runDownloadPackages(bundleRoot string, spec map[string]any, defaultDir stri
 		return nil, fmt.Errorf("DownloadPackages requires packages")
 	}
 
-	files := make([]string, 0, len(packages))
-	for _, pkg := range packages {
-		filename := fmt.Sprintf("%s.txt", pkg)
-		rel := filepath.ToSlash(filepath.Join(dir, filename))
-		target := filepath.Join(bundleRoot, rel)
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			return nil, err
-		}
-		content := fmt.Sprintf("package=%s\n", pkg)
-		if err := os.WriteFile(target, []byte(content), 0o644); err != nil {
-			return nil, err
-		}
-		files = append(files, rel)
+	backend := mapValue(spec, "backend")
+	if stringValue(backend, "mode") == "container" && stringValue(backend, "image") != "" {
+		return runContainerPackageDownload(runner, bundleRoot, dir, spec, packages)
 	}
-	return files, nil
+
+	return writePackagePlaceholders(bundleRoot, dir, packages), nil
 }
 
-func runDownloadK8sPackages(bundleRoot string, spec map[string]any) ([]string, error) {
+func runDownloadK8sPackages(runner CommandRunner, bundleRoot string, spec map[string]any) ([]string, error) {
 	output := mapValue(spec, "output")
 	dir := stringValue(output, "dir")
 	if dir == "" {
 		dir = "packages/k8s"
 	}
 
-	version := stringValue(spec, "kubernetesVersion")
+	version := strings.TrimPrefix(stringValue(spec, "kubernetesVersion"), "v")
 	if version == "" {
-		version = "v0.0.0"
+		version = "0.0.0"
 	}
 	components := stringSlice(spec["components"])
 	if len(components) == 0 {
 		return nil, fmt.Errorf("DownloadK8sPackages requires components")
 	}
 
-	files := make([]string, 0, len(components))
+	pkgs := make([]string, 0, len(components))
 	for _, c := range components {
-		filename := fmt.Sprintf("%s-%s.txt", c, version)
-		rel := filepath.ToSlash(filepath.Join(dir, filename))
-		target := filepath.Join(bundleRoot, rel)
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			return nil, err
-		}
-		content := fmt.Sprintf("component=%s\nversion=%s\n", c, version)
-		if err := os.WriteFile(target, []byte(content), 0o644); err != nil {
-			return nil, err
-		}
-		files = append(files, rel)
+		pkgs = append(pkgs, c)
 	}
 
-	return files, nil
+	backend := mapValue(spec, "backend")
+	if stringValue(backend, "mode") == "container" && stringValue(backend, "image") != "" {
+		files, err := runContainerPackageDownload(runner, bundleRoot, dir, spec, pkgs)
+		if err != nil {
+			return nil, err
+		}
+		metaRel := filepath.ToSlash(filepath.Join(dir, "kubernetes-version.txt"))
+		metaAbs := filepath.Join(bundleRoot, metaRel)
+		if err := os.MkdirAll(filepath.Dir(metaAbs), 0o755); err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(metaAbs, []byte(version+"\n"), 0o644); err != nil {
+			return nil, err
+		}
+		return append(files, metaRel), nil
+	}
+
+	placeholderPkgs := make([]string, 0, len(pkgs))
+	for _, p := range pkgs {
+		placeholderPkgs = append(placeholderPkgs, fmt.Sprintf("%s-v%s", p, version))
+	}
+	files := writePackagePlaceholders(bundleRoot, dir, placeholderPkgs)
+	metaRel := filepath.ToSlash(filepath.Join(dir, "kubernetes-version.txt"))
+	_ = os.WriteFile(filepath.Join(bundleRoot, metaRel), []byte(version+"\n"), 0o644)
+	return append(files, metaRel), nil
 }
 
-func runDownloadImages(bundleRoot string, spec map[string]any) ([]string, error) {
+func runContainerPackageDownload(runner CommandRunner, bundleRoot, dir string, spec map[string]any, packages []string) ([]string, error) {
+	backend := mapValue(spec, "backend")
+	runtimeSel, err := detectRuntime(runner, stringValue(backend, "runtime"))
+	if err != nil {
+		return nil, err
+	}
+
+	image := stringValue(backend, "image")
+	if image == "" {
+		return nil, fmt.Errorf("backend.image is required for container package download")
+	}
+
+	distro := mapValue(spec, "distro")
+	family := stringValue(distro, "family")
+	if family == "" {
+		family = "debian"
+	}
+
+	outAbs := filepath.Join(bundleRoot, filepath.FromSlash(dir))
+	if err := os.MkdirAll(outAbs, 0o755); err != nil {
+		return nil, err
+	}
+	before, _ := listRelativeFiles(outAbs)
+
+	for _, pkg := range packages {
+		cmdScript := buildPackageDownloadScript(family, pkg)
+		args := []string{"run", "--rm", "-v", outAbs + ":/out", image, "bash", "-lc", cmdScript}
+		if err := runner.Run(context.Background(), runtimeSel, args...); err != nil {
+			return nil, fmt.Errorf("container package download failed for %s: %w", pkg, err)
+		}
+	}
+
+	after, _ := listRelativeFiles(outAbs)
+	newFiles := make([]string, 0)
+	seen := map[string]bool{}
+	for _, f := range before {
+		seen[f] = true
+	}
+	for _, f := range after {
+		if !seen[f] {
+			newFiles = append(newFiles, filepath.ToSlash(filepath.Join(dir, f)))
+		}
+	}
+	if len(newFiles) == 0 {
+		return nil, fmt.Errorf("no package artifacts generated in %s", dir)
+	}
+	return newFiles, nil
+}
+
+func buildPackageDownloadScript(family, pkg string) string {
+	safePkg := shellEscape(pkg)
+	if family == "rhel" {
+		return fmt.Sprintf("set -euo pipefail; (dnf -y install 'dnf-command(download)' >/dev/null 2>&1 || yum -y install yum-utils >/dev/null 2>&1 || true); (dnf -y download --destdir /out %s || yumdownloader --destdir /out %s)", safePkg, safePkg)
+	}
+	return fmt.Sprintf("set -euo pipefail; apt-get update -y >/dev/null; (apt-get download %s || true); cp -a ./*.deb /out/ 2>/dev/null || true", safePkg)
+}
+
+func shellEscape(v string) string {
+	return strings.ReplaceAll(v, "'", "''")
+}
+
+func writePackagePlaceholders(bundleRoot, dir string, packages []string) []string {
+	files := make([]string, 0, len(packages))
+	for _, pkg := range packages {
+		filename := fmt.Sprintf("%s.txt", pkg)
+		rel := filepath.ToSlash(filepath.Join(dir, filename))
+		target := filepath.Join(bundleRoot, rel)
+		_ = os.MkdirAll(filepath.Dir(target), 0o755)
+		_ = os.WriteFile(target, []byte(fmt.Sprintf("package=%s\n", pkg)), 0o644)
+		files = append(files, rel)
+	}
+	return files
+}
+
+func runDownloadImages(runner CommandRunner, bundleRoot string, spec map[string]any) ([]string, error) {
 	output := mapValue(spec, "output")
 	dir := stringValue(output, "dir")
 	if dir == "" {
@@ -236,6 +341,16 @@ func runDownloadImages(bundleRoot string, spec map[string]any) ([]string, error)
 	images := stringSlice(spec["images"])
 	if len(images) == 0 {
 		return nil, fmt.Errorf("DownloadImages requires images")
+	}
+
+	backend := mapValue(spec, "backend")
+	engine := stringValue(backend, "engine")
+	if engine == "" {
+		engine = "skopeo"
+	}
+
+	if engine == "skopeo" && len(backend) > 0 {
+		return runSkopeoDownloads(runner, bundleRoot, dir, images, backend)
 	}
 
 	files := make([]string, 0, len(images))
@@ -252,8 +367,82 @@ func runDownloadImages(bundleRoot string, spec map[string]any) ([]string, error)
 		}
 		files = append(files, rel)
 	}
-
 	return files, nil
+}
+
+func runSkopeoDownloads(runner CommandRunner, bundleRoot, dir string, images []string, backend map[string]any) ([]string, error) {
+	files := make([]string, 0, len(images))
+	sandbox := mapValue(backend, "sandbox")
+	useSandbox := stringValue(sandbox, "mode") == "container"
+
+	absBundle, err := filepath.Abs(bundleRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	var runtimeSel string
+	var sandboxImage string
+	if useSandbox {
+		runtimeSel, err = detectRuntime(runner, stringValue(sandbox, "runtime"))
+		if err != nil {
+			return nil, err
+		}
+		sandboxImage = stringValue(sandbox, "image")
+		if sandboxImage == "" {
+			sandboxImage = "quay.io/skopeo/stable:latest"
+		}
+	} else {
+		if _, err := runner.LookPath("skopeo"); err != nil {
+			return nil, fmt.Errorf("skopeo not found in PATH")
+		}
+	}
+
+	for _, img := range images {
+		rel := filepath.ToSlash(filepath.Join(dir, sanitizeImageName(img)+".tar"))
+		abs := filepath.Join(bundleRoot, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+			return nil, err
+		}
+
+		dest := "docker-archive:" + abs + ":" + img
+		if useSandbox {
+			bundleMountDest := "/bundle/" + rel
+			args := []string{"run", "--rm", "-v", absBundle + ":/bundle", sandboxImage, "skopeo", "copy", "docker://" + img, "docker-archive:" + bundleMountDest + ":" + img}
+			if err := runner.Run(context.Background(), runtimeSel, args...); err != nil {
+				return nil, fmt.Errorf("skopeo sandbox copy failed for %s: %w", img, err)
+			}
+		} else {
+			if err := runner.Run(context.Background(), "skopeo", "copy", "docker://"+img, dest); err != nil {
+				return nil, fmt.Errorf("skopeo copy failed for %s: %w", img, err)
+			}
+		}
+		files = append(files, rel)
+	}
+	return files, nil
+}
+
+func detectRuntime(runner CommandRunner, preferred string) (string, error) {
+	pref := strings.TrimSpace(preferred)
+	if pref == "" {
+		pref = "auto"
+	}
+
+	if pref == "auto" {
+		for _, candidate := range []string{"docker", "podman"} {
+			if _, err := runner.LookPath(candidate); err == nil {
+				return candidate, nil
+			}
+		}
+		return "", fmt.Errorf("no supported container runtime found (docker/podman)")
+	}
+
+	if pref != "docker" && pref != "podman" {
+		return "", fmt.Errorf("unsupported runtime: %s", pref)
+	}
+	if _, err := runner.LookPath(pref); err != nil {
+		return "", fmt.Errorf("runtime not found: %s", pref)
+	}
+	return pref, nil
 }
 
 func sanitizeImageName(v string) string {
@@ -340,6 +529,23 @@ func writeManifest(path string, entries []manifestEntry) error {
 	return nil
 }
 
+func dedupeEntries(entries []manifestEntry) []manifestEntry {
+	seen := map[string]manifestEntry{}
+	for _, e := range entries {
+		seen[e.Path] = e
+	}
+	keys := make([]string, 0, len(seen))
+	for k := range seen {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	out := make([]manifestEntry, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, seen[k])
+	}
+	return out
+}
+
 func renderSpec(spec map[string]any, wf *config.Workflow, runtimeVars map[string]any) map[string]any {
 	if spec == nil {
 		return map[string]any{}
@@ -418,4 +624,27 @@ func resolvePath(path string, ctx map[string]any) (any, bool) {
 		cur = next
 	}
 	return cur, true
+}
+
+func listRelativeFiles(root string) ([]string, error) {
+	results := []string{}
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		results = append(results, filepath.ToSlash(rel))
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(results)
+	return results, nil
 }
