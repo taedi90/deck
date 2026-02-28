@@ -19,7 +19,7 @@ func TestResolveBytes(t *testing.T) {
 			t.Fatalf("write local file: %v", err)
 		}
 
-		raw, err := ResolveBytes("files/a.txt", []SourceConfig{{Type: "local", Path: local}})
+		raw, err := ResolveBytes("files/a.txt", []SourceConfig{{Type: "local", Path: local}}, ResolveOptions{})
 		if err != nil {
 			t.Fatalf("resolve bytes: %v", err)
 		}
@@ -46,7 +46,7 @@ func TestResolveBytes(t *testing.T) {
 		raw, err := ResolveBytes("files/a.txt", []SourceConfig{
 			{Type: "repo", URL: repo.URL},
 			{Type: "online", URL: online.URL},
-		})
+		}, ResolveOptions{})
 		if err != nil {
 			t.Fatalf("resolve bytes: %v", err)
 		}
@@ -56,11 +56,26 @@ func TestResolveBytes(t *testing.T) {
 	})
 
 	t.Run("returns deterministic miss error", func(t *testing.T) {
-		_, err := ResolveBytes("files/missing.txt", []SourceConfig{{Type: "local", Path: t.TempDir()}})
+		_, err := ResolveBytes("files/missing.txt", []SourceConfig{{Type: "local", Path: t.TempDir()}}, ResolveOptions{})
 		if err == nil {
 			t.Fatalf("expected resolve error")
 		}
 		if !strings.Contains(err.Error(), "all fetch sources failed") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("blocks online in offline-only mode", func(t *testing.T) {
+		online := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte("online"))
+		}))
+		defer online.Close()
+
+		_, err := ResolveBytes("files/a.txt", []SourceConfig{{Type: "online", URL: online.URL}}, ResolveOptions{OfflineOnly: true})
+		if err == nil {
+			t.Fatalf("expected offline policy error")
+		}
+		if !strings.Contains(err.Error(), "blocked-by-offline-policy") {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})

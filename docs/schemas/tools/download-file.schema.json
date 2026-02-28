@@ -40,6 +40,7 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
+            "offlineOnly": { "type": "boolean", "default": false },
             "strategy": { "type": "string", "enum": ["fallback"] },
             "sources": {
               "type": "array",

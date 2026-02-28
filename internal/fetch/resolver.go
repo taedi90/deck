@@ -15,7 +15,11 @@ type SourceConfig struct {
 	URL  string
 }
 
-func ResolveBytes(relPath string, sources []SourceConfig) ([]byte, error) {
+type ResolveOptions struct {
+	OfflineOnly bool
+}
+
+func ResolveBytes(relPath string, sources []SourceConfig, opts ResolveOptions) ([]byte, error) {
 	if strings.TrimSpace(relPath) == "" {
 		return nil, fmt.Errorf("relative path is empty")
 	}
@@ -38,6 +42,10 @@ func ResolveBytes(relPath string, sources []SourceConfig) ([]byte, error) {
 			attempts = append(attempts, fmt.Sprintf("%s(%s)", typ, candidate))
 
 		case "repo", "online":
+			if opts.OfflineOnly && typ == "online" {
+				attempts = append(attempts, "online(blocked-by-offline-policy)")
+				continue
+			}
 			baseURL := strings.TrimSpace(src.URL)
 			if baseURL == "" {
 				attempts = append(attempts, fmt.Sprintf("%s(url=missing)", typ))

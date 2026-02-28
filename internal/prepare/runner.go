@@ -62,6 +62,7 @@ const (
 	errCodePrepareSkopeoMissing      = "E_PREPARE_SKOPEO_NOT_FOUND"
 	errCodePrepareSourceNotFound     = "E_PREPARE_SOURCE_NOT_FOUND"
 	errCodePrepareChecksumMismatch   = "E_PREPARE_CHECKSUM_MISMATCH"
+	errCodePrepareOfflinePolicyBlock = "E_PREPARE_OFFLINE_POLICY_BLOCK"
 )
 
 func Run(wf *config.Workflow, opts RunOptions) error {
@@ -156,9 +157,11 @@ func findPhase(wf *config.Workflow, name string) (config.Phase, bool) {
 func runDownloadFile(bundleRoot string, spec map[string]any) (string, error) {
 	source := mapValue(spec, "source")
 	output := mapValue(spec, "output")
+	fetchCfg := mapValue(spec, "fetch")
 	url := stringValue(source, "url")
 	sourcePath := stringValue(source, "path")
 	expectedSHA := strings.ToLower(stringValue(source, "sha256"))
+	offlineOnly := boolValue(fetchCfg, "offlineOnly")
 	outPath := stringValue(output, "path")
 	if strings.TrimSpace(outPath) == "" {
 		return "", fmt.Errorf("DownloadFile requires output.path")
@@ -188,6 +191,9 @@ func runDownloadFile(bundleRoot string, spec map[string]any) (string, error) {
 			if url == "" {
 				return "", err
 			}
+			if offlineOnly {
+				return "", fmt.Errorf("%s: source.url fallback blocked by offline policy", errCodePrepareOfflinePolicyBlock)
+			}
 			if _, err := f.Seek(0, 0); err != nil {
 				return "", fmt.Errorf("reset output file cursor: %w", err)
 			}
@@ -199,6 +205,9 @@ func runDownloadFile(bundleRoot string, spec map[string]any) (string, error) {
 			}
 		}
 	} else {
+		if offlineOnly {
+			return "", fmt.Errorf("%s: source.url blocked by offline policy", errCodePrepareOfflinePolicyBlock)
+		}
 		if err := downloadURLToFile(f, url); err != nil {
 			return "", err
 		}
@@ -241,6 +250,7 @@ func downloadURLToFile(target *os.File, url string) error {
 func resolveSourceBytes(spec map[string]any, sourcePath string) ([]byte, error) {
 	fetchCfg := mapValue(spec, "fetch")
 	sourcesRaw, ok := fetchCfg["sources"].([]any)
+	offlineOnly := boolValue(fetchCfg, "offlineOnly")
 	if ok && len(sourcesRaw) > 0 {
 		sources := make([]fetch.SourceConfig, 0, len(sourcesRaw))
 		for _, raw := range sourcesRaw {
@@ -257,7 +267,7 @@ func resolveSourceBytes(spec map[string]any, sourcePath string) ([]byte, error) 
 		if len(sources) == 0 {
 			return nil, fmt.Errorf("%s: source.path %s not found in configured fetch sources", errCodePrepareSourceNotFound, sourcePath)
 		}
-		raw, err := fetch.ResolveBytes(sourcePath, sources)
+		raw, err := fetch.ResolveBytes(sourcePath, sources, fetch.ResolveOptions{OfflineOnly: offlineOnly})
 		if err == nil {
 			return raw, nil
 		}
@@ -586,6 +596,21 @@ func stringSlice(v any) []string {
 		}
 	}
 	return result
+}
+
+func boolValue(v map[string]any, key string) bool {
+	if v == nil {
+		return false
+	}
+	raw, ok := v[key]
+	if !ok {
+		return false
+	}
+	b, ok := raw.(bool)
+	if !ok {
+		return false
+	}
+	return b
 }
 
 func fileManifestEntry(bundleRoot, rel string) (manifestEntry, error) {

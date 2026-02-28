@@ -423,6 +423,79 @@ func TestRun_DownloadFileFallbackRepoThenOnline(t *testing.T) {
 	}
 }
 
+func TestRun_DownloadFileOfflinePolicyBlocksOnlineFallback(t *testing.T) {
+	bundleOut := t.TempDir()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("should-not-be-downloaded"))
+	}))
+	defer server.Close()
+
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "prepare",
+			Steps: []config.Step{{
+				ID:   "download-file",
+				Kind: "DownloadFile",
+				Spec: map[string]any{
+					"source": map[string]any{
+						"path": "files/not-found.bin",
+						"url":  server.URL + "/files/not-found.bin",
+					},
+					"fetch": map[string]any{
+						"offlineOnly": true,
+						"strategy":    "fallback",
+						"sources":     []any{map[string]any{"type": "online", "url": server.URL}},
+					},
+					"output": map[string]any{"path": "files/out.bin"},
+				},
+			}},
+		}},
+	}
+
+	err := Run(wf, RunOptions{BundleRoot: bundleOut})
+	if err == nil {
+		t.Fatalf("expected offline policy block error")
+	}
+	if !strings.Contains(err.Error(), "E_PREPARE_OFFLINE_POLICY_BLOCK") {
+		t.Fatalf("expected E_PREPARE_OFFLINE_POLICY_BLOCK, got %v", err)
+	}
+}
+
+func TestRun_DownloadFileOfflinePolicyBlocksDirectURL(t *testing.T) {
+	bundleOut := t.TempDir()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("should-not-be-downloaded"))
+	}))
+	defer server.Close()
+
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "prepare",
+			Steps: []config.Step{{
+				ID:   "download-file",
+				Kind: "DownloadFile",
+				Spec: map[string]any{
+					"source": map[string]any{"url": server.URL + "/files/a.bin"},
+					"fetch":  map[string]any{"offlineOnly": true},
+					"output": map[string]any{"path": "files/out.bin"},
+				},
+			}},
+		}},
+	}
+
+	err := Run(wf, RunOptions{BundleRoot: bundleOut})
+	if err == nil {
+		t.Fatalf("expected offline policy block error")
+	}
+	if !strings.Contains(err.Error(), "E_PREPARE_OFFLINE_POLICY_BLOCK") {
+		t.Fatalf("expected E_PREPARE_OFFLINE_POLICY_BLOCK, got %v", err)
+	}
+}
+
 type fakeRunner struct{}
 
 type noRuntimeRunner struct{}
