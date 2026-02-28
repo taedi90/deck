@@ -67,6 +67,9 @@ type alphaJob struct {
 	ID             string `json:"id"`
 	Type           string `json:"type"`
 	Message        string `json:"message,omitempty"`
+	WorkflowFile   string `json:"workflow_file,omitempty"`
+	BundleRoot     string `json:"bundle_root,omitempty"`
+	Phase          string `json:"phase,omitempty"`
 	Attempt        int    `json:"attempt,omitempty"`
 	MaxAttempts    int    `json:"max_attempts,omitempty"`
 	RetryDelaySec  int    `json:"retry_delay_sec,omitempty"`
@@ -343,7 +346,15 @@ func NewHandler(root string, opts HandlerOptions) (http.Handler, error) {
 		}
 		job.ID = strings.TrimSpace(job.ID)
 		job.Type = strings.TrimSpace(job.Type)
-		if job.ID == "" || (job.Type != "noop" && job.Type != "echo") {
+		if job.ID == "" || (job.Type != "noop" && job.Type != "echo" && job.Type != "install" && job.Type != "join") {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{"status": "invalid_job"})
+			return
+		}
+		job.WorkflowFile = strings.TrimSpace(job.WorkflowFile)
+		job.BundleRoot = strings.TrimSpace(job.BundleRoot)
+		job.Phase = strings.TrimSpace(job.Phase)
+		if (job.Type == "install" || job.Type == "join") && job.WorkflowFile == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			_ = json.NewEncoder(w).Encode(map[string]string{"status": "invalid_job"})
 			return

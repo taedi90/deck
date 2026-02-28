@@ -152,6 +152,15 @@ func TestNewHandler(t *testing.T) {
 		}
 	})
 
+	t.Run("rejects install job without workflow file", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/agent/job", strings.NewReader(`{"id":"j-install","type":"install"}`))
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d", rr.Code)
+		}
+	})
+
 	t.Run("rejects invalid max_attempts", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/agent/job", strings.NewReader(`{"id":"j-bad","type":"noop","max_attempts":-1}`))
 		rr := httptest.NewRecorder()
