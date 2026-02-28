@@ -1,0 +1,43 @@
+name: CI Main Vagrant Smoke
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  vagrant-smoke:
+    runs-on: [self-hosted, linux, x64, vagrant]
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check Vagrant availability
+        run: |
+          if ! command -v vagrant >/dev/null 2>&1; then
+            echo "Vagrant is not installed on this runner"
+            exit 1
+          fi
+          vagrant --version
+
+      - name: Run smoke scenario (if script exists)
+        run: |
+          if [ -x .ci/vagrant/run-smoke.sh ]; then
+            .ci/vagrant/run-smoke.sh
+          else
+            echo "Missing .ci/vagrant/run-smoke.sh. Add implementation script to enable smoke E2E."
+            exit 1
+          fi
+
+      - name: Upload smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: main-vagrant-smoke-artifacts
+          path: |
+            .ci/artifacts/**
+            /tmp/deck-artifacts/**
+          if-no-files-found: warn

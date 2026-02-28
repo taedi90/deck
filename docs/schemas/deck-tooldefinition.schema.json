@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deck.local/schemas/deck-tooldefinition.schema.json",
+  "title": "DeckToolDefinition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "const": "deck/v1"
+    },
+    "kind": {
+      "type": "string",
+      "const": "ToolDefinition"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z0-9]+$"
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "description": { "type": "string" }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "summary", "category", "inputSchema"],
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^v[0-9]+$"
+        },
+        "summary": { "type": "string", "minLength": 1 },
+        "category": {
+          "type": "string",
+          "enum": ["prepare", "install", "shared"]
+        },
+        "offlineAllowed": { "type": "boolean", "default": false },
+        "requires": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "network": { "type": "boolean" },
+            "root": { "type": "boolean" },
+            "containerRuntime": {
+              "type": "string",
+              "enum": ["required", "optional", "none"]
+            }
+          }
+        },
+        "inputSchema": {
+          "type": "object"
+        },
+        "outputContract": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "artifacts": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "stateKeys": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "idempotency": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "keys"],
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["by-output", "by-state", "always-run"]
+            },
+            "keys": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "failurePolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "retryable": { "type": "boolean" },
+            "defaultRetry": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    }
+  }
+}

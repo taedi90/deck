@@ -1,0 +1,35 @@
+# macOS / Common
+.DS_Store
+
+# VSCode
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+dist/
+build/
+
+# Next.js / Node
+node_modules/
+.next/
+out/
+.turbo/
+.npm/
+npm-debug.log*
+yarn-error.log*
+.env*
+!.env.example
+
+# Go
+bin/
+*.test
+coverage.out
+
+# Rust
+target/
+Cargo.lock

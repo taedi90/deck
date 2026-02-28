@@ -1,0 +1,53 @@
+name: CI PR
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lint-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+        continue-on-error: true
+
+      - name: Validate JSON schema files are parseable
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path('.')
+          files = sorted((root / 'docs' / 'schemas').rglob('*.json'))
+          if not files:
+              print('No schema files found, skipping')
+              raise SystemExit(0)
+
+          for f in files:
+              with f.open('r', encoding='utf-8') as fp:
+                  json.load(fp)
+              print(f'OK: {f}')
+          PY
+
+      - name: Run Go tests (if go.mod exists)
+        run: |
+          if [ -f go.mod ]; then
+            go test ./...
+          else
+            echo "go.mod not found, skipping go test"
+          fi
+
+      - name: Run deck validate (if deck binary exists)
+        run: |
+          if [ -x ./deck ] && [ -f cluster.yaml ]; then
+            ./deck validate -f cluster.yaml
+          else
+            echo "deck binary or cluster.yaml not found, skipping deck validate"
+          fi

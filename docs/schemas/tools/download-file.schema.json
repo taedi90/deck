@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deck.local/schemas/tools/download-file.schema.json",
+  "title": "DownloadFileStep",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "apiVersion", "kind", "spec"],
+  "properties": {
+    "id": { "type": "string" },
+    "apiVersion": { "const": "deck/v1" },
+    "kind": { "const": "DownloadFile" },
+    "metadata": { "type": "object", "additionalProperties": true },
+    "when": { "type": "string" },
+    "retry": { "type": "integer", "minimum": 0 },
+    "timeout": { "type": "string", "pattern": "^[0-9]+(ms|s|m|h)$" },
+    "register": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+      "additionalProperties": { "type": "string" }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "output"],
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["url"],
+          "properties": {
+            "url": { "type": "string", "format": "uri" },
+            "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" }
+          }
+        },
+        "output": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path"],
+          "properties": {
+            "path": { "type": "string" },
+            "chmod": { "type": "string", "pattern": "^[0-7]{4}$" }
+          }
+        }
+      }
+    }
+  }
+}
