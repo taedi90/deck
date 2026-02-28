@@ -16,7 +16,9 @@ jobs:
         with:
           go-version-file: go.mod
           check-latest: true
-        continue-on-error: true
+
+      - name: Build deck CLI
+        run: go build -o ./deck ./cmd/deck
 
       - name: Validate JSON schema files are parseable
         run: |
@@ -44,10 +46,14 @@ jobs:
             echo "go.mod not found, skipping go test"
           fi
 
-      - name: Run deck validate (if deck binary exists)
+      - name: Run deck validate
         run: |
-          if [ -x ./deck ] && [ -f cluster.yaml ]; then
-            ./deck validate -f cluster.yaml
-          else
-            echo "deck binary or cluster.yaml not found, skipping deck validate"
+          if [ ! -f cluster.yaml ]; then
+            echo "cluster.yaml not found"
+            exit 1
           fi
+          ./deck validate -f cluster.yaml
+
+      - name: Run L2 prepare backend integration checks
+        run: |
+          go test ./internal/prepare -run 'TestRun_ContainerBackendsWithFakeRunner|TestRun_PrepareArtifactsAndManifest|TestRun_DownloadFileFallbackLocalThenBundle|TestRun_DownloadFileFallbackRepoThenOnline|TestRun_DownloadFileOfflinePolicyBlocksOnlineFallback|TestRun_DownloadFileOfflinePolicyBlocksDirectURL'
