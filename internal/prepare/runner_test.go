@@ -215,7 +215,96 @@ func TestRun_DownloadK8sPackagesContainerBackend(t *testing.T) {
 	}
 }
 
+func TestRun_DownloadPackagesContainerRuntimeMissing(t *testing.T) {
+	bundle := t.TempDir()
+
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "prepare",
+			Steps: []config.Step{
+				{
+					ID:   "pkg",
+					Kind: "DownloadPackages",
+					Spec: map[string]any{
+						"packages": []any{"containerd"},
+						"backend": map[string]any{
+							"mode":    "container",
+							"runtime": "auto",
+							"image":   "ubuntu:22.04",
+						},
+					},
+				},
+			},
+		}},
+	}
+
+	err := Run(wf, RunOptions{BundleRoot: bundle, CommandRunner: &noRuntimeRunner{}})
+	if err == nil {
+		t.Fatalf("expected runtime detection error")
+	}
+	if !strings.Contains(err.Error(), "E_PREPARE_RUNTIME_NOT_FOUND") {
+		t.Fatalf("expected runtime error code, got: %v", err)
+	}
+}
+
+func TestRun_DownloadPackagesContainerNoArtifacts(t *testing.T) {
+	bundle := t.TempDir()
+
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "prepare",
+			Steps: []config.Step{
+				{
+					ID:   "pkg",
+					Kind: "DownloadPackages",
+					Spec: map[string]any{
+						"packages": []any{"containerd"},
+						"backend": map[string]any{
+							"mode":    "container",
+							"runtime": "docker",
+							"image":   "ubuntu:22.04",
+						},
+					},
+				},
+			},
+		}},
+	}
+
+	err := Run(wf, RunOptions{BundleRoot: bundle, CommandRunner: &noArtifactsRunner{}})
+	if err == nil {
+		t.Fatalf("expected no artifacts error")
+	}
+	if !strings.Contains(err.Error(), "E_PREPARE_NO_ARTIFACTS") {
+		t.Fatalf("expected no-artifacts error code, got: %v", err)
+	}
+}
+
 type fakeRunner struct{}
+
+type noRuntimeRunner struct{}
+
+func (n *noRuntimeRunner) LookPath(_ string) (string, error) {
+	return "", fmt.Errorf("not found")
+}
+
+func (n *noRuntimeRunner) Run(_ context.Context, _ string, _ ...string) error {
+	return nil
+}
+
+type noArtifactsRunner struct{}
+
+func (n *noArtifactsRunner) LookPath(file string) (string, error) {
+	if file == "docker" || file == "podman" || file == "skopeo" {
+		return "/usr/bin/" + file, nil
+	}
+	return "", fmt.Errorf("not found")
+}
+
+func (n *noArtifactsRunner) Run(_ context.Context, _ string, _ ...string) error {
+	return nil
+}
 
 func (f *fakeRunner) LookPath(file string) (string, error) {
 	if file == "docker" || file == "podman" || file == "skopeo" {

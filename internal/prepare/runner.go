@@ -54,6 +54,13 @@ type manifestEntry struct {
 
 var templateRefPattern = regexp.MustCompile(`\{\s*\.([A-Za-z0-9_\.]+)\s*\}`)
 
+const (
+	errCodePrepareRuntimeMissing     = "E_PREPARE_RUNTIME_NOT_FOUND"
+	errCodePrepareRuntimeUnsupported = "E_PREPARE_RUNTIME_UNSUPPORTED"
+	errCodePrepareArtifactsEmpty     = "E_PREPARE_NO_ARTIFACTS"
+	errCodePrepareSkopeoMissing      = "E_PREPARE_SKOPEO_NOT_FOUND"
+)
+
 func Run(wf *config.Workflow, opts RunOptions) error {
 	if wf == nil {
 		return fmt.Errorf("workflow is nil")
@@ -301,7 +308,7 @@ func runContainerPackageDownload(runner CommandRunner, bundleRoot, dir string, s
 		}
 	}
 	if len(newFiles) == 0 {
-		return nil, fmt.Errorf("no package artifacts generated in %s", dir)
+		return nil, fmt.Errorf("%s: no package artifacts generated in %s", errCodePrepareArtifactsEmpty, dir)
 	}
 	return newFiles, nil
 }
@@ -393,7 +400,7 @@ func runSkopeoDownloads(runner CommandRunner, bundleRoot, dir string, images []s
 		}
 	} else {
 		if _, err := runner.LookPath("skopeo"); err != nil {
-			return nil, fmt.Errorf("skopeo not found in PATH")
+			return nil, fmt.Errorf("%s: skopeo not found in PATH", errCodePrepareSkopeoMissing)
 		}
 	}
 
@@ -433,14 +440,14 @@ func detectRuntime(runner CommandRunner, preferred string) (string, error) {
 				return candidate, nil
 			}
 		}
-		return "", fmt.Errorf("no supported container runtime found (docker/podman)")
+		return "", fmt.Errorf("%s: no supported container runtime found (docker/podman)", errCodePrepareRuntimeMissing)
 	}
 
 	if pref != "docker" && pref != "podman" {
-		return "", fmt.Errorf("unsupported runtime: %s", pref)
+		return "", fmt.Errorf("%s: unsupported runtime: %s", errCodePrepareRuntimeUnsupported, pref)
 	}
 	if _, err := runner.LookPath(pref); err != nil {
-		return "", fmt.Errorf("runtime not found: %s", pref)
+		return "", fmt.Errorf("%s: runtime not found: %s", errCodePrepareRuntimeMissing, pref)
 	}
 	return pref, nil
 }
