@@ -37,3 +37,7 @@ Cargo.lock
 # CI artifacts
 .ci/artifacts/*
 !.ci/artifacts/.gitkeep
+
+# Local run artifacts
+bundle/
+reports/
