@@ -5,11 +5,108 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestRunApply(t *testing.T) {
+	t.Run("success with preflight", func(t *testing.T) {
+		root := t.TempDir()
+		bundle := filepath.Join(root, "bundle")
+		sourceFile := filepath.Join(root, "source.bin")
+		stateFile := filepath.Join(root, "state", "state.json")
+		if err := os.WriteFile(sourceFile, []byte("hello"), 0o644); err != nil {
+			t.Fatalf("write source file: %v", err)
+		}
+
+		workflowPath := filepath.Join(root, "workflow.yaml")
+		workflow := fmt.Sprintf(`version: v1
+context:
+  stateFile: %s
+phases:
+  - name: prepare
+    steps:
+      - id: download
+        apiVersion: deck/v1
+        kind: DownloadFile
+        spec:
+          source:
+            path: %s
+          output:
+            path: files/fetched.bin
+  - name: install
+    steps:
+      - id: run
+        apiVersion: deck/v1
+        kind: RunCommand
+        spec:
+          command: ["true"]
+`, stateFile, sourceFile)
+		if err := os.WriteFile(workflowPath, []byte(workflow), 0o644); err != nil {
+			t.Fatalf("write workflow: %v", err)
+		}
+
+		if err := run([]string{"apply", "--file", workflowPath, "--bundle", bundle}); err != nil {
+			t.Fatalf("expected apply success, got %v", err)
+		}
+
+		if _, err := os.Stat(filepath.Join(bundle, "manifest.json")); err != nil {
+			t.Fatalf("expected manifest generated: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(stateFile)); err != nil {
+			t.Fatalf("expected state file generated: %v", err)
+		}
+	})
+
+	t.Run("preflight failure unless skipped", func(t *testing.T) {
+		root := t.TempDir()
+		bundle := filepath.Join(root, "bundle")
+		sourceFile := filepath.Join(root, "source.bin")
+		if err := os.WriteFile(sourceFile, []byte("hello"), 0o644); err != nil {
+			t.Fatalf("write source file: %v", err)
+		}
+
+		workflowPath := filepath.Join(root, "workflow.yaml")
+		workflow := fmt.Sprintf(`version: v1
+phases:
+  - name: prepare
+    steps:
+      - id: download
+        apiVersion: deck/v1
+        kind: DownloadFile
+        spec:
+          source:
+            path: %s
+          output:
+            path: files/fetched.bin
+  - name: install
+    steps:
+      - id: run
+        apiVersion: deck/v1
+        kind: RunCommand
+        spec:
+          command: ["true"]
+`, sourceFile)
+		if err := os.WriteFile(workflowPath, []byte(workflow), 0o644); err != nil {
+			t.Fatalf("write workflow: %v", err)
+		}
+
+		err := run([]string{"apply", "--file", workflowPath, "--bundle", bundle})
+		if err == nil {
+			t.Fatalf("expected preflight failure")
+		}
+		if !strings.Contains(err.Error(), "preflight failed") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if err := run([]string{"apply", "--file", workflowPath, "--bundle", bundle, "--skip-preflight"}); err != nil {
+			t.Fatalf("expected success with --skip-preflight, got %v", err)
+		}
+	})
+}
 
 func TestRunBundleVerify(t *testing.T) {
 	t.Run("success", func(t *testing.T) {

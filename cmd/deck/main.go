@@ -29,6 +29,8 @@ func run(args []string) error {
 	}
 
 	switch args[0] {
+	case "apply":
+		return runApply(args[1:])
 	case "validate":
 		return runValidate(args[1:])
 	case "run":
@@ -44,6 +46,51 @@ func run(args []string) error {
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
+}
+
+func runApply(args []string) error {
+	fs := flag.NewFlagSet("apply", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	file := fs.String("file", "", "path to workflow file")
+	bundlePath := fs.String("bundle", "", "bundle path")
+	skipPreflight := fs.Bool("skip-preflight", false, "skip preflight checks")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *file == "" {
+		return errors.New("--file is required")
+	}
+
+	if err := validate.File(*file); err != nil {
+		return err
+	}
+
+	wf, err := config.Load(*file)
+	if err != nil {
+		return err
+	}
+
+	bundleRoot := *bundlePath
+	if bundleRoot == "" {
+		bundleRoot = wf.Context.BundleRoot
+	}
+
+	if err := prepare.Run(wf, prepare.RunOptions{BundleRoot: bundleRoot}); err != nil {
+		return err
+	}
+
+	if !*skipPreflight {
+		if _, err := diagnose.Preflight(wf, diagnose.RunOptions{WorkflowPath: *file, BundleRoot: bundleRoot}); err != nil {
+			return err
+		}
+	}
+
+	if err := install.Run(wf, install.RunOptions{BundleRoot: bundleRoot}); err != nil {
+		return err
+	}
+
+	fmt.Fprintln(os.Stdout, "apply: ok")
+	return nil
 }
 
 func runServer(args []string) error {
@@ -270,5 +317,5 @@ func runDiagnose(args []string) error {
 }
 
 func usageError() error {
-	return errors.New("usage: deck validate -f <file> | deck run --file <file> --phase <phase> | deck resume --file <file> | deck diagnose --preflight --file <file> | deck bundle verify --bundle <path> | deck bundle import --file <bundle.tar> --dest <dir> | deck bundle collect --bundle <dir> --output <bundle.tar> | deck server start --root <dir> --addr <host:port>")
+	return errors.New("usage: deck apply --file <file> | deck validate -f <file> | deck run --file <file> --phase <phase> | deck resume --file <file> | deck diagnose --preflight --file <file> | deck bundle verify --bundle <path> | deck bundle import --file <bundle.tar> --dest <dir> | deck bundle collect --bundle <dir> --output <bundle.tar> | deck server start --root <dir> --addr <host:port>")
 }
