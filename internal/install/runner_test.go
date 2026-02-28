@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -390,6 +391,108 @@ func TestRun_KubeadmJoinMissingFileErrorCode(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "E_INSTALL_KUBEADM_JOIN_FILE_NOT_FOUND") {
 		t.Fatalf("expected E_INSTALL_KUBEADM_JOIN_FILE_NOT_FOUND, got %v", err)
+	}
+}
+
+func TestRun_KubeadmRealMode(t *testing.T) {
+	dir := t.TempDir()
+	bundle := filepath.Join(dir, "bundle")
+	statePath := filepath.Join(dir, "state", "state.json")
+	if err := os.MkdirAll(bundle, 0o755); err != nil {
+		t.Fatalf("mkdir bundle: %v", err)
+	}
+	artifact := filepath.Join(bundle, "files", "a.txt")
+	if err := os.MkdirAll(filepath.Dir(artifact), 0o755); err != nil {
+		t.Fatalf("mkdir files: %v", err)
+	}
+	if err := os.WriteFile(artifact, []byte("ok"), 0o644); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+	if err := writeManifestForTest(bundle, "files/a.txt", []byte("ok")); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	binDir := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatalf("mkdir bin: %v", err)
+	}
+	fakeKubeadmPath := filepath.Join(binDir, "kubeadm")
+	fakeScript := "#!/usr/bin/env bash\nset -euo pipefail\nif [[ \"${1:-}\" == \"init\" ]]; then\n  exit 0\nfi\nif [[ \"${1:-}\" == \"token\" && \"${2:-}\" == \"create\" ]]; then\n  echo \"kubeadm join 10.1.0.10:6443 --token fake.token --discovery-token-ca-cert-hash sha256:fake\"\n  exit 0\nfi\nif [[ \"${1:-}\" == \"join\" ]]; then\n  exit 0\nfi\necho \"unsupported kubeadm invocation\" >&2\nexit 1\n"
+	if err := os.WriteFile(fakeKubeadmPath, []byte(fakeScript), 0o755); err != nil {
+		t.Fatalf("write fake kubeadm: %v", err)
+	}
+
+	originalPath := os.Getenv("PATH")
+	t.Setenv("PATH", fmt.Sprintf("%s:%s", binDir, originalPath))
+
+	joinPath := filepath.Join(dir, "join.txt")
+	wf := &config.Workflow{
+		Version: "v1",
+		Context: config.Context{StateFile: statePath},
+		Phases: []config.Phase{{
+			Name: "install",
+			Steps: []config.Step{
+				{ID: "kubeadm-init", Kind: "KubeadmInit", Spec: map[string]any{"mode": "real", "outputJoinFile": joinPath}},
+				{ID: "kubeadm-join", Kind: "KubeadmJoin", Spec: map[string]any{"mode": "real", "joinFile": joinPath}},
+			},
+		}},
+	}
+
+	if err := Run(wf, RunOptions{BundleRoot: bundle}); err != nil {
+		t.Fatalf("real kubeadm mode run failed: %v", err)
+	}
+
+	joinRaw, err := os.ReadFile(joinPath)
+	if err != nil {
+		t.Fatalf("read join file: %v", err)
+	}
+	if !strings.Contains(string(joinRaw), "kubeadm join") {
+		t.Fatalf("expected real join command in join file, got %q", string(joinRaw))
+	}
+}
+
+func TestRun_KubeadmJoinRealModeRejectsInvalidCommand(t *testing.T) {
+	dir := t.TempDir()
+	bundle := filepath.Join(dir, "bundle")
+	statePath := filepath.Join(dir, "state", "state.json")
+	if err := os.MkdirAll(bundle, 0o755); err != nil {
+		t.Fatalf("mkdir bundle: %v", err)
+	}
+	artifact := filepath.Join(bundle, "files", "a.txt")
+	if err := os.MkdirAll(filepath.Dir(artifact), 0o755); err != nil {
+		t.Fatalf("mkdir files: %v", err)
+	}
+	if err := os.WriteFile(artifact, []byte("ok"), 0o644); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+	if err := writeManifestForTest(bundle, "files/a.txt", []byte("ok")); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	joinPath := filepath.Join(dir, "join.txt")
+	if err := os.WriteFile(joinPath, []byte("echo not-kubeadm\n"), 0o644); err != nil {
+		t.Fatalf("write join file: %v", err)
+	}
+
+	wf := &config.Workflow{
+		Version: "v1",
+		Context: config.Context{StateFile: statePath},
+		Phases: []config.Phase{{
+			Name: "install",
+			Steps: []config.Step{{
+				ID:   "kubeadm-join",
+				Kind: "KubeadmJoin",
+				Spec: map[string]any{"mode": "real", "joinFile": joinPath},
+			}},
+		}},
+	}
+
+	err := Run(wf, RunOptions{BundleRoot: bundle})
+	if err == nil {
+		t.Fatalf("expected invalid join command error")
+	}
+	if !strings.Contains(err.Error(), "E_INSTALL_KUBEADM_JOIN_COMMAND_INVALID") {
+		t.Fatalf("expected E_INSTALL_KUBEADM_JOIN_COMMAND_INVALID, got %v", err)
 	}
 }
 

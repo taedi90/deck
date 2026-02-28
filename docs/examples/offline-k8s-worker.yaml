@@ -1,0 +1,58 @@
+version: v1
+vars:
+  role: worker
+context:
+  stateFile: /tmp/deck/state-worker-offline.json
+phases:
+  - name: install
+    steps:
+      - id: prep-disable-swap
+        apiVersion: deck/v1
+        kind: RunCommand
+        spec:
+          command: ["bash", "-lc", "swapoff -a"]
+      - id: prep-kernel-modules-persist
+        apiVersion: deck/v1
+        kind: Modprobe
+        spec:
+          modules: [overlay, br_netfilter]
+          persistFile: /etc/modules-load.d/k8s.conf
+      - id: prep-kernel-modules-load
+        apiVersion: deck/v1
+        kind: RunCommand
+        spec:
+          command: ["bash", "-lc", "modprobe overlay && modprobe br_netfilter"]
+      - id: prep-sysctl-file
+        apiVersion: deck/v1
+        kind: Sysctl
+        spec:
+          writeFile: /etc/sysctl.d/99-kubernetes-cri.conf
+          values:
+            net.bridge.bridge-nf-call-iptables: 1
+            net.bridge.bridge-nf-call-ip6tables: 1
+            net.ipv4.ip_forward: 1
+      - id: prep-sysctl-apply
+        apiVersion: deck/v1
+        kind: RunCommand
+        spec:
+          command: ["bash", "-lc", "sysctl --system"]
+      - id: prep-containerd-config
+        apiVersion: deck/v1
+        kind: RunCommand
+        spec:
+          command:
+            - "bash"
+            - "-lc"
+            - "mkdir -p /etc/containerd && containerd config default > /etc/containerd/config.toml && sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml"
+      - id: prep-kubelet-runtime
+        apiVersion: deck/v1
+        kind: RunCommand
+        spec:
+          command: ["bash", "-lc", "systemctl enable --now containerd kubelet"]
+      - id: kubeadm-join
+        apiVersion: deck/v1
+        kind: KubeadmJoin
+        spec:
+          mode: real
+          joinFile: /tmp/deck/join-real.txt
+          extraArgs: ["--cri-socket", "unix:///run/containerd/containerd.sock", "--ignore-preflight-errors=Swap"]
