@@ -162,6 +162,63 @@ func TestNewHandler(t *testing.T) {
 		}
 	})
 
+	t.Run("filters reports by job_id", func(t *testing.T) {
+		postA := httptest.NewRequest(http.MethodPost, "/api/agent/report", strings.NewReader(`{"job_id":"j-a","status":"success"}`))
+		postARR := httptest.NewRecorder()
+		h.ServeHTTP(postARR, postA)
+
+		postB := httptest.NewRequest(http.MethodPost, "/api/agent/report", strings.NewReader(`{"job_id":"j-b","status":"success"}`))
+		postBRR := httptest.NewRecorder()
+		h.ServeHTTP(postBRR, postB)
+
+		getReq := httptest.NewRequest(http.MethodGet, "/api/agent/reports?job_id=j-a", nil)
+		getRR := httptest.NewRecorder()
+		h.ServeHTTP(getRR, getReq)
+		if getRR.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", getRR.Code)
+		}
+		if !strings.Contains(getRR.Body.String(), `"job_id":"j-a"`) || strings.Contains(getRR.Body.String(), `"job_id":"j-b"`) {
+			t.Fatalf("unexpected filtered response: %q", getRR.Body.String())
+		}
+	})
+
+	t.Run("limits reports count", func(t *testing.T) {
+		for i := 0; i < 3; i++ {
+			req := httptest.NewRequest(http.MethodPost, "/api/agent/report", strings.NewReader(`{"job_id":"j-limit","status":"success"}`))
+			rr := httptest.NewRecorder()
+			h.ServeHTTP(rr, req)
+		}
+
+		getReq := httptest.NewRequest(http.MethodGet, "/api/agent/reports?limit=1", nil)
+		getRR := httptest.NewRecorder()
+		h.ServeHTTP(getRR, getReq)
+		if getRR.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", getRR.Code)
+		}
+		var payload struct {
+			Status  string           `json:"status"`
+			Reports []map[string]any `json:"reports"`
+		}
+		if err := json.Unmarshal(getRR.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("parse reports response: %v", err)
+		}
+		if payload.Status != "ok" || len(payload.Reports) != 1 {
+			t.Fatalf("unexpected limited response: %+v", payload)
+		}
+	})
+
+	t.Run("rejects invalid limit", func(t *testing.T) {
+		getReq := httptest.NewRequest(http.MethodGet, "/api/agent/reports?limit=0", nil)
+		getRR := httptest.NewRecorder()
+		h.ServeHTTP(getRR, getReq)
+		if getRR.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d", getRR.Code)
+		}
+		if !strings.Contains(getRR.Body.String(), `"status":"invalid_limit"`) {
+			t.Fatalf("unexpected invalid limit response: %q", getRR.Body.String())
+		}
+	})
+
 	t.Run("writes audit logs", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
 		rr := httptest.NewRecorder()

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -96,6 +97,33 @@ func (s *alphaReportStore) list() []map[string]any {
 			c[k] = v
 		}
 		out = append(out, c)
+	}
+	return out
+}
+
+func (s *alphaReportStore) listFiltered(limit int, jobID string) []map[string]any {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	jobID = strings.TrimSpace(jobID)
+	out := make([]map[string]any, 0)
+	for i := len(s.reports) - 1; i >= 0; i-- {
+		r := s.reports[i]
+		if jobID != "" {
+			rid, ok := r["job_id"].(string)
+			if !ok || strings.TrimSpace(rid) != jobID {
+				continue
+			}
+		}
+
+		c := map[string]any{}
+		for k, v := range r {
+			c[k] = v
+		}
+		out = append(out, c)
+		if limit > 0 && len(out) >= limit {
+			break
+		}
 	}
 	return out
 }
@@ -209,10 +237,23 @@ func NewHandler(root string) (http.Handler, error) {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
+
+		jobID := strings.TrimSpace(r.URL.Query().Get("job_id"))
+		limit := 0
+		if rawLimit := strings.TrimSpace(r.URL.Query().Get("limit")); rawLimit != "" {
+			parsed, err := strconv.Atoi(rawLimit)
+			if err != nil || parsed <= 0 {
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(map[string]string{"status": "invalid_limit"})
+				return
+			}
+			limit = parsed
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"status":  "ok",
-			"reports": reports.list(),
+			"reports": reports.listFiltered(limit, jobID),
 		})
 	})
 
