@@ -293,6 +293,18 @@ func NewHandler(root string, opts HandlerOptions) (http.Handler, error) {
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "accepted"})
 	})
 
+	mux.HandleFunc("/api/agent/jobs", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status": "ok",
+			"jobs":   queue.snapshot(),
+		})
+	})
+
 	mux.HandleFunc("/api/agent/report", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPost:

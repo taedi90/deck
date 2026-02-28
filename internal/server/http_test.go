@@ -101,6 +101,16 @@ func TestNewHandler(t *testing.T) {
 			t.Fatalf("expected enqueue 200, got %d", enqRR.Code)
 		}
 
+		jobsReq := httptest.NewRequest(http.MethodGet, "/api/agent/jobs", nil)
+		jobsRR := httptest.NewRecorder()
+		h.ServeHTTP(jobsRR, jobsReq)
+		if jobsRR.Code != http.StatusOK {
+			t.Fatalf("expected jobs 200, got %d", jobsRR.Code)
+		}
+		if !strings.Contains(jobsRR.Body.String(), `"id":"j-1"`) {
+			t.Fatalf("expected queued job in jobs response: %q", jobsRR.Body.String())
+		}
+
 		leaseReq := httptest.NewRequest(http.MethodPost, "/api/agent/lease", strings.NewReader(`{"agent":"x"}`))
 		leaseRR := httptest.NewRecorder()
 		h.ServeHTTP(leaseRR, leaseReq)
@@ -119,6 +129,16 @@ func TestNewHandler(t *testing.T) {
 		}
 		if !strings.Contains(leaseRR2.Body.String(), `"job":null`) {
 			t.Fatalf("expected empty queue on second lease: %q", leaseRR2.Body.String())
+		}
+
+		jobsReq2 := httptest.NewRequest(http.MethodGet, "/api/agent/jobs", nil)
+		jobsRR2 := httptest.NewRecorder()
+		h.ServeHTTP(jobsRR2, jobsReq2)
+		if jobsRR2.Code != http.StatusOK {
+			t.Fatalf("expected jobs 200, got %d", jobsRR2.Code)
+		}
+		if !strings.Contains(jobsRR2.Body.String(), `"jobs":[]`) {
+			t.Fatalf("expected empty jobs queue after lease: %q", jobsRR2.Body.String())
 		}
 	})
 

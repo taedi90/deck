@@ -295,6 +295,26 @@ func TestRunAgent(t *testing.T) {
 			t.Fatalf("expected success, got %v", err)
 		}
 	})
+
+	t.Run("run-once alias success", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/api/agent/heartbeat":
+				w.WriteHeader(http.StatusOK)
+			case "/api/agent/lease":
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"status":"ok","job":null}`))
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+		defer srv.Close()
+
+		err := run([]string{"agent", "run-once", "--server", srv.URL})
+		if err != nil {
+			t.Fatalf("expected success, got %v", err)
+		}
+	})
 }
 
 func writeManifestForMainTest(bundleRoot, rel string, content []byte) error {

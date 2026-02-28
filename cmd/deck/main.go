@@ -53,8 +53,13 @@ func run(args []string) error {
 }
 
 func runAgent(args []string) error {
-	if len(args) == 0 || args[0] != "start" {
-		return errors.New("usage: deck agent start --server <url> [--interval <duration>] [--once]")
+	if len(args) == 0 {
+		return errors.New("usage: deck agent start --server <url> [--interval <duration>] [--once] | deck agent run-once --server <url>")
+	}
+
+	mode := args[0]
+	if mode != "start" && mode != "run-once" {
+		return errors.New("usage: deck agent start --server <url> [--interval <duration>] [--once] | deck agent run-once --server <url>")
 	}
 
 	fs := flag.NewFlagSet("agent start", flag.ContinueOnError)
@@ -74,11 +79,12 @@ func runAgent(args []string) error {
 		return fmt.Errorf("invalid --interval: %w", err)
 	}
 
-	if err := agent.Run(agent.RunOptions{ServerURL: *serverURL, Interval: interval, Once: *once}); err != nil {
+	runOnce := *once || mode == "run-once"
+	if err := agent.Run(agent.RunOptions{ServerURL: *serverURL, Interval: interval, Once: runOnce}); err != nil {
 		return err
 	}
 
-	if *once {
+	if runOnce {
 		fmt.Fprintln(os.Stdout, "agent start: heartbeat sent")
 	}
 	return nil
@@ -385,5 +391,5 @@ func runDiagnose(args []string) error {
 }
 
 func usageError() error {
-	return errors.New("usage: deck apply --file <file> | deck validate -f <file> | deck run --file <file> --phase <phase> | deck resume --file <file> | deck diagnose --preflight --file <file> | deck bundle verify --bundle <path> | deck bundle import --file <bundle.tar> --dest <dir> | deck bundle collect --bundle <dir> --output <bundle.tar> | deck server start --root <dir> --addr <host:port> | deck agent start --server <url>")
+	return errors.New("usage: deck apply --file <file> | deck validate -f <file> | deck run --file <file> --phase <phase> | deck resume --file <file> | deck diagnose --preflight --file <file> | deck bundle verify --bundle <path> | deck bundle import --file <bundle.tar> --dest <dir> | deck bundle collect --bundle <dir> --output <bundle.tar> | deck server start --root <dir> --addr <host:port> | deck agent start --server <url> | deck agent run-once --server <url>")
 }
