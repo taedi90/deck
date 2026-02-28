@@ -93,6 +93,18 @@ func TestNewHandler(t *testing.T) {
 		}
 	})
 
+	t.Run("accepts agent report", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/agent/report", strings.NewReader(`{"job_id":"j-1","status":"success"}`))
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", rr.Code)
+		}
+		if !strings.Contains(rr.Body.String(), `"status":"accepted"`) {
+			t.Fatalf("unexpected report response: %q", rr.Body.String())
+		}
+	})
+
 	t.Run("writes audit logs", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
 		rr := httptest.NewRecorder()
