@@ -45,14 +45,21 @@ type statusRecorder struct {
 }
 
 type alphaJob struct {
-	ID      string `json:"id"`
-	Type    string `json:"type"`
-	Message string `json:"message,omitempty"`
+	ID          string `json:"id"`
+	Type        string `json:"type"`
+	Message     string `json:"message,omitempty"`
+	Attempt     int    `json:"attempt,omitempty"`
+	MaxAttempts int    `json:"max_attempts,omitempty"`
 }
 
 type alphaJobQueue struct {
 	mu   sync.Mutex
 	jobs []alphaJob
+}
+
+type alphaInFlightJobs struct {
+	mu   sync.Mutex
+	jobs map[string]alphaJob
 }
 
 type alphaReportStore struct {
@@ -85,6 +92,22 @@ func (q *alphaJobQueue) dequeue() (alphaJob, bool) {
 	job := q.jobs[0]
 	q.jobs = q.jobs[1:]
 	return job, true
+}
+
+func (f *alphaInFlightJobs) set(job alphaJob) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.jobs[job.ID] = job
+}
+
+func (f *alphaInFlightJobs) pop(id string) (alphaJob, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	job, ok := f.jobs[id]
+	if ok {
+		delete(f.jobs, id)
+	}
+	return job, ok
 }
 
 func (q *alphaJobQueue) snapshot() []alphaJob {
@@ -203,6 +226,7 @@ func NewHandler(root string, opts HandlerOptions) (http.Handler, error) {
 
 	mux := http.NewServeMux()
 	queue := &alphaJobQueue{jobs: []alphaJob{}}
+	inFlight := &alphaInFlightJobs{jobs: map[string]alphaJob{}}
 	reports := &alphaReportStore{max: reportMax, reports: []map[string]any{}}
 
 	state, err := loadAlphaServerState(root)
@@ -248,6 +272,11 @@ func NewHandler(root string, opts HandlerOptions) (http.Handler, error) {
 		job, ok := queue.dequeue()
 		var jobPayload any
 		if ok {
+			job.Attempt++
+			if job.MaxAttempts <= 0 {
+				job.MaxAttempts = 1
+			}
+			inFlight.set(job)
 			jobPayload = job
 			if err := persist(); err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
@@ -282,6 +311,15 @@ func NewHandler(root string, opts HandlerOptions) (http.Handler, error) {
 			_ = json.NewEncoder(w).Encode(map[string]string{"status": "invalid_job"})
 			return
 		}
+		if job.MaxAttempts < 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{"status": "invalid_job"})
+			return
+		}
+		if job.MaxAttempts == 0 {
+			job.MaxAttempts = 1
+		}
+		job.Attempt = 0
 
 		queue.enqueue(job)
 		if err := persist(); err != nil {
@@ -317,6 +355,15 @@ func NewHandler(root string, opts HandlerOptions) (http.Handler, error) {
 			}
 			report["received_at"] = time.Now().UTC().Format(time.RFC3339)
 			reports.add(report)
+
+			jobID, _ := report["job_id"].(string)
+			status, _ := report["status"].(string)
+			if leasedJob, ok := inFlight.pop(strings.TrimSpace(jobID)); ok {
+				if strings.EqualFold(strings.TrimSpace(status), "failed") && leasedJob.Attempt < leasedJob.MaxAttempts {
+					queue.enqueue(leasedJob)
+				}
+			}
+
 			if err := persist(); err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				_ = json.NewEncoder(w).Encode(map[string]string{"status": "persist_error"})

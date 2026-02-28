@@ -151,6 +151,96 @@ func TestNewHandler(t *testing.T) {
 		}
 	})
 
+	t.Run("rejects invalid max_attempts", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/agent/job", strings.NewReader(`{"id":"j-bad","type":"noop","max_attempts":-1}`))
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d", rr.Code)
+		}
+	})
+
+	t.Run("requeues failed job when attempts remain", func(t *testing.T) {
+		rootRetry := t.TempDir()
+		hRetry, err := NewHandler(rootRetry, HandlerOptions{})
+		if err != nil {
+			t.Fatalf("NewHandler: %v", err)
+		}
+
+		enqReq := httptest.NewRequest(http.MethodPost, "/api/agent/job", strings.NewReader(`{"id":"j-retry","type":"echo","message":"hello","max_attempts":2}`))
+		enqRR := httptest.NewRecorder()
+		hRetry.ServeHTTP(enqRR, enqReq)
+		if enqRR.Code != http.StatusOK {
+			t.Fatalf("expected enqueue 200, got %d", enqRR.Code)
+		}
+
+		leaseReq := httptest.NewRequest(http.MethodPost, "/api/agent/lease", strings.NewReader(`{"agent":"x"}`))
+		leaseRR := httptest.NewRecorder()
+		hRetry.ServeHTTP(leaseRR, leaseReq)
+		if leaseRR.Code != http.StatusOK {
+			t.Fatalf("expected lease 200, got %d", leaseRR.Code)
+		}
+		if !strings.Contains(leaseRR.Body.String(), `"id":"j-retry"`) || !strings.Contains(leaseRR.Body.String(), `"attempt":1`) {
+			t.Fatalf("unexpected lease response: %q", leaseRR.Body.String())
+		}
+
+		repReq := httptest.NewRequest(http.MethodPost, "/api/agent/report", strings.NewReader(`{"job_id":"j-retry","status":"failed"}`))
+		repRR := httptest.NewRecorder()
+		hRetry.ServeHTTP(repRR, repReq)
+		if repRR.Code != http.StatusOK {
+			t.Fatalf("expected report 200, got %d", repRR.Code)
+		}
+
+		jobsReq := httptest.NewRequest(http.MethodGet, "/api/agent/jobs", nil)
+		jobsRR := httptest.NewRecorder()
+		hRetry.ServeHTTP(jobsRR, jobsReq)
+		if jobsRR.Code != http.StatusOK {
+			t.Fatalf("expected jobs 200, got %d", jobsRR.Code)
+		}
+		if !strings.Contains(jobsRR.Body.String(), `"id":"j-retry"`) {
+			t.Fatalf("expected retry job queued after failed report: %q", jobsRR.Body.String())
+		}
+	})
+
+	t.Run("does not requeue failed job when attempts exhausted", func(t *testing.T) {
+		rootFinal := t.TempDir()
+		hFinal, err := NewHandler(rootFinal, HandlerOptions{})
+		if err != nil {
+			t.Fatalf("NewHandler: %v", err)
+		}
+
+		enqReq := httptest.NewRequest(http.MethodPost, "/api/agent/job", strings.NewReader(`{"id":"j-final","type":"noop","max_attempts":1}`))
+		enqRR := httptest.NewRecorder()
+		hFinal.ServeHTTP(enqRR, enqReq)
+		if enqRR.Code != http.StatusOK {
+			t.Fatalf("expected enqueue 200, got %d", enqRR.Code)
+		}
+
+		leaseReq := httptest.NewRequest(http.MethodPost, "/api/agent/lease", strings.NewReader(`{"agent":"x"}`))
+		leaseRR := httptest.NewRecorder()
+		hFinal.ServeHTTP(leaseRR, leaseReq)
+		if leaseRR.Code != http.StatusOK {
+			t.Fatalf("expected lease 200, got %d", leaseRR.Code)
+		}
+
+		repReq := httptest.NewRequest(http.MethodPost, "/api/agent/report", strings.NewReader(`{"job_id":"j-final","status":"failed"}`))
+		repRR := httptest.NewRecorder()
+		hFinal.ServeHTTP(repRR, repReq)
+		if repRR.Code != http.StatusOK {
+			t.Fatalf("expected report 200, got %d", repRR.Code)
+		}
+
+		jobsReq := httptest.NewRequest(http.MethodGet, "/api/agent/jobs", nil)
+		jobsRR := httptest.NewRecorder()
+		hFinal.ServeHTTP(jobsRR, jobsReq)
+		if jobsRR.Code != http.StatusOK {
+			t.Fatalf("expected jobs 200, got %d", jobsRR.Code)
+		}
+		if strings.Contains(jobsRR.Body.String(), `"id":"j-final"`) {
+			t.Fatalf("expected exhausted job not requeued: %q", jobsRR.Body.String())
+		}
+	})
+
 	t.Run("persists queue and reports across handler restart", func(t *testing.T) {
 		enqReq := httptest.NewRequest(http.MethodPost, "/api/agent/job", strings.NewReader(`{"id":"j-persist","type":"noop"}`))
 		enqRR := httptest.NewRecorder()
