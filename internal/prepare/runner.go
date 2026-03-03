@@ -834,9 +834,21 @@ func runDownloadK8sPackages(runner CommandRunner, bundleRoot string, spec map[st
 		pkgs = append(pkgs, c)
 	}
 
+	distro := mapValue(spec, "distro")
+	family := stringValue(distro, "family")
+	if family == "" {
+		family = "debian"
+	}
+	if family == "debian" {
+		pkgs = append(pkgs, "cri-tools", "kubernetes-cni")
+	}
+
 	backend := mapValue(spec, "backend")
 	if stringValue(backend, "mode") == "container" && stringValue(backend, "image") != "" {
-		files, err := runContainerPackageDownload(runner, bundleRoot, dir, spec, pkgs)
+		versionLine := strings.TrimSpace(version)
+		files, err := runContainerPackageDownloadWithScript(runner, bundleRoot, dir, spec, pkgs, func(family, pkg string) string {
+			return buildK8sPackageDownloadScript(family, pkg, versionLine)
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -862,6 +874,10 @@ func runDownloadK8sPackages(runner CommandRunner, bundleRoot string, spec map[st
 }
 
 func runContainerPackageDownload(runner CommandRunner, bundleRoot, dir string, spec map[string]any, packages []string) ([]string, error) {
+	return runContainerPackageDownloadWithScript(runner, bundleRoot, dir, spec, packages, buildPackageDownloadScript)
+}
+
+func runContainerPackageDownloadWithScript(runner CommandRunner, bundleRoot, dir string, spec map[string]any, packages []string, scriptBuilder func(family, pkg string) string) ([]string, error) {
 	backend := mapValue(spec, "backend")
 	runtimeSel, err := detectRuntime(runner, stringValue(backend, "runtime"))
 	if err != nil {
@@ -886,7 +902,7 @@ func runContainerPackageDownload(runner CommandRunner, bundleRoot, dir string, s
 	before, _ := listRelativeFiles(outAbs)
 
 	for _, pkg := range packages {
-		cmdScript := buildPackageDownloadScript(family, pkg)
+		cmdScript := scriptBuilder(family, pkg)
 		args := []string{"run", "--rm", "-v", outAbs + ":/out", image, "bash", "-lc", cmdScript}
 		if err := runner.Run(context.Background(), runtimeSel, args...); err != nil {
 			return nil, fmt.Errorf("container package download failed for %s: %w", pkg, err)
@@ -915,7 +931,27 @@ func buildPackageDownloadScript(family, pkg string) string {
 	if family == "rhel" {
 		return fmt.Sprintf("set -euo pipefail; (dnf -y install 'dnf-command(download)' >/dev/null 2>&1 || yum -y install yum-utils >/dev/null 2>&1 || true); (dnf -y download --destdir /out %s || yumdownloader --destdir /out %s)", safePkg, safePkg)
 	}
-	return fmt.Sprintf("set -euo pipefail; apt-get update -y >/dev/null; (apt-get download %s || true); cp -a ./*.deb /out/ 2>/dev/null || true", safePkg)
+	return fmt.Sprintf("set -euo pipefail; mkdir -p /tmp/deck-pkg-download; cd /tmp/deck-pkg-download; apt-get update -y >/dev/null; (apt-get download %s || true); cp -a ./*.deb /out/ 2>/dev/null || true", safePkg)
+}
+
+func buildK8sPackageDownloadScript(family, pkg, version string) string {
+	safePkg := shellEscape(pkg)
+	channel := kubernetesStableChannel(version)
+	if family == "rhel" {
+		repoURL := shellEscape(fmt.Sprintf("https://pkgs.k8s.io/core:/stable:/%s/rpm/", channel))
+		return fmt.Sprintf("set -euo pipefail; cat > /etc/yum.repos.d/kubernetes.repo <<'EOF'\n[kubernetes]\nname=Kubernetes\nbaseurl=%s\nenabled=1\ngpgcheck=0\nrepo_gpgcheck=0\nEOF\n(dnf -y install 'dnf-command(download)' >/dev/null 2>&1 || yum -y install yum-utils >/dev/null 2>&1 || true); (dnf -y download --destdir /out %s || yumdownloader --destdir /out %s)", repoURL, safePkg, safePkg)
+	}
+	repoURL := shellEscape(fmt.Sprintf("https://pkgs.k8s.io/core:/stable:/%s/deb/", channel))
+	return fmt.Sprintf("set -euo pipefail; export DEBIAN_FRONTEND=noninteractive; mkdir -p /tmp/deck-pkg-download; cd /tmp/deck-pkg-download; apt-get update -y >/dev/null; apt-get install -y ca-certificates curl gpg >/dev/null; install -d -m 0755 /etc/apt/keyrings; curl -fsSL %sRelease.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg; echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] %s /' > /etc/apt/sources.list.d/kubernetes.list; apt-get update -y >/dev/null; (apt-get download %s || true); cp -a ./*.deb /out/ 2>/dev/null || true", repoURL, repoURL, safePkg)
+}
+
+func kubernetesStableChannel(version string) string {
+	trimmed := strings.TrimPrefix(strings.TrimSpace(version), "v")
+	parts := strings.Split(trimmed, ".")
+	if len(parts) >= 2 && parts[0] != "" && parts[1] != "" {
+		return "v" + parts[0] + "." + parts[1]
+	}
+	return "v1.30"
 }
 
 func shellEscape(v string) string {
@@ -1011,7 +1047,7 @@ func runSkopeoDownloads(runner CommandRunner, bundleRoot, dir string, images []s
 		dest := "docker-archive:" + abs + ":" + img
 		if useSandbox {
 			bundleMountDest := "/bundle/" + rel
-			args := []string{"run", "--rm", "-v", absBundle + ":/bundle", sandboxImage, "skopeo", "copy", "docker://" + img, "docker-archive:" + bundleMountDest + ":" + img}
+			args := []string{"run", "--rm", "-v", absBundle + ":/bundle", sandboxImage, "copy", "docker://" + img, "docker-archive:" + bundleMountDest + ":" + img}
 			if err := runner.Run(context.Background(), runtimeSel, args...); err != nil {
 				return nil, fmt.Errorf("skopeo sandbox copy failed for %s: %w", img, err)
 			}

@@ -903,6 +903,84 @@ func TestRun_InstallPackagesSourcePathValidation(t *testing.T) {
 	}
 }
 
+func TestRun_InstallPackagesInstallsFromLocalRepo(t *testing.T) {
+	dir := t.TempDir()
+	bundle := filepath.Join(dir, "bundle")
+	statePath := filepath.Join(dir, "state", "state.json")
+	if err := os.MkdirAll(bundle, 0o755); err != nil {
+		t.Fatalf("mkdir bundle: %v", err)
+	}
+	artifact := filepath.Join(bundle, "files", "a.txt")
+	if err := os.MkdirAll(filepath.Dir(artifact), 0o755); err != nil {
+		t.Fatalf("mkdir files: %v", err)
+	}
+	if err := os.WriteFile(artifact, []byte("ok"), 0o644); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+	if err := writeManifestForTest(bundle, "files/a.txt", []byte("ok")); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	repoDir := filepath.Join(dir, "repo")
+	if err := os.MkdirAll(repoDir, 0o755); err != nil {
+		t.Fatalf("mkdir repo: %v", err)
+	}
+	debA := filepath.Join(repoDir, "containerd_1.0.0_amd64.deb")
+	debB := filepath.Join(repoDir, "kubelet_1.30.1_amd64.deb")
+	if err := os.WriteFile(debA, []byte("deb-a"), 0o644); err != nil {
+		t.Fatalf("write debA: %v", err)
+	}
+	if err := os.WriteFile(debB, []byte("deb-b"), 0o644); err != nil {
+		t.Fatalf("write debB: %v", err)
+	}
+
+	binDir := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatalf("mkdir bin: %v", err)
+	}
+	marker := filepath.Join(dir, "apt-local-invoked.txt")
+	fakeApt := filepath.Join(binDir, "apt-get")
+	script := "#!/usr/bin/env bash\nset -euo pipefail\necho \"$*\" > \"" + marker + "\"\nexit 0\n"
+	if err := os.WriteFile(fakeApt, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake apt-get: %v", err)
+	}
+
+	originalPath := os.Getenv("PATH")
+	t.Setenv("PATH", fmt.Sprintf("%s:%s", binDir, originalPath))
+
+	wf := &config.Workflow{
+		Version: "v1",
+		Context: config.Context{StateFile: statePath},
+		Phases: []config.Phase{{
+			Name: "install",
+			Steps: []config.Step{{
+				ID:   "install-pkgs",
+				Kind: "InstallPackages",
+				Spec: map[string]any{
+					"packages": []any{"containerd", "kubelet"},
+					"source":   map[string]any{"type": "local-repo", "path": repoDir},
+				},
+			}},
+		}},
+	}
+
+	if err := Run(wf, RunOptions{BundleRoot: bundle}); err != nil {
+		t.Fatalf("expected local repo install success, got %v", err)
+	}
+
+	raw, err := os.ReadFile(marker)
+	if err != nil {
+		t.Fatalf("read marker: %v", err)
+	}
+	args := strings.TrimSpace(string(raw))
+	if !strings.Contains(args, "install -y") {
+		t.Fatalf("unexpected apt-get args: %q", args)
+	}
+	if !strings.Contains(args, debA) || !strings.Contains(args, debB) {
+		t.Fatalf("local deb artifacts were not passed to apt-get: %q", args)
+	}
+}
+
 func writeManifestForTest(bundleRoot, relPath string, content []byte) error {
 	sum := sha256.Sum256(content)
 	entry := map[string]any{
