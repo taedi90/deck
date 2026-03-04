@@ -757,7 +757,187 @@ func TestRun_CheckHostStep(t *testing.T) {
 	})
 }
 
+func TestRun_DownloadPackagesRepoModeAptFlatGeneratesMetadata(t *testing.T) {
+	bundle := t.TempDir()
+	r := &fakeRunner{}
+
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "prepare",
+			Steps: []config.Step{{
+				ID:   "pkgs",
+				Kind: "DownloadPackages",
+				Spec: map[string]any{
+					"packages": []any{"containerd"},
+					"distro": map[string]any{
+						"family":  "debian",
+						"release": "ubuntu2204",
+					},
+					"repo": map[string]any{
+						"type": "apt-flat",
+					},
+					"backend": map[string]any{
+						"mode":    "container",
+						"runtime": "docker",
+						"image":   "ubuntu:22.04",
+					},
+				},
+			}},
+		}},
+	}
+
+	if err := Run(wf, RunOptions{BundleRoot: bundle, CommandRunner: r}); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(bundle, "packages", "apt", "ubuntu2204", "pkgs", "mock-package.deb")); err != nil {
+		t.Fatalf("expected mock deb artifact: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(bundle, "packages", "apt", "ubuntu2204", "Packages.gz")); err != nil {
+		t.Fatalf("expected Packages.gz: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(bundle, "packages", "apt", "ubuntu2204", "Release")); err != nil {
+		t.Fatalf("expected Release: %v", err)
+	}
+}
+
+func TestRun_DownloadPackagesRepoModeYumGeneratesRepodata(t *testing.T) {
+	bundle := t.TempDir()
+	r := &fakeRunner{}
+
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "prepare",
+			Steps: []config.Step{{
+				ID:   "pkgs",
+				Kind: "DownloadPackages",
+				Spec: map[string]any{
+					"packages": []any{"containerd"},
+					"distro": map[string]any{
+						"family":  "rhel",
+						"release": "rhel9",
+					},
+					"repo": map[string]any{
+						"type": "yum",
+					},
+					"backend": map[string]any{
+						"mode":    "container",
+						"runtime": "docker",
+						"image":   "rockylinux:9",
+					},
+				},
+			}},
+		}},
+	}
+
+	if err := Run(wf, RunOptions{BundleRoot: bundle, CommandRunner: r}); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(bundle, "packages", "yum", "rhel9", "repodata", "repomd.xml")); err != nil {
+		t.Fatalf("expected repodata/repomd.xml: %v", err)
+	}
+}
+
 type fakeRunner struct{}
+
+func TestRun_DownloadK8sPackagesRepoModeAptFlatGeneratesMetadata(t *testing.T) {
+	bundle := t.TempDir()
+	r := &fakeRunner{}
+
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "prepare",
+			Steps: []config.Step{{
+				ID:   "k8s-pkgs",
+				Kind: "DownloadK8sPackages",
+				Spec: map[string]any{
+					"kubernetesVersion": "v1.30.1",
+					"components":        []any{"kubelet", "kubeadm", "kubectl"},
+					"distro": map[string]any{
+						"family":  "debian",
+						"release": "ubuntu2204",
+					},
+					"repo": map[string]any{
+						"type": "apt-flat",
+					},
+					"backend": map[string]any{
+						"mode":    "container",
+						"runtime": "docker",
+						"image":   "ubuntu:22.04",
+					},
+				},
+			}},
+		}},
+	}
+
+	if err := Run(wf, RunOptions{BundleRoot: bundle, CommandRunner: r}); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	base := filepath.Join(bundle, "packages", "apt-k8s", "ubuntu2204")
+	for _, name := range []string{"kubelet.deb", "kubeadm.deb", "kubectl.deb"} {
+		if _, err := os.Stat(filepath.Join(base, "pkgs", name)); err != nil {
+			t.Fatalf("expected %s: %v", name, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(base, "Packages.gz")); err != nil {
+		t.Fatalf("expected Packages.gz: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(base, "Release")); err != nil {
+		t.Fatalf("expected Release: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(base, "kubernetes-version.txt")); err != nil {
+		t.Fatalf("expected kubernetes-version.txt: %v", err)
+	}
+}
+
+func TestRun_DownloadK8sPackagesRepoModeYumGeneratesRepodata(t *testing.T) {
+	bundle := t.TempDir()
+	r := &fakeRunner{}
+
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "prepare",
+			Steps: []config.Step{{
+				ID:   "k8s-pkgs",
+				Kind: "DownloadK8sPackages",
+				Spec: map[string]any{
+					"kubernetesVersion": "v1.30.1",
+					"components":        []any{"kubelet", "kubeadm"},
+					"distro": map[string]any{
+						"family":  "rhel",
+						"release": "rhel9",
+					},
+					"repo": map[string]any{
+						"type": "yum",
+					},
+					"backend": map[string]any{
+						"mode":    "container",
+						"runtime": "docker",
+						"image":   "rockylinux:9",
+					},
+				},
+			}},
+		}},
+	}
+
+	if err := Run(wf, RunOptions{BundleRoot: bundle, CommandRunner: r}); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	base := filepath.Join(bundle, "packages", "yum-k8s", "rhel9")
+	if _, err := os.Stat(filepath.Join(base, "repodata", "repomd.xml")); err != nil {
+		t.Fatalf("expected repodata/repomd.xml: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(base, "kubernetes-version.txt")); err != nil {
+		t.Fatalf("expected kubernetes-version.txt: %v", err)
+	}
+}
 
 type failOnceRunner struct {
 	calls int
@@ -826,6 +1006,49 @@ func (f *fakeRunner) Run(_ context.Context, name string, args ...string) error {
 			if container == "/out" {
 				if err := os.MkdirAll(host, 0o755); err != nil {
 					return err
+				}
+				// repo-mode simulation: create minimal artifacts + metadata
+				if strings.Contains(host, string(filepath.Separator)+"packages"+string(filepath.Separator)+"apt"+string(filepath.Separator)) ||
+					strings.Contains(host, string(filepath.Separator)+"packages"+string(filepath.Separator)+"apt-k8s"+string(filepath.Separator)) {
+					pkgs := filepath.Join(host, "pkgs")
+					if err := os.MkdirAll(pkgs, 0o755); err != nil {
+						return err
+					}
+					if strings.Contains(host, string(filepath.Separator)+"packages"+string(filepath.Separator)+"apt-k8s"+string(filepath.Separator)) {
+						for _, name := range []string{"kubelet.deb", "kubeadm.deb", "kubectl.deb"} {
+							if err := os.WriteFile(filepath.Join(pkgs, name), []byte("pkg"), 0o644); err != nil {
+								return err
+							}
+						}
+					} else {
+						if err := os.WriteFile(filepath.Join(pkgs, "mock-package.deb"), []byte("pkg"), 0o644); err != nil {
+							return err
+						}
+					}
+					if err := os.WriteFile(filepath.Join(host, "Packages"), []byte("Packages"), 0o644); err != nil {
+						return err
+					}
+					if err := os.WriteFile(filepath.Join(host, "Packages.gz"), []byte("Packages.gz"), 0o644); err != nil {
+						return err
+					}
+					if err := os.WriteFile(filepath.Join(host, "Release"), []byte("Release"), 0o644); err != nil {
+						return err
+					}
+					continue
+				}
+				if strings.Contains(host, string(filepath.Separator)+"packages"+string(filepath.Separator)+"yum"+string(filepath.Separator)) ||
+					strings.Contains(host, string(filepath.Separator)+"packages"+string(filepath.Separator)+"yum-k8s"+string(filepath.Separator)) {
+					repodata := filepath.Join(host, "repodata")
+					if err := os.MkdirAll(repodata, 0o755); err != nil {
+						return err
+					}
+					if err := os.WriteFile(filepath.Join(host, "mock-package.rpm"), []byte("pkg"), 0o644); err != nil {
+						return err
+					}
+					if err := os.WriteFile(filepath.Join(repodata, "repomd.xml"), []byte("repomd"), 0o644); err != nil {
+						return err
+					}
+					continue
 				}
 				if err := os.WriteFile(filepath.Join(host, "mock-package.deb"), []byte("pkg"), 0o644); err != nil {
 					return err

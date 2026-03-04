@@ -38,6 +38,16 @@
           "minItems": 1,
           "items": { "type": "string" }
         },
+        "repo": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "type": { "type": "string", "enum": ["apt-flat", "yum"] },
+            "generate": { "type": "boolean", "default": true },
+            "pkgsDir": { "type": "string", "default": "pkgs" }
+          }
+        },
         "backend": {
           "type": "object",
           "additionalProperties": false,
