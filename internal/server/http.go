@@ -2,8 +2,18 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
+
 	"fmt"
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/registry"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
+	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -22,6 +32,10 @@ const (
 	auditEventJobLeased      = "alpha_job_leased"
 	auditEventJobRequeued    = "alpha_job_requeued"
 	auditEventJobFinalFailed = "alpha_job_final_failed"
+	auditEventRegistrySeed   = "registry_seed"
+
+	maxAgentJobBodyBytes    int64 = 16 * 1024
+	maxAgentReportBodyBytes int64 = 16 * 1024
 )
 
 func newAuditLogger(root string) (*auditLogger, error) {
@@ -70,6 +84,7 @@ type alphaJob struct {
 	WorkflowFile   string `json:"workflow_file,omitempty"`
 	BundleRoot     string `json:"bundle_root,omitempty"`
 	Phase          string `json:"phase,omitempty"`
+	TargetHostname string `json:"target_hostname,omitempty"`
 	Attempt        int    `json:"attempt,omitempty"`
 	MaxAttempts    int    `json:"max_attempts,omitempty"`
 	RetryDelaySec  int    `json:"retry_delay_sec,omitempty"`
@@ -98,7 +113,55 @@ type alphaServerState struct {
 }
 
 type HandlerOptions struct {
-	ReportMax int
+	ReportMax       int
+	RegistryEnable  bool
+	RegistryRoot    string
+	RegistryHandler http.Handler
+}
+
+type RegistrySeedOptions struct {
+	SeedDir         string
+	StripRegistries []string
+	AuditLogPath    string
+}
+
+func writeRegistrySeedAudit(logPath string, entry map[string]any) {
+	logPath = strings.TrimSpace(logPath)
+	if logPath == "" {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
+		return
+	}
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	entry["timestamp"] = time.Now().UTC().Format(time.RFC3339)
+	entry["event_type"] = auditEventRegistrySeed
+	raw, err := json.Marshal(entry)
+	if err != nil {
+		return
+	}
+	_, _ = f.Write(append(raw, '\n'))
+}
+
+func decodeJSONWithBodyLimit(w http.ResponseWriter, r *http.Request, maxBytes int64, target any) error {
+	limitedBody := http.MaxBytesReader(w, r.Body, maxBytes)
+	defer limitedBody.Close()
+	dec := json.NewDecoder(limitedBody)
+	if err := dec.Decode(target); err != nil {
+		return err
+	}
+	if err := dec.Decode(&struct{}{}); err != io.EOF {
+		if err == nil {
+			return errors.New("unexpected trailing payload")
+		}
+		return err
+	}
+	return nil
 }
 
 func (q *alphaJobQueue) enqueue(job alphaJob) {
@@ -107,18 +170,40 @@ func (q *alphaJobQueue) enqueue(job alphaJob) {
 	q.jobs = append(q.jobs, job)
 }
 
-func (q *alphaJobQueue) dequeueEligible(now time.Time) (alphaJob, bool) {
+func (q *alphaJobQueue) dequeueEligible(now time.Time, hostname string) (alphaJob, bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	hostname = strings.TrimSpace(hostname)
+	matchingTargetedIdx := -1
+	untargetedIdx := -1
 	for i := 0; i < len(q.jobs); i++ {
 		job := q.jobs[i]
 		if !isJobEligible(job, now) {
 			continue
 		}
-		q.jobs = append(q.jobs[:i], q.jobs[i+1:]...)
-		return job, true
+		targetHostname := strings.TrimSpace(job.TargetHostname)
+		if targetHostname != "" {
+			if hostname != "" && strings.EqualFold(targetHostname, hostname) && matchingTargetedIdx < 0 {
+				matchingTargetedIdx = i
+			}
+			continue
+		}
+		if untargetedIdx < 0 {
+			untargetedIdx = i
+		}
 	}
-	return alphaJob{}, false
+
+	selectedIdx := untargetedIdx
+	if hostname != "" && matchingTargetedIdx >= 0 {
+		selectedIdx = matchingTargetedIdx
+	}
+	if selectedIdx < 0 {
+		return alphaJob{}, false
+	}
+
+	job := q.jobs[selectedIdx]
+	q.jobs = append(q.jobs[:selectedIdx], q.jobs[selectedIdx+1:]...)
+	return job, true
 }
 
 func isJobEligible(job alphaJob, now time.Time) bool {
@@ -252,6 +337,14 @@ func (r *statusRecorder) WriteHeader(code int) {
 	r.ResponseWriter.WriteHeader(code)
 }
 
+func addStaticHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Accept-Ranges", "bytes")
+		w.Header().Set("Cache-Control", "no-store")
+		next.ServeHTTP(w, r)
+	})
+}
+
 func NewHandler(root string, opts HandlerOptions) (http.Handler, error) {
 	logger, err := newAuditLogger(root)
 	if err != nil {
@@ -284,6 +377,24 @@ func NewHandler(root string, opts HandlerOptions) (http.Handler, error) {
 	filesDir := filepath.Join(root, "files")
 	packagesDir := filepath.Join(root, "packages")
 
+	registryEnabled := opts.RegistryEnable
+	registryRoot := strings.TrimSpace(opts.RegistryRoot)
+	if registryRoot == "" {
+		registryRoot = DefaultRegistryRoot(root)
+	}
+	var regHandler http.Handler
+	if registryEnabled {
+		regHandler = opts.RegistryHandler
+		if regHandler == nil {
+			regHandler, err = NewRegistryHandler(registryRoot)
+			if err != nil {
+				return nil, err
+			}
+		}
+		mux.Handle("/v2/", regHandler)
+		mux.Handle("/v2", http.RedirectHandler("/v2/", http.StatusPermanentRedirect))
+	}
+
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -307,7 +418,22 @@ func NewHandler(root string, opts HandlerOptions) (http.Handler, error) {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
-		job, ok := queue.dequeueEligible(time.Now().UTC())
+		defer r.Body.Close()
+		var leaseRequest struct {
+			Hostname string `json:"hostname"`
+		}
+		if err := decodeJSONWithBodyLimit(w, r, maxAgentJobBodyBytes, &leaseRequest); err != nil {
+			var maxBodyErr *http.MaxBytesError
+			if errors.As(err, &maxBodyErr) {
+				w.WriteHeader(http.StatusRequestEntityTooLarge)
+				_ = json.NewEncoder(w).Encode(map[string]string{"status": "payload_too_large"})
+				return
+			}
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{"status": "bad_request"})
+			return
+		}
+		job, ok := queue.dequeueEligible(time.Now().UTC(), leaseRequest.Hostname)
 		var jobPayload any
 		if ok {
 			job.Attempt++
@@ -339,7 +465,13 @@ func NewHandler(root string, opts HandlerOptions) (http.Handler, error) {
 		defer r.Body.Close()
 
 		var job alphaJob
-		if err := json.NewDecoder(r.Body).Decode(&job); err != nil {
+		if err := decodeJSONWithBodyLimit(w, r, maxAgentJobBodyBytes, &job); err != nil {
+			var maxBodyErr *http.MaxBytesError
+			if errors.As(err, &maxBodyErr) {
+				w.WriteHeader(http.StatusRequestEntityTooLarge)
+				_ = json.NewEncoder(w).Encode(map[string]string{"status": "payload_too_large"})
+				return
+			}
 			w.WriteHeader(http.StatusBadRequest)
 			_ = json.NewEncoder(w).Encode(map[string]string{"status": "bad_request"})
 			return
@@ -354,6 +486,7 @@ func NewHandler(root string, opts HandlerOptions) (http.Handler, error) {
 		job.WorkflowFile = strings.TrimSpace(job.WorkflowFile)
 		job.BundleRoot = strings.TrimSpace(job.BundleRoot)
 		job.Phase = strings.TrimSpace(job.Phase)
+		job.TargetHostname = strings.TrimSpace(job.TargetHostname)
 		if (job.Type == "install" || job.Type == "join") && job.WorkflowFile == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			_ = json.NewEncoder(w).Encode(map[string]string{"status": "invalid_job"})
@@ -403,7 +536,13 @@ func NewHandler(root string, opts HandlerOptions) (http.Handler, error) {
 		case http.MethodPost:
 			defer r.Body.Close()
 			var report map[string]any
-			if err := json.NewDecoder(r.Body).Decode(&report); err != nil {
+			if err := decodeJSONWithBodyLimit(w, r, maxAgentReportBodyBytes, &report); err != nil {
+				var maxBodyErr *http.MaxBytesError
+				if errors.As(err, &maxBodyErr) {
+					w.WriteHeader(http.StatusRequestEntityTooLarge)
+					_ = json.NewEncoder(w).Encode(map[string]string{"status": "payload_too_large"})
+					return
+				}
 				w.WriteHeader(http.StatusBadRequest)
 				_ = json.NewEncoder(w).Encode(map[string]string{"status": "bad_request"})
 				return
@@ -473,11 +612,11 @@ func NewHandler(root string, opts HandlerOptions) (http.Handler, error) {
 		})
 	})
 
-	mux.Handle("/files/", http.StripPrefix("/files/", http.FileServer(http.Dir(filesDir))))
-	mux.Handle("/packages/", http.StripPrefix("/packages/", http.FileServer(http.Dir(packagesDir))))
+	mux.Handle("/files/", http.StripPrefix("/files/", addStaticHeaders(http.FileServer(http.Dir(filesDir)))))
+	mux.Handle("/packages/", http.StripPrefix("/packages/", addStaticHeaders(http.FileServer(http.Dir(packagesDir)))))
 
 	base := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/files/") || strings.HasPrefix(r.URL.Path, "/packages/") || strings.HasPrefix(r.URL.Path, "/api/") {
+		if strings.HasPrefix(r.URL.Path, "/files/") || strings.HasPrefix(r.URL.Path, "/packages/") || strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/v2/") || r.URL.Path == "/v2" {
 			mux.ServeHTTP(w, r)
 			return
 		}
@@ -539,4 +678,190 @@ func saveAlphaServerState(root string, state alphaServerState) error {
 		return fmt.Errorf("replace alpha state file: %w", err)
 	}
 	return nil
+}
+
+func DefaultRegistryRoot(root string) string {
+	return filepath.Join(root, ".deck", "registry")
+}
+
+func NewRegistryHandler(registryRoot string) (http.Handler, error) {
+	registryRoot = strings.TrimSpace(registryRoot)
+	if registryRoot == "" {
+		return nil, errors.New("registry root is required")
+	}
+	if err := os.MkdirAll(registryRoot, 0o755); err != nil {
+		return nil, fmt.Errorf("create registry root: %w", err)
+	}
+	return registry.New(registry.WithBlobHandler(registry.NewDiskBlobHandler(registryRoot))), nil
+}
+
+func SeedRegistryFromDir(registryHandler http.Handler, opts RegistrySeedOptions) error {
+	if registryHandler == nil {
+		return errors.New("registry handler is required")
+	}
+	seedDir := strings.TrimSpace(opts.SeedDir)
+	if seedDir == "" {
+		return nil
+	}
+	writeRegistrySeedAudit(opts.AuditLogPath, map[string]any{
+		"seed_dir": seedDir,
+		"status":   "started",
+	})
+	entries, err := os.ReadDir(seedDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			writeRegistrySeedAudit(opts.AuditLogPath, map[string]any{
+				"seed_dir": seedDir,
+				"status":   "seed_dir_missing",
+			})
+			return nil
+		}
+		writeRegistrySeedAudit(opts.AuditLogPath, map[string]any{
+			"seed_dir": seedDir,
+			"status":   "failed",
+			"error":    err.Error(),
+		})
+		return fmt.Errorf("read registry seed dir: %w", err)
+	}
+
+	stripSet := map[string]struct{}{}
+	for _, sourceRegistry := range opts.StripRegistries {
+		registryName := strings.ToLower(strings.TrimSpace(sourceRegistry))
+		if registryName == "" {
+			continue
+		}
+		stripSet[registryName] = struct{}{}
+	}
+
+	server := httptest.NewServer(registryHandler)
+	defer server.Close()
+	registryHost := strings.TrimPrefix(server.URL, "http://")
+	processed := 0
+	skipped := 0
+
+	for _, entry := range entries {
+		if entry.IsDir() || strings.ToLower(filepath.Ext(entry.Name())) != ".tar" {
+			continue
+		}
+		targets, alreadyPresent, err := seedRegistryTarArchive(filepath.Join(seedDir, entry.Name()), registryHost, stripSet)
+		if err != nil {
+			writeRegistrySeedAudit(opts.AuditLogPath, map[string]any{
+				"seed_dir": seedDir,
+				"archive":  entry.Name(),
+				"status":   "failed",
+				"error":    err.Error(),
+			})
+			return fmt.Errorf("seed registry tar %q: %w", entry.Name(), err)
+		}
+		processed += targets
+		skipped += alreadyPresent
+		writeRegistrySeedAudit(opts.AuditLogPath, map[string]any{
+			"seed_dir":          seedDir,
+			"archive":           entry.Name(),
+			"status":            "completed",
+			"target_references": targets,
+			"already_present":   alreadyPresent,
+		})
+	}
+	writeRegistrySeedAudit(opts.AuditLogPath, map[string]any{
+		"seed_dir":              seedDir,
+		"status":                "finished",
+		"target_references":     processed,
+		"already_present":       skipped,
+		"pushed_new_references": processed - skipped,
+	})
+
+	return nil
+}
+
+func seedRegistryTarArchive(tarPath, registryHost string, stripSet map[string]struct{}) (int, int, error) {
+	opener := func() (io.ReadCloser, error) {
+		return os.Open(tarPath)
+	}
+
+	manifest, err := tarball.LoadManifest(opener)
+	if err != nil {
+		return 0, 0, fmt.Errorf("load tar manifest: %w", err)
+	}
+
+	targets := 0
+	alreadyPresent := 0
+
+	for _, descriptor := range manifest {
+		for _, repoTag := range descriptor.RepoTags {
+			sourceTag, err := name.NewTag(repoTag, name.WeakValidation)
+			if err != nil {
+				return 0, 0, fmt.Errorf("parse source tag %q: %w", repoTag, err)
+			}
+
+			targetRef, err := mapSeedTargetReference(sourceTag, registryHost, stripSet)
+			if err != nil {
+				return 0, 0, err
+			}
+			targets++
+
+			exists, err := registryReferenceExists(targetRef)
+			if err != nil {
+				return 0, 0, err
+			}
+			if exists {
+				alreadyPresent++
+				continue
+			}
+
+			img, err := tarball.Image(opener, &sourceTag)
+			if err != nil {
+				return 0, 0, fmt.Errorf("read image %q from tar: %w", sourceTag.Name(), err)
+			}
+
+			if err := remote.Write(targetRef, img, remote.WithAuth(authn.Anonymous)); err != nil {
+				return 0, 0, fmt.Errorf("push image %q to %q: %w", sourceTag.Name(), targetRef.Name(), err)
+			}
+		}
+	}
+
+	return targets, alreadyPresent, nil
+}
+
+func mapSeedTargetReference(sourceTag name.Tag, registryHost string, stripSet map[string]struct{}) (name.Reference, error) {
+	sourceRegistry := strings.ToLower(sourceTag.Context().RegistryStr())
+	targetRepo := sourceTag.Context().Name()
+	if shouldStripRegistry(sourceRegistry, stripSet) {
+		targetRepo = strings.TrimPrefix(targetRepo, sourceTag.Context().RegistryStr()+"/")
+	}
+	target := fmt.Sprintf("%s/%s:%s", registryHost, targetRepo, sourceTag.TagStr())
+	ref, err := name.ParseReference(target, name.Insecure)
+	if err != nil {
+		return nil, fmt.Errorf("parse target ref %q: %w", target, err)
+	}
+	return ref, nil
+}
+
+func shouldStripRegistry(sourceRegistry string, stripSet map[string]struct{}) bool {
+	if _, ok := stripSet[sourceRegistry]; ok {
+		return true
+	}
+	if sourceRegistry == "index.docker.io" {
+		_, ok := stripSet["docker.io"]
+		return ok
+	}
+	if sourceRegistry == "docker.io" {
+		_, ok := stripSet["index.docker.io"]
+		return ok
+	}
+	return false
+}
+
+func registryReferenceExists(ref name.Reference) (bool, error) {
+	_, err := remote.Head(ref, remote.WithAuth(authn.Anonymous))
+	if err == nil {
+		return true, nil
+	}
+
+	var transportErr *transport.Error
+	if errors.As(err, &transportErr) && transportErr.StatusCode == http.StatusNotFound {
+		return false, nil
+	}
+
+	return false, fmt.Errorf("head %q: %w", ref.Name(), err)
 }

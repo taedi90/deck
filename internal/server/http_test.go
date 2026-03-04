@@ -2,6 +2,8 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -9,6 +11,13 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/empty"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
+	"github.com/google/go-containerregistry/pkg/v1/tarball"
 )
 
 func TestNewHandler(t *testing.T) {
@@ -24,6 +33,18 @@ func TestNewHandler(t *testing.T) {
 	}
 	if err := os.WriteFile(filepath.Join(root, "packages", "pkg.txt"), []byte("pkg-data"), 0o644); err != nil {
 		t.Fatalf("write packages entry: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "packages", "apt", "ubuntu2204"), 0o755); err != nil {
+		t.Fatalf("mkdir apt repo: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "packages", "apt", "ubuntu2204", "Release"), []byte("apt-release"), 0o644); err != nil {
+		t.Fatalf("write apt Release: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "packages", "yum", "rhel9", "repodata"), 0o755); err != nil {
+		t.Fatalf("mkdir yum repodata: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "packages", "yum", "rhel9", "repodata", "repomd.xml"), []byte("repomd"), 0o644); err != nil {
+		t.Fatalf("write repomd.xml: %v", err)
 	}
 
 	h, err := NewHandler(root, HandlerOptions{})
@@ -41,6 +62,12 @@ func TestNewHandler(t *testing.T) {
 		if rr.Body.String() != "file-data" {
 			t.Fatalf("unexpected body: %q", rr.Body.String())
 		}
+		if got := rr.Header().Get("Accept-Ranges"); got != "bytes" {
+			t.Fatalf("expected Accept-Ranges=bytes, got %q", got)
+		}
+		if got := rr.Header().Get("Cache-Control"); got != "no-store" {
+			t.Fatalf("expected Cache-Control=no-store, got %q", got)
+		}
 	})
 
 	t.Run("serves packages", func(t *testing.T) {
@@ -53,6 +80,42 @@ func TestNewHandler(t *testing.T) {
 		if rr.Body.String() != "pkg-data" {
 			t.Fatalf("unexpected body: %q", rr.Body.String())
 		}
+		if got := rr.Header().Get("Accept-Ranges"); got != "bytes" {
+			t.Fatalf("expected Accept-Ranges=bytes, got %q", got)
+		}
+		if got := rr.Header().Get("Cache-Control"); got != "no-store" {
+			t.Fatalf("expected Cache-Control=no-store, got %q", got)
+		}
+
+		t.Run("serves apt repo Release", func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/packages/apt/ubuntu2204/Release", nil)
+			rr := httptest.NewRecorder()
+			h.ServeHTTP(rr, req)
+			if rr.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d", rr.Code)
+			}
+			if rr.Body.String() != "apt-release" {
+				t.Fatalf("unexpected body: %q", rr.Body.String())
+			}
+			if got := rr.Header().Get("Accept-Ranges"); got != "bytes" {
+				t.Fatalf("expected Accept-Ranges=bytes, got %q", got)
+			}
+		})
+
+		t.Run("serves yum repodata", func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/packages/yum/rhel9/repodata/repomd.xml", nil)
+			rr := httptest.NewRecorder()
+			h.ServeHTTP(rr, req)
+			if rr.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d", rr.Code)
+			}
+			if rr.Body.String() != "repomd" {
+				t.Fatalf("unexpected body: %q", rr.Body.String())
+			}
+			if got := rr.Header().Get("Accept-Ranges"); got != "bytes" {
+				t.Fatalf("expected Accept-Ranges=bytes, got %q", got)
+			}
+		})
 	})
 
 	t.Run("returns 404 for unsupported routes", func(t *testing.T) {
@@ -61,6 +124,19 @@ func TestNewHandler(t *testing.T) {
 		h.ServeHTTP(rr, req)
 		if rr.Code != http.StatusNotFound {
 			t.Fatalf("expected 404, got %d", rr.Code)
+		}
+	})
+
+	t.Run("serves registry v2 ping when enabled", func(t *testing.T) {
+		h2, err := NewHandler(root, HandlerOptions{RegistryEnable: true})
+		if err != nil {
+			t.Fatalf("NewHandler: %v", err)
+		}
+		req := httptest.NewRequest(http.MethodGet, "/v2/", nil)
+		rr := httptest.NewRecorder()
+		h2.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d (body=%q)", rr.Code, rr.Body.String())
 		}
 	})
 
@@ -143,6 +219,53 @@ func TestNewHandler(t *testing.T) {
 		}
 	})
 
+	t.Run("leases hostname-targeted jobs deterministically", func(t *testing.T) {
+		rootTarget := t.TempDir()
+		hTarget, err := NewHandler(rootTarget, HandlerOptions{})
+		if err != nil {
+			t.Fatalf("NewHandler: %v", err)
+		}
+
+		for _, body := range []string{
+			`{"id":"job-host-a","type":"noop","target_hostname":"hostA"}`,
+			`{"id":"job-any","type":"noop"}`,
+			`{"id":"job-host-b","type":"noop","target_hostname":"hostB"}`,
+		} {
+			enqueueReq := httptest.NewRequest(http.MethodPost, "/api/agent/job", strings.NewReader(body))
+			enqueueRR := httptest.NewRecorder()
+			hTarget.ServeHTTP(enqueueRR, enqueueReq)
+			if enqueueRR.Code != http.StatusOK {
+				t.Fatalf("expected enqueue 200, got %d (body=%q)", enqueueRR.Code, enqueueRR.Body.String())
+			}
+		}
+
+		leaseForHost := func(hostname string) string {
+			reqBody := fmt.Sprintf(`{"hostname":%q,"timestamp":"2026-01-01T00:00:00Z"}`, hostname)
+			leaseReq := httptest.NewRequest(http.MethodPost, "/api/agent/lease", strings.NewReader(reqBody))
+			leaseRR := httptest.NewRecorder()
+			hTarget.ServeHTTP(leaseRR, leaseReq)
+			if leaseRR.Code != http.StatusOK {
+				t.Fatalf("expected lease 200, got %d (body=%q)", leaseRR.Code, leaseRR.Body.String())
+			}
+			return leaseRR.Body.String()
+		}
+
+		leaseHostB := leaseForHost("hostB")
+		if !strings.Contains(leaseHostB, `"id":"job-host-b"`) {
+			t.Fatalf("expected hostB-targeted job, got %q", leaseHostB)
+		}
+
+		leaseHostA := leaseForHost("hostA")
+		if !strings.Contains(leaseHostA, `"id":"job-host-a"`) {
+			t.Fatalf("expected hostA-targeted job, got %q", leaseHostA)
+		}
+
+		leaseOther := leaseForHost("hostC")
+		if !strings.Contains(leaseOther, `"id":"job-any"`) {
+			t.Fatalf("expected untargeted job for non-matching host, got %q", leaseOther)
+		}
+	})
+
 	t.Run("rejects invalid alpha job payload", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/agent/job", strings.NewReader(`{"id":"","type":"invalid"}`))
 		rr := httptest.NewRecorder()
@@ -176,6 +299,20 @@ func TestNewHandler(t *testing.T) {
 		h.ServeHTTP(rr, req)
 		if rr.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d", rr.Code)
+		}
+	})
+
+	t.Run("rejects oversized alpha job payload", func(t *testing.T) {
+		oversizedMessage := strings.Repeat("x", int(maxAgentJobBodyBytes))
+		body := fmt.Sprintf(`{"id":"j-large","type":"echo","message":"%s"}`, oversizedMessage)
+		req := httptest.NewRequest(http.MethodPost, "/api/agent/job", strings.NewReader(body))
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if rr.Code != http.StatusRequestEntityTooLarge {
+			t.Fatalf("expected 413, got %d (body=%q)", rr.Code, rr.Body.String())
+		}
+		if !strings.Contains(rr.Body.String(), `"status":"payload_too_large"`) {
+			t.Fatalf("unexpected oversized response: %q", rr.Body.String())
 		}
 	})
 
@@ -374,6 +511,20 @@ func TestNewHandler(t *testing.T) {
 		}
 		if !strings.Contains(rr.Body.String(), `"status":"accepted"`) {
 			t.Fatalf("unexpected report response: %q", rr.Body.String())
+		}
+	})
+
+	t.Run("rejects oversized alpha report payload", func(t *testing.T) {
+		oversizedDetail := strings.Repeat("x", int(maxAgentReportBodyBytes))
+		body := fmt.Sprintf(`{"job_id":"j-large-report","status":"success","detail":"%s"}`, oversizedDetail)
+		req := httptest.NewRequest(http.MethodPost, "/api/agent/report", strings.NewReader(body))
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if rr.Code != http.StatusRequestEntityTooLarge {
+			t.Fatalf("expected 413, got %d (body=%q)", rr.Code, rr.Body.String())
+		}
+		if !strings.Contains(rr.Body.String(), `"status":"payload_too_large"`) {
+			t.Fatalf("unexpected oversized response: %q", rr.Body.String())
 		}
 	})
 
@@ -621,4 +772,178 @@ func TestNewHandler(t *testing.T) {
 			t.Fatalf("expected final failure audit metadata for j-audit")
 		}
 	})
+}
+
+func TestSeedRegistryFromDirIdempotent(t *testing.T) {
+	root := t.TempDir()
+	seedDir := filepath.Join(root, "images")
+	if err := os.MkdirAll(seedDir, 0o755); err != nil {
+		t.Fatalf("mkdir seed dir: %v", err)
+	}
+
+	tarPath := filepath.Join(seedDir, "kube-apiserver.tar")
+	mustWriteSeedTar(t, tarPath, "registry.k8s.io/kube-apiserver:v1.31.0")
+
+	registryHandler, err := NewRegistryHandler(DefaultRegistryRoot(root))
+	if err != nil {
+		t.Fatalf("NewRegistryHandler: %v", err)
+	}
+
+	seedOpts := RegistrySeedOptions{
+		SeedDir:         seedDir,
+		StripRegistries: []string{"registry.k8s.io", "docker.io", "quay.io", "ghcr.io", "gcr.io", "k8s.gcr.io"},
+	}
+	if err := SeedRegistryFromDir(registryHandler, seedOpts); err != nil {
+		t.Fatalf("first SeedRegistryFromDir: %v", err)
+	}
+	if err := SeedRegistryFromDir(registryHandler, seedOpts); err != nil {
+		t.Fatalf("second SeedRegistryFromDir: %v", err)
+	}
+
+	registryServer := httptest.NewServer(registryHandler)
+	defer registryServer.Close()
+	host := strings.TrimPrefix(registryServer.URL, "http://")
+
+	seededRef := mustParseReference(t, host+"/kube-apiserver:v1.31.0")
+	present, err := registryRefPresent(seededRef)
+	if err != nil {
+		t.Fatalf("check seeded ref: %v", err)
+	}
+	if !present {
+		t.Fatalf("expected seeded ref %s to exist", seededRef.Name())
+	}
+}
+
+func TestSeedRegistryFromDirStripsSourceRegistryDomain(t *testing.T) {
+	root := t.TempDir()
+	seedDir := filepath.Join(root, "images")
+	if err := os.MkdirAll(seedDir, 0o755); err != nil {
+		t.Fatalf("mkdir seed dir: %v", err)
+	}
+
+	tarPath := filepath.Join(seedDir, "pause.tar")
+	mustWriteSeedTar(t, tarPath, "registry.k8s.io/pause:3.9")
+
+	registryHandler, err := NewRegistryHandler(DefaultRegistryRoot(root))
+	if err != nil {
+		t.Fatalf("NewRegistryHandler: %v", err)
+	}
+
+	if err := SeedRegistryFromDir(registryHandler, RegistrySeedOptions{SeedDir: seedDir, StripRegistries: []string{"registry.k8s.io"}}); err != nil {
+		t.Fatalf("SeedRegistryFromDir: %v", err)
+	}
+
+	registryServer := httptest.NewServer(registryHandler)
+	defer registryServer.Close()
+	host := strings.TrimPrefix(registryServer.URL, "http://")
+
+	strippedRef := mustParseReference(t, host+"/pause:3.9")
+	originalRef := mustParseReference(t, host+"/registry.k8s.io/pause:3.9")
+
+	strippedPresent, err := registryRefPresent(strippedRef)
+	if err != nil {
+		t.Fatalf("check stripped ref: %v", err)
+	}
+	if !strippedPresent {
+		t.Fatalf("expected stripped ref %s to exist", strippedRef.Name())
+	}
+
+	originalPresent, err := registryRefPresent(originalRef)
+	if err != nil {
+		t.Fatalf("check original ref: %v", err)
+	}
+	if originalPresent {
+		t.Fatalf("expected original ref %s to be absent", originalRef.Name())
+	}
+}
+
+func TestSeedRegistryFromDirWritesAuditEvents(t *testing.T) {
+	root := t.TempDir()
+	seedDir := filepath.Join(root, "images")
+	if err := os.MkdirAll(seedDir, 0o755); err != nil {
+		t.Fatalf("mkdir seed dir: %v", err)
+	}
+
+	tarPath := filepath.Join(seedDir, "pause.tar")
+	mustWriteSeedTar(t, tarPath, "registry.k8s.io/pause:3.9")
+
+	registryHandler, err := NewRegistryHandler(DefaultRegistryRoot(root))
+	if err != nil {
+		t.Fatalf("NewRegistryHandler: %v", err)
+	}
+
+	auditPath := filepath.Join(root, ".deck", "logs", "server-audit.log")
+	if err := SeedRegistryFromDir(registryHandler, RegistrySeedOptions{SeedDir: seedDir, StripRegistries: []string{"registry.k8s.io"}, AuditLogPath: auditPath}); err != nil {
+		t.Fatalf("SeedRegistryFromDir: %v", err)
+	}
+
+	raw, err := os.ReadFile(auditPath)
+	if err != nil {
+		t.Fatalf("read audit log: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
+	if len(lines) == 0 {
+		t.Fatalf("expected registry seed audit lines")
+	}
+
+	seenStarted := false
+	seenFinished := false
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		var entry map[string]any
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			t.Fatalf("parse audit json: %v", err)
+		}
+		eventType, _ := entry["event_type"].(string)
+		if eventType != "registry_seed" {
+			continue
+		}
+		status, _ := entry["status"].(string)
+		if status == "started" {
+			seenStarted = true
+		}
+		if status == "finished" {
+			seenFinished = true
+		}
+	}
+
+	if !seenStarted || !seenFinished {
+		t.Fatalf("expected started and finished registry seed audit events")
+	}
+}
+
+func mustWriteSeedTar(t *testing.T, tarPath, sourceRef string) {
+	t.Helper()
+	sourceTag, err := name.NewTag(sourceRef, name.WeakValidation)
+	if err != nil {
+		t.Fatalf("name.NewTag(%q): %v", sourceRef, err)
+	}
+	if err := tarball.WriteToFile(tarPath, sourceTag, empty.Image); err != nil {
+		t.Fatalf("tarball.WriteToFile(%q): %v", tarPath, err)
+	}
+}
+
+func mustParseReference(t *testing.T, ref string) name.Reference {
+	t.Helper()
+	parsed, err := name.ParseReference(ref, name.Insecure)
+	if err != nil {
+		t.Fatalf("name.ParseReference(%q): %v", ref, err)
+	}
+	return parsed
+}
+
+func registryRefPresent(ref name.Reference) (bool, error) {
+	_, err := remote.Head(ref, remote.WithAuth(authn.Anonymous))
+	if err == nil {
+		return true, nil
+	}
+
+	var transportErr *transport.Error
+	if errors.As(err, &transportErr) && transportErr.StatusCode == http.StatusNotFound {
+		return false, nil
+	}
+
+	return false, fmt.Errorf("head %s: %w", ref.Name(), err)
 }

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/taedi90/deck/internal/agent"
@@ -137,7 +139,7 @@ func runApply(args []string) error {
 
 func runServer(args []string) error {
 	if len(args) == 0 || args[0] != "start" {
-		return errors.New("usage: deck server start --root <dir> --addr <host:port> [--report-max <n>] [--tls-cert <crt> --tls-key <key> | --tls-self-signed]")
+		return errors.New("usage: deck server start --root <dir> --addr <host:port> [--report-max <n>] [--registry-seed-dir <dir>] [--registry-seed-registries <csv>] [--tls-cert <crt> --tls-key <key> | --tls-self-signed]")
 	}
 
 	fs := flag.NewFlagSet("server start", flag.ContinueOnError)
@@ -145,6 +147,10 @@ func runServer(args []string) error {
 	root := fs.String("root", "./bundle", "server content root")
 	addr := fs.String("addr", ":8080", "server listen address")
 	reportMax := fs.Int("report-max", 200, "max retained in-memory reports")
+	registryEnable := fs.Bool("registry-enable", true, "enable embedded registry at /v2")
+	registryRoot := fs.String("registry-root", "", "embedded registry storage root (default: <root>/.deck/registry)")
+	registrySeedDir := fs.String("registry-seed-dir", "", "directory with docker-archive .tar files for registry seeding")
+	registrySeedRegistries := fs.String("registry-seed-registries", "registry.k8s.io,docker.io,quay.io,ghcr.io,gcr.io,k8s.gcr.io", "comma-separated source registries whose domain is stripped when seeding")
 	tlsCert := fs.String("tls-cert", "", "TLS certificate path")
 	tlsKey := fs.String("tls-key", "", "TLS private key path")
 	tlsSelfSigned := fs.Bool("tls-self-signed", false, "auto-generate and use self-signed TLS cert")
@@ -161,6 +167,9 @@ func runServer(args []string) error {
 	if *reportMax <= 0 {
 		return errors.New("--report-max must be > 0")
 	}
+	if strings.TrimSpace(*registrySeedDir) == "" {
+		*registrySeedDir = filepath.Join(*root, "images")
+	}
 
 	certPath := *tlsCert
 	keyPath := *tlsKey
@@ -172,17 +181,45 @@ func runServer(args []string) error {
 		}
 	}
 
-	h, err := server.NewHandler(*root, server.HandlerOptions{ReportMax: *reportMax})
+	effectiveRegistryRoot := strings.TrimSpace(*registryRoot)
+	if effectiveRegistryRoot == "" {
+		effectiveRegistryRoot = server.DefaultRegistryRoot(*root)
+	}
+
+	var (
+		registryHandler http.Handler
+		err             error
+	)
+	if *registryEnable {
+		registryHandler, err = server.NewRegistryHandler(effectiveRegistryRoot)
+		if err != nil {
+			return err
+		}
+		auditLogPath := filepath.Join(*root, ".deck", "logs", "server-audit.log")
+		if err := server.SeedRegistryFromDir(registryHandler, server.RegistrySeedOptions{SeedDir: *registrySeedDir, StripRegistries: strings.Split(*registrySeedRegistries, ","), AuditLogPath: auditLogPath}); err != nil {
+			return err
+		}
+	}
+
+	h, err := server.NewHandler(*root, server.HandlerOptions{ReportMax: *reportMax, RegistryEnable: *registryEnable, RegistryRoot: effectiveRegistryRoot, RegistryHandler: registryHandler})
 	if err != nil {
 		return err
 	}
+	httpServer := &http.Server{
+		Addr:              *addr,
+		Handler:           h,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
 	if certPath != "" {
 		fmt.Fprintf(os.Stdout, "server start: listening on https://%s (root=%s)\n", *addr, *root)
-		return http.ListenAndServeTLS(*addr, certPath, keyPath, h)
+		return httpServer.ListenAndServeTLS(certPath, keyPath)
 	}
 
 	fmt.Fprintf(os.Stdout, "server start: listening on http://%s (root=%s)\n", *addr, *root)
-	return http.ListenAndServe(*addr, h)
+	return httpServer.ListenAndServe()
 }
 
 func runBundle(args []string) error {
@@ -393,5 +430,5 @@ func runDiagnose(args []string) error {
 }
 
 func usageError() error {
-	return errors.New("usage: deck apply --file <file> | deck validate --file <file> (-f alias) | deck run --file <file> --phase <phase> | deck resume --file <file> | deck diagnose --preflight --file <file> | deck bundle verify --bundle <path> | deck bundle import --file <bundle.tar> --dest <dir> | deck bundle collect --bundle <dir> --output <bundle.tar> | deck server start --root <dir> --addr <host:port> | deck agent start --server <url> | deck agent run-once --server <url>")
+	return errors.New("usage: deck apply --file <file> | deck validate --file <file> (-f alias) | deck run --file <file> --phase <phase> | deck resume --file <file> | deck diagnose --preflight --file <file> | deck bundle verify --bundle <path> | deck bundle import --file <bundle.tar> --dest <dir> | deck bundle collect --bundle <dir> --output <bundle.tar> | deck server start --root <dir> --addr <host:port> [--registry-seed-dir <dir>] [--registry-seed-registries <csv>] | deck agent start --server <url> | deck agent run-once --server <url>")
 }
