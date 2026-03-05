@@ -1,11 +1,11 @@
-version: v1
+version: v1alpha1
 context:
   stateFile: /tmp/deck/state-verify-images.json
 phases:
   - name: install
     steps:
       - id: verify-required-images
-        apiVersion: deck/v1
+        apiVersion: deck/v1alpha1
         kind: VerifyImages
         spec:
           images:

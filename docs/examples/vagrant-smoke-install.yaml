@@ -1,11 +1,11 @@
-version: v1
+version: v1alpha1
 context:
   stateFile: /tmp/deck/state-vagrant-smoke-example.json
 phases:
   - name: install
     steps:
       - id: create-smoke-marker
-        apiVersion: deck/v1
+        apiVersion: deck/v1alpha1
         kind: RunCommand
         spec:
           command:

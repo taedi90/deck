@@ -8,7 +8,7 @@
   "properties": {
     "version": {
       "type": "string",
-      "const": "v1"
+      "const": "v1alpha1"
     },
     "imports": {
       "type": "array",
@@ -65,7 +65,7 @@
         },
         "apiVersion": {
           "type": "string",
-          "const": "deck/v1"
+          "const": "deck/v1alpha1"
         },
         "kind": {
           "type": "string",

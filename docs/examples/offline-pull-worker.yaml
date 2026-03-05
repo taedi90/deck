@@ -1,4 +1,4 @@
-version: v1
+version: v1alpha1
 vars:
   serverURL: 192.168.56.1:8080
   release: ubuntu2204
@@ -10,12 +10,12 @@ phases:
   - name: install
     steps:
       - id: prep-disable-swap
-        apiVersion: deck/v1
+        apiVersion: deck/v1alpha1
         kind: RunCommand
         spec:
           command: ["bash", "-lc", "swapoff -a"]
       - id: write-apt-offline-repo
-        apiVersion: deck/v1
+        apiVersion: deck/v1alpha1
         kind: WriteFile
         spec:
           path: /tmp/deck-offline-apt.list
@@ -24,7 +24,7 @@ phases:
             deb [trusted=yes] http://{ .vars.serverURL }/packages/apt/{ .vars.release } ./
             deb [trusted=yes] http://{ .vars.serverURL }/packages/apt-k8s/{ .vars.release } ./
       - id: write-yum-offline-repo
-        apiVersion: deck/v1
+        apiVersion: deck/v1alpha1
         kind: WriteFile
         spec:
           path: /tmp/deck-offline.repo
@@ -42,7 +42,7 @@ phases:
             enabled=1
             gpgcheck=0
       - id: apply-offline-repo-config
-        apiVersion: deck/v1
+        apiVersion: deck/v1alpha1
         kind: RunCommand
         spec:
           command:
@@ -65,7 +65,7 @@ phases:
                 exit 1
               fi
       - id: install-k8s-deps
-        apiVersion: deck/v1
+        apiVersion: deck/v1alpha1
         kind: RunCommand
         spec:
           command:
@@ -82,7 +82,7 @@ phases:
                 exit 1
               fi
       - id: write-containerd-mirror-registry-k8s
-        apiVersion: deck/v1
+        apiVersion: deck/v1alpha1
         kind: WriteFile
         spec:
           path: /etc/containerd/certs.d/registry.k8s.io/hosts.toml
@@ -94,7 +94,7 @@ phases:
               capabilities = ["pull", "resolve"]
               skip_verify = true
       - id: configure-containerd-runtime
-        apiVersion: deck/v1
+        apiVersion: deck/v1alpha1
         kind: RunCommand
         spec:
           command:
@@ -109,7 +109,7 @@ phases:
               systemctl enable --now containerd kubelet
               systemctl restart containerd
       - id: kubeadm-join
-        apiVersion: deck/v1
+        apiVersion: deck/v1alpha1
         kind: KubeadmJoin
         spec:
           mode: real

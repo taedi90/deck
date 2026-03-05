@@ -1,4 +1,4 @@
-version: v1
+version: v1alpha1
 vars:
   serverURL: 192.168.56.1:8080
   release: ubuntu2204
@@ -8,7 +8,7 @@ phases:
   - name: install
     steps:
       - id: write-apt-offline-config-template
-        apiVersion: deck/v1
+        apiVersion: deck/v1alpha1
         kind: WriteFile
         spec:
           path: /tmp/deck-offline-99offline
@@ -18,7 +18,7 @@ phases:
             Acquire::AllowInsecureRepositories "true";
             Acquire::AllowDowngradeToInsecureRepositories "true";
       - id: write-apt-offline-repo-template
-        apiVersion: deck/v1
+        apiVersion: deck/v1alpha1
         kind: WriteFile
         spec:
           path: /tmp/deck-offline-apt.list
@@ -26,7 +26,7 @@ phases:
           contentFromTemplate: |
             deb [trusted=yes] http://{ .vars.serverURL }/packages/apt/{ .vars.release } ./
       - id: write-yum-offline-repo-template
-        apiVersion: deck/v1
+        apiVersion: deck/v1alpha1
         kind: WriteFile
         spec:
           path: /tmp/deck-offline-yum.repo
@@ -39,7 +39,7 @@ phases:
             gpgcheck=0
             module_hotfixes=1
       - id: apply-offline-repo-config
-        apiVersion: deck/v1
+        apiVersion: deck/v1alpha1
         kind: RunCommand
         spec:
           command:
@@ -64,7 +64,7 @@ phases:
                 cp -f /tmp/deck-offline-yum.repo /etc/yum.repos.d/offline.repo
               fi
       - id: disable-firewalld-and-ufw
-        apiVersion: deck/v1
+        apiVersion: deck/v1alpha1
         kind: RunCommand
         spec:
           command:

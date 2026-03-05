@@ -1,4 +1,4 @@
-version: v1
+version: v1alpha1
 vars:
   serverRegistryHost: 127.0.0.1:5000
   seedRegistries: "registry.k8s.io docker.io quay.io ghcr.io gcr.io k8s.gcr.io"
@@ -8,7 +8,7 @@ phases:
   - name: install
     steps:
       - id: prep-containerd-certsd-config
-        apiVersion: deck/v1
+        apiVersion: deck/v1alpha1
         kind: RunCommand
         spec:
           command:
@@ -26,7 +26,7 @@ phases:
                 exit 1
               fi
       - id: write-containerd-mirror-hosts
-        apiVersion: deck/v1
+        apiVersion: deck/v1alpha1
         kind: RunCommand
         spec:
           command:
@@ -44,12 +44,12 @@ phases:
               EOF
               done
       - id: restart-containerd
-        apiVersion: deck/v1
+        apiVersion: deck/v1alpha1
         kind: RunCommand
         spec:
           command: ["bash", "-lc", "systemctl restart containerd"]
       - id: verify-containerd-active
-        apiVersion: deck/v1
+        apiVersion: deck/v1alpha1
         kind: RunCommand
         spec:
           command: ["bash", "-lc", "systemctl is-active --quiet containerd"]

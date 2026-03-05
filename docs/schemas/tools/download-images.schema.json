@@ -7,7 +7,7 @@
   "required": ["id", "apiVersion", "kind", "spec"],
   "properties": {
     "id": { "type": "string" },
-    "apiVersion": { "const": "deck/v1" },
+    "apiVersion": { "const": "deck/v1alpha1" },
     "kind": { "const": "DownloadImages" },
     "metadata": { "type": "object", "additionalProperties": true },
     "when": { "type": "string" },
