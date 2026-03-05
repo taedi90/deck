@@ -1,1 +1,1 @@
-load File.expand_path(".ci/vagrant/Vagrantfile", __dir__)
+load File.expand_path("test/vagrant/Vagrantfile", __dir__)

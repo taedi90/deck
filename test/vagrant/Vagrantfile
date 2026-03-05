@@ -1,0 +1,130 @@
+Vagrant.configure("2") do |config|
+  require "rbconfig"
+  host_cpu = RbConfig::CONFIG["host_cpu"].to_s
+  host_arm64 = !!(host_cpu =~ /\A(aarch64|arm64)\z/)
+  default_cpus = host_arm64 ? 1 : 2
+
+  uefi_loader = nil
+  uefi_nvram = nil
+  if host_arm64
+    aavmf_loader = "/usr/share/AAVMF/AAVMF_CODE.fd"
+    aavmf_nvram = "/usr/share/AAVMF/AAVMF_VARS.fd"
+    if File.exist?(aavmf_loader) && File.exist?(aavmf_nvram)
+      uefi_loader = aavmf_loader
+      uefi_nvram = aavmf_nvram
+    else
+      qemu_loader = "/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"
+      uefi_loader = qemu_loader if File.exist?(qemu_loader)
+    end
+  end
+
+  config.vm.box_check_update = false
+  config.vm.boot_timeout = ENV.fetch("DECK_VAGRANT_BOOT_TIMEOUT", "300").to_i
+  config.ssh.insert_key = false
+
+  vm_name_prefix = ENV.fetch("DECK_VAGRANT_VM_PREFIX", "deck")
+  default_box = "generic/ubuntu2204"
+  mgmt_device = ENV.fetch("DECK_VAGRANT_MGMT_DEVICE", "")
+  sync_type = ENV.fetch("DECK_VAGRANT_SYNC_TYPE", "rsync").strip
+  sync_type = "rsync" if sync_type.empty?
+  disable_default_sync = ENV.fetch("DECK_VAGRANT_DISABLE_DEFAULT_SYNC", "1") == "1"
+  libvirt_pool_name = ENV.fetch("DECK_LIBVIRT_POOL_NAME", ENV.fetch("LIBVIRT_DEFAULT_STORAGE_POOL", "default"))
+  libvirt_use_session = ENV.fetch("DECK_LIBVIRT_USE_SESSION", "0") == "1"
+  qemu_use_session_env = ENV.fetch("DECK_VAGRANT_QEMU_USE_SESSION", "").strip
+  qemu_use_session = qemu_use_session_env.empty? ? libvirt_use_session : qemu_use_session_env == "1"
+  libvirt_default_uri = ENV.fetch("LIBVIRT_DEFAULT_URI", "").strip
+  private_network_name = ENV.fetch("DECK_VAGRANT_PRIVATE_NETWORK_NAME", "deck-vagrant")
+  enable_private_network = ENV.fetch("DECK_VAGRANT_ENABLE_PRIVATE_NETWORK", "0") == "1"
+  management_network_name = ENV.fetch("DECK_VAGRANT_MANAGEMENT_NETWORK_NAME", "default")
+  management_network_address = ENV.fetch("DECK_VAGRANT_MANAGEMENT_NETWORK_ADDRESS", "192.168.122.0/24")
+  ip_timeout = ENV.fetch("DECK_VAGRANT_IP_ADDRESS_TIMEOUT", "300").to_i
+  libvirt_ip_command = ENV.fetch("DECK_VAGRANT_LIBVIRT_IP_COMMAND", "").strip
+  mgmt_attach = ENV.fetch("DECK_VAGRANT_MGMT_ATTACH", "1") == "1"
+  machine_type = ENV.fetch("DECK_VAGRANT_MACHINE_TYPE", "")
+  libvirt_driver = ENV.fetch("DECK_VAGRANT_LIBVIRT_DRIVER", "")
+  qemu_use_agent = ENV.fetch("DECK_VAGRANT_QEMU_USE_AGENT", "0") == "1"
+  cpu_mode = ENV.fetch("DECK_VAGRANT_CPU_MODE", "host-model")
+  cpu_model = ENV.fetch("DECK_VAGRANT_CPU_MODEL", "").strip
+  if host_arm64
+    machine_type = "virt" if machine_type.empty?
+    if cpu_mode == "host-model" || cpu_mode == "host-passthrough"
+      cpu_mode = "custom"
+    end
+    cpu_model = "cortex-a57" if cpu_mode == "custom" && cpu_model.empty?
+  end
+  if disable_default_sync
+    config.vm.synced_folder ".", "/vagrant", disabled: true
+  end
+
+  case sync_type
+  when "9p"
+    config.vm.synced_folder "../..", "/workspace", type: "9p", accessmode: "mapped"
+  when "rsync"
+    config.vm.synced_folder "../..", "/workspace", type: "rsync"
+  else
+    config.vm.synced_folder "../..", "/workspace", type: "nfs"
+  end
+
+  nodes = [
+    { name: "control-plane", ip: "192.168.57.10", memory: 3072, cpus: default_cpus },
+    { name: "worker", ip: "192.168.57.11", memory: 3072, cpus: default_cpus }
+  ]
+
+  nodes.each do |node|
+    config.vm.define node[:name] do |m|
+      m.vm.box = ENV.fetch("DECK_VAGRANT_BOX", default_box)
+      m.vm.hostname = node[:name]
+      if enable_private_network
+        m.ssh.host = node[:ip]
+        m.ssh.port = 22
+      end
+      if enable_private_network
+        m.vm.network "private_network",
+          ip: node[:ip],
+          libvirt__network_name: private_network_name,
+          libvirt__dhcp_enabled: false
+      end
+
+      m.vm.provider "libvirt" do |lv|
+        lv.default_prefix = vm_name_prefix
+        lv.driver = libvirt_driver unless libvirt_driver.empty?
+        lv.storage_pool_name = libvirt_pool_name unless libvirt_pool_name.empty?
+        lv.qemu_use_session = qemu_use_session
+        if qemu_use_session && !libvirt_default_uri.empty?
+          lv.system_uri = libvirt_default_uri
+        end
+        lv.qemu_use_agent = qemu_use_agent
+        lv.cpu_mode = cpu_mode
+        if cpu_mode == "custom" && !cpu_model.empty?
+          lv.cpu_model = cpu_model
+        end
+        lv.mgmt_attach = mgmt_attach
+        if mgmt_attach
+          lv.management_network_device = mgmt_device unless mgmt_device.empty?
+          lv.management_network_name = management_network_name unless management_network_name.empty?
+          lv.management_network_address = management_network_address unless management_network_address.empty?
+        end
+        lv.wait_for_ip = true if lv.respond_to?(:wait_for_ip=)
+        lv.ip_address_timeout = ip_timeout if lv.respond_to?(:ip_address_timeout=)
+        if !libvirt_ip_command.empty? && lv.respond_to?(:ip_command=)
+          lv.ip_command = libvirt_ip_command
+        end
+        if uefi_loader
+          lv.loader = uefi_loader
+          lv.nvram = uefi_nvram if uefi_nvram
+        end
+        if host_arm64
+          lv.features = ["acpi"] if lv.respond_to?(:features=)
+          lv.graphics_type = "none" if lv.respond_to?(:graphics_type=)
+          lv.video_type = "virtio" if lv.respond_to?(:video_type=)
+          lv.inputs = [] if lv.respond_to?(:inputs=)
+        end
+        lv.machine_type = machine_type unless machine_type.empty?
+        lv.memory = node[:memory]
+        lv.cpus = node[:cpus]
+        lv.machine_virtual_size = 40
+      end
+
+    end
+  end
+end
