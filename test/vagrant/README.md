@@ -10,6 +10,7 @@
 - `run-offline-multinode-agent.sh`: C. server/agent pull 시나리오
   - 기본 토폴로지: `control-plane` 1대 + `worker` 2대
   - 기본 박스: `generic/ubuntu2204`(control-plane), `bento/ubuntu-24.04`(worker), `generic/rocky9`(worker-2)
+  - 단계 실행 옵션: `--step`, `--from-step`, `--to-step`, `--resume`, `--art-dir`
 - `run-vm-ssh-preflight.sh`: VM 생성/SSH 접근 preflight 시나리오
 
 ## 시나리오 요약
@@ -30,3 +31,14 @@
 각 아티팩트 디렉터리에는 상태 파일, manifest, vagrant status가 저장된다.
 
 각 시나리오는 verifier 스크립트로 필수 아티팩트 존재 여부를 검증한다.
+
+## offline-multinode-agent 단계 실행
+
+- Step 목록:
+  - `prepare-host`, `up-vms`, `start-agents`, `start-server`
+  - `enqueue-install`, `wait-install`, `enqueue-join`, `wait-join`
+  - `assert-cluster`, `collect`, `cleanup`
+- 체크포인트:
+  - `.ci/artifacts/offline-multinode-agent-*/checkpoints/<step>.done`
+- 재개 예시:
+  - `test/vagrant/run-offline-multinode-agent.sh --from-step wait-install --to-step collect --resume --art-dir .ci/artifacts/offline-multinode-agent-<ts>`
