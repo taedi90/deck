@@ -17,7 +17,7 @@ func TestRemoteE2EScriptModeContracts(t *testing.T) {
 	content := string(raw)
 
 	expectContainsAll(t, content,
-		"[--mode examples|nightly|single|smoke|vm-ssh|offline-single-node-real|offline-multinode-agent]",
+		"[--mode single|smoke|vm-ssh|offline-multinode-agent]",
 		"single)",
 		"smoke)",
 		"vm-ssh)",
@@ -27,7 +27,7 @@ func TestRemoteE2EScriptModeContracts(t *testing.T) {
 		"REMOTE_GLOB=\".ci/artifacts/single-node-*\"",
 		"REMOTE_GLOB=\".ci/artifacts/smoke-*\"",
 		"REMOTE_GLOB=\".ci/artifacts/vm-ssh-*\"",
-		"MODE must be one of: examples, nightly, single, smoke, vm-ssh, offline-single-node-real, offline-multinode-agent",
+		"MODE must be one of: single, smoke, vm-ssh, offline-multinode-agent",
 	)
 }
 
@@ -41,8 +41,6 @@ func TestRemoteVMDocModeContracts(t *testing.T) {
 	content := string(raw)
 
 	expectContainsAll(t, content,
-		"- `examples`",
-		"- `nightly`",
 		"- `single`",
 		"- `smoke`",
 		"- `vm-ssh`",
@@ -50,13 +48,10 @@ func TestRemoteVMDocModeContracts(t *testing.T) {
 	)
 }
 
-func TestNightlyMatrixIncludesRequiredBoxes(t *testing.T) {
+func TestVMSSHMatrixIncludesRequiredBoxes(t *testing.T) {
 	root := projectRoot(t)
 	required := []string{"generic/ubuntu2204", "bento/ubuntu-24.04", "generic/rocky9"}
-	files := []string{
-		filepath.Join(root, "test", "vagrant", "nightly-boxes.txt"),
-		filepath.Join(root, "test", "vagrant", "nightly-boxes-libvirt.txt"),
-	}
+	files := []string{filepath.Join(root, "test", "vagrant", "nightly-boxes-libvirt.txt")}
 
 	for _, path := range files {
 		raw, err := os.ReadFile(path)

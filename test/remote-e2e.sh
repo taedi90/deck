@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MODE="${MODE:-examples}"
+MODE="${MODE:-single}"
 REF="${REF:-}"
 ENV_FILE="${DECK_REMOTE_ENV_FILE:-}"
 SYNC_MODE="${DECK_REMOTE_SYNC_MODE:-auto}"
@@ -17,7 +17,7 @@ usage() {
 Run deck Vagrant E2E on remote host.
 
 Usage:
-  test/remote-e2e.sh --env-file <path> [--mode examples|nightly|single|smoke|vm-ssh|offline-single-node-real|offline-multinode-agent] [--ref <git-ref>] [--sync auto|git|upload] [--skip-cleanup]
+  test/remote-e2e.sh --env-file <path> [--mode single|smoke|vm-ssh|offline-multinode-agent] [--ref <git-ref>] [--sync auto|git|upload] [--skip-cleanup]
 
 Required env file keys:
   DECK_REMOTE_HOST
@@ -103,14 +103,6 @@ if [[ -z "${REF}" ]]; then
 fi
 
 case "${MODE}" in
-  examples)
-    REMOTE_CMD="test/vagrant/run-examples.sh"
-    REMOTE_GLOB=".ci/artifacts/examples-*"
-    ;;
-  nightly)
-    REMOTE_CMD="DECK_VAGRANT_PROVIDER=libvirt test/vagrant/run-nightly.sh"
-    REMOTE_GLOB=".ci/artifacts/nightly-*"
-    ;;
   single)
     REMOTE_CMD="DECK_VAGRANT_PROVIDER=libvirt test/vagrant/run-single-node-real.sh"
     REMOTE_GLOB=".ci/artifacts/single-node-*"
@@ -123,16 +115,12 @@ case "${MODE}" in
     REMOTE_CMD="DECK_VAGRANT_PROVIDER=libvirt test/vagrant/run-vm-ssh-preflight.sh"
     REMOTE_GLOB=".ci/artifacts/vm-ssh-*"
     ;;
-  offline-single-node-real)
-    REMOTE_CMD="DECK_VAGRANT_PROVIDER=libvirt test/vagrant/run-offline-single-node-real.sh"
-    REMOTE_GLOB=".ci/artifacts/offline-single-node-*"
-    ;;
   offline-multinode-agent)
     REMOTE_CMD="DECK_VAGRANT_PROVIDER=libvirt test/vagrant/run-offline-multinode-agent.sh"
     REMOTE_GLOB=".ci/artifacts/offline-multinode-agent-*"
     ;;
   *)
-    echo "MODE must be one of: examples, nightly, single, smoke, vm-ssh, offline-single-node-real, offline-multinode-agent"
+    echo "MODE must be one of: single, smoke, vm-ssh, offline-multinode-agent"
     exit 1
     ;;
 esac
@@ -275,7 +263,7 @@ else
 fi
 
 cd "${DECK_REMOTE_WORKDIR}"
-if [[ "${MODE}" == "examples" || "${MODE}" == "nightly" || "${MODE}" == "single" || "${MODE}" == "smoke" || "${MODE}" == "offline-single-node-real" || "${MODE}" == "offline-multinode-agent" ]]; then
+if [[ "${MODE}" == "single" || "${MODE}" == "smoke" || "${MODE}" == "offline-multinode-agent" ]]; then
   mkdir -p .ci/artifacts
   GOOS=linux GOARCH=amd64 go build -o .ci/artifacts/deck-linux-amd64 ./cmd/deck
   GOOS=linux GOARCH=arm64 go build -o .ci/artifacts/deck-linux-arm64 ./cmd/deck
