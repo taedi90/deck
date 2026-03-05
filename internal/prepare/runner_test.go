@@ -13,10 +13,17 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-containerregistry/pkg/name"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/empty"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/taedi90/deck/internal/config"
 )
 
 func TestRun_PrepareArtifactsAndManifest(t *testing.T) {
+	stubImageDownload(t)
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("hello-download-file"))
 	}))
@@ -122,6 +129,8 @@ func TestRun_NoPreparePhase(t *testing.T) {
 }
 
 func TestRun_ContainerBackendsWithFakeRunner(t *testing.T) {
+	stubImageDownload(t)
+
 	bundle := t.TempDir()
 	r := &fakeRunner{}
 
@@ -148,12 +157,7 @@ func TestRun_ContainerBackendsWithFakeRunner(t *testing.T) {
 					Spec: map[string]any{
 						"images": []any{"registry.k8s.io/kube-apiserver:v1.30.1"},
 						"backend": map[string]any{
-							"engine": "skopeo",
-							"sandbox": map[string]any{
-								"mode":    "container",
-								"runtime": "docker",
-								"image":   "quay.io/skopeo/stable:latest",
-							},
+							"engine": "go-containerregistry",
 						},
 					},
 				},
@@ -171,6 +175,30 @@ func TestRun_ContainerBackendsWithFakeRunner(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(bundle, "images", "registry.k8s.io_kube-apiserver_v1.30.1.tar")); err != nil {
 		t.Fatalf("expected mock image artifact: %v", err)
 	}
+}
+
+func stubImageDownload(t *testing.T) {
+	t.Helper()
+
+	oldParse := parseImageReferenceFn
+	oldFetch := remoteImageFetchFn
+	oldWrite := tarballWriteToFileFn
+
+	parseImageReferenceFn = func(v string) (name.Reference, error) {
+		return name.ParseReference(v, name.WeakValidation)
+	}
+	remoteImageFetchFn = func(_ name.Reference, _ ...remote.Option) (v1.Image, error) {
+		return empty.Image, nil
+	}
+	tarballWriteToFileFn = func(path string, _ name.Reference, _ v1.Image, _ ...tarball.WriteOption) error {
+		return os.WriteFile(path, []byte("image"), 0o644)
+	}
+
+	t.Cleanup(func() {
+		parseImageReferenceFn = oldParse
+		remoteImageFetchFn = oldFetch
+		tarballWriteToFileFn = oldWrite
+	})
 }
 
 func TestRun_DownloadK8sPackagesContainerBackend(t *testing.T) {
@@ -946,7 +974,7 @@ type failOnceRunner struct {
 type noRuntimeRunner struct{}
 
 func (f *failOnceRunner) LookPath(file string) (string, error) {
-	if file == "docker" || file == "podman" || file == "skopeo" {
+	if file == "docker" || file == "podman" {
 		return "/usr/bin/" + file, nil
 	}
 	return "", fmt.Errorf("not found")
@@ -972,7 +1000,7 @@ func (n *noRuntimeRunner) Run(_ context.Context, _ string, _ ...string) error {
 type noArtifactsRunner struct{}
 
 func (n *noArtifactsRunner) LookPath(file string) (string, error) {
-	if file == "docker" || file == "podman" || file == "skopeo" {
+	if file == "docker" || file == "podman" {
 		return "/usr/bin/" + file, nil
 	}
 	return "", fmt.Errorf("not found")
@@ -983,14 +1011,14 @@ func (n *noArtifactsRunner) Run(_ context.Context, _ string, _ ...string) error 
 }
 
 func (f *fakeRunner) LookPath(file string) (string, error) {
-	if file == "docker" || file == "podman" || file == "skopeo" {
+	if file == "docker" || file == "podman" {
 		return "/usr/bin/" + file, nil
 	}
 	return "", fmt.Errorf("not found")
 }
 
 func (f *fakeRunner) Run(_ context.Context, name string, args ...string) error {
-	if name != "docker" && name != "podman" && name != "skopeo" {
+	if name != "docker" && name != "podman" {
 		return nil
 	}
 
@@ -1073,19 +1101,6 @@ func (f *fakeRunner) Run(_ context.Context, name string, args ...string) error {
 						return os.WriteFile(abs, []byte("image"), 0o644)
 					}
 				}
-			}
-		}
-	}
-
-	if name == "skopeo" {
-		for _, a := range args {
-			if strings.HasPrefix(a, "docker-archive:") {
-				target := strings.TrimPrefix(a, "docker-archive:")
-				path := strings.SplitN(target, ":", 2)[0]
-				if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-					return err
-				}
-				return os.WriteFile(path, []byte("image"), 0o644)
 			}
 		}
 	}

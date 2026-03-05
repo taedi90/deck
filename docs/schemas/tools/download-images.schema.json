@@ -33,16 +33,7 @@
           "additionalProperties": false,
           "required": ["engine"],
           "properties": {
-            "engine": { "type": "string", "enum": ["skopeo", "go-containerregistry"] },
-            "sandbox": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "mode": { "const": "container" },
-                "runtime": { "type": "string", "enum": ["auto", "docker", "podman"] },
-                "image": { "type": "string" }
-              }
-            }
+            "engine": { "type": "string", "enum": ["go-containerregistry"] }
           }
         },
         "output": {

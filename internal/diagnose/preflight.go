@@ -230,25 +230,13 @@ func checkPrepareBackendPrerequisites(wf *config.Workflow, opts RunOptions, chec
 			check(fmt.Sprintf("prepare.runtime.%s", step.ID), ok, msg)
 
 		case "DownloadImages":
-			engine := stringFieldOrDefault(backend, "engine", "skopeo")
-			if engine != "skopeo" {
-				continue
+			engine := stringFieldOrDefault(backend, "engine", "go-containerregistry")
+			ok := engine == "go-containerregistry"
+			msg := "go-containerregistry engine enabled"
+			if !ok {
+				msg = fmt.Sprintf("unsupported image engine: %s", engine)
 			}
-			sandbox := nestedMap(backend, "sandbox")
-			if stringField(sandbox, "mode") == "container" {
-				runtimeMode := stringFieldOrDefault(sandbox, "runtime", "auto")
-				ok, msg := runtimeAvailable(lookPath, runtimeMode)
-				check(fmt.Sprintf("prepare.image-sandbox-runtime.%s", step.ID), ok, msg)
-				continue
-			}
-
-			_, err := lookPath("skopeo")
-			ok := err == nil
-			msg := "local skopeo binary required"
-			if ok {
-				msg = "skopeo found"
-			}
-			check(fmt.Sprintf("prepare.skopeo.%s", step.ID), ok, msg)
+			check(fmt.Sprintf("prepare.image-engine.%s", step.ID), ok, msg)
 		}
 	}
 }

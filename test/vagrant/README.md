@@ -4,10 +4,12 @@
 
 ## 구성 파일
 
-- `Vagrantfile`: control-plane/worker 2노드 VM 정의
+- `Vagrantfile`: control-plane + worker 2대(총 3노드) VM 정의
 - `run-single-node-real.sh`: A. 단일 노드(real) 시나리오
 - `run-smoke.sh`: B. 다중 노드(real) 시나리오
 - `run-offline-multinode-agent.sh`: C. server/agent pull 시나리오
+  - 기본 토폴로지: `control-plane` 1대 + `worker` 2대
+  - 기본 박스: `generic/ubuntu2204`(control-plane), `bento/ubuntu-24.04`(worker), `generic/rocky9`(worker-2)
 - `run-vm-ssh-preflight.sh`: VM 생성/SSH 접근 preflight 시나리오
 
 ## 시나리오 요약

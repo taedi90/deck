@@ -5,12 +5,16 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 VAGRANT_DIR="${ROOT_DIR}/test/vagrant"
 LIBVIRT_POOL_HELPER="${VAGRANT_DIR}/scripts/libvirt-pool.sh"
 ENSURE_BINARIES_HELPER="${VAGRANT_DIR}/scripts/ensure-deck-binaries.sh"
+PREPARE_CACHE_HELPER="${VAGRANT_DIR}/scripts/prepare-cache.sh"
 VM_SCENARIO_SCRIPT="${VAGRANT_DIR}/scripts/run-offline-multinode-agent-vm.sh"
 TS="$(date +%Y%m%d-%H%M%S)"
 ART_DIR_REL=".ci/artifacts/offline-multinode-agent-${TS}"
 ART_DIR_ABS="${ROOT_DIR}/${ART_DIR_REL}"
 DECK_VAGRANT_PROVIDER="libvirt"
-DECK_VAGRANT_BOX="${DECK_VAGRANT_BOX:-generic/ubuntu2204}"
+DECK_VAGRANT_BOX_CONTROL_PLANE="${DECK_VAGRANT_BOX_CONTROL_PLANE:-${DECK_VAGRANT_BOX:-generic/ubuntu2204}}"
+DECK_VAGRANT_BOX_WORKER="${DECK_VAGRANT_BOX_WORKER:-bento/ubuntu-24.04}"
+DECK_VAGRANT_BOX_WORKER_2="${DECK_VAGRANT_BOX_WORKER_2:-generic/rocky9}"
+DECK_VAGRANT_BOX="${DECK_VAGRANT_BOX:-${DECK_VAGRANT_BOX_CONTROL_PLANE}}"
 DECK_VAGRANT_VM_PREFIX="${DECK_VAGRANT_VM_PREFIX:-deck-offline-multinode-agent-${TS}-$$}"
 DECK_VAGRANT_SKIP_CLEANUP="${DECK_VAGRANT_SKIP_CLEANUP:-0}"
 IN_VAGRANT_DIR=0
@@ -96,13 +100,19 @@ export DECK_VAGRANT_IP_ADDRESS_TIMEOUT="${DECK_VAGRANT_IP_ADDRESS_TIMEOUT:-300}"
 export DECK_VAGRANT_LIBVIRT_IP_COMMAND="${DECK_VAGRANT_LIBVIRT_IP_COMMAND:-}"
 export DECK_VAGRANT_QEMU_USE_AGENT="${DECK_VAGRANT_QEMU_USE_AGENT:-0}"
 export DECK_VAGRANT_MGMT_ATTACH="${DECK_VAGRANT_MGMT_ATTACH:-1}"
+export DECK_VAGRANT_BOX_CONTROL_PLANE
+export DECK_VAGRANT_BOX_WORKER
+export DECK_VAGRANT_BOX_WORKER_2
 
 validate_box_provider() {
-  if [[ "${DECK_VAGRANT_BOX}" == "manrala/ubuntu24" ]]; then
-    echo "[deck] box/provider mismatch: ${DECK_VAGRANT_BOX} does not support libvirt"
-    echo "[deck] use DECK_VAGRANT_BOX=bento/ubuntu-24.04 (or another libvirt-capable box)"
-    exit 1
-  fi
+  local box
+  for box in "${DECK_VAGRANT_BOX_CONTROL_PLANE}" "${DECK_VAGRANT_BOX_WORKER}" "${DECK_VAGRANT_BOX_WORKER_2}"; do
+    if [[ "${box}" == "manrala/ubuntu24" ]]; then
+      echo "[deck] box/provider mismatch: ${box} does not support libvirt"
+      echo "[deck] use DECK_VAGRANT_BOX=bento/ubuntu-24.04 (or another libvirt-capable box)"
+      exit 1
+    fi
+  done
 }
 
 check_provider_available() {
@@ -150,6 +160,11 @@ for p in "${VAGRANT_DIR}/Vagrantfile" "${VM_SCENARIO_SCRIPT}" "${LIBVIRT_POOL_HE
   fi
 done
 
+if [[ ! -x "${PREPARE_CACHE_HELPER}" ]]; then
+  echo "[deck] missing executable script: test/vagrant/scripts/prepare-cache.sh"
+  exit 1
+fi
+
 if [[ ! -x "${VM_SCENARIO_SCRIPT}" ]]; then
   echo "[deck] missing executable script: test/vagrant/scripts/run-offline-multinode-agent-vm.sh"
   exit 1
@@ -170,6 +185,13 @@ prepare_libvirt_environment
 
 "${ENSURE_BINARIES_HELPER}" "${ROOT_DIR}"
 
+DECK_HOST_BIN="${ROOT_DIR}/.ci/artifacts/deck-host" \
+DECK_VAGRANT_PROVIDER="${DECK_VAGRANT_PROVIDER}" \
+DECK_VAGRANT_BOX="${DECK_VAGRANT_BOX_CONTROL_PLANE},${DECK_VAGRANT_BOX_WORKER},${DECK_VAGRANT_BOX_WORKER_2}" \
+DECK_PREPARE_TEMPLATE_PATH="${ROOT_DIR}/test/vagrant/scenario-templates/offline-multinode-prepare.yaml" \
+  "${PREPARE_CACHE_HELPER}" "${ROOT_DIR}" "${ART_DIR_ABS}" "offline-multinode-agent"
+source "${ART_DIR_ABS}/prepare-cache.env"
+
 pushd "${VAGRANT_DIR}" >/dev/null
 IN_VAGRANT_DIR=1
 
@@ -180,8 +202,9 @@ else
 fi
 delete_stale_volume "control-plane"
 delete_stale_volume "worker"
+delete_stale_volume "worker-2"
 
-DECK_VAGRANT_BOX="${DECK_VAGRANT_BOX}" DECK_VAGRANT_PROVIDER="${DECK_VAGRANT_PROVIDER}" DECK_VAGRANT_VM_PREFIX="${DECK_VAGRANT_VM_PREFIX}" vagrant up control-plane worker --provider "${DECK_VAGRANT_PROVIDER}"
+DECK_VAGRANT_BOX="${DECK_VAGRANT_BOX}" DECK_VAGRANT_PROVIDER="${DECK_VAGRANT_PROVIDER}" DECK_VAGRANT_VM_PREFIX="${DECK_VAGRANT_VM_PREFIX}" vagrant up control-plane worker worker-2 --provider "${DECK_VAGRANT_PROVIDER}"
 
 SERVER_IP="$(DECK_VAGRANT_BOX="${DECK_VAGRANT_BOX}" DECK_VAGRANT_PROVIDER="${DECK_VAGRANT_PROVIDER}" DECK_VAGRANT_VM_PREFIX="${DECK_VAGRANT_VM_PREFIX}" vagrant ssh-config control-plane 2>/dev/null | awk '/^[[:space:]]*HostName[[:space:]]+/ {print $2; exit}')"
 if [[ -z "${SERVER_IP}" ]]; then
@@ -191,11 +214,13 @@ fi
 
 SERVER_URL="http://${SERVER_IP}:18080"
 
-run_vagrant_ssh "worker" "ART_DIR_REL=${ART_DIR_REL} SERVER_URL=${SERVER_URL} bash /workspace/test/vagrant/scripts/run-offline-multinode-agent-vm.sh worker start-agent"
-run_vagrant_ssh "control-plane" "ART_DIR_REL=${ART_DIR_REL} SERVER_URL=${SERVER_URL} DECK_KUBEADM_ADVERTISE_ADDRESS=${SERVER_IP} bash /workspace/test/vagrant/scripts/run-offline-multinode-agent-vm.sh control-plane orchestrate"
+run_vagrant_ssh "worker" "ART_DIR_REL=${ART_DIR_REL} SERVER_URL=${SERVER_URL} DECK_OFFLINE_RELEASE=ubuntu2404 bash /workspace/test/vagrant/scripts/run-offline-multinode-agent-vm.sh worker start-agent"
+run_vagrant_ssh "worker-2" "ART_DIR_REL=${ART_DIR_REL} SERVER_URL=${SERVER_URL} DECK_OFFLINE_RELEASE=rocky9 bash /workspace/test/vagrant/scripts/run-offline-multinode-agent-vm.sh worker-2 start-agent"
+run_vagrant_ssh "control-plane" "ART_DIR_REL=${ART_DIR_REL} SERVER_URL=${SERVER_URL} DECK_KUBEADM_ADVERTISE_ADDRESS=${SERVER_IP} DECK_OFFLINE_RELEASE_CONTROL_PLANE=ubuntu2204 DECK_OFFLINE_RELEASE_WORKER=ubuntu2404 DECK_OFFLINE_RELEASE_WORKER_2=rocky9 DECK_PREPARED_BUNDLE_REL=${DECK_PREPARED_BUNDLE_REL} DECK_PREPARE_CACHE_STATUS=${DECK_PREPARE_CACHE_STATUS} bash /workspace/test/vagrant/scripts/run-offline-multinode-agent-vm.sh control-plane orchestrate"
 
 fetch_vm_artifacts "control-plane"
 fetch_vm_artifacts "worker"
+fetch_vm_artifacts "worker-2"
 
 if [[ ! -f "${ART_DIR_ABS}/offline-multinode-agent-pass.txt" ]]; then
   echo "[deck] PASS marker missing: ${ART_DIR_ABS}/offline-multinode-agent-pass.txt"
@@ -227,8 +252,8 @@ with open(path, "r", encoding="utf-8") as fp:
         if parts[1] == "Ready":
             ready += 1
 
-if total != 2 or ready != 2 or "control-plane" not in nodes or "worker" not in nodes:
-    raise SystemExit(f"expected 2 Ready nodes (control-plane, worker), got total={total} ready={ready} nodes={sorted(nodes)}")
+if total != 3 or ready != 3 or "control-plane" not in nodes or "worker" not in nodes or "worker-2" not in nodes:
+    raise SystemExit(f"expected 3 Ready nodes (control-plane, worker, worker-2), got total={total} ready={ready} nodes={sorted(nodes)}")
 PY
 
 DECK_VAGRANT_BOX="${DECK_VAGRANT_BOX}" DECK_VAGRANT_PROVIDER="${DECK_VAGRANT_PROVIDER}" DECK_VAGRANT_VM_PREFIX="${DECK_VAGRANT_VM_PREFIX}" vagrant status > "${ART_DIR_ABS}/vagrant-status.txt"

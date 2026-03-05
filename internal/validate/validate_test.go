@@ -21,7 +21,7 @@ phases:
         spec:
           images: [registry.k8s.io/kube-apiserver:v1.30.1]
           backend:
-            engine: skopeo
+            engine: go-containerregistry
           output:
             dir: images
             format: docker-archive

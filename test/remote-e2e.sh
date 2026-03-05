@@ -104,11 +104,11 @@ fi
 
 case "${MODE}" in
   single)
-    REMOTE_CMD="DECK_VAGRANT_PROVIDER=libvirt test/vagrant/run-single-node-real.sh"
+    REMOTE_CMD="DECK_PREPARE_FORCE_REDOWNLOAD=${DECK_PREPARE_FORCE_REDOWNLOAD:-0} DECK_VAGRANT_PROVIDER=libvirt test/vagrant/run-single-node-real.sh"
     REMOTE_GLOB=".ci/artifacts/single-node-*"
     ;;
   smoke)
-    REMOTE_CMD="DECK_VAGRANT_PROVIDER=libvirt test/vagrant/run-smoke.sh"
+    REMOTE_CMD="DECK_PREPARE_FORCE_REDOWNLOAD=${DECK_PREPARE_FORCE_REDOWNLOAD:-0} DECK_VAGRANT_PROVIDER=libvirt test/vagrant/run-smoke.sh"
     REMOTE_GLOB=".ci/artifacts/smoke-*"
     ;;
   vm-ssh)
@@ -116,7 +116,7 @@ case "${MODE}" in
     REMOTE_GLOB=".ci/artifacts/vm-ssh-*"
     ;;
   offline-multinode-agent)
-    REMOTE_CMD="DECK_VAGRANT_PROVIDER=libvirt test/vagrant/run-offline-multinode-agent.sh"
+    REMOTE_CMD="DECK_PREPARE_FORCE_REDOWNLOAD=${DECK_PREPARE_FORCE_REDOWNLOAD:-0} DECK_VAGRANT_PROVIDER=libvirt test/vagrant/run-offline-multinode-agent.sh"
     REMOTE_GLOB=".ci/artifacts/offline-multinode-agent-*"
     ;;
   *)

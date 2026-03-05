@@ -45,7 +45,7 @@ func TestPreflight(t *testing.T) {
 }
 
 func TestPreflight_PrepareBackendChecks(t *testing.T) {
-	t.Run("passes when runtime and skopeo are available", func(t *testing.T) {
+	t.Run("passes when runtime and go-containerregistry are available", func(t *testing.T) {
 		dir := t.TempDir()
 		bundle := filepath.Join(dir, "bundle")
 		if err := os.MkdirAll(bundle, 0o755); err != nil {
@@ -70,7 +70,7 @@ func TestPreflight_PrepareBackendChecks(t *testing.T) {
 						{
 							ID:   "img",
 							Kind: "DownloadImages",
-							Spec: map[string]any{"backend": map[string]any{"engine": "skopeo"}},
+							Spec: map[string]any{"backend": map[string]any{"engine": "go-containerregistry"}},
 						},
 					},
 				},
@@ -78,7 +78,7 @@ func TestPreflight_PrepareBackendChecks(t *testing.T) {
 			},
 		}
 
-		out, err := Preflight(wf, RunOptions{LookPath: availableLookPath("docker", "skopeo")})
+		out, err := Preflight(wf, RunOptions{LookPath: availableLookPath("docker")})
 		if err != nil {
 			t.Fatalf("expected pass, got %v", err)
 		}
@@ -113,7 +113,7 @@ func TestPreflight_PrepareBackendChecks(t *testing.T) {
 			},
 		}
 
-		_, err := Preflight(wf, RunOptions{LookPath: availableLookPath("skopeo")})
+		_, err := Preflight(wf, RunOptions{LookPath: availableLookPath("kubectl")})
 		if err == nil {
 			t.Fatalf("expected preflight failure")
 		}
@@ -122,7 +122,7 @@ func TestPreflight_PrepareBackendChecks(t *testing.T) {
 		}
 	})
 
-	t.Run("fails when local skopeo is unavailable", func(t *testing.T) {
+	t.Run("fails when unsupported image engine is configured", func(t *testing.T) {
 		dir := t.TempDir()
 		bundle := filepath.Join(dir, "bundle")
 		if err := os.MkdirAll(bundle, 0o755); err != nil {

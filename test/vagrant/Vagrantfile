@@ -24,6 +24,9 @@ Vagrant.configure("2") do |config|
 
   vm_name_prefix = ENV.fetch("DECK_VAGRANT_VM_PREFIX", "deck")
   default_box = "generic/ubuntu2204"
+  control_plane_box = ENV.fetch("DECK_VAGRANT_BOX_CONTROL_PLANE", ENV.fetch("DECK_VAGRANT_BOX", default_box))
+  worker_box = ENV.fetch("DECK_VAGRANT_BOX_WORKER", ENV.fetch("DECK_VAGRANT_BOX", default_box))
+  worker2_box = ENV.fetch("DECK_VAGRANT_BOX_WORKER_2", ENV.fetch("DECK_VAGRANT_BOX", default_box))
   mgmt_device = ENV.fetch("DECK_VAGRANT_MGMT_DEVICE", "")
   sync_type = ENV.fetch("DECK_VAGRANT_SYNC_TYPE", "rsync").strip
   sync_type = "rsync" if sync_type.empty?
@@ -66,13 +69,14 @@ Vagrant.configure("2") do |config|
   end
 
   nodes = [
-    { name: "control-plane", ip: "192.168.57.10", memory: 3072, cpus: default_cpus },
-    { name: "worker", ip: "192.168.57.11", memory: 3072, cpus: default_cpus }
+    { name: "control-plane", ip: "192.168.57.10", memory: 3072, cpus: default_cpus, box: control_plane_box },
+    { name: "worker", ip: "192.168.57.11", memory: 3072, cpus: default_cpus, box: worker_box },
+    { name: "worker-2", ip: "192.168.57.12", memory: 3072, cpus: default_cpus, box: worker2_box }
   ]
 
   nodes.each do |node|
     config.vm.define node[:name] do |m|
-      m.vm.box = ENV.fetch("DECK_VAGRANT_BOX", default_box)
+      m.vm.box = node[:box]
       m.vm.hostname = node[:name]
       if enable_private_network
         m.ssh.host = node[:ip]
