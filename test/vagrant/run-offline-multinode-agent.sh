@@ -189,7 +189,9 @@ run_vagrant_ssh() {
   local attempts="${3:-4}"
   local delay_sec="${4:-5}"
   local i rc
+  local result=1
 
+  pushd "${VAGRANT_DIR}" >/dev/null
   for ((i=1; i<=attempts; i++)); do
     set +e
     DECK_VAGRANT_BOX="${DECK_VAGRANT_BOX}" DECK_VAGRANT_PROVIDER="${DECK_VAGRANT_PROVIDER}" DECK_VAGRANT_VM_PREFIX="${DECK_VAGRANT_VM_PREFIX}" \
@@ -197,12 +199,13 @@ run_vagrant_ssh() {
     rc=$?
     set -e
     if [[ ${rc} -eq 0 ]]; then
-      return 0
+      result=0
+      break
     fi
     sleep "${delay_sec}"
   done
-
-  return 1
+  popd >/dev/null
+  return ${result}
 }
 
 load_state_env() {
