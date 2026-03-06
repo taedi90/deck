@@ -324,34 +324,17 @@ func TestRunServerAuditRotationFlagValidation(t *testing.T) {
 	}
 }
 
-func TestRunLegacyCommandsMigrated(t *testing.T) {
-	tests := map[string]string{
-		"apply":    "deck workflow run --phase install",
-		"run":      "deck workflow run",
-		"resume":   "deck workflow run --phase install",
-		"validate": "deck workflow validate",
-		"bundle":   "deck workflow bundle",
-		"diagnose": "deck control doctor preflight",
-		"server":   "deck control start server",
-		"agent":    "deck control start agent",
-	}
-
-	for cmd, suggestion := range tests {
+func TestRunLegacyTopLevelCommandsAreRemoved(t *testing.T) {
+	for _, cmd := range []string{"apply", "run", "resume", "validate", "bundle", "diagnose", "server", "agent"} {
 		t.Run(cmd, func(t *testing.T) {
 			err := run([]string{cmd})
 			if err == nil {
-				t.Fatalf("expected migration error")
+				t.Fatalf("expected unknown command error")
 			}
-
 			msg := err.Error()
-			if !strings.Contains(msg, "command migrated") {
-				t.Fatalf("expected migration marker, got %q", msg)
-			}
-			if !strings.Contains(msg, suggestion) {
-				t.Fatalf("expected suggestion %q, got %q", suggestion, msg)
-			}
-			if !strings.Contains(msg, "docs/command-migration-matrix.md") {
-				t.Fatalf("expected migration matrix path, got %q", msg)
+			want := fmt.Sprintf("unknown command %q", cmd)
+			if msg != want {
+				t.Fatalf("unexpected error\nwant: %q\ngot : %q", want, msg)
 			}
 		})
 	}
@@ -380,17 +363,13 @@ func TestRunWorkflowValidateAndLegacyValidateMigration(t *testing.T) {
 		}
 	})
 
-	t.Run("legacy validate remains migrated", func(t *testing.T) {
+	t.Run("legacy validate is removed", func(t *testing.T) {
 		err := run([]string{"validate", "-f", wf})
 		if err == nil {
-			t.Fatalf("expected migration error")
+			t.Fatalf("expected unknown command error")
 		}
-		msg := err.Error()
-		if !strings.Contains(msg, "command migrated") {
-			t.Fatalf("expected migration marker, got %q", msg)
-		}
-		if !strings.Contains(msg, "deck workflow validate") {
-			t.Fatalf("expected workflow validate suggestion, got %q", msg)
+		if err.Error() != `unknown command "validate"` {
+			t.Fatalf("unexpected error: %q", err.Error())
 		}
 	})
 }

@@ -79,8 +79,6 @@ func run(args []string) error {
 		return runControl(args[1:])
 	case "workflow":
 		return runWorkflow(args[1:])
-	case "apply", "run", "resume", "validate", "bundle", "diagnose", "server", "agent":
-		return legacyCommandMigratedError(args[0])
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
@@ -151,7 +149,7 @@ func runControlInstallService(args []string) error {
 func controlServiceTemplate(unitType string) (string, string, string, string) {
 	if unitType == "agent" {
 		return "deck-agent.service", `[Unit]
-Description=deck agent
+Description=deck control agent
 After=network-online.target
 Wants=network-online.target
 
@@ -175,7 +173,7 @@ WantedBy=multi-user.target
 	}
 
 	return "deck-server.service", `[Unit]
-Description=deck server
+Description=deck control server
 After=network-online.target
 Wants=network-online.target
 
@@ -1453,25 +1451,6 @@ func findWorkflowPhaseByName(wf *config.Workflow, name string) (config.Phase, bo
 	return config.Phase{}, false
 }
 
-func legacyCommandMigratedError(command string) error {
-	suggestion, ok := legacyCommandSuggestions[command]
-	if !ok {
-		suggestion = "deck strategy --help"
-	}
-	return fmt.Errorf("command migrated: %q is no longer a top-level command; use %q. See docs/command-migration-matrix.md.", command, suggestion)
-}
-
-var legacyCommandSuggestions = map[string]string{
-	"apply":    "deck workflow run --phase install",
-	"run":      "deck workflow run",
-	"resume":   "deck workflow run --phase install",
-	"validate": "deck workflow validate",
-	"bundle":   "deck workflow bundle",
-	"diagnose": "deck control doctor preflight",
-	"server":   "deck control start server",
-	"agent":    "deck control start agent",
-}
-
 func runStrategy(args []string) error {
 	if len(args) == 0 {
 		return errors.New("usage: deck strategy use local|server [--server <url>] | deck strategy current [--use local|server] [--output json]")
@@ -1560,12 +1539,12 @@ func runStrategyCurrent(args []string) error {
 
 func runAgent(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: deck agent start --server <url> [--interval <duration>] [--once] | deck agent run-once --server <url>")
+		return errors.New("usage: deck control start agent --server <url> [--interval <duration>] [--once]")
 	}
 
 	mode := args[0]
 	if mode != "start" && mode != "run-once" {
-		return errors.New("usage: deck agent start --server <url> [--interval <duration>] [--once] | deck agent run-once --server <url>")
+		return errors.New("usage: deck control start agent --server <url> [--interval <duration>] [--once]")
 	}
 
 	fs := flag.NewFlagSet("agent start", flag.ContinueOnError)
@@ -1643,7 +1622,7 @@ func runApply(args []string) error {
 
 func runServer(args []string) error {
 	if len(args) == 0 || args[0] != "start" {
-		return errors.New("usage: deck server start --root <dir> --addr <host:port> [--report-max <n>] [--audit-max-size-mb <n>] [--audit-max-files <n>] [--registry-seed-dir <dir>] [--registry-seed-registries <csv>] [--tls-cert <crt> --tls-key <key> | --tls-self-signed]")
+		return errors.New("usage: deck control start server --root <dir> --addr <host:port> [--report-max <n>] [--audit-max-size-mb <n>] [--audit-max-files <n>] [--registry-seed-dir <dir>] [--registry-seed-registries <csv>] [--tls-cert <crt> --tls-key <key> | --tls-self-signed]")
 	}
 
 	fs := flag.NewFlagSet("server start", flag.ContinueOnError)
