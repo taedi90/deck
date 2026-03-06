@@ -1,28 +1,34 @@
 package install
 
 import (
+	"bytes"
 	"context"
 	crand "crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/taedi90/deck/internal/bundle"
 	"github.com/taedi90/deck/internal/config"
+	"github.com/taedi90/deck/internal/fetch"
 )
 
 type RunOptions struct {
 	BundleRoot string
+	StatePath  string
 }
 
 type State struct {
@@ -33,8 +39,6 @@ type State struct {
 	FailedStep     string         `json:"failedStep,omitempty"`
 	Error          string         `json:"error,omitempty"`
 }
-
-var templateRefPattern = regexp.MustCompile(`\{\s*\.([A-Za-z0-9_\.]+)\s*\}`)
 
 const (
 	errCodeInstallKindUnsupported  = "E_INSTALL_KIND_UNSUPPORTED"
@@ -64,6 +68,9 @@ const (
 	errCodeInstallJoinFailed       = "E_INSTALL_KUBEADM_JOIN_FAILED"
 	errCodeInstallJoinCmdInvalid   = "E_INSTALL_KUBEADM_JOIN_COMMAND_INVALID"
 	errCodeInstallJoinCmdMissing   = "E_INSTALL_KUBEADM_JOIN_COMMAND_MISSING"
+	errCodeInstallSourceNotFound   = "E_INSTALL_SOURCE_NOT_FOUND"
+	errCodeInstallChecksumMismatch = "E_INSTALL_CHECKSUM_MISMATCH"
+	errCodeInstallOfflineBlocked   = "E_INSTALL_OFFLINE_POLICY_BLOCK"
 	errCodeConditionEval           = "E_CONDITION_EVAL"
 	errCodeRegisterOutputMissing   = "E_REGISTER_OUTPUT_NOT_FOUND"
 )
@@ -79,21 +86,19 @@ func Run(wf *config.Workflow, opts RunOptions) error {
 	}
 
 	bundleRoot := strings.TrimSpace(opts.BundleRoot)
-	if bundleRoot == "" {
-		bundleRoot = strings.TrimSpace(wf.Context.BundleRoot)
-	}
 	if bundleRoot != "" {
 		if err := verifyBundleManifest(bundleRoot); err != nil {
 			return err
 		}
 	}
 
-	statePath := strings.TrimSpace(wf.Context.StateFile)
+	statePath := strings.TrimSpace(opts.StatePath)
 	if statePath == "" {
-		if bundleRoot == "" {
-			bundleRoot = "."
+		resolvedStatePath, err := defaultStatePath(wf)
+		if err != nil {
+			return err
 		}
-		statePath = filepath.Join(bundleRoot, ".deck", "state.json")
+		statePath = resolvedStatePath
 	}
 
 	st, err := loadState(statePath)
@@ -116,7 +121,7 @@ func Run(wf *config.Workflow, opts RunOptions) error {
 		skipped[id] = true
 	}
 
-	ctxData := map[string]any{"bundleRoot": wf.Context.BundleRoot, "stateFile": wf.Context.StateFile}
+	ctxData := map[string]any{"bundleRoot": bundleRoot, "stateFile": statePath}
 	for _, step := range installPhase.Steps {
 		if completed[step.ID] {
 			continue
@@ -147,8 +152,17 @@ func Run(wf *config.Workflow, opts RunOptions) error {
 			attempts = 1
 		}
 		for i := 0; i < attempts; i++ {
-			rendered := renderSpec(step.Spec, wf, runtimeVars)
-			execErr = executeStep(step.Kind, rendered)
+			rendered, renderErr := renderSpec(step.Spec, wf, runtimeVars)
+			if renderErr != nil {
+				execErr = fmt.Errorf("render spec template: %w", renderErr)
+				break
+			}
+			if strings.TrimSpace(step.Timeout) != "" {
+				if _, exists := rendered["timeout"]; !exists {
+					rendered["timeout"] = strings.TrimSpace(step.Timeout)
+				}
+			}
+			execErr = executeStep(step.Kind, rendered, bundleRoot)
 			if execErr == nil {
 				if err := applyRegister(step, rendered, runtimeVars); err != nil {
 					execErr = err
@@ -204,8 +218,11 @@ func verifyBundleManifest(bundleRoot string) error {
 	return bundle.VerifyManifest(bundleRoot)
 }
 
-func executeStep(kind string, spec map[string]any) error {
+func executeStep(kind string, spec map[string]any, bundleRoot string) error {
 	switch kind {
+	case "DownloadFile":
+		_, err := runDownloadFile(bundleRoot, spec)
+		return err
 	case "InstallPackages":
 		return runInstallPackages(spec)
 	case "WriteFile":
@@ -229,6 +246,221 @@ func executeStep(kind string, spec map[string]any) error {
 	default:
 		return fmt.Errorf("%s: unsupported step kind %s", errCodeInstallKindUnsupported, kind)
 	}
+}
+
+func runDownloadFile(bundleRoot string, spec map[string]any) (string, error) {
+	source := mapValue(spec, "source")
+	output := mapValue(spec, "output")
+	fetchCfg := mapValue(spec, "fetch")
+	url := stringValue(source, "url")
+	sourcePath := stringValue(source, "path")
+	expectedSHA := strings.ToLower(stringValue(source, "sha256"))
+	offlineOnly := boolValue(fetchCfg, "offlineOnly")
+	outPath := stringValue(output, "path")
+	if strings.TrimSpace(outPath) == "" {
+		outPath = filepath.ToSlash(filepath.Join("files", inferDownloadFileName(sourcePath, url)))
+	}
+	if strings.TrimSpace(sourcePath) == "" && strings.TrimSpace(url) == "" {
+		return "", fmt.Errorf("DownloadFile requires source.path or source.url")
+	}
+
+	target := filepath.Join(bundleRoot, outPath)
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return "", fmt.Errorf("create output directory: %w", err)
+	}
+
+	reuse, err := canReuseDownloadFile(spec, target)
+	if err != nil {
+		return "", err
+	}
+	if reuse {
+		return outPath, nil
+	}
+
+	f, err := os.Create(target)
+	if err != nil {
+		return "", fmt.Errorf("create output file: %w", err)
+	}
+	defer f.Close()
+
+	if sourcePath != "" {
+		raw, resolveErr := resolveSourceBytes(spec, sourcePath)
+		if resolveErr == nil {
+			if _, err := f.Write(raw); err != nil {
+				return "", fmt.Errorf("write output file: %w", err)
+			}
+		} else {
+			if url == "" {
+				return "", resolveErr
+			}
+			if offlineOnly {
+				return "", fmt.Errorf("%s: source.url fallback blocked by offline policy", errCodeInstallOfflineBlocked)
+			}
+			if _, err := f.Seek(0, 0); err != nil {
+				return "", fmt.Errorf("reset output file cursor: %w", err)
+			}
+			if err := f.Truncate(0); err != nil {
+				return "", fmt.Errorf("truncate output file: %w", err)
+			}
+			if err := downloadURLToFile(f, url, commandTimeout(spec)); err != nil {
+				return "", err
+			}
+		}
+	} else {
+		if offlineOnly {
+			return "", fmt.Errorf("%s: source.url blocked by offline policy", errCodeInstallOfflineBlocked)
+		}
+		if err := downloadURLToFile(f, url, commandTimeout(spec)); err != nil {
+			return "", err
+		}
+	}
+
+	if expectedSHA != "" {
+		if err := verifyFileSHA256(target, expectedSHA); err != nil {
+			return "", err
+		}
+	}
+
+	if modeRaw := stringValue(output, "chmod"); modeRaw != "" {
+		modeVal, err := strconv.ParseUint(modeRaw, 8, 32)
+		if err != nil {
+			return "", fmt.Errorf("invalid chmod: %w", err)
+		}
+		if err := os.Chmod(target, os.FileMode(modeVal)); err != nil {
+			return "", fmt.Errorf("apply chmod: %w", err)
+		}
+	}
+
+	return outPath, nil
+}
+
+func downloadURLToFile(target *os.File, url string, timeout time.Duration) error {
+	client := &http.Client{Timeout: timeout}
+	resp, err := client.Get(url)
+	if err != nil {
+		return fmt.Errorf("download %s: %w", url, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("download %s: unexpected status %d", url, resp.StatusCode)
+	}
+	if _, err := io.Copy(target, resp.Body); err != nil {
+		return fmt.Errorf("write output file: %w", err)
+	}
+	return nil
+}
+
+func resolveSourceBytes(spec map[string]any, sourcePath string) ([]byte, error) {
+	fetchCfg := mapValue(spec, "fetch")
+	sourcesRaw, ok := fetchCfg["sources"].([]any)
+	offlineOnly := boolValue(fetchCfg, "offlineOnly")
+	if ok && len(sourcesRaw) > 0 {
+		sources := make([]fetch.SourceConfig, 0, len(sourcesRaw))
+		for _, raw := range sourcesRaw {
+			s, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			sources = append(sources, fetch.SourceConfig{
+				Type: stringValue(s, "type"),
+				Path: stringValue(s, "path"),
+				URL:  stringValue(s, "url"),
+			})
+		}
+		if len(sources) == 0 {
+			return nil, fmt.Errorf("%s: source.path %s not found in configured fetch sources", errCodeInstallSourceNotFound, sourcePath)
+		}
+		raw, err := fetch.ResolveBytes(sourcePath, sources, fetch.ResolveOptions{OfflineOnly: offlineOnly})
+		if err == nil {
+			return raw, nil
+		}
+		return nil, fmt.Errorf("%s: source.path %s not found in configured fetch sources", errCodeInstallSourceNotFound, sourcePath)
+	}
+
+	raw, err := os.ReadFile(sourcePath)
+	if err == nil {
+		return raw, nil
+	}
+	return nil, fmt.Errorf("%s: source.path %s not found", errCodeInstallSourceNotFound, sourcePath)
+}
+
+func verifyFileSHA256(path, expected string) error {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read downloaded file for checksum: %w", err)
+	}
+	sum := sha256.Sum256(raw)
+	actual := hex.EncodeToString(sum[:])
+	if !strings.EqualFold(actual, expected) {
+		return fmt.Errorf("%s: expected %s got %s", errCodeInstallChecksumMismatch, expected, actual)
+	}
+	return nil
+}
+
+func canReuseDownloadFile(spec map[string]any, target string) (bool, error) {
+	info, err := os.Stat(target)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	if info.Size() == 0 {
+		return false, nil
+	}
+
+	source := mapValue(spec, "source")
+	expectedSHA := strings.ToLower(stringValue(source, "sha256"))
+	if expectedSHA != "" {
+		if err := verifyFileSHA256(target, expectedSHA); err == nil {
+			return true, nil
+		}
+		return false, nil
+	}
+
+	sourcePath := stringValue(source, "path")
+	if sourcePath == "" {
+		return false, nil
+	}
+	raw, err := resolveSourceBytes(spec, sourcePath)
+	if err != nil {
+		return false, nil
+	}
+	targetSHA, err := fileSHA256(target)
+	if err != nil {
+		return false, err
+	}
+	sourceSHA := sha256.Sum256(raw)
+	return strings.EqualFold(targetSHA, hex.EncodeToString(sourceSHA[:])), nil
+}
+
+func fileSHA256(path string) (string, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+func inferDownloadFileName(sourcePath, sourceURL string) string {
+	if strings.TrimSpace(sourcePath) != "" {
+		base := filepath.Base(filepath.FromSlash(strings.TrimSpace(sourcePath)))
+		if base != "" && base != "." && base != string(filepath.Separator) {
+			return base
+		}
+	}
+	if strings.TrimSpace(sourceURL) != "" {
+		trimmed := strings.TrimSpace(sourceURL)
+		if idx := strings.Index(trimmed, "?"); idx >= 0 {
+			trimmed = trimmed[:idx]
+		}
+		base := filepath.Base(filepath.FromSlash(trimmed))
+		if base != "" && base != "." && base != string(filepath.Separator) {
+			return base
+		}
+	}
+	return "downloaded.bin"
 }
 
 func runInstallPackages(spec map[string]any) error {
@@ -816,6 +1048,10 @@ func applyRegister(step config.Step, rendered map[string]any, runtimeVars map[st
 func stepOutputs(kind string, rendered map[string]any) map[string]any {
 	outputs := map[string]any{}
 	switch kind {
+	case "DownloadFile":
+		if path := stringValue(mapValue(rendered, "output"), "path"); path != "" {
+			outputs["path"] = path
+		}
 	case "WriteFile":
 		if path := stringValue(rendered, "path"); path != "" {
 			outputs["path"] = path
@@ -1061,7 +1297,7 @@ func (p *condParser) parseValue() (any, error) {
 		if v, ok := p.resolveIdentifier(tok.value); ok {
 			return v, nil
 		}
-		return nil, fmt.Errorf("unknown identifier %q", tok.value)
+		return nil, unknownIdentifierError(tok.value)
 	}
 	return nil, fmt.Errorf("unexpected token %q", tok.value)
 }
@@ -1073,24 +1309,14 @@ func (p *condParser) resolveIdentifier(id string) (any, bool) {
 	if strings.HasPrefix(id, "runtime.") {
 		return resolveNestedMap(p.runtime, strings.TrimPrefix(id, "runtime."))
 	}
-	if strings.HasPrefix(id, "context.") {
-		return resolveNestedMap(p.ctx, strings.TrimPrefix(id, "context."))
-	}
-	if v, ok := p.vars[id]; ok {
-		return v, true
-	}
-	if v, ok := p.runtime[id]; ok {
-		return v, true
-	}
-	if v, ok := p.ctx[id]; ok {
-		return v, true
-	}
-	if strings.Contains(id, ".") {
-		if v, ok := resolvePath(id, map[string]any{"vars": p.vars, "runtime": p.runtime, "context": p.ctx}); ok {
-			return v, true
-		}
-	}
 	return nil, false
+}
+
+func unknownIdentifierError(id string) error {
+	if strings.Contains(id, ".") {
+		return fmt.Errorf("unknown identifier %q; supported prefixes are vars. and runtime.", id)
+	}
+	return fmt.Errorf("unknown identifier %q; use vars.%s", id, id)
 }
 
 func resolveNestedMap(root map[string]any, path string) (any, bool) {
@@ -1238,27 +1464,50 @@ func saveState(path string, st *State) error {
 	return nil
 }
 
-func renderSpec(spec map[string]any, wf *config.Workflow, runtimeVars map[string]any) map[string]any {
+func defaultStatePath(wf *config.Workflow) (string, error) {
+	if wf == nil {
+		return "", fmt.Errorf("workflow is nil")
+	}
+	stateKey := strings.TrimSpace(wf.StateKey)
+	if stateKey == "" {
+		return "", fmt.Errorf("workflow state key is empty")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve user home directory: %w", err)
+	}
+	return filepath.Join(home, ".deck", "state", stateKey+".json"), nil
+}
+
+func renderSpec(spec map[string]any, wf *config.Workflow, runtimeVars map[string]any) (map[string]any, error) {
 	if spec == nil {
-		return map[string]any{}
+		return map[string]any{}, nil
+	}
+	vars := map[string]any{}
+	if wf != nil && wf.Vars != nil {
+		vars = wf.Vars
 	}
 	ctx := map[string]any{
-		"vars":    wf.Vars,
-		"context": map[string]any{"bundleRoot": wf.Context.BundleRoot, "stateFile": wf.Context.StateFile},
+		"vars":    vars,
+		"context": map[string]any{"bundleRoot": "", "stateFile": ""},
 		"runtime": runtimeVars,
 	}
 	return renderMap(spec, ctx)
 }
 
-func renderMap(input map[string]any, ctx map[string]any) map[string]any {
+func renderMap(input map[string]any, ctx map[string]any) (map[string]any, error) {
 	out := make(map[string]any, len(input))
 	for k, v := range input {
-		out[k] = renderAny(v, ctx)
+		rendered, err := renderAny(v, ctx)
+		if err != nil {
+			return nil, fmt.Errorf("spec.%s: %w", k, err)
+		}
+		out[k] = rendered
 	}
-	return out
+	return out, nil
 }
 
-func renderAny(v any, ctx map[string]any) any {
+func renderAny(v any, ctx map[string]any) (any, error) {
 	switch tv := v.(type) {
 	case string:
 		return renderString(tv, ctx)
@@ -1266,27 +1515,29 @@ func renderAny(v any, ctx map[string]any) any {
 		return renderMap(tv, ctx)
 	case []any:
 		out := make([]any, 0, len(tv))
-		for _, item := range tv {
-			out = append(out, renderAny(item, ctx))
+		for idx, item := range tv {
+			rendered, err := renderAny(item, ctx)
+			if err != nil {
+				return nil, fmt.Errorf("[%d]: %w", idx, err)
+			}
+			out = append(out, rendered)
 		}
-		return out
+		return out, nil
 	default:
-		return v
+		return v, nil
 	}
 }
 
-func renderString(input string, ctx map[string]any) string {
-	return templateRefPattern.ReplaceAllStringFunc(input, func(full string) string {
-		m := templateRefPattern.FindStringSubmatch(full)
-		if len(m) != 2 {
-			return full
-		}
-		path := m[1]
-		if val, ok := resolvePath(path, ctx); ok {
-			return fmt.Sprint(val)
-		}
-		return full
-	})
+func renderString(input string, ctx map[string]any) (string, error) {
+	tmpl, err := template.New("spec").Option("missingkey=error").Parse(input)
+	if err != nil {
+		return "", err
+	}
+	var out bytes.Buffer
+	if err := tmpl.Execute(&out, ctx); err != nil {
+		return "", err
+	}
+	return out.String(), nil
 }
 
 func resolvePath(path string, ctx map[string]any) (any, bool) {
@@ -1331,6 +1582,36 @@ func stringValue(v map[string]any, key string) string {
 		return ""
 	}
 	return strings.TrimSpace(s)
+}
+
+func mapValue(v map[string]any, key string) map[string]any {
+	if v == nil {
+		return map[string]any{}
+	}
+	raw, ok := v[key]
+	if !ok {
+		return map[string]any{}
+	}
+	m, ok := raw.(map[string]any)
+	if !ok || m == nil {
+		return map[string]any{}
+	}
+	return m
+}
+
+func boolValue(v map[string]any, key string) bool {
+	if v == nil {
+		return false
+	}
+	raw, ok := v[key]
+	if !ok {
+		return false
+	}
+	b, ok := raw.(bool)
+	if !ok {
+		return false
+	}
+	return b
 }
 
 func stringSlice(v any) []string {

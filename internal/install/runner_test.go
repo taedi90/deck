@@ -51,7 +51,6 @@ func TestRun_InstallTools(t *testing.T) {
 
 	wf := &config.Workflow{
 		Version: "v1",
-		Context: config.Context{StateFile: statePath},
 		Phases: []config.Phase{{
 			Name: "install",
 			Steps: []config.Step{
@@ -68,7 +67,7 @@ func TestRun_InstallTools(t *testing.T) {
 		}},
 	}
 
-	if err := Run(wf, RunOptions{BundleRoot: bundle}); err != nil {
+	if err := Run(wf, RunOptions{BundleRoot: bundle, StatePath: statePath}); err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
 
@@ -106,6 +105,49 @@ func TestRun_InstallTools(t *testing.T) {
 	}
 }
 
+func TestRun_DefaultStatePathUsesHomeStateKey(t *testing.T) {
+	dir := t.TempDir()
+	home := filepath.Join(dir, "home")
+	bundle := filepath.Join(dir, "bundle")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+	if err := os.MkdirAll(bundle, 0o755); err != nil {
+		t.Fatalf("mkdir bundle: %v", err)
+	}
+	artifact := filepath.Join(bundle, "files", "a.txt")
+	if err := os.MkdirAll(filepath.Dir(artifact), 0o755); err != nil {
+		t.Fatalf("mkdir files: %v", err)
+	}
+	if err := os.WriteFile(artifact, []byte("ok"), 0o644); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+	if err := writeManifestForTest(bundle, "files/a.txt", []byte("ok")); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+	t.Setenv("HOME", home)
+
+	wf := &config.Workflow{
+		StateKey: "state-key-default-path-test",
+		Phases: []config.Phase{{
+			Name:  "install",
+			Steps: []config.Step{{ID: "s1", Kind: "RunCommand", Spec: map[string]any{"command": []any{"true"}}}},
+		}},
+	}
+
+	if err := Run(wf, RunOptions{BundleRoot: bundle}); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	statePath := filepath.Join(home, ".deck", "state", wf.StateKey+".json")
+	if _, err := os.Stat(statePath); err != nil {
+		t.Fatalf("state file missing at expected home path: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(bundle, ".deck", "state.json")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected bundle state file, err=%v", err)
+	}
+}
+
 func TestRun_ManifestIntegrityVerified(t *testing.T) {
 	dir := t.TempDir()
 	bundle := filepath.Join(dir, "bundle")
@@ -126,14 +168,13 @@ func TestRun_ManifestIntegrityVerified(t *testing.T) {
 
 	wf := &config.Workflow{
 		Version: "v1",
-		Context: config.Context{StateFile: statePath},
 		Phases: []config.Phase{{
 			Name:  "install",
 			Steps: []config.Step{{ID: "s1", Kind: "RunCommand", Spec: map[string]any{"command": []any{"true"}}}},
 		}},
 	}
 
-	if err := Run(wf, RunOptions{BundleRoot: bundle}); err != nil {
+	if err := Run(wf, RunOptions{BundleRoot: bundle, StatePath: statePath}); err != nil {
 		t.Fatalf("expected install success, got %v", err)
 	}
 }
@@ -158,14 +199,13 @@ func TestRun_ManifestIntegrityMismatch(t *testing.T) {
 
 	wf := &config.Workflow{
 		Version: "v1",
-		Context: config.Context{StateFile: statePath},
 		Phases: []config.Phase{{
 			Name:  "install",
 			Steps: []config.Step{{ID: "s1", Kind: "RunCommand", Spec: map[string]any{"command": []any{"true"}}}},
 		}},
 	}
 
-	err := Run(wf, RunOptions{BundleRoot: bundle})
+	err := Run(wf, RunOptions{BundleRoot: bundle, StatePath: statePath})
 	if err == nil {
 		t.Fatalf("expected manifest integrity error")
 	}
@@ -197,7 +237,6 @@ func TestRun_ResumeFromFailedStep(t *testing.T) {
 
 	wf := &config.Workflow{
 		Version: "v1",
-		Context: config.Context{StateFile: statePath},
 		Phases: []config.Phase{{
 			Name: "install",
 			Steps: []config.Step{
@@ -208,7 +247,7 @@ func TestRun_ResumeFromFailedStep(t *testing.T) {
 		}},
 	}
 
-	if err := Run(wf, RunOptions{BundleRoot: bundle}); err == nil {
+	if err := Run(wf, RunOptions{BundleRoot: bundle, StatePath: statePath}); err == nil {
 		t.Fatalf("expected failure on s2")
 	}
 
@@ -228,7 +267,7 @@ func TestRun_ResumeFromFailedStep(t *testing.T) {
 	}
 
 	wf.Phases[0].Steps[1].Spec = map[string]any{"command": []any{"true"}}
-	if err := Run(wf, RunOptions{BundleRoot: bundle}); err != nil {
+	if err := Run(wf, RunOptions{BundleRoot: bundle, StatePath: statePath}); err != nil {
 		t.Fatalf("resume run failed: %v", err)
 	}
 
@@ -272,14 +311,13 @@ func TestRun_UnsupportedInstallKindFails(t *testing.T) {
 
 	wf := &config.Workflow{
 		Version: "v1",
-		Context: config.Context{StateFile: statePath},
 		Phases: []config.Phase{{
 			Name:  "install",
 			Steps: []config.Step{{ID: "x", Kind: "UnknownKind", Spec: map[string]any{}}},
 		}},
 	}
 
-	err := Run(wf, RunOptions{BundleRoot: bundle})
+	err := Run(wf, RunOptions{BundleRoot: bundle, StatePath: statePath})
 	if err == nil {
 		t.Fatalf("expected unsupported kind error")
 	}
@@ -309,14 +347,13 @@ func TestRun_RunCommandErrorCodes(t *testing.T) {
 
 		wf := &config.Workflow{
 			Version: "v1",
-			Context: config.Context{StateFile: statePath},
 			Phases: []config.Phase{{
 				Name:  "install",
 				Steps: []config.Step{{ID: "cmd", Kind: "RunCommand", Spec: map[string]any{"command": []any{"false"}}}},
 			}},
 		}
 
-		err := Run(wf, RunOptions{BundleRoot: bundle})
+		err := Run(wf, RunOptions{BundleRoot: bundle, StatePath: statePath})
 		if err == nil {
 			t.Fatalf("expected run command failure")
 		}
@@ -345,7 +382,6 @@ func TestRun_RunCommandErrorCodes(t *testing.T) {
 
 		wf := &config.Workflow{
 			Version: "v1",
-			Context: config.Context{StateFile: statePath},
 			Phases: []config.Phase{{
 				Name: "install",
 				Steps: []config.Step{{
@@ -356,7 +392,7 @@ func TestRun_RunCommandErrorCodes(t *testing.T) {
 			}},
 		}
 
-		err := Run(wf, RunOptions{BundleRoot: bundle})
+		err := Run(wf, RunOptions{BundleRoot: bundle, StatePath: statePath})
 		if err == nil {
 			t.Fatalf("expected run command timeout")
 		}
@@ -386,7 +422,6 @@ func TestRun_KubeadmJoinMissingFileErrorCode(t *testing.T) {
 
 	wf := &config.Workflow{
 		Version: "v1",
-		Context: config.Context{StateFile: statePath},
 		Phases: []config.Phase{{
 			Name: "install",
 			Steps: []config.Step{{
@@ -397,7 +432,7 @@ func TestRun_KubeadmJoinMissingFileErrorCode(t *testing.T) {
 		}},
 	}
 
-	err := Run(wf, RunOptions{BundleRoot: bundle})
+	err := Run(wf, RunOptions{BundleRoot: bundle, StatePath: statePath})
 	if err == nil {
 		t.Fatalf("expected kubeadm join missing file error")
 	}
@@ -433,7 +468,6 @@ func TestRun_VerifyImages(t *testing.T) {
 
 		wf := &config.Workflow{
 			Version: "v1",
-			Context: config.Context{StateFile: statePath},
 			Phases: []config.Phase{{
 				Name: "install",
 				Steps: []config.Step{{
@@ -447,7 +481,7 @@ func TestRun_VerifyImages(t *testing.T) {
 			}},
 		}
 
-		if err := Run(wf, RunOptions{BundleRoot: bundle}); err != nil {
+		if err := Run(wf, RunOptions{BundleRoot: bundle, StatePath: statePath}); err != nil {
 			t.Fatalf("verify images should succeed: %v", err)
 		}
 	})
@@ -478,7 +512,6 @@ func TestRun_VerifyImages(t *testing.T) {
 
 		wf := &config.Workflow{
 			Version: "v1",
-			Context: config.Context{StateFile: statePath},
 			Phases: []config.Phase{{
 				Name: "install",
 				Steps: []config.Step{{
@@ -492,7 +525,7 @@ func TestRun_VerifyImages(t *testing.T) {
 			}},
 		}
 
-		err := Run(wf, RunOptions{BundleRoot: bundle})
+		err := Run(wf, RunOptions{BundleRoot: bundle, StatePath: statePath})
 		if err == nil {
 			t.Fatalf("expected missing image error")
 		}
@@ -536,7 +569,6 @@ func TestRun_KubeadmRealMode(t *testing.T) {
 	joinPath := filepath.Join(dir, "join.txt")
 	wf := &config.Workflow{
 		Version: "v1",
-		Context: config.Context{StateFile: statePath},
 		Phases: []config.Phase{{
 			Name: "install",
 			Steps: []config.Step{
@@ -546,7 +578,7 @@ func TestRun_KubeadmRealMode(t *testing.T) {
 		}},
 	}
 
-	if err := Run(wf, RunOptions{BundleRoot: bundle}); err != nil {
+	if err := Run(wf, RunOptions{BundleRoot: bundle, StatePath: statePath}); err != nil {
 		t.Fatalf("real kubeadm mode run failed: %v", err)
 	}
 
@@ -584,7 +616,6 @@ func TestRun_KubeadmJoinRealModeRejectsInvalidCommand(t *testing.T) {
 
 	wf := &config.Workflow{
 		Version: "v1",
-		Context: config.Context{StateFile: statePath},
 		Phases: []config.Phase{{
 			Name: "install",
 			Steps: []config.Step{{
@@ -595,7 +626,7 @@ func TestRun_KubeadmJoinRealModeRejectsInvalidCommand(t *testing.T) {
 		}},
 	}
 
-	err := Run(wf, RunOptions{BundleRoot: bundle})
+	err := Run(wf, RunOptions{BundleRoot: bundle, StatePath: statePath})
 	if err == nil {
 		t.Fatalf("expected invalid join command error")
 	}
@@ -629,18 +660,17 @@ func TestRun_WhenAndRegisterSemantics(t *testing.T) {
 	wf := &config.Workflow{
 		Version: "v1",
 		Vars:    map[string]any{"role": "control-plane"},
-		Context: config.Context{StateFile: statePath},
 		Phases: []config.Phase{{
 			Name: "install",
 			Steps: []config.Step{
 				{ID: "init", Kind: "KubeadmInit", Spec: map[string]any{"outputJoinFile": joinPath}, Register: map[string]string{"workerJoinFile": "joinFile"}},
-				{ID: "use-register", Kind: "WriteFile", When: "role == \"control-plane\"", Spec: map[string]any{"path": registeredOutputPath, "content": "{ .runtime.workerJoinFile }"}},
-				{ID: "skip-worker", Kind: "WriteFile", When: "role == \"worker\"", Spec: map[string]any{"path": skippedOutputPath, "content": "worker"}},
+				{ID: "use-register", Kind: "WriteFile", When: "vars.role == \"control-plane\"", Spec: map[string]any{"path": registeredOutputPath, "content": "{{ .runtime.workerJoinFile }}"}},
+				{ID: "skip-worker", Kind: "WriteFile", When: "vars.role == \"worker\"", Spec: map[string]any{"path": skippedOutputPath, "content": "worker"}},
 			},
 		}},
 	}
 
-	if err := Run(wf, RunOptions{BundleRoot: bundle}); err != nil {
+	if err := Run(wf, RunOptions{BundleRoot: bundle, StatePath: statePath}); err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
 
@@ -700,14 +730,13 @@ func TestRun_RetrySemantics(t *testing.T) {
 
 		wf := &config.Workflow{
 			Version: "v1",
-			Context: config.Context{StateFile: statePath},
 			Phases: []config.Phase{{
 				Name:  "install",
 				Steps: []config.Step{{ID: "retry-cmd", Kind: "RunCommand", Retry: 1, Spec: map[string]any{"command": []any{scriptPath}}}},
 			}},
 		}
 
-		if err := Run(wf, RunOptions{BundleRoot: bundle}); err != nil {
+		if err := Run(wf, RunOptions{BundleRoot: bundle, StatePath: statePath}); err != nil {
 			t.Fatalf("expected retry success, got %v", err)
 		}
 	})
@@ -739,14 +768,13 @@ func TestRun_RetrySemantics(t *testing.T) {
 
 		wf := &config.Workflow{
 			Version: "v1",
-			Context: config.Context{StateFile: statePath},
 			Phases: []config.Phase{{
 				Name:  "install",
 				Steps: []config.Step{{ID: "retry-cmd", Kind: "RunCommand", Retry: 1, Spec: map[string]any{"command": []any{scriptPath}}}},
 			}},
 		}
 
-		err := Run(wf, RunOptions{BundleRoot: bundle})
+		err := Run(wf, RunOptions{BundleRoot: bundle, StatePath: statePath})
 		if err == nil {
 			t.Fatalf("expected failure after retry exhaustion")
 		}
@@ -782,24 +810,61 @@ func TestRun_WhenInvalidExpression(t *testing.T) {
 	wf := &config.Workflow{
 		Version: "v1",
 		Vars:    map[string]any{"role": "worker"},
-		Context: config.Context{StateFile: statePath},
 		Phases: []config.Phase{{
 			Name: "install",
 			Steps: []config.Step{{
 				ID:   "bad-when",
 				Kind: "RunCommand",
-				When: "role = \"worker\"",
+				When: "vars.role = \"worker\"",
 				Spec: map[string]any{"command": []any{"true"}},
 			}},
 		}},
 	}
 
-	err := Run(wf, RunOptions{BundleRoot: bundle})
+	err := Run(wf, RunOptions{BundleRoot: bundle, StatePath: statePath})
 	if err == nil {
 		t.Fatalf("expected condition evaluation failure")
 	}
 	if !strings.Contains(err.Error(), "E_CONDITION_EVAL") {
 		t.Fatalf("expected E_CONDITION_EVAL, got %v", err)
+	}
+}
+
+func TestWhen_NamespaceEnforced(t *testing.T) {
+	vars := map[string]any{"nodeRole": "worker"}
+	runtimeVars := map[string]any{"hostPassed": true}
+	ctx := map[string]any{"nodeRole": "worker"}
+
+	ok, err := EvaluateWhen("vars.nodeRole == \"worker\"", vars, runtimeVars, ctx)
+	if err != nil {
+		t.Fatalf("expected vars namespace expression to pass, got %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected vars namespace expression to be true")
+	}
+
+	_, err = EvaluateWhen("nodeRole == \"worker\"", vars, runtimeVars, ctx)
+	if err == nil {
+		t.Fatalf("expected bare identifier to fail")
+	}
+	if !strings.Contains(err.Error(), "unknown identifier \"nodeRole\"; use vars.nodeRole") {
+		t.Fatalf("expected bare identifier guidance, got %v", err)
+	}
+
+	_, err = EvaluateWhen("context.nodeRole == \"worker\"", vars, runtimeVars, ctx)
+	if err == nil {
+		t.Fatalf("expected context namespace to fail")
+	}
+	if !strings.Contains(err.Error(), "unknown identifier \"context.nodeRole\"; supported prefixes are vars. and runtime.") {
+		t.Fatalf("expected namespace restriction message, got %v", err)
+	}
+
+	_, err = EvaluateWhen("other.nodeRole == \"worker\"", vars, runtimeVars, ctx)
+	if err == nil {
+		t.Fatalf("expected unknown dotted namespace to fail")
+	}
+	if !strings.Contains(err.Error(), "unknown identifier \"other.nodeRole\"; supported prefixes are vars. and runtime.") {
+		t.Fatalf("expected namespace restriction message, got %v", err)
 	}
 }
 
@@ -837,7 +902,6 @@ func TestRun_InstallPackagesExecutesPackageManager(t *testing.T) {
 
 	wf := &config.Workflow{
 		Version: "v1",
-		Context: config.Context{StateFile: statePath},
 		Phases: []config.Phase{{
 			Name: "install",
 			Steps: []config.Step{{
@@ -848,7 +912,7 @@ func TestRun_InstallPackagesExecutesPackageManager(t *testing.T) {
 		}},
 	}
 
-	if err := Run(wf, RunOptions{BundleRoot: bundle}); err != nil {
+	if err := Run(wf, RunOptions{BundleRoot: bundle, StatePath: statePath}); err != nil {
 		t.Fatalf("expected install packages success, got %v", err)
 	}
 
@@ -882,7 +946,6 @@ func TestRun_InstallPackagesSourcePathValidation(t *testing.T) {
 
 	wf := &config.Workflow{
 		Version: "v1",
-		Context: config.Context{StateFile: statePath},
 		Phases: []config.Phase{{
 			Name: "install",
 			Steps: []config.Step{{
@@ -896,7 +959,7 @@ func TestRun_InstallPackagesSourcePathValidation(t *testing.T) {
 		}},
 	}
 
-	err := Run(wf, RunOptions{BundleRoot: bundle})
+	err := Run(wf, RunOptions{BundleRoot: bundle, StatePath: statePath})
 	if err == nil {
 		t.Fatalf("expected source validation error")
 	}
@@ -952,7 +1015,6 @@ func TestRun_InstallPackagesInstallsFromLocalRepo(t *testing.T) {
 
 	wf := &config.Workflow{
 		Version: "v1",
-		Context: config.Context{StateFile: statePath},
 		Phases: []config.Phase{{
 			Name: "install",
 			Steps: []config.Step{{
@@ -966,7 +1028,7 @@ func TestRun_InstallPackagesInstallsFromLocalRepo(t *testing.T) {
 		}},
 	}
 
-	if err := Run(wf, RunOptions{BundleRoot: bundle}); err != nil {
+	if err := Run(wf, RunOptions{BundleRoot: bundle, StatePath: statePath}); err != nil {
 		t.Fatalf("expected local repo install success, got %v", err)
 	}
 
@@ -980,6 +1042,59 @@ func TestRun_InstallPackagesInstallsFromLocalRepo(t *testing.T) {
 	}
 	if !strings.Contains(args, debA) || !strings.Contains(args, debB) {
 		t.Fatalf("local deb artifacts were not passed to apt-get: %q", args)
+	}
+}
+
+func TestTemplate_RenderVarsAndRuntime(t *testing.T) {
+	wf := &config.Workflow{Vars: map[string]any{"kubernetesVersion": "v1.30.1", "registry": map[string]any{"host": "registry.k8s.io"}}}
+	runtimeVars := map[string]any{"joinFile": "/tmp/join.txt"}
+
+	rendered, err := renderSpec(map[string]any{
+		"path": "{{ .runtime.joinFile }}",
+		"nested": map[string]any{
+			"image": "{{ .vars.registry.host }}/kube-apiserver:{{ .vars.kubernetesVersion }}",
+		},
+		"items": []any{
+			"{{ .vars.kubernetesVersion }}",
+			map[string]any{"join": "{{ .runtime.joinFile }}"},
+			123,
+		},
+	}, wf, runtimeVars)
+	if err != nil {
+		t.Fatalf("renderSpec failed: %v", err)
+	}
+
+	if got := rendered["path"]; got != "/tmp/join.txt" {
+		t.Fatalf("unexpected rendered path: %#v", got)
+	}
+	nested, ok := rendered["nested"].(map[string]any)
+	if !ok {
+		t.Fatalf("nested should be map, got %#v", rendered["nested"])
+	}
+	if got := nested["image"]; got != "registry.k8s.io/kube-apiserver:v1.30.1" {
+		t.Fatalf("unexpected rendered image: %#v", got)
+	}
+	items, ok := rendered["items"].([]any)
+	if !ok {
+		t.Fatalf("items should be slice, got %#v", rendered["items"])
+	}
+	if got := items[0]; got != "v1.30.1" {
+		t.Fatalf("unexpected rendered items[0]: %#v", got)
+	}
+	itemMap, ok := items[1].(map[string]any)
+	if !ok || itemMap["join"] != "/tmp/join.txt" {
+		t.Fatalf("unexpected rendered items[1]: %#v", items[1])
+	}
+	if got := items[2]; got != 123 {
+		t.Fatalf("unexpected rendered items[2]: %#v", got)
+	}
+
+	_, err = renderSpec(map[string]any{"content": "{{ .runtime.missing }}"}, wf, runtimeVars)
+	if err == nil {
+		t.Fatalf("expected unresolved template reference error")
+	}
+	if !strings.Contains(err.Error(), "spec.content") {
+		t.Fatalf("expected error to include spec path, got %v", err)
 	}
 }
 
@@ -1194,5 +1309,9 @@ func writeManifestForTest(bundleRoot, relPath string, content []byte) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(bundleRoot, "manifest.json"), raw, 0o644)
+	manifestPath := filepath.Join(bundleRoot, ".deck", "manifest.json")
+	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(manifestPath, raw, 0o644)
 }

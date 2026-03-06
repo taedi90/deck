@@ -1,6 +1,7 @@
 package prepare
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -12,11 +13,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
 	"strings"
+	"text/template"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -59,8 +60,6 @@ type manifestEntry struct {
 	Size   int64  `json:"size"`
 }
 
-var templateRefPattern = regexp.MustCompile(`\{\s*\.([A-Za-z0-9_\.]+)\s*\}`)
-
 const (
 	errCodePrepareRuntimeMissing     = "E_PREPARE_RUNTIME_NOT_FOUND"
 	errCodePrepareRuntimeUnsupported = "E_PREPARE_RUNTIME_UNSUPPORTED"
@@ -97,9 +96,6 @@ func Run(wf *config.Workflow, opts RunOptions) error {
 
 	bundleRoot := strings.TrimSpace(opts.BundleRoot)
 	if bundleRoot == "" {
-		bundleRoot = strings.TrimSpace(wf.Context.BundleRoot)
-	}
-	if bundleRoot == "" {
 		bundleRoot = "./bundle"
 	}
 
@@ -118,7 +114,35 @@ func Run(wf *config.Workflow, opts RunOptions) error {
 	if !found {
 		return fmt.Errorf("prepare phase not found")
 	}
-	ctxData := map[string]any{"bundleRoot": wf.Context.BundleRoot, "stateFile": wf.Context.StateFile}
+	packCacheEnabled := strings.TrimSpace(wf.Role) == "pack"
+	packCacheStatePath := ""
+	packCachePlan := PackCachePlan{}
+	if packCacheEnabled {
+		workflowSHA := strings.TrimSpace(wf.WorkflowSHA256)
+		if workflowSHA == "" {
+			fallbackBytes, err := json.Marshal(wf)
+			if err != nil {
+				return fmt.Errorf("encode workflow for pack cache: %w", err)
+			}
+			workflowSHA = computeWorkflowSHA256(fallbackBytes)
+		}
+		var err error
+		packCacheStatePath, err = defaultPackCacheStatePath(workflowSHA)
+		if err != nil {
+			return fmt.Errorf("resolve pack cache state path: %w", err)
+		}
+		prevPackCacheState, err := loadPackCacheState(packCacheStatePath)
+		if err != nil {
+			return err
+		}
+		workflowBytesForPlan, err := json.Marshal(wf)
+		if err != nil {
+			return fmt.Errorf("encode workflow for pack cache plan: %w", err)
+		}
+		packCachePlan = ComputePackCachePlan(prevPackCacheState, workflowBytesForPlan, wf.Vars, preparePhase.Steps)
+		packCachePlan.WorkflowSHA256 = workflowSHA
+	}
+	ctxData := map[string]any{"bundleRoot": bundleRoot, "stateFile": ""}
 
 	for _, step := range preparePhase.Steps {
 		ok, err := evaluateWhen(step.When, wf.Vars, runtimeVars, ctxData)
@@ -140,7 +164,11 @@ func Run(wf *config.Workflow, opts RunOptions) error {
 			execErr   error
 		)
 		for i := 0; i < attempts; i++ {
-			rendered := renderSpec(step.Spec, wf, runtimeVars)
+			rendered, renderErr := renderSpec(step.Spec, wf, runtimeVars)
+			if renderErr != nil {
+				execErr = fmt.Errorf("render spec template: %w", renderErr)
+				break
+			}
 			stepFiles, outputs, execErr = runPrepareStep(runner, bundleRoot, step.Kind, rendered)
 			if execErr == nil {
 				execErr = applyRegister(step, outputs, runtimeVars)
@@ -163,9 +191,14 @@ func Run(wf *config.Workflow, opts RunOptions) error {
 	}
 
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Path < entries[j].Path })
-	manifestPath := filepath.Join(bundleRoot, "manifest.json")
-	if err := writeManifest(manifestPath, dedupeEntries(entries)); err != nil {
+	manifestPath := filepath.Join(bundleRoot, ".deck", "manifest.json")
+	if err := writeManifest(manifestPath, dedupeEntries(filterManifestEntries(entries))); err != nil {
 		return err
+	}
+	if packCacheEnabled {
+		if err := savePackCacheState(packCacheStatePath, packCacheStateFromPlan(packCachePlan)); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -180,7 +213,7 @@ func runPrepareStep(runner CommandRunner, bundleRoot, kind string, rendered map[
 		}
 		return []string{f}, map[string]any{"path": f, "artifacts": []string{f}}, nil
 	case "DownloadPackages":
-		files, err := runDownloadPackages(runner, bundleRoot, rendered, "packages/os")
+		files, err := runDownloadPackages(runner, bundleRoot, rendered, "packages")
 		if err != nil {
 			return nil, nil, err
 		}
@@ -530,7 +563,7 @@ func (p *condParser) parseValue() (any, error) {
 		if v, ok := p.resolveIdentifier(tok.value); ok {
 			return v, nil
 		}
-		return nil, fmt.Errorf("unknown identifier %q", tok.value)
+		return nil, unknownIdentifierError(tok.value)
 	}
 	return nil, fmt.Errorf("unexpected token %q", tok.value)
 }
@@ -542,24 +575,14 @@ func (p *condParser) resolveIdentifier(id string) (any, bool) {
 	if strings.HasPrefix(id, "runtime.") {
 		return resolveNestedMap(p.runtime, strings.TrimPrefix(id, "runtime."))
 	}
-	if strings.HasPrefix(id, "context.") {
-		return resolveNestedMap(p.ctx, strings.TrimPrefix(id, "context."))
-	}
-	if v, ok := p.vars[id]; ok {
-		return v, true
-	}
-	if v, ok := p.runtime[id]; ok {
-		return v, true
-	}
-	if v, ok := p.ctx[id]; ok {
-		return v, true
-	}
-	if strings.Contains(id, ".") {
-		if v, ok := resolvePath(id, map[string]any{"vars": p.vars, "runtime": p.runtime, "context": p.ctx}); ok {
-			return v, true
-		}
-	}
 	return nil, false
+}
+
+func unknownIdentifierError(id string) error {
+	if strings.Contains(id, ".") {
+		return fmt.Errorf("unknown identifier %q; supported prefixes are vars. and runtime.", id)
+	}
+	return fmt.Errorf("unknown identifier %q; use vars.%s", id, id)
 }
 
 func resolveNestedMap(root map[string]any, path string) (any, bool) {
@@ -681,7 +704,7 @@ func runDownloadFile(bundleRoot string, spec map[string]any) (string, error) {
 	offlineOnly := boolValue(fetchCfg, "offlineOnly")
 	outPath := stringValue(output, "path")
 	if strings.TrimSpace(outPath) == "" {
-		return "", fmt.Errorf("DownloadFile requires output.path")
+		outPath = filepath.ToSlash(filepath.Join("files", inferDownloadFileName(sourcePath, url)))
 	}
 	if strings.TrimSpace(sourcePath) == "" && strings.TrimSpace(url) == "" {
 		return "", fmt.Errorf("DownloadFile requires source.path or source.url")
@@ -901,7 +924,7 @@ func runDownloadK8sPackages(runner CommandRunner, bundleRoot string, spec map[st
 	output := mapValue(spec, "output")
 	dir := stringValue(output, "dir")
 	if dir == "" {
-		dir = "packages/k8s"
+		dir = "packages"
 	}
 
 	version := strings.TrimPrefix(stringValue(spec, "kubernetesVersion"), "v")
@@ -1371,6 +1394,26 @@ func runDownloadImages(runner CommandRunner, bundleRoot string, spec map[string]
 	return runGoContainerRegistryDownloads(bundleRoot, dir, images)
 }
 
+func inferDownloadFileName(sourcePath, sourceURL string) string {
+	if strings.TrimSpace(sourcePath) != "" {
+		base := filepath.Base(filepath.FromSlash(strings.TrimSpace(sourcePath)))
+		if base != "" && base != "." && base != string(filepath.Separator) {
+			return base
+		}
+	}
+	if strings.TrimSpace(sourceURL) != "" {
+		trimmed := strings.TrimSpace(sourceURL)
+		if idx := strings.Index(trimmed, "?"); idx >= 0 {
+			trimmed = trimmed[:idx]
+		}
+		base := filepath.Base(filepath.FromSlash(trimmed))
+		if base != "" && base != "." && base != string(filepath.Separator) {
+			return base
+		}
+	}
+	return "downloaded.bin"
+}
+
 func runGoContainerRegistryDownloads(bundleRoot, dir string, images []string) ([]string, error) {
 	files := make([]string, 0, len(images))
 	for _, img := range images {
@@ -1706,27 +1749,53 @@ func dedupeEntries(entries []manifestEntry) []manifestEntry {
 	return out
 }
 
-func renderSpec(spec map[string]any, wf *config.Workflow, runtimeVars map[string]any) map[string]any {
+func filterManifestEntries(entries []manifestEntry) []manifestEntry {
+	filtered := make([]manifestEntry, 0, len(entries))
+	for _, e := range entries {
+		if isManifestTrackedPath(e.Path) {
+			filtered = append(filtered, e)
+		}
+	}
+	return filtered
+}
+
+func isManifestTrackedPath(rel string) bool {
+	normalized := filepath.ToSlash(filepath.Clean(filepath.FromSlash(strings.TrimSpace(rel))))
+	if normalized == "." {
+		return false
+	}
+	return strings.HasPrefix(normalized, "packages/") || strings.HasPrefix(normalized, "images/") || strings.HasPrefix(normalized, "files/")
+}
+
+func renderSpec(spec map[string]any, wf *config.Workflow, runtimeVars map[string]any) (map[string]any, error) {
 	if spec == nil {
-		return map[string]any{}
+		return map[string]any{}, nil
+	}
+	vars := map[string]any{}
+	if wf != nil && wf.Vars != nil {
+		vars = wf.Vars
 	}
 	ctx := map[string]any{
-		"vars":    wf.Vars,
-		"context": map[string]any{"bundleRoot": wf.Context.BundleRoot, "stateFile": wf.Context.StateFile},
+		"vars":    vars,
+		"context": map[string]any{"bundleRoot": "", "stateFile": ""},
 		"runtime": runtimeVars,
 	}
 	return renderMap(spec, ctx)
 }
 
-func renderMap(input map[string]any, ctx map[string]any) map[string]any {
+func renderMap(input map[string]any, ctx map[string]any) (map[string]any, error) {
 	out := make(map[string]any, len(input))
 	for k, v := range input {
-		out[k] = renderAny(v, ctx)
+		rendered, err := renderAny(v, ctx)
+		if err != nil {
+			return nil, fmt.Errorf("spec.%s: %w", k, err)
+		}
+		out[k] = rendered
 	}
-	return out
+	return out, nil
 }
 
-func renderAny(v any, ctx map[string]any) any {
+func renderAny(v any, ctx map[string]any) (any, error) {
 	switch tv := v.(type) {
 	case string:
 		return renderString(tv, ctx)
@@ -1734,27 +1803,29 @@ func renderAny(v any, ctx map[string]any) any {
 		return renderMap(tv, ctx)
 	case []any:
 		out := make([]any, 0, len(tv))
-		for _, item := range tv {
-			out = append(out, renderAny(item, ctx))
+		for idx, item := range tv {
+			rendered, err := renderAny(item, ctx)
+			if err != nil {
+				return nil, fmt.Errorf("[%d]: %w", idx, err)
+			}
+			out = append(out, rendered)
 		}
-		return out
+		return out, nil
 	default:
-		return v
+		return v, nil
 	}
 }
 
-func renderString(input string, ctx map[string]any) string {
-	return templateRefPattern.ReplaceAllStringFunc(input, func(full string) string {
-		m := templateRefPattern.FindStringSubmatch(full)
-		if len(m) != 2 {
-			return full
-		}
-		path := m[1]
-		if val, ok := resolvePath(path, ctx); ok {
-			return fmt.Sprint(val)
-		}
-		return full
-	})
+func renderString(input string, ctx map[string]any) (string, error) {
+	tmpl, err := template.New("spec").Option("missingkey=error").Parse(input)
+	if err != nil {
+		return "", err
+	}
+	var out bytes.Buffer
+	if err := tmpl.Execute(&out, ctx); err != nil {
+		return "", err
+	}
+	return out.String(), nil
 }
 
 func resolvePath(path string, ctx map[string]any) (any, bool) {

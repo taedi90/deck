@@ -59,7 +59,7 @@ func TestRun_PrepareArtifactsAndManifest(t *testing.T) {
 						ID:   "download-k8s-packages",
 						Kind: "DownloadK8sPackages",
 						Spec: map[string]any{
-							"kubernetesVersion": "{ .vars.kubernetesVersion }",
+							"kubernetesVersion": "{{ .vars.kubernetesVersion }}",
 							"components":        []any{"kubelet"},
 						},
 					},
@@ -67,7 +67,7 @@ func TestRun_PrepareArtifactsAndManifest(t *testing.T) {
 						ID:   "download-images",
 						Kind: "DownloadImages",
 						Spec: map[string]any{
-							"images": []any{"registry.k8s.io/kube-apiserver:{ .vars.kubernetesVersion }"},
+							"images": []any{"registry.k8s.io/kube-apiserver:{{ .vars.kubernetesVersion }}"},
 						},
 					},
 				},
@@ -81,11 +81,11 @@ func TestRun_PrepareArtifactsAndManifest(t *testing.T) {
 
 	expectFiles := []string{
 		"files/artifact.bin",
-		"packages/os/containerd.txt",
-		"packages/os/iptables.txt",
-		"packages/k8s/kubelet-v1.30.1.txt",
+		"packages/containerd.txt",
+		"packages/iptables.txt",
+		"packages/kubelet-v1.30.1.txt",
 		"images/registry.k8s.io_kube-apiserver_v1.30.1.tar",
-		"manifest.json",
+		".deck/manifest.json",
 	}
 
 	for _, rel := range expectFiles {
@@ -95,7 +95,7 @@ func TestRun_PrepareArtifactsAndManifest(t *testing.T) {
 		}
 	}
 
-	manifestRaw, err := os.ReadFile(filepath.Join(bundle, "manifest.json"))
+	manifestRaw, err := os.ReadFile(filepath.Join(bundle, ".deck", "manifest.json"))
 	if err != nil {
 		t.Fatalf("read manifest: %v", err)
 	}
@@ -117,6 +117,12 @@ func TestRun_PrepareArtifactsAndManifest(t *testing.T) {
 	for _, e := range mf.Entries {
 		if e.Path == "" || e.SHA256 == "" || e.Size <= 0 {
 			t.Fatalf("invalid manifest entry: %+v", e)
+		}
+		if strings.HasPrefix(e.Path, "workflows/") || e.Path == "deck" {
+			t.Fatalf("manifest must exclude workflow and root deck entries: %+v", e)
+		}
+		if !(strings.HasPrefix(e.Path, "packages/") || strings.HasPrefix(e.Path, "images/") || strings.HasPrefix(e.Path, "files/")) {
+			t.Fatalf("manifest entry outside allowed prefixes: %+v", e)
 		}
 	}
 }
@@ -169,7 +175,7 @@ func TestRun_ContainerBackendsWithFakeRunner(t *testing.T) {
 		t.Fatalf("Run failed: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(bundle, "packages", "os", "mock-package.deb")); err != nil {
+	if _, err := os.Stat(filepath.Join(bundle, "packages", "mock-package.deb")); err != nil {
 		t.Fatalf("expected mock package artifact: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(bundle, "images", "registry.k8s.io_kube-apiserver_v1.30.1.tar")); err != nil {
@@ -231,11 +237,11 @@ func TestRun_DownloadK8sPackagesContainerBackend(t *testing.T) {
 		t.Fatalf("Run failed: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(bundle, "packages", "k8s", "mock-package.deb")); err != nil {
+	if _, err := os.Stat(filepath.Join(bundle, "packages", "mock-package.deb")); err != nil {
 		t.Fatalf("expected mock package artifact: %v", err)
 	}
 
-	versionPath := filepath.Join(bundle, "packages", "k8s", "kubernetes-version.txt")
+	versionPath := filepath.Join(bundle, "packages", "kubernetes-version.txt")
 	raw, err := os.ReadFile(versionPath)
 	if err != nil {
 		t.Fatalf("expected kubernetes version metadata: %v", err)
@@ -556,9 +562,9 @@ func TestRun_WhenAndRegisterSemantics(t *testing.T) {
 				{
 					ID:   "download-b",
 					Kind: "DownloadFile",
-					When: "role == \"control-plane\"",
+					When: "vars.role == \"control-plane\"",
 					Spec: map[string]any{
-						"source": map[string]any{"path": "{ .runtime.downloaded }"},
+						"source": map[string]any{"path": "{{ .runtime.downloaded }}"},
 						"fetch":  map[string]any{"sources": []any{map[string]any{"type": "bundle", "path": bundle}}},
 						"output": map[string]any{"path": "files/b-out.bin"},
 					},
@@ -566,7 +572,7 @@ func TestRun_WhenAndRegisterSemantics(t *testing.T) {
 				{
 					ID:   "skip-worker-only",
 					Kind: "DownloadFile",
-					When: "role == \"worker\"",
+					When: "vars.role == \"worker\"",
 					Spec: map[string]any{
 						"source": map[string]any{"path": sourceRel},
 						"fetch":  map[string]any{"sources": []any{map[string]any{"type": "local", "path": localCache}}},
@@ -664,7 +670,7 @@ func TestRun_WhenInvalidExpression(t *testing.T) {
 			Steps: []config.Step{{
 				ID:   "bad-when",
 				Kind: "DownloadPackages",
-				When: "role = \"worker\"",
+				When: "vars.role = \"worker\"",
 				Spec: map[string]any{"packages": []any{"containerd"}},
 			}},
 		}},
@@ -676,6 +682,44 @@ func TestRun_WhenInvalidExpression(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "E_CONDITION_EVAL") {
 		t.Fatalf("expected E_CONDITION_EVAL, got %v", err)
+	}
+}
+
+func TestWhen_NamespaceEnforced(t *testing.T) {
+	vars := map[string]any{"nodeRole": "worker"}
+	runtimeVars := map[string]any{"hostPassed": true}
+	ctx := map[string]any{"nodeRole": "worker"}
+
+	ok, err := EvaluateWhen("vars.nodeRole == \"worker\"", vars, runtimeVars, ctx)
+	if err != nil {
+		t.Fatalf("expected vars namespace expression to pass, got %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected vars namespace expression to be true")
+	}
+
+	_, err = EvaluateWhen("nodeRole == \"worker\"", vars, runtimeVars, ctx)
+	if err == nil {
+		t.Fatalf("expected bare identifier to fail")
+	}
+	if !strings.Contains(err.Error(), "unknown identifier \"nodeRole\"; use vars.nodeRole") {
+		t.Fatalf("expected bare identifier guidance, got %v", err)
+	}
+
+	_, err = EvaluateWhen("context.nodeRole == \"worker\"", vars, runtimeVars, ctx)
+	if err == nil {
+		t.Fatalf("expected context namespace to fail")
+	}
+	if !strings.Contains(err.Error(), "unknown identifier \"context.nodeRole\"; supported prefixes are vars. and runtime.") {
+		t.Fatalf("expected namespace restriction message, got %v", err)
+	}
+
+	_, err = EvaluateWhen("other.nodeRole == \"worker\"", vars, runtimeVars, ctx)
+	if err == nil {
+		t.Fatalf("expected unknown dotted namespace to fail")
+	}
+	if !strings.Contains(err.Error(), "unknown identifier \"other.nodeRole\"; supported prefixes are vars. and runtime.") {
+		t.Fatalf("expected namespace restriction message, got %v", err)
 	}
 }
 
@@ -1106,4 +1150,53 @@ func (f *fakeRunner) Run(_ context.Context, name string, args ...string) error {
 	}
 
 	return nil
+}
+
+func TestTemplate_RenderVarsAndRuntime(t *testing.T) {
+	wf := &config.Workflow{Vars: map[string]any{"kubernetesVersion": "v1.30.1", "registry": map[string]any{"host": "registry.k8s.io"}}}
+	runtimeVars := map[string]any{"downloaded": "files/a.bin"}
+
+	rendered, err := renderSpec(map[string]any{
+		"source": map[string]any{"path": "{{ .runtime.downloaded }}"},
+		"output": map[string]any{"path": "files/{{ .vars.kubernetesVersion }}.bin"},
+		"images": []any{
+			"{{ .vars.registry.host }}/kube-apiserver:{{ .vars.kubernetesVersion }}",
+			map[string]any{"tag": "{{ .runtime.downloaded }}"},
+			7,
+		},
+	}, wf, runtimeVars)
+	if err != nil {
+		t.Fatalf("renderSpec failed: %v", err)
+	}
+
+	source, ok := rendered["source"].(map[string]any)
+	if !ok || source["path"] != "files/a.bin" {
+		t.Fatalf("unexpected rendered source: %#v", rendered["source"])
+	}
+	output, ok := rendered["output"].(map[string]any)
+	if !ok || output["path"] != "files/v1.30.1.bin" {
+		t.Fatalf("unexpected rendered output: %#v", rendered["output"])
+	}
+	images, ok := rendered["images"].([]any)
+	if !ok {
+		t.Fatalf("images should be slice, got %#v", rendered["images"])
+	}
+	if got := images[0]; got != "registry.k8s.io/kube-apiserver:v1.30.1" {
+		t.Fatalf("unexpected rendered images[0]: %#v", got)
+	}
+	imageMap, ok := images[1].(map[string]any)
+	if !ok || imageMap["tag"] != "files/a.bin" {
+		t.Fatalf("unexpected rendered images[1]: %#v", images[1])
+	}
+	if got := images[2]; got != 7 {
+		t.Fatalf("unexpected rendered images[2]: %#v", got)
+	}
+
+	_, err = renderSpec(map[string]any{"content": "{{ .vars.missing }}"}, wf, runtimeVars)
+	if err == nil {
+		t.Fatalf("expected unresolved template reference error")
+	}
+	if !strings.Contains(err.Error(), "spec.content") {
+		t.Fatalf("expected error to include spec path, got %v", err)
+	}
 }

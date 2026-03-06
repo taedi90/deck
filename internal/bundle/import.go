@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -12,6 +13,7 @@ import (
 const (
 	errCodeBundleImportTraversal = "E_BUNDLE_IMPORT_PATH_TRAVERSAL"
 	errCodeBundleImportType      = "E_BUNDLE_IMPORT_UNSUPPORTED_TYPE"
+	errCodeBundleImportPrefix    = "E_BUNDLE_IMPORT_INVALID_PREFIX"
 )
 
 func ImportArchive(archivePath, destRoot string) error {
@@ -35,9 +37,19 @@ func ImportArchive(archivePath, destRoot string) error {
 			return fmt.Errorf("read bundle archive: %w", err)
 		}
 
-		name := strings.TrimSpace(hdr.Name)
+		name := strings.TrimSpace(strings.ReplaceAll(hdr.Name, "\\", "/"))
 		if name == "" {
 			continue
+		}
+		if hasParentRef(name) {
+			return fmt.Errorf("%s: %s", errCodeBundleImportTraversal, hdr.Name)
+		}
+		name = path.Clean(name)
+		if name == "." {
+			continue
+		}
+		if name != "bundle" && !strings.HasPrefix(name, "bundle/") {
+			return fmt.Errorf("%s: %s", errCodeBundleImportPrefix, hdr.Name)
 		}
 
 		cleanRel := filepath.Clean(filepath.FromSlash(name))
@@ -83,4 +95,13 @@ func ImportArchive(archivePath, destRoot string) error {
 	}
 
 	return nil
+}
+
+func hasParentRef(name string) bool {
+	for _, seg := range strings.Split(name, "/") {
+		if seg == ".." {
+			return true
+		}
+	}
+	return false
 }

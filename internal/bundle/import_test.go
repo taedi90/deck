@@ -15,8 +15,8 @@ func TestImportArchive(t *testing.T) {
 		dest := filepath.Join(root, "imported")
 
 		if err := writeTarArchive(archive, []tarEntry{
-			{name: "manifest.json", body: []byte("{}")},
-			{name: "files/a.txt", body: []byte("hello")},
+			{name: "bundle/.deck/manifest.json", body: []byte("{}")},
+			{name: "bundle/files/a.txt", body: []byte("hello")},
 		}); err != nil {
 			t.Fatalf("write tar: %v", err)
 		}
@@ -25,7 +25,7 @@ func TestImportArchive(t *testing.T) {
 			t.Fatalf("import archive: %v", err)
 		}
 
-		raw, err := os.ReadFile(filepath.Join(dest, "files", "a.txt"))
+		raw, err := os.ReadFile(filepath.Join(dest, "bundle", "files", "a.txt"))
 		if err != nil {
 			t.Fatalf("read imported file: %v", err)
 		}
@@ -49,6 +49,24 @@ func TestImportArchive(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), errCodeBundleImportTraversal) {
 			t.Fatalf("expected %s, got %v", errCodeBundleImportTraversal, err)
+		}
+	})
+
+	t.Run("rejects archive root entries without bundle prefix", func(t *testing.T) {
+		root := t.TempDir()
+		archive := filepath.Join(root, "bundle.tar")
+		dest := filepath.Join(root, "imported")
+
+		if err := writeTarArchive(archive, []tarEntry{{name: "manifest.json", body: []byte("x")}}); err != nil {
+			t.Fatalf("write tar: %v", err)
+		}
+
+		err := ImportArchive(archive, dest)
+		if err == nil {
+			t.Fatalf("expected prefix error")
+		}
+		if !strings.Contains(err.Error(), errCodeBundleImportPrefix) {
+			t.Fatalf("expected %s, got %v", errCodeBundleImportPrefix, err)
 		}
 	})
 }

@@ -62,7 +62,7 @@ func CollectArchive(bundleRoot, outputPath string) error {
 		if err != nil {
 			return err
 		}
-		header.Name = rel
+		header.Name = filepath.ToSlash(filepath.Join("bundle", rel))
 		if info.IsDir() {
 			header.Name += "/"
 		}
