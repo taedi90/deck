@@ -1,6 +1,7 @@
 package validate
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +12,8 @@ func TestFile(t *testing.T) {
 	t.Run("valid yaml", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "cluster.yaml")
-		content := []byte(`version: v1alpha1
+		content := []byte(`role: apply
+version: v1alpha1
 phases:
   - name: prepare
     steps:
@@ -39,7 +41,8 @@ phases:
 	t.Run("tool schema valid InstallPackages without source", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`version: v1alpha1
+		content := []byte(`role: apply
+version: v1alpha1
 phases:
   - name: install
     steps:
@@ -61,7 +64,8 @@ phases:
 	t.Run("install phase accepts InstallPackages with only spec.packages", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`version: v1alpha1
+		content := []byte(`role: apply
+version: v1alpha1
 phases:
   - name: install
     steps:
@@ -89,7 +93,7 @@ phases:
 	t.Run("invalid yaml", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "invalid.yaml")
-		if err := os.WriteFile(path, []byte("version: ["), 0o644); err != nil {
+		if err := os.WriteFile(path, []byte("role: apply\nversion: ["), 0o644); err != nil {
 			t.Fatalf("write file: %v", err)
 		}
 
@@ -101,7 +105,7 @@ phases:
 	t.Run("unsupported version", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		if err := os.WriteFile(path, []byte("version: v2\nphases: []\n"), 0o644); err != nil {
+		if err := os.WriteFile(path, []byte("role: apply\nversion: v2\nphases: []\n"), 0o644); err != nil {
 			t.Fatalf("write file: %v", err)
 		}
 
@@ -113,7 +117,8 @@ phases:
 	t.Run("schema invalid kind", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`version: v1alpha1
+		content := []byte(`role: apply
+version: v1alpha1
 phases:
   - name: prepare
     steps:
@@ -134,7 +139,8 @@ phases:
 	t.Run("duplicate step id", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`version: v1alpha1
+		content := []byte(`role: apply
+version: v1alpha1
 phases:
   - name: prepare
     steps:
@@ -166,7 +172,8 @@ phases:
 	t.Run("runtime register redefinition", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`version: v1alpha1
+		content := []byte(`role: apply
+version: v1alpha1
 phases:
   - name: prepare
     steps:
@@ -203,7 +210,8 @@ phases:
 	t.Run("tool schema invalid step spec", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`version: v1alpha1
+		content := []byte(`role: apply
+version: v1alpha1
 phases:
   - name: install
     steps:
@@ -229,7 +237,8 @@ phases:
 	t.Run("register output key invalid for kind", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`version: v1alpha1
+		content := []byte(`role: apply
+version: v1alpha1
 phases:
   - name: install
     steps:
@@ -258,7 +267,8 @@ phases:
 	t.Run("register output key valid for kind", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`version: v1alpha1
+		content := []byte(`role: apply
+version: v1alpha1
 phases:
   - name: prepare
     steps:
@@ -285,7 +295,8 @@ phases:
 	t.Run("register output key valid for checkhost", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`version: v1alpha1
+		content := []byte(`role: apply
+version: v1alpha1
 phases:
   - name: prepare
     steps:
@@ -305,4 +316,82 @@ phases:
 			t.Fatalf("expected valid checkhost register output, got %v", err)
 		}
 	})
+}
+
+func TestSchema_ApiVersionOptional(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "workflow.yaml")
+	content := []byte(`role: apply
+version: v1alpha1
+steps:
+  - id: run-without-api-version
+    kind: RunCommand
+    spec:
+      command: ["true"]
+`)
+	if err := os.WriteFile(path, content, 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	if err := File(path); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+}
+
+func TestValidate_SingleBraceTemplateShowsLine(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "workflow.yaml")
+	content := []byte(`role: apply
+version: v1alpha1
+steps:
+  - id: bad-template
+    kind: RunCommand
+    spec:
+      command:
+        - "echo"
+        - "{ .vars.msg }"
+`)
+	if err := os.WriteFile(path, content, 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	err := File(path)
+	if err == nil {
+		t.Fatalf("expected single-brace template validation error")
+	}
+
+	if got := err.Error(); !strings.Contains(got, "E_TEMPLATE_SINGLE_BRACE") {
+		t.Fatalf("expected E_TEMPLATE_SINGLE_BRACE, got %v", err)
+	}
+	if got := err.Error(); !strings.Contains(got, fmt.Sprintf("%s:%d", path, 9)) {
+		t.Fatalf("expected file and line in error, got %v", err)
+	}
+}
+
+func TestSchema_RejectsContextAndImports(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "workflow.yaml")
+	content := []byte(`role: apply
+version: v1alpha1
+imports:
+  - ./legacy.yaml
+context:
+  bundleRoot: /tmp/bundle
+steps:
+  - id: ok-step
+    kind: RunCommand
+    spec:
+      command: ["true"]
+`)
+	if err := os.WriteFile(path, content, 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	err := File(path)
+	if err == nil {
+		t.Fatalf("expected schema validation error")
+	}
+	if got := err.Error(); !strings.HasPrefix(got, "E_SCHEMA_INVALID") {
+		t.Fatalf("expected E_SCHEMA_INVALID, got %v", err)
+	}
 }

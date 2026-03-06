@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deck.local/schemas/tools/copy-file.schema.json",
+  "title": "CopyFileStep",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "apiVersion", "kind", "spec"],
+  "properties": {
+    "id": { "type": "string" },
+    "apiVersion": { "const": "deck/v1alpha1" },
+    "kind": { "const": "CopyFile" },
+    "metadata": { "type": "object", "additionalProperties": true },
+    "when": { "type": "string" },
+    "retry": { "type": "integer", "minimum": 0 },
+    "timeout": { "type": "string", "pattern": "^[0-9]+(ms|s|m|h)$" },
+    "register": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+      "additionalProperties": { "type": "string" }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["src", "dest"],
+      "properties": {
+        "src": { "type": "string", "minLength": 1 },
+        "dest": { "type": "string", "minLength": 1 },
+        "owner": { "type": "string" },
+        "group": { "type": "string" },
+        "mode": { "type": "string", "pattern": "^[0-7]{4}$" },
+        "overwrite": { "type": "boolean", "default": true }
+      }
+    }
+  }
+}

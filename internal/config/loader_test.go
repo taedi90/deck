@@ -1,99 +1,174 @@
 package config
 
 import (
-	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
-func TestLoad_MergeImports(t *testing.T) {
+func TestVarsPrecedence(t *testing.T) {
 	dir := t.TempDir()
+	workflowPath := filepath.Join(dir, "apply.yaml")
 
-	base := filepath.Join(dir, "base.yaml")
-	root := filepath.Join(dir, "cluster.yaml")
-
-	baseContent := []byte(`version: v1alpha1
-vars:
-  role: worker
-  imageRepo: registry.local
-context:
-  bundleRoot: ./bundle
-phases:
-  - name: prepare
-    steps:
-      - id: from-base
-        apiVersion: deck/v1alpha1
-        kind: DownloadFile
-        spec: {}
-`)
-	rootContent := []byte(`version: v1alpha1
-imports:
-  - ./base.yaml
-vars:
-  role: control-plane
-context:
-  stateFile: /var/lib/deck/state.json
-phases:
-  - name: prepare
-    steps:
-      - id: from-root
-        apiVersion: deck/v1alpha1
-        kind: DownloadImages
-        spec: {}
-`)
-
-	if err := os.WriteFile(base, baseContent, 0o644); err != nil {
-		t.Fatalf("write base: %v", err)
+	if err := os.WriteFile(filepath.Join(dir, "vars.yaml"), []byte("imageRepo: from-vars-file\nroleHint: from-vars-file\n"), 0o644); err != nil {
+		t.Fatalf("write vars.yaml: %v", err)
 	}
-	if err := os.WriteFile(root, rootContent, 0o644); err != nil {
-		t.Fatalf("write root: %v", err)
+	if err := os.WriteFile(workflowPath, []byte("role: apply\nversion: v1alpha1\nvars:\n  imageRepo: from-workflow\n  kubeVersion: v1.31.0\nphases: []\n"), 0o644); err != nil {
+		t.Fatalf("write workflow: %v", err)
 	}
 
-	wf, err := Load(root)
+	wf, err := LoadWithOptions(workflowPath, LoadOptions{VarOverrides: map[string]any{
+		"imageRepo": "from-cli",
+		"cliOnly":   "present",
+	}})
 	if err != nil {
-		t.Fatalf("Load failed: %v", err)
+		t.Fatalf("LoadWithOptions failed: %v", err)
 	}
 
-	if got := wf.Vars["role"]; got != "control-plane" {
-		t.Fatalf("vars precedence mismatch, got %v", got)
+	if got := wf.Vars["imageRepo"]; got != "from-cli" {
+		t.Fatalf("imageRepo precedence mismatch, got %v", got)
 	}
-	if got := wf.Vars["imageRepo"]; got != "registry.local" {
-		t.Fatalf("missing imported var, got %v", got)
+	if got := wf.Vars["kubeVersion"]; got != "v1.31.0" {
+		t.Fatalf("workflow var missing, got %v", got)
 	}
-
-	if wf.Context.BundleRoot != "./bundle" {
-		t.Fatalf("bundleRoot not merged: %s", wf.Context.BundleRoot)
+	if got := wf.Vars["roleHint"]; got != "from-vars-file" {
+		t.Fatalf("vars.yaml var missing, got %v", got)
 	}
-	if wf.Context.StateFile != "/var/lib/deck/state.json" {
-		t.Fatalf("stateFile not merged: %s", wf.Context.StateFile)
-	}
-
-	if len(wf.Phases) != 1 || wf.Phases[0].Name != "prepare" {
-		t.Fatalf("unexpected phases: %#v", wf.Phases)
-	}
-	if len(wf.Phases[0].Steps) != 2 {
-		t.Fatalf("expected 2 merged steps, got %d", len(wf.Phases[0].Steps))
+	if got := wf.Vars["cliOnly"]; got != "present" {
+		t.Fatalf("cli override missing, got %v", got)
 	}
 }
 
-func TestLoad_ImportCycle(t *testing.T) {
+func TestVarsURLFetch(t *testing.T) {
+	t.Run("loads vars yaml when present", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/workflows/apply.yaml":
+				_, _ = w.Write([]byte("role: apply\nversion: v1alpha1\nvars:\n  fromWorkflow: true\nphases: []\n"))
+			case "/workflows/vars.yaml":
+				_, _ = w.Write([]byte("fromVarsFile: true\n"))
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+		defer ts.Close()
+
+		wf, err := Load(ts.URL + "/workflows/apply.yaml")
+		if err != nil {
+			t.Fatalf("Load failed: %v", err)
+		}
+
+		if got := wf.Vars["fromVarsFile"]; got != true {
+			t.Fatalf("vars.yaml from URL not loaded, got %v", got)
+		}
+		if got := wf.Vars["fromWorkflow"]; got != true {
+			t.Fatalf("workflow vars missing, got %v", got)
+		}
+	})
+
+	t.Run("skips vars yaml on 404", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/workflows/apply.yaml":
+				_, _ = w.Write([]byte("role: apply\nversion: v1alpha1\nvars:\n  fromWorkflow: true\nphases: []\n"))
+			case "/workflows/vars.yaml":
+				http.NotFound(w, r)
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+		defer ts.Close()
+
+		wf, err := Load(ts.URL + "/workflows/apply.yaml")
+		if err != nil {
+			t.Fatalf("Load failed: %v", err)
+		}
+
+		if _, ok := wf.Vars["fromVarsFile"]; ok {
+			t.Fatalf("unexpected vars.yaml value loaded on 404")
+		}
+		if got := wf.Vars["fromWorkflow"]; got != true {
+			t.Fatalf("workflow vars missing, got %v", got)
+		}
+	})
+}
+
+func TestLoadRejectsBothPhasesAndSteps(t *testing.T) {
 	dir := t.TempDir()
-	a := filepath.Join(dir, "a.yaml")
-	b := filepath.Join(dir, "b.yaml")
+	workflowPath := filepath.Join(dir, "workflow.yaml")
 
-	if err := os.WriteFile(a, []byte("version: v1\nimports:\n  - ./b.yaml\n"), 0o644); err != nil {
-		t.Fatalf("write a: %v", err)
-	}
-	if err := os.WriteFile(b, []byte("version: v1\nimports:\n  - ./a.yaml\n"), 0o644); err != nil {
-		t.Fatalf("write b: %v", err)
+	content := []byte(`role: apply
+version: v1alpha1
+phases:
+  - name: phase-a
+    steps: []
+steps:
+  - id: step-a
+    kind: RunCommand
+    spec: {}
+`)
+	if err := os.WriteFile(workflowPath, content, 0o644); err != nil {
+		t.Fatalf("write workflow: %v", err)
 	}
 
-	_, err := Load(a)
+	_, err := Load(workflowPath)
 	if err == nil {
-		t.Fatalf("expected cycle error")
+		t.Fatalf("expected error when both phases and steps are set")
 	}
-	if !errors.Is(err, ErrImportCycle) {
-		t.Fatalf("expected ErrImportCycle, got %v", err)
-	}
+}
+
+func TestStateKey(t *testing.T) {
+	t.Run("changes when vars yaml changes", func(t *testing.T) {
+		dir := t.TempDir()
+		workflowPath := filepath.Join(dir, "apply.yaml")
+		workflowContent := []byte("role: apply\nversion: v1alpha1\nphases: []\n")
+		if err := os.WriteFile(workflowPath, workflowContent, 0o644); err != nil {
+			t.Fatalf("write workflow: %v", err)
+		}
+
+		if err := os.WriteFile(filepath.Join(dir, "vars.yaml"), []byte("name: alpha\n"), 0o644); err != nil {
+			t.Fatalf("write vars.yaml(1): %v", err)
+		}
+		wf1, err := LoadWithOptions(workflowPath, LoadOptions{})
+		if err != nil {
+			t.Fatalf("LoadWithOptions(1) failed: %v", err)
+		}
+
+		if err := os.WriteFile(filepath.Join(dir, "vars.yaml"), []byte("name: beta\n"), 0o644); err != nil {
+			t.Fatalf("write vars.yaml(2): %v", err)
+		}
+		wf2, err := LoadWithOptions(workflowPath, LoadOptions{})
+		if err != nil {
+			t.Fatalf("LoadWithOptions(2) failed: %v", err)
+		}
+
+		if wf1.StateKey == wf2.StateKey {
+			t.Fatalf("expected state key to change when vars.yaml changes")
+		}
+	})
+
+	t.Run("changes when var override changes", func(t *testing.T) {
+		dir := t.TempDir()
+		workflowPath := filepath.Join(dir, "apply.yaml")
+		workflowContent := []byte("role: apply\nversion: v1alpha1\nvars:\n  mode: workflow\nphases: []\n")
+		if err := os.WriteFile(workflowPath, workflowContent, 0o644); err != nil {
+			t.Fatalf("write workflow: %v", err)
+		}
+
+		wf1, err := LoadWithOptions(workflowPath, LoadOptions{VarOverrides: map[string]any{"mode": "override-a"}})
+		if err != nil {
+			t.Fatalf("LoadWithOptions(override-a) failed: %v", err)
+		}
+
+		wf2, err := LoadWithOptions(workflowPath, LoadOptions{VarOverrides: map[string]any{"mode": "override-b"}})
+		if err != nil {
+			t.Fatalf("LoadWithOptions(override-b) failed: %v", err)
+		}
+
+		if wf1.StateKey == wf2.StateKey {
+			t.Fatalf("expected state key to change when --var override changes")
+		}
+	})
 }

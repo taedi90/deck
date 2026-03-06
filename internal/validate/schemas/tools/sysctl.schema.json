@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deck.local/schemas/tools/sysctl.schema.json",
+  "title": "SysctlStep",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "apiVersion", "kind", "spec"],
+  "properties": {
+    "id": { "type": "string" },
+    "apiVersion": { "const": "deck/v1alpha1" },
+    "kind": { "const": "Sysctl" },
+    "metadata": { "type": "object", "additionalProperties": true },
+    "when": { "type": "string" },
+    "retry": { "type": "integer", "minimum": 0 },
+    "timeout": { "type": "string", "pattern": "^[0-9]+(ms|s|m|h)$" },
+    "register": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+      "additionalProperties": { "type": "string" }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["values", "writeFile"],
+      "properties": {
+        "values": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "anyOf": [
+              { "type": "string" },
+              { "type": "number" },
+              { "type": "integer" },
+              { "type": "boolean" }
+            ]
+          }
+        },
+        "writeFile": { "type": "string" },
+        "apply": { "type": "boolean", "default": true }
+      }
+    }
+  }
+}

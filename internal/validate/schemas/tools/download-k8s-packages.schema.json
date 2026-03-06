@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deck.local/schemas/tools/download-k8s-packages.schema.json",
+  "title": "DownloadK8sPackagesStep",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "apiVersion", "kind", "spec"],
+  "properties": {
+    "id": { "type": "string" },
+    "apiVersion": { "const": "deck/v1alpha1" },
+    "kind": { "const": "DownloadK8sPackages" },
+    "metadata": { "type": "object", "additionalProperties": true },
+    "when": { "type": "string" },
+    "retry": { "type": "integer", "minimum": 0 },
+    "timeout": { "type": "string", "pattern": "^[0-9]+(ms|s|m|h)$" },
+    "register": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+      "additionalProperties": { "type": "string" }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["components", "repo"],
+      "properties": {
+        "kubernetesVersion": { "type": "string", "minLength": 1 },
+        "components": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "enum": ["kubelet", "kubeadm", "kubectl"] }
+        },
+        "repo": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "type": { "type": "string", "enum": ["apt-flat", "yum"] },
+            "generate": { "type": "boolean", "default": true },
+            "pkgsDir": { "type": "string", "default": "pkgs" }
+          }
+        },
+        "backend": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "runtime", "image"],
+          "properties": {
+            "mode": { "const": "container" },
+            "runtime": { "type": "string", "enum": ["auto", "docker", "podman"] },
+            "image": { "type": "string", "minLength": 1 },
+            "sandbox": { "type": "boolean", "default": true }
+          }
+        },
+        "distro": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["family", "release", "arch"],
+          "properties": {
+            "family": { "type": "string", "enum": ["debian", "rhel"] },
+            "release": { "type": "string" },
+            "arch": { "type": "string", "enum": ["amd64", "arm64"] }
+          }
+        },
+        "output": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "dir": { "type": "string" },
+            "manifest": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

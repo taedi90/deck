@@ -1,16 +1,13 @@
 package config
 
 type Workflow struct {
-	Version string         `yaml:"version" json:"version"`
-	Imports []string       `yaml:"imports" json:"imports,omitempty"`
-	Vars    map[string]any `yaml:"vars" json:"vars,omitempty"`
-	Context Context        `yaml:"context" json:"context,omitempty"`
-	Phases  []Phase        `yaml:"phases" json:"phases"`
-}
-
-type Context struct {
-	BundleRoot string `yaml:"bundleRoot" json:"bundleRoot,omitempty"`
-	StateFile  string `yaml:"stateFile" json:"stateFile,omitempty"`
+	Role           string         `yaml:"role" json:"-"`
+	Version        string         `yaml:"version" json:"version"`
+	Vars           map[string]any `yaml:"vars" json:"vars,omitempty"`
+	Phases         []Phase        `yaml:"phases,omitempty" json:"phases,omitempty"`
+	Steps          []Step         `yaml:"steps,omitempty" json:"-"`
+	StateKey       string         `yaml:"-" json:"-"`
+	WorkflowSHA256 string         `yaml:"-" json:"-"`
 }
 
 type Phase struct {
