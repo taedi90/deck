@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bytes"
+	"archive/tar"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -12,11 +12,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
-	"github.com/taedi90/deck/internal/strategycfg"
+	"github.com/taedi90/deck/internal/config"
+	"github.com/taedi90/deck/internal/install"
 )
 
 func TestRunUsageShowsTopLevelAxes(t *testing.T) {
@@ -37,157 +40,219 @@ func TestRunUsageShowsTopLevelAxes(t *testing.T) {
 			}
 
 			msg := err.Error()
-			if !strings.Contains(msg, "deck strategy") {
-				t.Fatalf("usage must include strategy axis, got %q", msg)
+			for _, cmd := range []string{"pack", "apply", "serve", "bundle", "list", "validate", "diff", "init", "doctor", "health", "logs", "cache", "service"} {
+				if !strings.Contains(msg, cmd) {
+					t.Fatalf("usage must include %q, got %q", cmd, msg)
+				}
 			}
-			if !strings.Contains(msg, "deck control") {
-				t.Fatalf("usage must include control axis, got %q", msg)
-			}
-			if !strings.Contains(msg, "deck workflow") {
-				t.Fatalf("usage must include workflow axis, got %q", msg)
-			}
-			for _, legacy := range []string{"apply", "run", "resume", "validate", "bundle", "diagnose", "server", "agent"} {
-				if strings.Contains(msg, "deck "+legacy) {
-					t.Fatalf("usage must not include legacy command %q, got %q", legacy, msg)
+			for _, legacy := range []string{"strategy", "control", "workflow"} {
+				if strings.Contains(msg, legacy) {
+					t.Fatalf("usage must not include legacy namespace %q, got %q", legacy, msg)
 				}
 			}
 		})
 	}
 }
 
-func TestRunControlWorkflowStubUsage(t *testing.T) {
-	t.Run("control usage", func(t *testing.T) {
-		err := run([]string{"control"})
+func TestRunTopLevelStubUsage(t *testing.T) {
+	t.Run("pack usage", func(t *testing.T) {
+		err := run([]string{"pack"})
 		if err == nil {
 			t.Fatalf("expected usage error")
 		}
-		if !strings.Contains(err.Error(), "usage: deck control <subcommand>") {
+		if !strings.Contains(err.Error(), "--out is required") {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 
-	t.Run("workflow usage", func(t *testing.T) {
-		err := run([]string{"workflow"})
+	t.Run("cache usage", func(t *testing.T) {
+		err := run([]string{"cache"})
 		if err == nil {
 			t.Fatalf("expected usage error")
 		}
-		if !strings.Contains(err.Error(), "usage: deck workflow <subcommand>") {
+		if !strings.Contains(err.Error(), "usage: deck cache list|clean") {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 }
 
-func TestRunControlHealth(t *testing.T) {
-	t.Run("uses --server when provided", func(t *testing.T) {
+func TestHealth(t *testing.T) {
+	t.Run("ok", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path != "/api/health" {
+			if r.Method != http.MethodGet {
+				t.Fatalf("unexpected method: %s", r.Method)
+			}
+			if r.URL.Path != "/healthz" {
 				t.Fatalf("unexpected path: %s", r.URL.Path)
 			}
-			_, _ = w.Write([]byte(`{"status":"ok"}`))
+			w.WriteHeader(http.StatusOK)
 		}))
 		defer srv.Close()
 
-		out, err := runWithCapturedStdout([]string{"control", "health", "--server", srv.URL})
+		out, err := runWithCapturedStdout([]string{"health", "--server", srv.URL})
 		if err != nil {
 			t.Fatalf("expected success, got %v", err)
 		}
-		expected := fmt.Sprintf("control health: ok (%s)\n", srv.URL)
+		expected := fmt.Sprintf("health: ok (%s)\n", srv.URL)
 		if out != expected {
 			t.Fatalf("unexpected output\nwant: %q\ngot : %q", expected, out)
 		}
 	})
 
-	t.Run("falls back to strategy config server url", func(t *testing.T) {
-		setupStrategyConfigEnv(t)
+	t.Run("non-200 fails", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path != "/api/health" {
+			if r.URL.Path != "/healthz" {
 				t.Fatalf("unexpected path: %s", r.URL.Path)
 			}
-			_, _ = w.Write([]byte(`{"status":"ok"}`))
+			w.WriteHeader(http.StatusServiceUnavailable)
 		}))
 		defer srv.Close()
 
-		if _, err := runWithCapturedStdout([]string{"strategy", "use", "server", "--server", srv.URL}); err != nil {
-			t.Fatalf("strategy use server failed: %v", err)
+		_, err := runWithCapturedStdout([]string{"health", "--server", srv.URL})
+		if err == nil {
+			t.Fatalf("expected error")
 		}
-
-		out, err := runWithCapturedStdout([]string{"control", "health"})
-		if err != nil {
-			t.Fatalf("expected success, got %v", err)
-		}
-		expected := fmt.Sprintf("control health: ok (%s)\n", srv.URL)
-		if out != expected {
-			t.Fatalf("unexpected output\nwant: %q\ngot : %q", expected, out)
+		if !strings.Contains(err.Error(), "unexpected status") {
+			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 }
 
-func TestRunControlStartAgentUsesConfigServerWhenOmitted(t *testing.T) {
-	setupStrategyConfigEnv(t)
-	heartbeatCalls := 0
+func TestService(t *testing.T) {
+	t.Run("usage lists install status stop only", func(t *testing.T) {
+		err := run([]string{"service"})
+		if err == nil {
+			t.Fatalf("expected usage error")
+		}
+		if !strings.Contains(err.Error(), "usage: deck service <install|status|stop>") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("install writes deck-server.service with serve execstart", func(t *testing.T) {
+		outDir := t.TempDir()
+		stdout, err := runWithCapturedStdout([]string{"service", "install", "--out", outDir, "--root", "/var/lib/deck/bundle", "--addr", ":18080"})
+		if err != nil {
+			t.Fatalf("expected success, got %v", err)
+		}
+		unitPath := filepath.Join(outDir, "deck-server.service")
+		if !strings.Contains(stdout, unitPath) {
+			t.Fatalf("expected output path in stdout, got %q", stdout)
+		}
+		raw, readErr := os.ReadFile(unitPath)
+		if readErr != nil {
+			t.Fatalf("read service unit: %v", readErr)
+		}
+		if !strings.Contains(string(raw), "ExecStart=deck serve --root /var/lib/deck/bundle --addr :18080") {
+			t.Fatalf("unexpected unit content: %q", string(raw))
+		}
+	})
+
+	t.Run("status and stop are server-only", func(t *testing.T) {
+		installFakeSystemctl(t, `#!/bin/sh
+if [ "$1" = "is-active" ] && [ "$2" = "deck-server.service" ]; then
+  echo active
+  exit 0
+fi
+if [ "$1" = "stop" ] && [ "$2" = "deck-server.service" ]; then
+  exit 0
+fi
+exit 1
+`)
+
+		statusOut, err := runWithCapturedStdout([]string{"service", "status"})
+		if err != nil {
+			t.Fatalf("status should succeed: %v", err)
+		}
+		if statusOut != "service status: active (deck-server.service)\n" {
+			t.Fatalf("unexpected status output: %q", statusOut)
+		}
+
+		stopOut, err := runWithCapturedStdout([]string{"service", "stop"})
+		if err != nil {
+			t.Fatalf("stop should succeed: %v", err)
+		}
+		if stopOut != "service stop: ok (deck-server.service)\n" {
+			t.Fatalf("unexpected stop output: %q", stopOut)
+		}
+
+		_, err = runWithCapturedStdout([]string{"service", "status", "server"})
+		if err == nil || !strings.Contains(err.Error(), "usage: deck service status") {
+			t.Fatalf("expected usage error for positional arg, got %v", err)
+		}
+
+		_, err = runWithCapturedStdout([]string{"service", "status", "--unknown", "server"})
+		if err == nil || !strings.Contains(err.Error(), "flag provided but not defined: -unknown") {
+			t.Fatalf("expected undefined flag error, got %v", err)
+		}
+	})
+}
+
+func TestDoctor(t *testing.T) {
+	localRepo := filepath.Join(t.TempDir(), "repo")
+	if err := os.MkdirAll(localRepo, 0o755); err != nil {
+		t.Fatalf("mkdir local repo: %v", err)
+	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/api/agent/heartbeat":
-			heartbeatCalls++
-			w.WriteHeader(http.StatusOK)
-		case "/api/agent/lease":
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"status":"ok"}`))
-		case "/api/agent/report":
-			w.WriteHeader(http.StatusOK)
-		default:
-			w.WriteHeader(http.StatusNotFound)
+		if r.Method != http.MethodHead {
+			t.Fatalf("unexpected method: %s", r.Method)
 		}
+		if r.URL.Path != "/packages" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
 
-	if _, err := runWithCapturedStdout([]string{"strategy", "use", "server", "--server", srv.URL}); err != nil {
-		t.Fatalf("strategy use server failed: %v", err)
-	}
+	wfPath := filepath.Join(t.TempDir(), "apply.yaml")
+	writeWorkflowYAML(t, wfPath, fmt.Sprintf("role: apply\nversion: v1alpha1\nvars:\n  localRepo: %q\n  httpRepo: %q\nphases:\n  - name: install\n    steps:\n      - id: check-sources\n        apiVersion: deck/v1alpha1\n        kind: DownloadFile\n        spec:\n          source:\n            path: dummy.txt\n          fetch:\n            sources:\n              - type: local\n                path: \"{{ .vars.localRepo }}\"\n              - type: repo\n                url: \"{{ .vars.httpRepo }}\"\n          output:\n            path: files/dummy.txt\n", localRepo, srv.URL+"/packages"))
 
-	if _, err := runWithCapturedStdout([]string{"control", "start", "agent", "--once", "--interval", "1s"}); err != nil {
-		t.Fatalf("expected success, got %v", err)
-	}
-	if heartbeatCalls != 1 {
-		t.Fatalf("expected one heartbeat call, got %d", heartbeatCalls)
-	}
-}
-
-func TestRunControlDoctorPreflight(t *testing.T) {
-	bundleDir := t.TempDir()
-	createValidBundleManifest(t, bundleDir)
-
-	t.Run("success output", func(t *testing.T) {
-		wfPath := writeDoctorWorkflowFile(t, bundleDir, true)
+	t.Run("ok", func(t *testing.T) {
 		reportPath := filepath.Join(t.TempDir(), "doctor.json")
-
-		out, err := runWithCapturedStdout([]string{"control", "doctor", "preflight", "--file", wfPath, "--bundle", bundleDir, "--out", reportPath})
+		_, err := runWithCapturedStdout([]string{"doctor", "--file", wfPath, "--out", reportPath})
 		if err != nil {
 			t.Fatalf("expected success, got %v", err)
 		}
-		if !strings.Contains(out, "doctor preflight: ok (") {
-			t.Fatalf("expected success message, got %q", out)
+		raw, err := os.ReadFile(reportPath)
+		if err != nil {
+			t.Fatalf("read report: %v", err)
 		}
-		expectedReportLine := fmt.Sprintf("doctor report: %s\n", reportPath)
-		if !strings.Contains(out, expectedReportLine) {
-			t.Fatalf("expected report path line, got %q", out)
+		var report struct {
+			Summary struct {
+				Passed int `json:"passed"`
+				Failed int `json:"failed"`
+			} `json:"summary"`
+			Checks []struct {
+				Name   string `json:"name"`
+				Status string `json:"status"`
+			} `json:"checks"`
+		}
+		if err := json.Unmarshal(raw, &report); err != nil {
+			t.Fatalf("decode report: %v", err)
+		}
+		if report.Summary.Failed != 0 {
+			t.Fatalf("expected no failures, got %+v", report.Summary)
+		}
+		got := map[string]string{}
+		for _, c := range report.Checks {
+			got[c.Name] = c.Status
+		}
+		if got["vars.localRepo"] != "passed" {
+			t.Fatalf("expected vars.localRepo passed, got %q", got["vars.localRepo"])
+		}
+		if got["vars.httpRepo"] != "passed" {
+			t.Fatalf("expected vars.httpRepo passed, got %q", got["vars.httpRepo"])
 		}
 	})
 
-	t.Run("failure still prints report path", func(t *testing.T) {
-		wfPath := writeDoctorWorkflowFile(t, bundleDir, false)
+	t.Run("missing path fails", func(t *testing.T) {
 		reportPath := filepath.Join(t.TempDir(), "doctor-failed.json")
-
-		out, err := runWithCapturedStdout([]string{"control", "doctor", "preflight", "--file", wfPath, "--bundle", bundleDir, "--out", reportPath})
+		_, err := runWithCapturedStdout([]string{"doctor", "--file", wfPath, "--out", reportPath, "--var", "localRepo=/no-such-path"})
 		if err == nil {
 			t.Fatalf("expected failure")
 		}
-		if !strings.Contains(out, "doctor preflight: failed (") {
-			t.Fatalf("expected failed message, got %q", out)
-		}
-		expectedReportLine := fmt.Sprintf("doctor report: %s\n", reportPath)
-		if !strings.Contains(out, expectedReportLine) {
-			t.Fatalf("expected report path line, got %q", out)
+		if _, statErr := os.Stat(reportPath); statErr != nil {
+			t.Fatalf("expected report file, got stat error: %v", statErr)
 		}
 	})
 }
@@ -202,37 +267,19 @@ fi
 exit 1
 `)
 
-		out, err := runWithCapturedStdout([]string{"control", "status", "--type", "server"})
+		out, err := runWithCapturedStdout([]string{"service", "status"})
 		if err != nil {
 			t.Fatalf("expected success, got %v", err)
 		}
-		if out != "control status: inactive (deck-server.service)\n" {
+		if out != "service status: inactive (deck-server.service)\n" {
 			t.Fatalf("unexpected output: %q", out)
-		}
-	})
-
-	t.Run("status json maps active output", func(t *testing.T) {
-		installFakeSystemctl(t, `#!/bin/sh
-if [ "$1" = "is-active" ]; then
-  echo active
-  exit 0
-fi
-exit 1
-`)
-
-		out, err := runWithCapturedStdout([]string{"control", "status", "--type", "agent", "--output", "json"})
-		if err != nil {
-			t.Fatalf("expected success, got %v", err)
-		}
-		if !strings.Contains(out, `"status":"active"`) || !strings.Contains(out, `"unit":"deck-agent.service"`) {
-			t.Fatalf("unexpected json output: %q", out)
 		}
 	})
 
 	t.Run("status missing systemctl suggests one command", func(t *testing.T) {
 		t.Setenv("PATH", t.TempDir())
 
-		_, err := runWithCapturedStdout([]string{"control", "status", "--type", "server"})
+		_, err := runWithCapturedStdout([]string{"service", "status"})
 		if err == nil {
 			t.Fatalf("expected error")
 		}
@@ -254,7 +301,7 @@ fi
 exit 1
 `)
 
-		_, err := runWithCapturedStdout([]string{"control", "stop", "--type", "agent"})
+		_, err := runWithCapturedStdout([]string{"service", "stop"})
 		if err == nil {
 			t.Fatalf("expected error")
 		}
@@ -262,54 +309,104 @@ exit 1
 		if strings.Count(msg, "suggestion:") != 1 {
 			t.Fatalf("expected exactly one suggestion, got %q", msg)
 		}
-		if !strings.Contains(msg, "suggestion: sudo systemctl status deck-agent.service") {
+		if !strings.Contains(msg, "suggestion: sudo systemctl status deck-server.service") {
 			t.Fatalf("unexpected suggestion: %q", msg)
 		}
 	})
 }
 
-func TestControlLogsJournalFailure(t *testing.T) {
-	t.Setenv("PATH", t.TempDir())
+func TestLogs(t *testing.T) {
+	t.Run("file json output", func(t *testing.T) {
+		root := t.TempDir()
+		logDir := filepath.Join(root, ".deck", "logs")
+		if err := os.MkdirAll(logDir, 0o755); err != nil {
+			t.Fatalf("mkdir log dir: %v", err)
+		}
+		logPath := filepath.Join(logDir, "server-audit.log")
+		line := `{"ts":"2026-03-05T12:01:00Z","schema_version":1,"source":"server","event_type":"http_request","level":"info","message":"current","job_id":"current"}` + "\n"
+		if err := os.WriteFile(logPath, []byte(line), 0o644); err != nil {
+			t.Fatalf("write log: %v", err)
+		}
 
-	_, err := runWithCapturedStdout([]string{"control", "logs", "--source", "journal", "--unit", "deck-server.service"})
-	if err == nil {
-		t.Fatalf("expected error")
-	}
-	msg := err.Error()
-	if strings.Count(msg, "suggestion:") != 1 {
-		t.Fatalf("expected exactly one suggestion, got %q", msg)
-	}
-	if !strings.Contains(msg, "suggestion: sudo journalctl -u deck-server.service --no-pager -n 50") {
-		t.Fatalf("unexpected suggestion: %q", msg)
-	}
+		out, err := runWithCapturedStdout([]string{"logs", "--root", root, "--source", "file", "-o", "json"})
+		if err != nil {
+			t.Fatalf("expected success, got %v", err)
+		}
+		if !strings.Contains(out, `"job_id":"current"`) {
+			t.Fatalf("expected log entry in output, got %q", out)
+		}
+	})
+
+	t.Run("journal missing suggests one command", func(t *testing.T) {
+		t.Setenv("PATH", t.TempDir())
+		_, err := runWithCapturedStdout([]string{"logs", "--source", "journal", "--unit", "deck-server.service"})
+		if err == nil {
+			t.Fatalf("expected error")
+		}
+		msg := err.Error()
+		if strings.Count(msg, "suggestion:") != 1 {
+			t.Fatalf("expected exactly one suggestion, got %q", msg)
+		}
+		if !strings.Contains(msg, "suggestion: sudo journalctl -u deck-server.service --no-pager -n 50") {
+			t.Fatalf("unexpected suggestion: %q", msg)
+		}
+	})
 }
 
-func TestControlLogsReadsCurrentAfterRotation(t *testing.T) {
-	logDir := filepath.Join(t.TempDir(), ".deck", "logs")
-	if err := os.MkdirAll(logDir, 0o755); err != nil {
-		t.Fatalf("mkdir log dir: %v", err)
+func TestCache(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	cacheRoot := filepath.Join(home, ".deck", "cache")
+	packagesDir := filepath.Join(cacheRoot, "packages")
+	stateDir := filepath.Join(cacheRoot, "state")
+	if err := os.MkdirAll(packagesDir, 0o755); err != nil {
+		t.Fatalf("mkdir packages dir: %v", err)
 	}
-	logPath := filepath.Join(logDir, "server-audit.log")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatalf("mkdir state dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(packagesDir, "p.deb"), []byte("x"), 0o644); err != nil {
+		t.Fatalf("write package file: %v", err)
+	}
+	old := time.Now().Add(-2 * time.Hour)
+	if err := os.Chtimes(packagesDir, old, old); err != nil {
+		t.Fatalf("chtimes packages dir: %v", err)
+	}
 
-	rotatedLine := `{"ts":"2026-03-05T12:00:00Z","schema_version":1,"source":"server","event_type":"http_request","level":"info","message":"old","job_id":"old"}` + "\n"
-	currentLine := `{"ts":"2026-03-05T12:01:00Z","schema_version":1,"source":"server","event_type":"http_request","level":"info","message":"current","job_id":"current"}` + "\n"
-	if err := os.WriteFile(logPath+".1", []byte(rotatedLine), 0o644); err != nil {
-		t.Fatalf("write rotated log: %v", err)
-	}
-	if err := os.WriteFile(logPath, []byte(currentLine), 0o644); err != nil {
-		t.Fatalf("write current log: %v", err)
-	}
+	t.Run("list json", func(t *testing.T) {
+		out, err := runWithCapturedStdout([]string{"cache", "list", "-o", "json"})
+		if err != nil {
+			t.Fatalf("expected success, got %v", err)
+		}
+		var entries []struct {
+			Path string `json:"path"`
+		}
+		if err := json.Unmarshal([]byte(out), &entries); err != nil {
+			t.Fatalf("decode json: %v", err)
+		}
+		found := false
+		for _, e := range entries {
+			if e.Path == "packages/p.deb" {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("expected packages/p.deb in output, got %q", out)
+		}
+	})
 
-	out, err := runWithCapturedStdout([]string{"control", "logs", "--source", "file", "--path", logPath, "--tail", "200", "--output", "json"})
-	if err != nil {
-		t.Fatalf("run control logs: %v", err)
-	}
-	if !strings.Contains(out, `"job_id":"current"`) {
-		t.Fatalf("expected current log entry in output, got %q", out)
-	}
-	if strings.Contains(out, `"job_id":"old"`) {
-		t.Fatalf("expected rotated log entries excluded from output, got %q", out)
-	}
+	t.Run("clean dry-run older-than", func(t *testing.T) {
+		out, err := runWithCapturedStdout([]string{"cache", "clean", "--older-than", "1h", "--dry-run"})
+		if err != nil {
+			t.Fatalf("expected success, got %v", err)
+		}
+		if !strings.Contains(out, packagesDir) {
+			t.Fatalf("expected packages dir in plan, got %q", out)
+		}
+		if strings.Contains(out, stateDir) {
+			t.Fatalf("expected state dir excluded from plan, got %q", out)
+		}
+	})
 }
 
 func TestRunServerAuditRotationFlagValidation(t *testing.T) {
@@ -325,7 +422,7 @@ func TestRunServerAuditRotationFlagValidation(t *testing.T) {
 }
 
 func TestRunLegacyTopLevelCommandsAreRemoved(t *testing.T) {
-	for _, cmd := range []string{"apply", "run", "resume", "validate", "bundle", "diagnose", "server", "agent"} {
+	for _, cmd := range []string{"run", "resume", "diagnose", "server", "agent", "workflow", "control", "strategy"} {
 		t.Run(cmd, func(t *testing.T) {
 			err := run([]string{cmd})
 			if err == nil {
@@ -343,8 +440,8 @@ func TestRunLegacyTopLevelCommandsAreRemoved(t *testing.T) {
 func TestRunWorkflowValidateAndLegacyValidateMigration(t *testing.T) {
 	wf := filepath.Join("..", "..", "cluster.yaml")
 
-	t.Run("workflow validate with -f", func(t *testing.T) {
-		out, err := runWithCapturedStdout([]string{"workflow", "validate", "-f", wf})
+	t.Run("validate with -f", func(t *testing.T) {
+		out, err := runWithCapturedStdout([]string{"validate", "-f", wf})
 		if err != nil {
 			t.Fatalf("expected success, got %v", err)
 		}
@@ -353,8 +450,8 @@ func TestRunWorkflowValidateAndLegacyValidateMigration(t *testing.T) {
 		}
 	})
 
-	t.Run("workflow validate with --file", func(t *testing.T) {
-		out, err := runWithCapturedStdout([]string{"workflow", "validate", "--file", wf})
+	t.Run("validate with --file", func(t *testing.T) {
+		out, err := runWithCapturedStdout([]string{"validate", "--file", wf})
 		if err != nil {
 			t.Fatalf("expected success, got %v", err)
 		}
@@ -363,12 +460,12 @@ func TestRunWorkflowValidateAndLegacyValidateMigration(t *testing.T) {
 		}
 	})
 
-	t.Run("legacy validate is removed", func(t *testing.T) {
-		err := run([]string{"validate", "-f", wf})
+	t.Run("legacy workflow namespace is removed", func(t *testing.T) {
+		err := run([]string{"workflow", "validate", "-f", wf})
 		if err == nil {
 			t.Fatalf("expected unknown command error")
 		}
-		if err.Error() != `unknown command "validate"` {
+		if err.Error() != `unknown command "workflow"` {
 			t.Fatalf("unexpected error: %q", err.Error())
 		}
 	})
@@ -378,7 +475,7 @@ func TestRunWorkflowBundleVerifySuccess(t *testing.T) {
 	bundleDir := t.TempDir()
 	createValidBundleManifest(t, bundleDir)
 
-	out, err := runWithCapturedStdout([]string{"workflow", "bundle", "verify", "--bundle", bundleDir})
+	out, err := runWithCapturedStdout([]string{"bundle", "verify", "--file", bundleDir})
 	if err != nil {
 		t.Fatalf("expected success, got %v", err)
 	}
@@ -393,7 +490,7 @@ func TestRunWorkflowBundleCollectAndImportSuccess(t *testing.T) {
 	createValidBundleManifest(t, bundleDir)
 	archivePath := filepath.Join(t.TempDir(), "bundle.tar")
 
-	collectOut, err := runWithCapturedStdout([]string{"workflow", "bundle", "collect", "--bundle", bundleDir, "--output", archivePath})
+	collectOut, err := runWithCapturedStdout([]string{"bundle", "collect", "--root", bundleDir, "--out", archivePath})
 	if err != nil {
 		t.Fatalf("expected collect success, got %v", err)
 	}
@@ -406,7 +503,7 @@ func TestRunWorkflowBundleCollectAndImportSuccess(t *testing.T) {
 	}
 
 	importDest := t.TempDir()
-	importOut, err := runWithCapturedStdout([]string{"workflow", "bundle", "import", "--file", archivePath, "--dest", importDest})
+	importOut, err := runWithCapturedStdout([]string{"bundle", "import", "--file", archivePath, "--dest", importDest})
 	if err != nil {
 		t.Fatalf("expected import success, got %v", err)
 	}
@@ -415,12 +512,12 @@ func TestRunWorkflowBundleCollectAndImportSuccess(t *testing.T) {
 		t.Fatalf("unexpected import output\nwant: %q\ngot : %q", expectedImport, importOut)
 	}
 
-	manifestPath := filepath.Join(importDest, "manifest.json")
+	manifestPath := filepath.Join(importDest, "bundle", ".deck", "manifest.json")
 	if _, err := os.Stat(manifestPath); err != nil {
 		t.Fatalf("expected imported manifest, got %v", err)
 	}
 
-	artifactPath := filepath.Join(importDest, "artifacts", "dummy.txt")
+	artifactPath := filepath.Join(importDest, "bundle", "files", "dummy.txt")
 	artifact, err := os.ReadFile(artifactPath)
 	if err != nil {
 		t.Fatalf("read imported artifact: %v", err)
@@ -430,245 +527,166 @@ func TestRunWorkflowBundleCollectAndImportSuccess(t *testing.T) {
 	}
 }
 
+func TestRunWorkflowBundleInspectTar(t *testing.T) {
+	archivePath := filepath.Join(t.TempDir(), "bundle.tar")
+	writeBundleTarFixture(t, archivePath)
+
+	out, err := runWithCapturedStdout([]string{"bundle", "inspect", archivePath, "-o", "json"})
+	if err != nil {
+		t.Fatalf("expected inspect success, got %v", err)
+	}
+	if !strings.Contains(out, `"entries"`) || !strings.Contains(out, `"files/dummy.txt"`) {
+		t.Fatalf("unexpected inspect output: %q", out)
+	}
+}
+
 func TestRunWorkflowRunInstallLocalSuccess(t *testing.T) {
 	wf := filepath.Join("..", "..", "testdata", "workflows", "install-true.yaml")
 	bundle := t.TempDir()
 	createValidBundleManifest(t, bundle)
+	if err := os.MkdirAll(filepath.Join(bundle, "workflows"), 0o755); err != nil {
+		t.Fatalf("mkdir bundle workflows: %v", err)
+	}
 
-	out, err := runWithCapturedStdout([]string{"workflow", "run", "--file", wf, "--phase", "install", "--bundle", bundle})
+	out, err := runWithCapturedStdout([]string{"apply", "--file", wf, bundle})
 	if err != nil {
 		t.Fatalf("expected success, got %v", err)
 	}
-	if out != "run install: ok\n" {
+	if out != "apply: ok\n" {
 		t.Fatalf("unexpected output: %q", out)
 	}
 }
 
-func TestRunWorkflowInitTemplates(t *testing.T) {
-	singleTemplate := filepath.Join("..", "..", "docs", "examples", "vagrant-smoke-install.yaml")
-	controlPlaneTemplate := filepath.Join("..", "..", "docs", "examples", "offline-k8s-control-plane.yaml")
-	workerTemplate := filepath.Join("..", "..", "docs", "examples", "offline-k8s-worker.yaml")
+func TestInit(t *testing.T) {
+	assertWorkflowSet := func(t *testing.T, outDir string, wantVars string) {
+		t.Helper()
+		want := map[string]string{
+			"vars.yaml":  wantVars,
+			"pack.yaml":  "role: pack\nversion: v1alpha1\nsteps: []\n",
+			"apply.yaml": "role: apply\nversion: v1alpha1\nsteps: []\n",
+		}
+		for fileName, expected := range want {
+			path := filepath.Join(outDir, "workflows", fileName)
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("read generated file %s: %v", path, err)
+			}
+			if string(raw) != expected {
+				t.Fatalf("unexpected content for %s\nwant:\n%s\ngot:\n%s", fileName, expected, string(raw))
+			}
+		}
+	}
 
-	t.Run("single template success creates file", func(t *testing.T) {
-		outputPath := filepath.Join(t.TempDir(), "single.yaml")
-		if _, err := runWithCapturedStdout([]string{"workflow", "init", "--template", "single", "--output", outputPath}); err != nil {
-			t.Fatalf("workflow init single failed: %v", err)
-		}
-
-		generated, err := os.ReadFile(outputPath)
-		if err != nil {
-			t.Fatalf("read generated single file: %v", err)
-		}
-		expected, err := os.ReadFile(singleTemplate)
-		if err != nil {
-			t.Fatalf("read single template: %v", err)
-		}
-		if !bytes.Equal(generated, expected) {
-			t.Fatalf("single template content mismatch")
+	t.Run("template is required", func(t *testing.T) {
+		_, err := runWithCapturedStdout([]string{"init"})
+		if err == nil || !strings.Contains(err.Error(), "--template is required") {
+			t.Fatalf("expected template-required error, got %v", err)
 		}
 	})
 
-	t.Run("multinode template success creates two files", func(t *testing.T) {
-		outputDir := filepath.Join(t.TempDir(), "mn")
-		if _, err := runWithCapturedStdout([]string{"workflow", "init", "--template", "multinode", "--output", outputDir}); err != nil {
-			t.Fatalf("workflow init multinode failed: %v", err)
-		}
-
-		controlPlanePath := filepath.Join(outputDir, "control-plane.yaml")
-		workerPath := filepath.Join(outputDir, "worker.yaml")
-
-		generatedControlPlane, err := os.ReadFile(controlPlanePath)
-		if err != nil {
-			t.Fatalf("read generated control-plane file: %v", err)
-		}
-		expectedControlPlane, err := os.ReadFile(controlPlaneTemplate)
-		if err != nil {
-			t.Fatalf("read control-plane template: %v", err)
-		}
-		if !bytes.Equal(generatedControlPlane, expectedControlPlane) {
-			t.Fatalf("control-plane template content mismatch")
-		}
-
-		generatedWorker, err := os.ReadFile(workerPath)
-		if err != nil {
-			t.Fatalf("read generated worker file: %v", err)
-		}
-		expectedWorker, err := os.ReadFile(workerTemplate)
-		if err != nil {
-			t.Fatalf("read worker template: %v", err)
-		}
-		if !bytes.Equal(generatedWorker, expectedWorker) {
-			t.Fatalf("worker template content mismatch")
+	t.Run("template accepts only single or multi", func(t *testing.T) {
+		_, err := runWithCapturedStdout([]string{"init", "--template", "multinode"})
+		if err == nil || !strings.Contains(err.Error(), "single or multi") {
+			t.Fatalf("expected template validation error, got %v", err)
 		}
 	})
 
-	t.Run("overwrite fails without force", func(t *testing.T) {
-		outputPath := filepath.Join(t.TempDir(), "single.yaml")
-		if err := os.WriteFile(outputPath, []byte("existing"), 0o644); err != nil {
-			t.Fatalf("seed existing file: %v", err)
+	t.Run("single template creates starter set under --out workflows", func(t *testing.T) {
+		outputDir := t.TempDir()
+		if _, err := runWithCapturedStdout([]string{"init", "--template", "single", "--out", outputDir}); err != nil {
+			t.Fatalf("init single failed: %v", err)
+		}
+		assertWorkflowSet(t, outputDir, "{}\n")
+	})
+
+	t.Run("multi template creates starter set under default --out .", func(t *testing.T) {
+		root := t.TempDir()
+		originalCWD, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("getwd: %v", err)
+		}
+		if err := os.Chdir(root); err != nil {
+			t.Fatalf("chdir root: %v", err)
+		}
+		t.Cleanup(func() {
+			_ = os.Chdir(originalCWD)
+		})
+
+		if _, err := runWithCapturedStdout([]string{"init", "--template", "multi"}); err != nil {
+			t.Fatalf("init multi failed: %v", err)
+		}
+		assertWorkflowSet(t, root, "nodes: []\n")
+	})
+
+	t.Run("fails when any target file already exists and does not overwrite", func(t *testing.T) {
+		outputDir := t.TempDir()
+		workflowsDir := filepath.Join(outputDir, "workflows")
+		if err := os.MkdirAll(workflowsDir, 0o755); err != nil {
+			t.Fatalf("mkdir workflows: %v", err)
+		}
+		existingPath := filepath.Join(workflowsDir, "pack.yaml")
+		if err := os.WriteFile(existingPath, []byte("seed\n"), 0o644); err != nil {
+			t.Fatalf("seed pack.yaml: %v", err)
 		}
 
-		_, err := runWithCapturedStdout([]string{"workflow", "init", "--template", "single", "--output", outputPath})
+		_, err := runWithCapturedStdout([]string{"init", "--template", "single", "--out", outputDir})
 		if err == nil {
-			t.Fatalf("expected overwrite error")
+			t.Fatalf("expected overwrite refusal error")
 		}
-		msg := err.Error()
-		if !strings.Contains(msg, "destination already exists") || !strings.Contains(msg, outputPath) {
-			t.Fatalf("expected destination path in error, got %q", msg)
-		}
-	})
-
-	t.Run("overwrite succeeds with force", func(t *testing.T) {
-		outputPath := filepath.Join(t.TempDir(), "single.yaml")
-		if err := os.WriteFile(outputPath, []byte("existing"), 0o644); err != nil {
-			t.Fatalf("seed existing file: %v", err)
+		if !strings.Contains(err.Error(), "refusing to overwrite") || !strings.Contains(err.Error(), existingPath) {
+			t.Fatalf("expected actionable overwrite error, got %v", err)
 		}
 
-		if _, err := runWithCapturedStdout([]string{"workflow", "init", "--template", "single", "--output", outputPath, "--force"}); err != nil {
-			t.Fatalf("workflow init --force failed: %v", err)
-		}
-
-		generated, err := os.ReadFile(outputPath)
-		if err != nil {
-			t.Fatalf("read generated single file: %v", err)
-		}
-		expected, err := os.ReadFile(singleTemplate)
-		if err != nil {
-			t.Fatalf("read single template: %v", err)
-		}
-		if !bytes.Equal(generated, expected) {
-			t.Fatalf("single template content mismatch after force overwrite")
-		}
-	})
-}
-
-func TestRunWorkflowConvertSingleFile(t *testing.T) {
-	inputPath := filepath.Join("..", "..", "testdata", "workflows", "v1-sample.yaml")
-	outputPath := filepath.Join(t.TempDir(), "v1alpha1.yaml")
-
-	stdout, stderr, err := runWithCapturedOutput([]string{"workflow", "convert", "--file", inputPath, "--out", outputPath})
-	if err != nil {
-		t.Fatalf("expected success, got %v", err)
-	}
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
-	}
-	if !strings.Contains(stdout, "workflow convert: wrote "+outputPath) {
-		t.Fatalf("unexpected stdout: %q", stdout)
-	}
-	if !strings.Contains(stdout, "workflow convert: validate ok") {
-		t.Fatalf("expected validate ok output, got %q", stdout)
-	}
-
-	raw, readErr := os.ReadFile(outputPath)
-	if readErr != nil {
-		t.Fatalf("read output workflow: %v", readErr)
-	}
-	text := string(raw)
-	if !strings.Contains(text, "version: v1alpha1") {
-		t.Fatalf("expected converted version, got %q", text)
-	}
-	if !strings.Contains(text, "apiVersion: deck/v1alpha1") {
-		t.Fatalf("expected converted apiVersion, got %q", text)
-	}
-}
-
-func TestWorkflowConvert_RewriteImports(t *testing.T) {
-	t.Run("relative imports are converted recursively", func(t *testing.T) {
-		dir := t.TempDir()
-		childPath := filepath.Join(dir, "child.yaml")
-		rootPath := filepath.Join(dir, "root.yaml")
-		outPath := filepath.Join(dir, "root.v1alpha1.yaml")
-
-		writeWorkflowYAML(t, childPath, strings.ReplaceAll(`version: v1
-context: {}
-phases:
-  - name: install
-    steps:
-      - id: child-step
-        apiVersion: deck/<<V1>>
-        kind: RunCommand
-        spec:
-          command: ["true"]
-`, "<<V1>>", "v1"))
-
-		writeWorkflowYAML(t, rootPath, strings.ReplaceAll(`version: v1
-imports:
-  - child.yaml
-context: {}
-phases:
-  - name: install
-    steps:
-      - id: root-step
-        apiVersion: deck/<<V1>>
-        kind: RunCommand
-        spec:
-          command: ["true"]
-`, "<<V1>>", "v1"))
-
-		stdout, stderr, err := runWithCapturedOutput([]string{"workflow", "convert", "--file", rootPath, "--out", outPath})
-		if err != nil {
-			t.Fatalf("expected success, got %v (stdout=%q, stderr=%q)", err, stdout, stderr)
-		}
-
-		convertedRoot, readErr := os.ReadFile(outPath)
+		raw, readErr := os.ReadFile(existingPath)
 		if readErr != nil {
-			t.Fatalf("read converted root: %v", readErr)
+			t.Fatalf("read seeded pack.yaml: %v", readErr)
 		}
-		if !strings.Contains(string(convertedRoot), "version: v1alpha1") {
-			t.Fatalf("expected root version conversion, got %q", string(convertedRoot))
+		if string(raw) != "seed\n" {
+			t.Fatalf("existing file must remain unchanged, got %q", string(raw))
 		}
-
-		convertedChild, childErr := os.ReadFile(childPath)
-		if childErr != nil {
-			t.Fatalf("read converted child: %v", childErr)
-		}
-		childText := string(convertedChild)
-		if !strings.Contains(childText, "version: v1alpha1") || !strings.Contains(childText, "apiVersion: deck/v1alpha1") {
-			t.Fatalf("expected child conversion, got %q", childText)
+		if _, statErr := os.Stat(filepath.Join(workflowsDir, "apply.yaml")); !os.IsNotExist(statErr) {
+			t.Fatalf("apply.yaml must not be created on failure, stat err=%v", statErr)
 		}
 	})
 
-	t.Run("url imports are skipped with warning", func(t *testing.T) {
-		dir := t.TempDir()
-		rootPath := filepath.Join(dir, "root-url.yaml")
-		outPath := filepath.Join(dir, "root-url.v1alpha1.yaml")
+	t.Run("fails when target path exists as directory", func(t *testing.T) {
+		outputDir := t.TempDir()
+		workflowsDir := filepath.Join(outputDir, "workflows")
+		targetDir := filepath.Join(workflowsDir, "pack.yaml")
+		if err := os.MkdirAll(targetDir, 0o755); err != nil {
+			t.Fatalf("mkdir conflicting directory: %v", err)
+		}
 
-		writeWorkflowYAML(t, rootPath, strings.ReplaceAll(`version: v1
-imports:
-  - https://example.com/workflow.yaml
-context: {}
-phases:
-  - name: install
-    steps:
-      - id: root-step
-        apiVersion: deck/<<V1>>
-        kind: RunCommand
-        spec:
-          command: ["true"]
-`, "<<V1>>", "v1"))
-
-		stdout, stderr, err := runWithCapturedOutput([]string{"workflow", "convert", "--file", rootPath, "--out", outPath})
+		_, err := runWithCapturedStdout([]string{"init", "--template", "single", "--out", outputDir})
 		if err == nil {
-			t.Fatalf("expected validation failure due to unresolved URL import")
+			t.Fatalf("expected overwrite refusal error")
 		}
-		if !strings.Contains(stderr, "warning: skip URL import") {
-			t.Fatalf("expected URL warning, got %q", stderr)
+		if !strings.Contains(err.Error(), "refusing to overwrite") || !strings.Contains(err.Error(), targetDir) {
+			t.Fatalf("expected directory conflict path in error, got %v", err)
 		}
-		if !strings.Contains(stdout, "workflow convert: wrote "+outPath) {
-			t.Fatalf("expected output file write message, got %q", stdout)
+		if _, statErr := os.Stat(filepath.Join(workflowsDir, "apply.yaml")); !os.IsNotExist(statErr) {
+			t.Fatalf("apply.yaml must not be created on failure, stat err=%v", statErr)
 		}
-
-		if _, statErr := os.Stat(outPath); statErr != nil {
-			t.Fatalf("expected converted output file to remain on validation failure: %v", statErr)
+		if _, statErr := os.Stat(filepath.Join(workflowsDir, "vars.yaml")); !os.IsNotExist(statErr) {
+			t.Fatalf("vars.yaml must not be created on failure, stat err=%v", statErr)
 		}
 	})
 }
 
 func TestRunWorkflowRunDryRunPrintsPlan(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "home")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+	t.Setenv("HOME", home)
+	bundle := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(bundle, "workflows"), 0o755); err != nil {
+		t.Fatalf("mkdir bundle workflows: %v", err)
+	}
+
 	wf := filepath.Join("..", "..", "testdata", "workflows", "install-true.yaml")
 
-	out, err := runWithCapturedStdout([]string{"workflow", "run", "--file", wf, "--dry-run"})
+	out, err := runWithCapturedStdout([]string{"apply", "--file", wf, "--dry-run", bundle})
 	if err != nil {
 		t.Fatalf("expected success, got %v", err)
 	}
@@ -680,115 +698,653 @@ func TestRunWorkflowRunDryRunPrintsPlan(t *testing.T) {
 	}
 }
 
-func TestWorkflowRunServerWait(t *testing.T) {
-	originalPollInterval := workflowRunPollInterval
-	workflowRunPollInterval = 5 * time.Millisecond
+func TestRunPackCreatesBundleTar(t *testing.T) {
+	root := t.TempDir()
+	workflowsDir := filepath.Join(root, "workflows")
+	if err := os.MkdirAll(workflowsDir, 0o755); err != nil {
+		t.Fatalf("mkdir workflows: %v", err)
+	}
+	seedDir := filepath.Join(root, "seed", "files")
+	if err := os.MkdirAll(seedDir, 0o755); err != nil {
+		t.Fatalf("mkdir seed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(seedDir, "source.bin"), []byte("seed\n"), 0o644); err != nil {
+		t.Fatalf("write seed file: %v", err)
+	}
+	packPath := filepath.Join(workflowsDir, "pack.yaml")
+	packBody := fmt.Sprintf(`role: pack
+version: v1alpha1
+phases:
+  - name: prepare
+    steps:
+      - id: p1
+        kind: DownloadFile
+        spec:
+          source:
+            path: files/source.bin
+          fetch:
+            sources:
+              - type: local
+                path: %q
+`, filepath.Join(root, "seed"))
+	if err := os.WriteFile(packPath, []byte(packBody), 0o644); err != nil {
+		t.Fatalf("write pack workflow: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(workflowsDir, "apply.yaml"), []byte("role: apply\nversion: v1alpha1\nsteps: []\n"), 0o644); err != nil {
+		t.Fatalf("write apply workflow: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(workflowsDir, "vars.yaml"), []byte("kubernetesVersion: v1.30.1\n"), 0o644); err != nil {
+		t.Fatalf("write vars workflow: %v", err)
+	}
+
+	originalCWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir root: %v", err)
+	}
 	t.Cleanup(func() {
-		workflowRunPollInterval = originalPollInterval
+		_ = os.Chdir(originalCWD)
 	})
 
-	enqueued := map[string]any{}
-	reportCalls := 0
-	testJobID := "wf-test-id"
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/api/agent/job":
-			if r.Method != http.MethodPost {
-				t.Fatalf("unexpected method for job endpoint: %s", r.Method)
-			}
-			if err := json.NewDecoder(r.Body).Decode(&enqueued); err != nil {
-				t.Fatalf("decode job payload: %v", err)
-			}
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"status":"accepted"}`))
-		case "/api/agent/reports":
-			reportCalls++
-			w.Header().Set("Content-Type", "application/json")
-			if reportCalls < 2 {
-				_, _ = w.Write([]byte(`{"status":"ok","reports":[]}`))
-				return
-			}
-			_, _ = w.Write([]byte(`{"status":"ok","reports":[{"job_id":"wf-test-id","status":"success","detail":"done","attempt":1,"max_attempts":3,"received_at":"2026-03-05T12:00:00Z"}]}`))
-		default:
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-	}))
-	defer srv.Close()
-
-	args := []string{
-		"workflow", "run",
-		"--use", "server",
-		"--server", srv.URL,
-		"--file", "https://control.example/files/install.yaml",
-		"--phase", "install",
-		"--bundle", "/bundle-root",
-		"--job-id", testJobID,
-		"--target-hostname", "node-a",
-		"--wait",
-		"--output", "json",
+	outTar := filepath.Join(root, "bundle.tar")
+	if _, err := runWithCapturedStdout([]string{"pack", "--out", outTar}); err != nil {
+		t.Fatalf("pack failed: %v", err)
 	}
-	out, err := runWithCapturedStdout(args)
+
+	names, err := tarEntryNamesFromFile(outTar)
+	if err != nil {
+		t.Fatalf("read tar entries: %v", err)
+	}
+	for _, name := range names {
+		if !strings.HasPrefix(name, "bundle/") {
+			t.Fatalf("unexpected non-bundle tar path: %s", name)
+		}
+	}
+	for _, required := range []string{
+		"bundle/deck",
+		"bundle/files/deck",
+		"bundle/workflows/pack.yaml",
+		"bundle/workflows/apply.yaml",
+		"bundle/workflows/vars.yaml",
+		"bundle/.deck/manifest.json",
+	} {
+		if !sliceContains(names, required) {
+			t.Fatalf("missing tar entry %s: %#v", required, names)
+		}
+	}
+}
+
+func TestRunPackDryRunDoesNotWrite(t *testing.T) {
+	root := t.TempDir()
+	workflowsDir := filepath.Join(root, "workflows")
+	if err := os.MkdirAll(workflowsDir, 0o755); err != nil {
+		t.Fatalf("mkdir workflows: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(workflowsDir, "pack.yaml"), []byte("role: pack\nversion: v1alpha1\nsteps: []\n"), 0o644); err != nil {
+		t.Fatalf("write pack workflow: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(workflowsDir, "apply.yaml"), []byte("role: apply\nversion: v1alpha1\nsteps: []\n"), 0o644); err != nil {
+		t.Fatalf("write apply workflow: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(workflowsDir, "vars.yaml"), []byte("x: y\n"), 0o644); err != nil {
+		t.Fatalf("write vars workflow: %v", err)
+	}
+	originalCWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(originalCWD)
+	})
+
+	outTar := filepath.Join(root, "bundle.tar")
+	planOut, err := runWithCapturedStdout([]string{"pack", "--dry-run"})
+	if err != nil {
+		t.Fatalf("pack dry-run failed: %v", err)
+	}
+	if !strings.Contains(planOut, "PACK_WORKFLOW=") {
+		t.Fatalf("expected dry-run plan output, got %q", planOut)
+	}
+	if _, statErr := os.Stat(outTar); !os.IsNotExist(statErr) {
+		t.Fatalf("dry-run must not create tar, stat err=%v", statErr)
+	}
+}
+
+func TestResolveInstallStatePathUsesHomeAndStateKey(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "home")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+	t.Setenv("HOME", home)
+
+	wf := &config.Workflow{StateKey: "abc123"}
+	statePath, err := resolveInstallStatePath(wf)
+	if err != nil {
+		t.Fatalf("resolveInstallStatePath failed: %v", err)
+	}
+
+	expected := filepath.Join(home, ".deck", "state", "abc123.json")
+	if statePath != expected {
+		t.Fatalf("state path mismatch: got %q want %q", statePath, expected)
+	}
+}
+
+func TestRunApplyVarFlagLastWins(t *testing.T) {
+	wfPath := filepath.Join(t.TempDir(), "apply-vars.yaml")
+	content := `role: apply
+version: v1alpha1
+phases:
+  - name: install
+    steps:
+      - id: run-with-vars
+        kind: RunCommand
+        when: vars.run == "yes"
+        spec:
+          command: ["true"]
+`
+	if err := os.WriteFile(wfPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write workflow: %v", err)
+	}
+	bundle := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(bundle, "workflows"), 0o755); err != nil {
+		t.Fatalf("mkdir bundle workflows: %v", err)
+	}
+
+	out, err := runWithCapturedStdout([]string{"apply", "-f", wfPath, "--dry-run", "--var", "run=no", "--var", "run=yes", bundle})
 	if err != nil {
 		t.Fatalf("expected success, got %v", err)
 	}
-
-	if enqueued["id"] != testJobID {
-		t.Fatalf("unexpected payload id: %v", enqueued["id"])
-	}
-	if enqueued["type"] != "install" {
-		t.Fatalf("unexpected payload type: %v", enqueued["type"])
-	}
-	if enqueued["workflow_file"] != "https://control.example/files/install.yaml" {
-		t.Fatalf("unexpected payload workflow_file: %v", enqueued["workflow_file"])
-	}
-	if enqueued["bundle_root"] != "/bundle-root" {
-		t.Fatalf("unexpected payload bundle_root: %v", enqueued["bundle_root"])
-	}
-	if enqueued["phase"] != "install" {
-		t.Fatalf("unexpected payload phase: %v", enqueued["phase"])
-	}
-	if enqueued["target_hostname"] != "node-a" {
-		t.Fatalf("unexpected payload target_hostname: %v", enqueued["target_hostname"])
-	}
-	if enqueued["max_attempts"] != float64(3) {
-		t.Fatalf("unexpected payload max_attempts: %v", enqueued["max_attempts"])
-	}
-	if enqueued["retry_delay_sec"] != float64(10) {
-		t.Fatalf("unexpected payload retry_delay_sec: %v", enqueued["retry_delay_sec"])
-	}
-
-	lines := strings.Split(strings.TrimSpace(out), "\n")
-	if len(lines) != 2 {
-		t.Fatalf("unexpected output lines: %q", out)
-	}
-	if lines[0] != "job_id=wf-test-id" {
-		t.Fatalf("expected job_id line, got %q", lines[0])
-	}
-
-	var waitResult map[string]any
-	if err := json.Unmarshal([]byte(lines[1]), &waitResult); err != nil {
-		t.Fatalf("decode wait json: %v", err)
-	}
-	if waitResult["job_id"] != "wf-test-id" || waitResult["status"] != "success" {
-		t.Fatalf("unexpected wait json: %#v", waitResult)
-	}
-	if reportCalls < 2 {
-		t.Fatalf("expected polling to happen, calls=%d", reportCalls)
+	if !strings.Contains(out, "run-with-vars RunCommand PLAN") {
+		t.Fatalf("expected PLAN status, got %q", out)
 	}
 }
 
-func TestRunWorkflowRunServerRejectsNonURLFile(t *testing.T) {
-	err := run([]string{"workflow", "run", "--use", "server", "--server", "http://127.0.0.1:18080", "--file", "./cluster.yaml"})
+func TestRunApplyPhaseSelectionAndSkip(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "home")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+	t.Setenv("HOME", home)
+
+	root := t.TempDir()
+	bundleRoot := filepath.Join(root, "bundle")
+	createValidBundleManifest(t, bundleRoot)
+	if err := os.MkdirAll(filepath.Join(bundleRoot, "workflows"), 0o755); err != nil {
+		t.Fatalf("mkdir workflows: %v", err)
+	}
+
+	installLogPath := filepath.Join(root, "install.log")
+	postLogPath := filepath.Join(root, "post.log")
+	workflowPath := filepath.Join(root, "apply.yaml")
+	workflowBody := fmt.Sprintf(`role: apply
+version: v1alpha1
+phases:
+  - name: install
+    steps:
+      - id: install-step
+        kind: RunCommand
+        spec:
+          command: ["sh", "-c", "echo install >> %s"]
+  - name: post
+    steps:
+      - id: post-step
+        kind: RunCommand
+        spec:
+          command: ["sh", "-c", "echo post >> %s"]
+`, strings.ReplaceAll(installLogPath, "\\", "\\\\"), strings.ReplaceAll(postLogPath, "\\", "\\\\"))
+	if err := os.WriteFile(workflowPath, []byte(workflowBody), 0o644); err != nil {
+		t.Fatalf("write workflow: %v", err)
+	}
+
+	if _, err := runWithCapturedStdout([]string{"apply", "--file", workflowPath, "--phase", "post", bundleRoot}); err != nil {
+		t.Fatalf("first apply --phase post failed: %v", err)
+	}
+	if _, err := runWithCapturedStdout([]string{"apply", "--file", workflowPath, "--phase", "post", bundleRoot}); err != nil {
+		t.Fatalf("second apply --phase post failed: %v", err)
+	}
+	dryRunOut, err := runWithCapturedStdout([]string{"apply", "--file", workflowPath, "--phase", "post", "--dry-run", bundleRoot})
+	if err != nil {
+		t.Fatalf("dry-run apply --phase post failed: %v", err)
+	}
+	if !strings.Contains(dryRunOut, "PHASE=post") {
+		t.Fatalf("expected post phase line in dry-run output, got %q", dryRunOut)
+	}
+	if !strings.Contains(dryRunOut, "post-step RunCommand SKIP (completed)") {
+		t.Fatalf("expected completed skip in dry-run output, got %q", dryRunOut)
+	}
+	if strings.Contains(dryRunOut, "install-step") {
+		t.Fatalf("dry-run for phase post must not include install steps, got %q", dryRunOut)
+	}
+
+	postRaw, err := os.ReadFile(postLogPath)
+	if err != nil {
+		t.Fatalf("read post log: %v", err)
+	}
+	postLines := strings.Split(strings.TrimSpace(string(postRaw)), "\n")
+	if len(postLines) != 1 {
+		t.Fatalf("expected exactly one post execution, got %d (%q)", len(postLines), string(postRaw))
+	}
+
+	installRaw, err := os.ReadFile(installLogPath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			t.Fatalf("read install log: %v", err)
+		}
+	} else if strings.TrimSpace(string(installRaw)) != "" {
+		t.Fatalf("expected install phase not to execute, got %q", string(installRaw))
+	}
+}
+
+func TestApplyPrefetch(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "home")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+	t.Setenv("HOME", home)
+
+	bundle := t.TempDir()
+	createValidBundleManifest(t, bundle)
+	if err := os.MkdirAll(filepath.Join(bundle, "workflows"), 0o755); err != nil {
+		t.Fatalf("mkdir bundle workflows: %v", err)
+	}
+
+	downloadedRelPath := filepath.ToSlash(filepath.Join("files", "prefetched.txt"))
+	downloadedPath := filepath.Join(bundle, filepath.FromSlash(downloadedRelPath))
+	workflowPath := filepath.Join(t.TempDir(), "apply-prefetch.yaml")
+
+	var mu sync.Mutex
+	downloadCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		downloadCount++
+		mu.Unlock()
+		_, _ = w.Write([]byte("prefetched\n"))
+	}))
+	defer srv.Close()
+
+	workflowBody := fmt.Sprintf(`role: apply
+version: v1alpha1
+phases:
+  - name: install
+    steps:
+      - id: requires-prefetch
+        kind: RunCommand
+        spec:
+          command:
+            - sh
+            - -c
+            - 'test -f %s'
+      - id: download-file
+        kind: DownloadFile
+        spec:
+          source:
+            url: '%s'
+          output:
+            path: '%s'
+`, downloadedPath, srv.URL+"/payload", downloadedRelPath)
+	if err := os.WriteFile(workflowPath, []byte(workflowBody), 0o644); err != nil {
+		t.Fatalf("write workflow: %v", err)
+	}
+
+	_, err := runWithCapturedStdout([]string{"apply", "--file", workflowPath, bundle})
 	if err == nil {
-		t.Fatalf("expected error")
+		t.Fatalf("expected apply without --prefetch to fail")
 	}
-	msg := err.Error()
-	if !strings.Contains(msg, "URL-only") || !strings.Contains(msg, "/files/") {
-		t.Fatalf("unexpected error message: %q", msg)
+
+	if _, err := runWithCapturedStdout([]string{"apply", "--file", workflowPath, "--prefetch", bundle}); err != nil {
+		t.Fatalf("apply with --prefetch failed: %v", err)
+	}
+
+	raw, err := os.ReadFile(downloadedPath)
+	if err != nil {
+		t.Fatalf("read downloaded file: %v", err)
+	}
+	if string(raw) != "prefetched\n" {
+		t.Fatalf("unexpected downloaded content: %q", string(raw))
+	}
+
+	wf, err := config.Load(workflowPath)
+	if err != nil {
+		t.Fatalf("load workflow: %v", err)
+	}
+	statePath, err := resolveInstallStatePath(wf)
+	if err != nil {
+		t.Fatalf("resolve state path: %v", err)
+	}
+	stateRaw, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("read state: %v", err)
+	}
+	var state struct {
+		CompletedSteps []string `json:"completedSteps"`
+	}
+	if err := json.Unmarshal(stateRaw, &state); err != nil {
+		t.Fatalf("parse state: %v", err)
+	}
+	if !sliceContains(state.CompletedSteps, "download-file") {
+		t.Fatalf("expected download-file to be completed in state, got %#v", state.CompletedSteps)
+	}
+
+	if err := os.Remove(downloadedPath); err != nil {
+		t.Fatalf("remove downloaded file before rerun: %v", err)
+	}
+	if _, err := runWithCapturedStdout([]string{"apply", "--file", workflowPath, "--prefetch", bundle}); err != nil {
+		t.Fatalf("second apply with --prefetch failed: %v", err)
+	}
+
+	mu.Lock()
+	gotDownloads := downloadCount
+	mu.Unlock()
+	if gotDownloads != 1 {
+		t.Fatalf("expected exactly one download across prefetch reruns, got %d", gotDownloads)
 	}
 }
 
-func TestWorkflowRunServerTimeoutExitCodeViaBinary(t *testing.T) {
+func TestApplyRemoteWorkflow(t *testing.T) {
+	t.Run("vars.yaml 200 changes state key when vars changes", func(t *testing.T) {
+		home := filepath.Join(t.TempDir(), "home")
+		if err := os.MkdirAll(home, 0o755); err != nil {
+			t.Fatalf("mkdir home: %v", err)
+		}
+		t.Setenv("HOME", home)
+
+		logPath := filepath.Join(t.TempDir(), "remote-vars.log")
+		workflowBody := fmt.Sprintf(`role: apply
+version: v1alpha1
+phases:
+  - name: install
+    steps:
+      - id: remote-step
+        kind: RunCommand
+        spec:
+          command: ["sh", "-c", "echo hit >> %s"]
+`, strings.ReplaceAll(logPath, "\\", "\\\\"))
+
+		var mu sync.Mutex
+		varsBody := "mode: alpha\n"
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/workflows/apply.yaml":
+				_, _ = w.Write([]byte(workflowBody))
+			case "/workflows/vars.yaml":
+				mu.Lock()
+				current := varsBody
+				mu.Unlock()
+				_, _ = w.Write([]byte(current))
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+		defer ts.Close()
+
+		workflowURL := ts.URL + "/workflows/apply.yaml"
+		if _, err := runWithCapturedStdout([]string{"apply", "--file", workflowURL}); err != nil {
+			t.Fatalf("remote apply(1) failed: %v", err)
+		}
+
+		wf1, err := config.Load(workflowURL)
+		if err != nil {
+			t.Fatalf("load remote workflow(1): %v", err)
+		}
+		statePath1, err := resolveInstallStatePath(wf1)
+		if err != nil {
+			t.Fatalf("resolve state path(1): %v", err)
+		}
+		if _, err := os.Stat(statePath1); err != nil {
+			t.Fatalf("expected first state file: %v", err)
+		}
+
+		mu.Lock()
+		varsBody = "mode: beta\n"
+		mu.Unlock()
+
+		if _, err := runWithCapturedStdout([]string{"apply", "--file", workflowURL}); err != nil {
+			t.Fatalf("remote apply(2) failed: %v", err)
+		}
+
+		wf2, err := config.Load(workflowURL)
+		if err != nil {
+			t.Fatalf("load remote workflow(2): %v", err)
+		}
+		statePath2, err := resolveInstallStatePath(wf2)
+		if err != nil {
+			t.Fatalf("resolve state path(2): %v", err)
+		}
+		if statePath1 == statePath2 {
+			t.Fatalf("expected state path to change when vars.yaml changes")
+		}
+		if _, err := os.Stat(statePath2); err != nil {
+			t.Fatalf("expected second state file: %v", err)
+		}
+
+		raw, err := os.ReadFile(logPath)
+		if err != nil {
+			t.Fatalf("read remote log: %v", err)
+		}
+		lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
+		if len(lines) != 2 {
+			t.Fatalf("expected two executions with changed vars, got %d (%q)", len(lines), string(raw))
+		}
+	})
+
+	t.Run("vars.yaml 404 is non-fatal and rerun skips with same state", func(t *testing.T) {
+		home := filepath.Join(t.TempDir(), "home")
+		if err := os.MkdirAll(home, 0o755); err != nil {
+			t.Fatalf("mkdir home: %v", err)
+		}
+		t.Setenv("HOME", home)
+
+		logPath := filepath.Join(t.TempDir(), "remote-404.log")
+		workflowBody := fmt.Sprintf(`role: apply
+version: v1alpha1
+phases:
+  - name: install
+    steps:
+      - id: remote-step
+        kind: RunCommand
+        spec:
+          command: ["sh", "-c", "echo hit >> %s"]
+`, strings.ReplaceAll(logPath, "\\", "\\\\"))
+
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/workflows/apply.yaml":
+				_, _ = w.Write([]byte(workflowBody))
+			case "/workflows/vars.yaml":
+				http.NotFound(w, r)
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+		defer ts.Close()
+
+		workflowURL := ts.URL + "/workflows/apply.yaml"
+		ignoredBundleArg := filepath.Join(t.TempDir(), "missing-bundle")
+		if _, err := runWithCapturedStdout([]string{"apply", "--file", workflowURL, ignoredBundleArg}); err != nil {
+			t.Fatalf("remote apply with ignored positional bundle(1) failed: %v", err)
+		}
+		if _, err := runWithCapturedStdout([]string{"apply", "--file", workflowURL, ignoredBundleArg}); err != nil {
+			t.Fatalf("remote apply with ignored positional bundle(2) failed: %v", err)
+		}
+
+		raw, err := os.ReadFile(logPath)
+		if err != nil {
+			t.Fatalf("read remote log: %v", err)
+		}
+		lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
+		if len(lines) != 1 {
+			t.Fatalf("expected one execution due to state reuse, got %d (%q)", len(lines), string(raw))
+		}
+	})
+
+	t.Run("role pack is rejected for remote apply", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/workflows/apply.yaml":
+				_, _ = w.Write([]byte("role: pack\nversion: v1alpha1\nsteps:\n  - id: pack-step\n    kind: RunCommand\n    spec:\n      command: [\"true\"]\n"))
+			case "/workflows/vars.yaml":
+				http.NotFound(w, r)
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+		defer ts.Close()
+
+		_, err := runWithCapturedStdout([]string{"apply", "--file", ts.URL + "/workflows/apply.yaml"})
+		if err == nil {
+			t.Fatalf("expected role rejection error")
+		}
+		if !strings.Contains(err.Error(), "apply workflow role must be apply") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+}
+
+func TestDiff(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	wfPath := filepath.Join(t.TempDir(), "apply.yaml")
+	writeWorkflowYAML(t, wfPath, "role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: step-1\n        apiVersion: deck/v1alpha1\n        kind: RunCommand\n        spec:\n          command: [\"true\"]\n")
+
+	before, err := runWithCapturedStdout([]string{"diff", "--file", wfPath})
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if !strings.Contains(before, "RUN") {
+		t.Fatalf("expected RUN in diff output, got %q", before)
+	}
+
+	wf, err := config.Load(wfPath)
+	if err != nil {
+		t.Fatalf("load workflow: %v", err)
+	}
+	execWf, err := buildApplyExecutionWorkflow(wf, "install")
+	if err != nil {
+		t.Fatalf("build execution workflow: %v", err)
+	}
+	if err := install.Run(execWf, install.RunOptions{BundleRoot: ""}); err != nil {
+		t.Fatalf("install run: %v", err)
+	}
+
+	after, err := runWithCapturedStdout([]string{"diff", "--file", wfPath})
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if before == after {
+		t.Fatalf("expected diff output to change after apply run")
+	}
+	if !strings.Contains(after, "SKIP") {
+		t.Fatalf("expected SKIP in diff output after apply run, got %q", after)
+	}
+}
+
+func TestRunApplyPhaseNotFound(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "home")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+	t.Setenv("HOME", home)
+
+	bundle := t.TempDir()
+	createValidBundleManifest(t, bundle)
+	if err := os.MkdirAll(filepath.Join(bundle, "workflows"), 0o755); err != nil {
+		t.Fatalf("mkdir bundle workflows: %v", err)
+	}
+
+	workflowPath := filepath.Join(t.TempDir(), "apply.yaml")
+	workflowBody := "role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: step-one\n        kind: RunCommand\n        spec:\n          command: [\"true\"]\n"
+	if err := os.WriteFile(workflowPath, []byte(workflowBody), 0o644); err != nil {
+		t.Fatalf("write workflow: %v", err)
+	}
+
+	_, err := runWithCapturedStdout([]string{"apply", "--file", workflowPath, "--phase", "post", bundle})
+	if err == nil {
+		t.Fatalf("expected phase not found error")
+	}
+	if !strings.Contains(err.Error(), "post phase not found") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestResolveApplyBundleRootPrecedence(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "home")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+	t.Setenv("HOME", home)
+
+	root := t.TempDir()
+	originalCWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir root: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(originalCWD) })
+
+	positionalBundle := filepath.Join(root, "positional")
+	if err := os.MkdirAll(filepath.Join(positionalBundle, "workflows"), 0o755); err != nil {
+		t.Fatalf("mkdir positional workflows: %v", err)
+	}
+
+	bundleDir := filepath.Join(root, "bundle")
+	if err := os.MkdirAll(filepath.Join(bundleDir, "workflows"), 0o755); err != nil {
+		t.Fatalf("mkdir bundle workflows: %v", err)
+	}
+
+	if err := os.MkdirAll(filepath.Join(root, "workflows"), 0o755); err != nil {
+		t.Fatalf("mkdir cwd workflows: %v", err)
+	}
+
+	archivePath := filepath.Join(root, "bundle.tar")
+	writeApplyBundleTarFixture(t, archivePath)
+
+	resolved, err := resolveApplyBundleRoot(positionalBundle)
+	if err != nil {
+		t.Fatalf("resolve positional bundle: %v", err)
+	}
+	if resolved != positionalBundle {
+		t.Fatalf("expected positional bundle, got %s", resolved)
+	}
+
+	resolved, err = resolveApplyBundleRoot("")
+	if err != nil {
+		t.Fatalf("resolve default bundle candidate: %v", err)
+	}
+	resolvedSlash := filepath.ToSlash(resolved)
+	if !strings.Contains(resolvedSlash, "/.deck/extract/") || !strings.HasSuffix(resolvedSlash, "/bundle") {
+		t.Fatalf("expected extracted bundle root, got %s", resolved)
+	}
+
+	if err := os.Remove(archivePath); err != nil {
+		t.Fatalf("remove bundle.tar: %v", err)
+	}
+	resolved, err = resolveApplyBundleRoot("")
+	if err != nil {
+		t.Fatalf("resolve bundle directory candidate: %v", err)
+	}
+	if resolved != bundleDir {
+		t.Fatalf("expected bundle directory, got %s", resolved)
+	}
+
+	if err := os.RemoveAll(bundleDir); err != nil {
+		t.Fatalf("remove bundle dir: %v", err)
+	}
+	resolved, err = resolveApplyBundleRoot("")
+	if err != nil {
+		t.Fatalf("resolve cwd candidate: %v", err)
+	}
+	if resolved != root {
+		t.Fatalf("expected cwd bundle root, got %s", resolved)
+	}
+}
+
+func TestApplyDryRunExitCodeViaBinary(t *testing.T) {
 	binaryPath := filepath.Join(t.TempDir(), "deck-test-bin")
 	buildCmd := exec.Command("go", "build", "-o", binaryPath, "./cmd/deck")
 	buildCmd.Dir = filepath.Join("..", "..")
@@ -797,41 +1353,132 @@ func TestWorkflowRunServerTimeoutExitCodeViaBinary(t *testing.T) {
 		t.Fatalf("build deck binary: %v, output=%s", buildErr, string(buildOut))
 	}
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/api/agent/job":
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"status":"accepted"}`))
-		case "/api/agent/reports":
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"status":"ok","reports":[]}`))
-		default:
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-	}))
-	defer srv.Close()
+	home := filepath.Join(t.TempDir(), "home")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+
+	root := t.TempDir()
+	bundle := filepath.Join(root, "bundle")
+	if err := os.MkdirAll(filepath.Join(bundle, "workflows"), 0o755); err != nil {
+		t.Fatalf("mkdir workflows: %v", err)
+	}
+	workflowPath := filepath.Join(root, "apply.yaml")
+	workflowBody := "role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: dry-run-step\n        kind: RunCommand\n        spec:\n          command: [\"true\"]\n"
+	if err := os.WriteFile(workflowPath, []byte(workflowBody), 0o644); err != nil {
+		t.Fatalf("write workflow: %v", err)
+	}
 
 	cmd := exec.Command(binaryPath,
-		"workflow", "run",
-		"--use", "server",
-		"--server", srv.URL,
-		"--file", "https://control.example/files/install.yaml",
-		"--wait",
-		"--timeout", "40ms",
-		"--job-id", "wf-timeout-id",
+		"apply",
+		"--file", workflowPath,
+		"--dry-run",
+		bundle,
 	)
 	cmd.Dir = filepath.Join("..", "..")
+	cmd.Env = append(os.Environ(), "HOME="+home)
 	raw, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatalf("expected non-zero exit, output=%s", string(raw))
+	if err != nil {
+		t.Fatalf("expected zero exit, err=%v output=%s", err, string(raw))
+	}
+}
+
+func TestBundledApplyWorksFromBundleDir(t *testing.T) {
+	binaryPath := filepath.Join(t.TempDir(), "deck-pack-bin")
+	buildCmd := exec.Command("go", "build", "-o", binaryPath, "./cmd/deck")
+	buildCmd.Dir = filepath.Join("..", "..")
+	if raw, err := buildCmd.CombinedOutput(); err != nil {
+		t.Fatalf("build deck binary: %v, output=%s", err, string(raw))
 	}
 
-	exitErr, ok := err.(*exec.ExitError)
-	if !ok {
-		t.Fatalf("expected exit error, got %T (%v), output=%s", err, err, string(raw))
+	tmpRoot := t.TempDir()
+	home := filepath.Join(tmpRoot, "home")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
 	}
-	if exitErr.ExitCode() != 2 {
-		t.Fatalf("expected exit code 2, got %d, output=%s", exitErr.ExitCode(), string(raw))
+	workflowsDir := filepath.Join(tmpRoot, "workflows")
+	if err := os.MkdirAll(workflowsDir, 0o755); err != nil {
+		t.Fatalf("mkdir workflows: %v", err)
+	}
+	seedDir := filepath.Join(tmpRoot, "seed", "files")
+	if err := os.MkdirAll(seedDir, 0o755); err != nil {
+		t.Fatalf("mkdir seed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(seedDir, "source.bin"), []byte("seed\n"), 0o644); err != nil {
+		t.Fatalf("write seed file: %v", err)
+	}
+	packPath := filepath.Join(workflowsDir, "pack.yaml")
+	packBody := fmt.Sprintf(`role: pack
+version: v1alpha1
+phases:
+  - name: prepare
+    steps:
+      - id: seed-file
+        kind: DownloadFile
+        spec:
+          source:
+            path: files/source.bin
+          fetch:
+            sources:
+              - type: local
+                path: %q
+`, filepath.Join(tmpRoot, "seed"))
+	if err := os.WriteFile(packPath, []byte(packBody), 0o644); err != nil {
+		t.Fatalf("write pack workflow: %v", err)
+	}
+	applyLogPath := filepath.Join(tmpRoot, "apply.log")
+	applyBody := fmt.Sprintf(`role: apply
+version: v1alpha1
+phases:
+  - name: install
+    steps:
+      - id: apply-step
+        kind: RunCommand
+        spec:
+          command: ["sh", "-c", "echo hit >> %s"]
+`, strings.ReplaceAll(applyLogPath, "\\", "\\\\"))
+	if err := os.WriteFile(filepath.Join(workflowsDir, "apply.yaml"), []byte(applyBody), 0o644); err != nil {
+		t.Fatalf("write apply workflow: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(workflowsDir, "vars.yaml"), []byte("kubernetesVersion: v1.30.1\n"), 0o644); err != nil {
+		t.Fatalf("write vars workflow: %v", err)
+	}
+
+	bundleTar := filepath.Join(tmpRoot, "bundle.tar")
+	packCmd := exec.Command(binaryPath, "pack", "--out", bundleTar)
+	packCmd.Dir = tmpRoot
+	packCmd.Env = append(os.Environ(), "HOME="+home)
+	if raw, err := packCmd.CombinedOutput(); err != nil {
+		t.Fatalf("pack bundle: %v, output=%s", err, string(raw))
+	}
+
+	extractCmd := exec.Command("tar", "xf", bundleTar, "-C", tmpRoot)
+	if raw, err := extractCmd.CombinedOutput(); err != nil {
+		t.Fatalf("extract bundle tar: %v, output=%s", err, string(raw))
+	}
+
+	bundleDir := filepath.Join(tmpRoot, "bundle")
+	applyCmd1 := exec.Command("./deck", "apply")
+	applyCmd1.Dir = bundleDir
+	applyCmd1.Env = append(os.Environ(), "HOME="+home)
+	if raw, err := applyCmd1.CombinedOutput(); err != nil {
+		t.Fatalf("bundled apply first run: %v, output=%s", err, string(raw))
+	}
+
+	applyCmd2 := exec.Command("./deck", "apply")
+	applyCmd2.Dir = bundleDir
+	applyCmd2.Env = append(os.Environ(), "HOME="+home)
+	if raw, err := applyCmd2.CombinedOutput(); err != nil {
+		t.Fatalf("bundled apply second run: %v, output=%s", err, string(raw))
+	}
+
+	raw, err := os.ReadFile(applyLogPath)
+	if err != nil {
+		t.Fatalf("read apply log: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
+	if len(lines) != 1 {
+		t.Fatalf("expected bundled apply to execute once due state skip, got %d (%q)", len(lines), string(raw))
 	}
 }
 
@@ -843,102 +1490,6 @@ func TestRunUnknownCommand(t *testing.T) {
 	if !strings.Contains(err.Error(), `unknown command "unknown"`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
-}
-
-func TestRunStrategyCurrentDefault(t *testing.T) {
-	configPath := setupStrategyConfigEnv(t)
-
-	out, err := runWithCapturedStdout([]string{"strategy", "current"})
-	if err != nil {
-		t.Fatalf("expected success, got %v", err)
-	}
-
-	expected := fmt.Sprintf("strategy=local source=default config=%s server_url=\n", configPath)
-	if out != expected {
-		t.Fatalf("unexpected output\nwant: %q\ngot : %q", expected, out)
-	}
-}
-
-func TestRunStrategyCurrentEnvOverride(t *testing.T) {
-	configPath := setupStrategyConfigEnv(t)
-	t.Setenv("DECK_STRATEGY", "server")
-
-	out, err := runWithCapturedStdout([]string{"strategy", "current"})
-	if err != nil {
-		t.Fatalf("expected success, got %v", err)
-	}
-
-	expected := fmt.Sprintf("strategy=server source=env config=%s server_url=\n", configPath)
-	if out != expected {
-		t.Fatalf("unexpected output\nwant: %q\ngot : %q", expected, out)
-	}
-}
-
-func TestRunStrategyCurrentConfigOverride(t *testing.T) {
-	configPath := setupStrategyConfigEnv(t)
-
-	if _, err := runWithCapturedStdout([]string{"strategy", "use", "server", "--server", "https://control.example"}); err != nil {
-		t.Fatalf("expected strategy use success, got %v", err)
-	}
-
-	out, err := runWithCapturedStdout([]string{"strategy", "current"})
-	if err != nil {
-		t.Fatalf("expected success, got %v", err)
-	}
-
-	expected := fmt.Sprintf("strategy=server source=config config=%s server_url=https://control.example\n", configPath)
-	if out != expected {
-		t.Fatalf("unexpected output\nwant: %q\ngot : %q", expected, out)
-	}
-}
-
-func TestRunStrategyCurrentInvalidEnvValue(t *testing.T) {
-	setupStrategyConfigEnv(t)
-	t.Setenv("DECK_STRATEGY", "invalid")
-
-	_, err := runWithCapturedStdout([]string{"strategy", "current"})
-	if err == nil {
-		t.Fatalf("expected error")
-	}
-	if !strings.Contains(err.Error(), "invalid DECK_STRATEGY value") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestRunStrategyCurrentInvalidYAMLConfig(t *testing.T) {
-	configPath := setupStrategyConfigEnv(t)
-	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
-		t.Fatalf("mkdir config dir: %v", err)
-	}
-	if err := os.WriteFile(configPath, []byte("strategy: ["), 0o644); err != nil {
-		t.Fatalf("write invalid config: %v", err)
-	}
-
-	_, err := runWithCapturedStdout([]string{"strategy", "current"})
-	if err == nil {
-		t.Fatalf("expected error")
-	}
-	if !strings.Contains(err.Error(), configPath) {
-		t.Fatalf("expected error to include config path, got %v", err)
-	}
-	if !strings.Contains(err.Error(), "remediation: rm -f "+configPath) {
-		t.Fatalf("expected remediation command, got %v", err)
-	}
-}
-
-func setupStrategyConfigEnv(t *testing.T) string {
-	t.Helper()
-	home := t.TempDir()
-	xdgConfigHome := filepath.Join(home, "xdg-config")
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_CONFIG_HOME", xdgConfigHome)
-	t.Setenv("DECK_STRATEGY", "")
-
-	configPath, err := strategycfg.ConfigPath()
-	if err != nil {
-		t.Fatalf("resolve config path: %v", err)
-	}
-	return configPath
 }
 
 func runWithCapturedStdout(args []string) (string, error) {
@@ -1010,7 +1561,7 @@ func writeWorkflowYAML(t *testing.T, path string, content string) {
 
 func createValidBundleManifest(t *testing.T, bundleRoot string) {
 	t.Helper()
-	artifactRel := "artifacts/dummy.txt"
+	artifactRel := "files/dummy.txt"
 	artifactAbs := filepath.Join(bundleRoot, artifactRel)
 	if err := os.MkdirAll(filepath.Dir(artifactAbs), 0o755); err != nil {
 		t.Fatalf("mkdir artifact dir: %v", err)
@@ -1021,12 +1572,118 @@ func createValidBundleManifest(t *testing.T, bundleRoot string) {
 	}
 	sum := sha256.Sum256(content)
 	manifest := fmt.Sprintf("{\n  \"entries\": [\n    {\"path\": %q, \"sha256\": %q, \"size\": %d}\n  ]\n}\n", artifactRel, hex.EncodeToString(sum[:]), len(content))
-	if err := os.WriteFile(filepath.Join(bundleRoot, "manifest.json"), []byte(manifest), 0o644); err != nil {
+	manifestPath := filepath.Join(bundleRoot, ".deck", "manifest.json")
+	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
+		t.Fatalf("mkdir manifest dir: %v", err)
+	}
+	if err := os.WriteFile(manifestPath, []byte(manifest), 0o644); err != nil {
 		t.Fatalf("write manifest: %v", err)
 	}
 }
 
-func writeDoctorWorkflowFile(t *testing.T, bundleDir string, includePrepare bool) string {
+func tarEntryNamesFromFile(path string) ([]string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	tr := tar.NewReader(f)
+	names := make([]string, 0)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		names = append(names, hdr.Name)
+	}
+	return names, nil
+}
+
+func sliceContains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
+func writeBundleTarFixture(t *testing.T, archivePath string) {
+	t.Helper()
+	content := []byte("ok\n")
+	sum := sha256.Sum256(content)
+	manifest := fmt.Sprintf("{\n  \"entries\": [\n    {\"path\": %q, \"sha256\": %q, \"size\": %d}\n  ]\n}\n", "files/dummy.txt", hex.EncodeToString(sum[:]), len(content))
+
+	f, err := os.Create(archivePath)
+	if err != nil {
+		t.Fatalf("create archive: %v", err)
+	}
+	defer f.Close()
+
+	tw := tar.NewWriter(f)
+	defer tw.Close()
+
+	for _, entry := range []struct {
+		name string
+		body []byte
+	}{
+		{name: "bundle/.deck/manifest.json", body: []byte(manifest)},
+		{name: "bundle/files/dummy.txt", body: content},
+	} {
+		h := &tar.Header{Name: entry.name, Mode: 0o644, Size: int64(len(entry.body)), Typeflag: tar.TypeReg}
+		if err := tw.WriteHeader(h); err != nil {
+			t.Fatalf("write tar header %s: %v", entry.name, err)
+		}
+		if _, err := tw.Write(entry.body); err != nil {
+			t.Fatalf("write tar body %s: %v", entry.name, err)
+		}
+	}
+}
+
+func writeApplyBundleTarFixture(t *testing.T, archivePath string) {
+	t.Helper()
+	f, err := os.Create(archivePath)
+	if err != nil {
+		t.Fatalf("create archive: %v", err)
+	}
+	defer f.Close()
+
+	tw := tar.NewWriter(f)
+	defer tw.Close()
+
+	entries := []struct {
+		name string
+		body []byte
+		mode int64
+	}{
+		{name: "bundle/workflows/", mode: 0o755},
+		{name: "bundle/workflows/apply.yaml", body: []byte("role: apply\nversion: v1alpha1\nsteps: []\n"), mode: 0o644},
+	}
+
+	for _, entry := range entries {
+		h := &tar.Header{Name: entry.name, Mode: entry.mode}
+		if strings.HasSuffix(entry.name, "/") {
+			h.Typeflag = tar.TypeDir
+			h.Size = 0
+		} else {
+			h.Typeflag = tar.TypeReg
+			h.Size = int64(len(entry.body))
+		}
+		if err := tw.WriteHeader(h); err != nil {
+			t.Fatalf("write tar header %s: %v", entry.name, err)
+		}
+		if h.Typeflag == tar.TypeReg {
+			if _, err := tw.Write(entry.body); err != nil {
+				t.Fatalf("write tar body %s: %v", entry.name, err)
+			}
+		}
+	}
+}
+
+func writeDoctorWorkflowFile(t *testing.T, includePrepare bool) string {
 	t.Helper()
 	prepareSection := ""
 	if includePrepare {
@@ -1039,24 +1696,53 @@ func writeDoctorWorkflowFile(t *testing.T, bundleDir string, includePrepare bool
           packages: [containerd]
 `
 	}
-	content := fmt.Sprintf(`version: v1alpha1
-context:
-  stateFile: %s/.deck/state.json
-phases:
-%s  - name: install
-    steps:
-      - id: install-sample
-        apiVersion: deck/v1alpha1
-        kind: RunCommand
-        spec:
-          command: ["true"]
-`, bundleDir, prepareSection)
+	content := fmt.Sprintf("role: apply\nversion: v1alpha1\nphases:\n%s  - name: install\n    steps:\n      - id: install-sample\n        apiVersion: deck/v1alpha1\n        kind: RunCommand\n        spec:\n          command: [\"true\"]\n", prepareSection)
 
 	wfPath := filepath.Join(t.TempDir(), "workflow.yaml")
 	if err := os.WriteFile(wfPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("write workflow: %v", err)
 	}
 	return wfPath
+}
+
+func TestList(t *testing.T) {
+	items := []string{"workflows/pack.yaml", "workflows/apply.yaml"}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+		if r.URL.Path != "/workflows/index.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(items)
+	}))
+	defer srv.Close()
+
+	t.Run("text", func(t *testing.T) {
+		out, err := runWithCapturedStdout([]string{"list", "--server", srv.URL})
+		if err != nil {
+			t.Fatalf("expected success, got %v", err)
+		}
+		expected := strings.Join(items, "\n") + "\n"
+		if out != expected {
+			t.Fatalf("unexpected output\nwant: %q\ngot : %q", expected, out)
+		}
+	})
+
+	t.Run("json", func(t *testing.T) {
+		out, err := runWithCapturedStdout([]string{"list", "--server", srv.URL, "-o", "json"})
+		if err != nil {
+			t.Fatalf("expected success, got %v", err)
+		}
+		var got []string
+		if err := json.Unmarshal([]byte(out), &got); err != nil {
+			t.Fatalf("decode json output: %v\nraw: %q", err, out)
+		}
+		if !reflect.DeepEqual(got, items) {
+			t.Fatalf("unexpected items\nwant: %#v\ngot : %#v", items, got)
+		}
+	})
 }
 
 func installFakeSystemctl(t *testing.T, script string) {

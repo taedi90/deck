@@ -2,7 +2,7 @@ package main
 
 import (
 	"bufio"
-	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -14,21 +14,20 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/taedi90/deck/internal/agent"
 	"github.com/taedi90/deck/internal/bundle"
 	"github.com/taedi90/deck/internal/config"
-	ctrllogs "github.com/taedi90/deck/internal/control"
 	"github.com/taedi90/deck/internal/diagnose"
 	"github.com/taedi90/deck/internal/install"
+	ctrllogs "github.com/taedi90/deck/internal/logs"
 	"github.com/taedi90/deck/internal/prepare"
 	"github.com/taedi90/deck/internal/server"
-	"github.com/taedi90/deck/internal/strategycfg"
 	"github.com/taedi90/deck/internal/validate"
-	"github.com/taedi90/deck/internal/workflowconvert"
 )
 
 func main() {
@@ -44,6 +43,69 @@ func main() {
 type exitCodeError struct {
 	code int
 	err  error
+}
+
+type varFlag struct {
+	values map[string]string
+}
+
+func (v *varFlag) String() string {
+	if v == nil || len(v.values) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(v.values))
+	for key, value := range v.values {
+		parts = append(parts, key+"="+value)
+	}
+	return strings.Join(parts, ",")
+}
+
+func (v *varFlag) Set(raw string) error {
+	parts := strings.SplitN(raw, "=", 2)
+	if len(parts) != 2 {
+		return errors.New("--var must be key=value")
+	}
+	key := strings.TrimSpace(parts[0])
+	if key == "" {
+		return errors.New("--var must be key=value")
+	}
+	if v.values == nil {
+		v.values = map[string]string{}
+	}
+	v.values[key] = parts[1]
+	return nil
+}
+
+func (v *varFlag) AsMap() map[string]string {
+	if v == nil || len(v.values) == 0 {
+		return nil
+	}
+	cloned := make(map[string]string, len(v.values))
+	for key, value := range v.values {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func registerFileFlags(fs *flag.FlagSet, target *string, usage string) {
+	fs.StringVar(target, "file", "", usage)
+	fs.StringVar(target, "f", "", usage)
+}
+
+func registerOutputFormatFlags(fs *flag.FlagSet, target *string, defaultValue string) {
+	fs.StringVar(target, "output", defaultValue, "output format (text|json)")
+	fs.StringVar(target, "o", defaultValue, "output format (text|json)")
+}
+
+func varsAsAnyMap(vars map[string]string) map[string]any {
+	if len(vars) == 0 {
+		return nil
+	}
+	converted := make(map[string]any, len(vars))
+	for key, value := range vars {
+		converted[key] = value
+	}
+	return converted
 }
 
 func (e *exitCodeError) Error() string {
@@ -73,193 +135,1211 @@ func run(args []string) error {
 	switch args[0] {
 	case "-h", "--help", "help":
 		return usageError()
-	case "strategy":
-		return runStrategy(args[1:])
-	case "control":
-		return runControl(args[1:])
-	case "workflow":
-		return runWorkflow(args[1:])
+	case "pack":
+		return runPack(args[1:])
+	case "apply":
+		return runApply(args[1:])
+	case "serve":
+		return runServe(args[1:])
+	case "bundle":
+		return runWorkflowBundle(args[1:])
+	case "list":
+		return runList(args[1:])
+	case "validate":
+		return runValidate(args[1:])
+	case "diff":
+		return runDiff(args[1:])
+	case "init":
+		return runWorkflowInit(args[1:])
+	case "doctor":
+		return runDoctor(args[1:])
+	case "health":
+		return runHealth(args[1:])
+	case "logs":
+		return runLogs(args[1:])
+	case "cache":
+		return runCache(args[1:])
+	case "service":
+		return runService(args[1:])
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
 }
 
-func runControl(args []string) error {
-	if len(args) == 0 {
-		return errors.New("usage: deck control <subcommand>")
+func runPack(args []string) error {
+	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help" || args[0] == "help") {
+		return errors.New("usage: deck pack [flags]")
 	}
 
-	switch args[0] {
-	case "start":
-		return runControlStart(args[1:])
-	case "health":
-		return runControlHealth(args[1:])
-	case "doctor":
-		return runControlDoctor(args[1:])
-	case "status":
-		return runControlStatus(args[1:])
-	case "stop":
-		return runControlStop(args[1:])
-	case "logs":
-		return runControlLogs(args[1:])
-	case "install-service":
-		return runControlInstallService(args[1:])
-	default:
-		return fmt.Errorf("unknown control command %q", args[0])
-	}
-}
-
-func runControlInstallService(args []string) error {
-	fs := flag.NewFlagSet("control install-service", flag.ContinueOnError)
+	fs := flag.NewFlagSet("pack", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	unitType := fs.String("type", "", "service type (server|agent)")
-	outputDir := fs.String("output", "", "output directory for template files")
+	outPath := fs.String("out", "", "output tar archive path")
+	dryRun := fs.Bool("dry-run", false, "print pack plan without writing files")
+	cacheDir := fs.String("cache-dir", "", "artifact cache directory")
+	noCache := fs.Bool("no-cache", false, "disable artifact cache reuse")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-
-	resolvedType := strings.TrimSpace(*unitType)
-	if resolvedType != "server" && resolvedType != "agent" {
-		return errors.New("--type is required and must be server or agent")
-	}
-	resolvedOutput := strings.TrimSpace(*outputDir)
-	if resolvedOutput == "" {
-		return errors.New("--output is required")
+	resolvedOut := strings.TrimSpace(*outPath)
+	if !*dryRun && resolvedOut == "" {
+		return errors.New("--out is required")
 	}
 
-	if err := os.MkdirAll(resolvedOutput, 0o755); err != nil {
-		return fmt.Errorf("control install-service: create output dir: %w", err)
+	packWorkflowPath, err := discoverPackWorkflow()
+	if err != nil {
+		return err
+	}
+	workflowBaseDir := filepath.Dir(packWorkflowPath)
+	applyWorkflowPath := filepath.Join(workflowBaseDir, "apply.yaml")
+	varsWorkflowPath := filepath.Join(workflowBaseDir, "vars.yaml")
+	for _, requiredPath := range []string{applyWorkflowPath, varsWorkflowPath} {
+		info, statErr := os.Stat(requiredPath)
+		if statErr != nil || info.IsDir() {
+			return fmt.Errorf("required workflow file not found: %s", requiredPath)
+		}
 	}
 
-	serviceFileName, serviceContent, envFileName, envContent := controlServiceTemplate(resolvedType)
-	servicePath := filepath.Join(resolvedOutput, serviceFileName)
-	envPath := filepath.Join(resolvedOutput, envFileName)
-
-	if err := os.WriteFile(servicePath, []byte(serviceContent), 0o644); err != nil {
-		return fmt.Errorf("control install-service: write %s: %w", serviceFileName, err)
+	if *dryRun {
+		fmt.Fprintf(os.Stdout, "PACK_WORKFLOW=%s\n", filepath.ToSlash(packWorkflowPath))
+		fmt.Fprintf(os.Stdout, "WORKFLOW_INCLUDE=%s\n", filepath.ToSlash(packWorkflowPath))
+		fmt.Fprintf(os.Stdout, "WORKFLOW_INCLUDE=%s\n", filepath.ToSlash(applyWorkflowPath))
+		fmt.Fprintf(os.Stdout, "WORKFLOW_INCLUDE=%s\n", filepath.ToSlash(varsWorkflowPath))
+		fmt.Fprintln(os.Stdout, "ARTIFACT_DEFAULT_DEST=packages->bundle/packages")
+		fmt.Fprintln(os.Stdout, "ARTIFACT_DEFAULT_DEST=images->bundle/images")
+		fmt.Fprintln(os.Stdout, "ARTIFACT_DEFAULT_DEST=files->bundle/files")
+		fmt.Fprintln(os.Stdout, "WRITE=bundle/deck")
+		fmt.Fprintln(os.Stdout, "WRITE=bundle/files/deck")
+		fmt.Fprintln(os.Stdout, "WRITE=bundle/.deck/manifest.json")
+		if resolvedOut != "" {
+			fmt.Fprintf(os.Stdout, "WRITE_TAR=%s\n", resolvedOut)
+		}
+		return nil
 	}
-	if err := os.WriteFile(envPath, []byte(envContent), 0o644); err != nil {
-		return fmt.Errorf("control install-service: write %s: %w", envFileName, err)
+
+	resolvedOutAbs, err := filepath.Abs(resolvedOut)
+	if err != nil {
+		return fmt.Errorf("resolve --out: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(resolvedOutAbs), 0o755); err != nil {
+		return fmt.Errorf("create output parent: %w", err)
 	}
 
-	fmt.Fprintf(os.Stdout, "control install-service: wrote %s and %s\n", servicePath, envPath)
+	stagingRoot, err := os.MkdirTemp(filepath.Dir(resolvedOutAbs), "deck-pack-")
+	if err != nil {
+		return fmt.Errorf("create staging root: %w", err)
+	}
+	defer os.RemoveAll(stagingRoot)
+	bundleRoot := filepath.Join(stagingRoot, "bundle")
+
+	packWorkflow, err := config.Load(packWorkflowPath)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(packWorkflow.Role) != "pack" {
+		return fmt.Errorf("pack workflow role must be pack: %s", packWorkflowPath)
+	}
+
+	artifactRoot := bundleRoot
+	if !*noCache {
+		if strings.TrimSpace(*cacheDir) != "" {
+			artifactRoot, err = filepath.Abs(strings.TrimSpace(*cacheDir))
+			if err != nil {
+				return fmt.Errorf("resolve --cache-dir: %w", err)
+			}
+		}
+	}
+
+	prevForceDownload := os.Getenv("DECK_PREPARE_FORCE_REDOWNLOAD")
+	if *noCache {
+		if err := os.Setenv("DECK_PREPARE_FORCE_REDOWNLOAD", "1"); err != nil {
+			return err
+		}
+	} else {
+		if err := os.Unsetenv("DECK_PREPARE_FORCE_REDOWNLOAD"); err != nil {
+			return err
+		}
+	}
+	defer func() {
+		if prevForceDownload == "" {
+			_ = os.Unsetenv("DECK_PREPARE_FORCE_REDOWNLOAD")
+			return
+		}
+		_ = os.Setenv("DECK_PREPARE_FORCE_REDOWNLOAD", prevForceDownload)
+	}()
+
+	if err := prepare.Run(packWorkflow, prepare.RunOptions{BundleRoot: artifactRoot}); err != nil {
+		return err
+	}
+
+	if artifactRoot != bundleRoot {
+		for _, artifactDir := range []string{"packages", "images", "files"} {
+			if err := copySubtreeIfExists(filepath.Join(artifactRoot, artifactDir), filepath.Join(bundleRoot, artifactDir)); err != nil {
+				return err
+			}
+		}
+	}
+
+	workflowOutDir := filepath.Join(bundleRoot, "workflows")
+	if err := os.MkdirAll(workflowOutDir, 0o755); err != nil {
+		return fmt.Errorf("create workflow output dir: %w", err)
+	}
+	if err := copyFile(packWorkflowPath, filepath.Join(workflowOutDir, filepath.Base(packWorkflowPath)), 0o644); err != nil {
+		return err
+	}
+	if err := copyFile(applyWorkflowPath, filepath.Join(workflowOutDir, "apply.yaml"), 0o644); err != nil {
+		return err
+	}
+	if err := copyFile(varsWorkflowPath, filepath.Join(workflowOutDir, "vars.yaml"), 0o644); err != nil {
+		return err
+	}
+
+	execPath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("resolve deck binary path: %w", err)
+	}
+	binaryBytes, err := os.ReadFile(execPath)
+	if err != nil {
+		return fmt.Errorf("read deck binary: %w", err)
+	}
+	if err := writeBytes(filepath.Join(bundleRoot, "deck"), binaryBytes, 0o755); err != nil {
+		return err
+	}
+	if err := writeBytes(filepath.Join(bundleRoot, "files", "deck"), binaryBytes, 0o755); err != nil {
+		return err
+	}
+
+	manifest, err := buildPackManifest(bundleRoot)
+	if err != nil {
+		return err
+	}
+	if err := writePackManifest(filepath.Join(bundleRoot, ".deck", "manifest.json"), manifest); err != nil {
+		return err
+	}
+
+	if err := bundle.CollectArchive(bundleRoot, resolvedOutAbs); err != nil {
+		return err
+	}
+
+	fmt.Fprintf(os.Stdout, "pack: ok (%s)\n", resolvedOutAbs)
 	return nil
 }
 
-func controlServiceTemplate(unitType string) (string, string, string, string) {
-	if unitType == "agent" {
-		return "deck-agent.service", `[Unit]
-Description=deck control agent
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/deck control start agent --server http://127.0.0.1:8080 --interval 10s
-WorkingDirectory=/var/lib/deck
-Restart=on-failure
-RestartSec=5s
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=deck-agent
-
-[Install]
-WantedBy=multi-user.target
-`, "deck-agent.env", `# Optional overrides for deck-agent.service.
-# Copy to /etc/default/deck-agent and adjust values.
-# DECK_AGENT_SERVER=http://127.0.0.1:8080
-# DECK_AGENT_INTERVAL=10s
-`
+func discoverPackWorkflow() (string, error) {
+	workflowDir := filepath.Join(".", "workflows")
+	absWorkflowDir, err := filepath.Abs(workflowDir)
+	if err != nil {
+		return "", fmt.Errorf("resolve workflow directory: %w", err)
+	}
+	info, err := os.Stat(absWorkflowDir)
+	if err != nil || !info.IsDir() {
+		return "", fmt.Errorf("workflow directory not found: %s", absWorkflowDir)
 	}
 
-	return "deck-server.service", `[Unit]
-Description=deck control server
-After=network-online.target
-Wants=network-online.target
+	preferred := filepath.Join(absWorkflowDir, "pack.yaml")
+	if preferredInfo, statErr := os.Stat(preferred); statErr == nil && !preferredInfo.IsDir() {
+		wf, loadErr := config.Load(preferred)
+		if loadErr != nil {
+			return "", loadErr
+		}
+		if strings.TrimSpace(wf.Role) != "pack" {
+			return "", fmt.Errorf("pack workflow role must be pack: %s", preferred)
+		}
+		return preferred, nil
+	}
 
-[Service]
-Type=simple
-ExecStart=/usr/bin/deck control start server --root /var/lib/deck/bundle --addr :8080 --registry-enable
-WorkingDirectory=/var/lib/deck
-Restart=on-failure
-RestartSec=5s
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=deck-server
-# Optional overrides are loaded from /etc/default/deck-server.
-EnvironmentFile=-/etc/default/deck-server
+	entries, err := os.ReadDir(absWorkflowDir)
+	if err != nil {
+		return "", fmt.Errorf("read workflow directory: %w", err)
+	}
+	matches := make([]string, 0)
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := strings.ToLower(entry.Name())
+		if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".yml") {
+			continue
+		}
+		candidate := filepath.Join(absWorkflowDir, entry.Name())
+		wf, loadErr := config.Load(candidate)
+		if loadErr != nil {
+			return "", loadErr
+		}
+		if strings.TrimSpace(wf.Role) == "pack" {
+			matches = append(matches, candidate)
+		}
+	}
+	sort.Strings(matches)
+	if len(matches) == 0 {
+		return "", fmt.Errorf("pack workflow not found under %s", absWorkflowDir)
+	}
+	if len(matches) > 1 {
+		return "", fmt.Errorf("multiple pack workflows found under %s", absWorkflowDir)
+	}
 
-[Install]
-WantedBy=multi-user.target
-`, "deck-server.env", `# Optional overrides for deck-server.service.
-# Copy to /etc/default/deck-server and adjust values.
-# DECK_SERVER_ADDR=:8080
-# DECK_SERVER_ROOT=/var/lib/deck/bundle
-# DECK_SERVER_REGISTRY_ENABLE=true
-`
+	return matches[0], nil
 }
 
-func runControlStart(args []string) error {
-	if len(args) == 0 {
-		return errors.New("usage: deck control start server|agent [flags]")
+func copySubtreeIfExists(srcRoot, dstRoot string) error {
+	info, err := os.Stat(srcRoot)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if !info.IsDir() {
+		return nil
 	}
 
-	switch args[0] {
-	case "server":
-		return runServer(append([]string{"start"}, args[1:]...))
-	case "agent":
-		agentArgs, err := resolveControlAgentArgs(args[1:])
+	return filepath.WalkDir(srcRoot, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		rel, err := filepath.Rel(srcRoot, path)
 		if err != nil {
 			return err
 		}
-		return runAgent(append([]string{"start"}, agentArgs...))
+		if rel == "." {
+			return nil
+		}
+		target := filepath.Join(dstRoot, rel)
+		if d.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		return copyFile(path, target, 0o644)
+	})
+}
+
+func copyFile(srcPath, dstPath string, mode os.FileMode) error {
+	raw, err := os.ReadFile(srcPath)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", srcPath, err)
+	}
+	return writeBytes(dstPath, raw, mode)
+}
+
+func writeBytes(path string, data []byte, mode os.FileMode) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create parent directory for %s: %w", path, err)
+	}
+	if err := os.WriteFile(path, data, mode); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	return nil
+}
+
+type packManifest struct {
+	Entries []packManifestEntry `json:"entries"`
+}
+
+type packManifestEntry struct {
+	Path   string `json:"path"`
+	SHA256 string `json:"sha256"`
+	Size   int64  `json:"size"`
+}
+
+func buildPackManifest(bundleRoot string) (packManifest, error) {
+	entries := make([]packManifestEntry, 0)
+	for _, root := range []string{"packages", "images", "files"} {
+		rootPath := filepath.Join(bundleRoot, root)
+		if _, err := os.Stat(rootPath); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return packManifest{}, err
+		}
+		if err := filepath.WalkDir(rootPath, func(path string, d os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if d.IsDir() {
+				return nil
+			}
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			info, err := os.Stat(path)
+			if err != nil {
+				return err
+			}
+			rel, err := filepath.Rel(bundleRoot, path)
+			if err != nil {
+				return err
+			}
+			sum := sha256.Sum256(raw)
+			entries = append(entries, packManifestEntry{
+				Path:   filepath.ToSlash(rel),
+				SHA256: hex.EncodeToString(sum[:]),
+				Size:   info.Size(),
+			})
+			return nil
+		}); err != nil {
+			return packManifest{}, err
+		}
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Path < entries[j].Path })
+	return packManifest{Entries: entries}, nil
+}
+
+func writePackManifest(path string, manifest packManifest) error {
+	raw, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode pack manifest: %w", err)
+	}
+	return writeBytes(path, raw, 0o644)
+}
+
+func runServe(args []string) error {
+	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help" || args[0] == "help") {
+		return errors.New("usage: deck serve [flags]")
+	}
+	return runServer(append([]string{"start"}, args...))
+}
+
+func runList(args []string) error {
+	// usage: deck list [flags]
+	if len(args) == 0 {
+		return errors.New("usage: deck list [flags]")
+	}
+	if args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
+		return errors.New("usage: deck list [flags]")
+	}
+
+	// Flags for this subcommand
+	fs := flag.NewFlagSet("list", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	var server string
+	var output string
+	// --server is required
+	fs.StringVar(&server, "server", "", "server URL for index (required)")
+	// reuse common output flag definitions
+	registerOutputFormatFlags(fs, &output, "text")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if strings.TrimSpace(server) == "" {
+		return errors.New("--server is required")
+	}
+	if output != "text" && output != "json" {
+		return errors.New("--output must be text or json")
+	}
+
+	// Fetch the server index JSON
+	trimmed := strings.TrimRight(server, "/")
+	indexURL := trimmed + "/workflows/index.json"
+	resp, err := http.Get(indexURL)
+	if err != nil {
+		return fmt.Errorf("list: request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("list: unexpected status %d", resp.StatusCode)
+	}
+	var items []string
+	if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
+		return fmt.Errorf("list: decode response: %w", err)
+	}
+
+	// Output according to the requested format
+	if output == "json" {
+		enc := json.NewEncoder(os.Stdout)
+		if err := enc.Encode(items); err != nil {
+			return fmt.Errorf("list: encode output: %w", err)
+		}
+		return nil
+	}
+	// text output: one path per line
+	w := bufio.NewWriter(os.Stdout)
+	for _, it := range items {
+		if _, err := fmt.Fprintln(w, it); err != nil {
+			return err
+		}
+	}
+	return w.Flush()
+}
+
+func runDiff(args []string) error {
+	fs := flag.NewFlagSet("diff", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	var file string
+	registerFileFlags(fs, &file, "path to workflow file")
+	phase := fs.String("phase", "install", "phase name to diff")
+	output := ""
+	registerOutputFormatFlags(fs, &output, "text")
+	vars := &varFlag{}
+	fs.Var(vars, "var", "set variable override (key=value), repeatable")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	workflowPath := strings.TrimSpace(file)
+	if workflowPath == "" {
+		return errors.New("--file (or -f) is required")
+	}
+	if err := validate.File(workflowPath); err != nil {
+		return err
+	}
+
+	wf, err := config.LoadWithOptions(workflowPath, config.LoadOptions{VarOverrides: varsAsAnyMap(vars.AsMap())})
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(wf.Role) != "apply" {
+		return fmt.Errorf("diff workflow role must be apply: %s", workflowPath)
+	}
+	selectedPhase := strings.TrimSpace(*phase)
+	if selectedPhase == "" {
+		selectedPhase = "install"
+	}
+	applyExecutionWorkflow, err := buildApplyExecutionWorkflow(wf, selectedPhase)
+	if err != nil {
+		return err
+	}
+
+	state, err := loadInstallDryRunState(applyExecutionWorkflow)
+	if err != nil {
+		return err
+	}
+	completed := make(map[string]bool, len(state.CompletedSteps))
+	for _, stepID := range state.CompletedSteps {
+		completed[stepID] = true
+	}
+	runtimeVars := map[string]any{}
+	for k, v := range state.RuntimeVars {
+		runtimeVars[k] = v
+	}
+	statePath, err := resolveInstallStatePath(applyExecutionWorkflow)
+	if err != nil {
+		return err
+	}
+	ctxData := map[string]any{"bundleRoot": "", "stateFile": statePath}
+	phaseView, found := findWorkflowPhaseByName(applyExecutionWorkflow, "install")
+	if !found {
+		return errors.New("install phase not found")
+	}
+
+	type diffStep struct {
+		ID     string `json:"id"`
+		Kind   string `json:"kind"`
+		Action string `json:"action"`
+		Reason string `json:"reason,omitempty"`
+	}
+	steps := make([]diffStep, 0, len(phaseView.Steps))
+	for _, step := range phaseView.Steps {
+		if completed[step.ID] {
+			steps = append(steps, diffStep{ID: step.ID, Kind: step.Kind, Action: "skip", Reason: "completed"})
+			continue
+		}
+		ok, evalErr := install.EvaluateWhen(step.When, applyExecutionWorkflow.Vars, runtimeVars, ctxData)
+		if evalErr != nil {
+			return fmt.Errorf("WHEN_EVAL_ERROR: step %s (%s): %w", step.ID, step.Kind, evalErr)
+		}
+		if !ok {
+			steps = append(steps, diffStep{ID: step.ID, Kind: step.Kind, Action: "skip", Reason: "when"})
+			continue
+		}
+		steps = append(steps, diffStep{ID: step.ID, Kind: step.Kind, Action: "run"})
+	}
+
+	if output == "json" {
+		payload := struct {
+			Phase     string     `json:"phase"`
+			StatePath string     `json:"statePath"`
+			Steps     []diffStep `json:"steps"`
+		}{Phase: selectedPhase, StatePath: statePath, Steps: steps}
+		enc := json.NewEncoder(os.Stdout)
+		return enc.Encode(payload)
+	}
+	for _, s := range steps {
+		if s.Action == "skip" && s.Reason != "" {
+			fmt.Fprintf(os.Stdout, "%s %s SKIP (%s)\n", s.ID, s.Kind, s.Reason)
+			continue
+		}
+		fmt.Fprintf(os.Stdout, "%s %s %s\n", s.ID, s.Kind, strings.ToUpper(s.Action))
+	}
+	return nil
+}
+
+func runCache(args []string) error {
+	if len(args) == 0 {
+		return errors.New("usage: deck cache list|clean [flags]")
+	}
+	if args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
+		return errors.New("usage: deck cache list|clean [flags]")
+	}
+
+	switch args[0] {
+	case "list":
+		return runCacheList(args[1:])
+	case "clean":
+		return runCacheClean(args[1:])
 	default:
-		return fmt.Errorf("unknown control start target %q", args[0])
+		return fmt.Errorf("unknown cache command %q", args[0])
 	}
 }
 
-func runControlHealth(args []string) error {
-	fs := flag.NewFlagSet("control health", flag.ContinueOnError)
+type cacheEntry struct {
+	Path      string `json:"path"`
+	SizeBytes int64  `json:"size_bytes"`
+	ModTime   string `json:"mod_time"`
+}
+
+func runCacheList(args []string) error {
+	fs := flag.NewFlagSet("cache list", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	serverURL := fs.String("server", "", "control server url")
+	output := ""
+	registerOutputFormatFlags(fs, &output, "text")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if output != "text" && output != "json" {
+		return errors.New("--output must be text or json")
+	}
+
+	root, err := defaultDeckCacheRoot()
+	if err != nil {
+		return err
+	}
+	entries, err := listCacheEntries(root)
+	if err != nil {
+		return err
+	}
+	if output == "json" {
+		enc := json.NewEncoder(os.Stdout)
+		return enc.Encode(entries)
+	}
+	for _, e := range entries {
+		fmt.Fprintf(os.Stdout, "%s\t%d\t%s\n", e.Path, e.SizeBytes, e.ModTime)
+	}
+	return nil
+}
+
+func runCacheClean(args []string) error {
+	fs := flag.NewFlagSet("cache clean", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	olderThan := fs.String("older-than", "", "delete entries not modified within this duration (e.g. 30d, 24h)")
+	dryRun := fs.Bool("dry-run", false, "print deletion plan without deleting")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
-	resolvedURL, err := resolveServerURL(strings.TrimSpace(*serverURL))
+	root, err := defaultDeckCacheRoot()
 	if err != nil {
 		return err
 	}
+	cutoff, hasCutoff, err := parseOlderThan(*olderThan)
+	if err != nil {
+		return err
+	}
+	plan, err := computeCacheCleanPlan(root, cutoff, hasCutoff)
+	if err != nil {
+		return err
+	}
+	for _, p := range plan {
+		fmt.Fprintln(os.Stdout, p)
+	}
+	if *dryRun {
+		return nil
+	}
+	for _, p := range plan {
+		if err := os.RemoveAll(p); err != nil {
+			return fmt.Errorf("delete %s: %w", p, err)
+		}
+	}
+	return nil
+}
+
+func defaultDeckCacheRoot() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve user home directory: %w", err)
+	}
+	return filepath.Join(home, ".deck", "cache"), nil
+}
+
+func listCacheEntries(root string) ([]cacheEntry, error) {
+	if _, err := os.Stat(root); err != nil {
+		if os.IsNotExist(err) {
+			return []cacheEntry{}, nil
+		}
+		return nil, fmt.Errorf("stat cache root: %w", err)
+	}
+	entries := []cacheEntry{}
+	if err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		entries = append(entries, cacheEntry{
+			Path:      filepath.ToSlash(rel),
+			SizeBytes: info.Size(),
+			ModTime:   info.ModTime().UTC().Format(time.RFC3339),
+		})
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("walk cache root: %w", err)
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Path < entries[j].Path })
+	return entries, nil
+}
+
+func parseOlderThan(raw string) (time.Time, bool, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return time.Time{}, false, nil
+	}
+	var dur time.Duration
+	if strings.HasSuffix(trimmed, "d") {
+		n := strings.TrimSuffix(trimmed, "d")
+		days, err := strconv.ParseInt(n, 10, 64)
+		if err != nil || days < 0 {
+			return time.Time{}, false, fmt.Errorf("invalid --older-than: %s", trimmed)
+		}
+		dur = time.Duration(days) * 24 * time.Hour
+	} else {
+		parsed, err := time.ParseDuration(trimmed)
+		if err != nil || parsed < 0 {
+			return time.Time{}, false, fmt.Errorf("invalid --older-than: %s", trimmed)
+		}
+		dur = parsed
+	}
+	return time.Now().Add(-dur), true, nil
+}
+
+func computeCacheCleanPlan(root string, cutoff time.Time, hasCutoff bool) ([]string, error) {
+	if _, err := os.Stat(root); err != nil {
+		if os.IsNotExist(err) {
+			return []string{}, nil
+		}
+		return nil, fmt.Errorf("stat cache root: %w", err)
+	}
+	plan := []string{}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil, fmt.Errorf("read cache root: %w", err)
+	}
+	for _, entry := range entries {
+		path := filepath.Join(root, entry.Name())
+		if !hasCutoff {
+			plan = append(plan, path)
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return nil, err
+		}
+		if info.ModTime().Before(cutoff) {
+			plan = append(plan, path)
+		}
+	}
+	sort.Strings(plan)
+	return plan, nil
+}
+
+func runService(args []string) error {
+	if len(args) == 0 {
+		return errors.New("usage: deck service <install|status|stop>")
+	}
+
+	switch args[0] {
+	case "status":
+		return runServiceStatus(args[1:])
+	case "stop":
+		return runServiceStop(args[1:])
+	case "install":
+		return runServiceInstall(args[1:])
+	default:
+		return fmt.Errorf("unknown service command %q", args[0])
+	}
+}
+
+func runServiceInstall(args []string) error {
+	fs := flag.NewFlagSet("service install", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	outDir := fs.String("out", ".", "output directory")
+	root := fs.String("root", "", "serve root directory")
+	addr := fs.String("addr", ":8080", "serve listen address")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return errors.New("usage: deck service install [--out <dir>] --root <root> [--addr <addr>]")
+	}
+	resolvedOut := strings.TrimSpace(*outDir)
+	if resolvedOut == "" {
+		resolvedOut = "."
+	}
+	resolvedRoot := strings.TrimSpace(*root)
+	if resolvedRoot == "" {
+		return errors.New("--root is required")
+	}
+	resolvedAddr := strings.TrimSpace(*addr)
+	if resolvedAddr == "" {
+		resolvedAddr = ":8080"
+	}
+
+	if err := os.MkdirAll(resolvedOut, 0o755); err != nil {
+		return fmt.Errorf("service install: create output dir: %w", err)
+	}
+
+	servicePath := filepath.Join(resolvedOut, "deck-server.service")
+	serviceContent := fmt.Sprintf(`[Unit]
+Description=deck server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=deck serve --root %s --addr %s
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+`, resolvedRoot, resolvedAddr)
+	if err := os.WriteFile(servicePath, []byte(serviceContent), 0o644); err != nil {
+		return fmt.Errorf("service install: write service file: %w", err)
+	}
+
+	fmt.Fprintf(os.Stdout, "service install: wrote %s\n", servicePath)
+	return nil
+}
+
+func runServiceStatus(args []string) error {
+	fs := flag.NewFlagSet("service status", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return errors.New("usage: deck service status")
+	}
+	unit := "deck-server.service"
+	rawState, err := runSystemctlIsActive(unit, false)
+	if err != nil {
+		return fmt.Errorf("service status: %w\nsuggestion: %s", err, suggestSystemctlStatusCommand(unit, false))
+	}
+	mappedState := mapSystemctlState(rawState)
+	fmt.Fprintf(os.Stdout, "service status: %s (%s)\n", mappedState, unit)
+	return nil
+}
+
+func runServiceStop(args []string) error {
+	fs := flag.NewFlagSet("service stop", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return errors.New("usage: deck service stop")
+	}
+	unit := "deck-server.service"
+	if err := runSystemctlStop(unit, false); err != nil {
+		return fmt.Errorf("service stop: %w\nsuggestion: %s", err, suggestSystemctlStatusCommand(unit, false))
+	}
+	fmt.Fprintf(os.Stdout, "service stop: ok (%s)\n", unit)
+	return nil
+}
+
+func runHealth(args []string) error {
+	fs := flag.NewFlagSet("health", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	server := fs.String("server", "", "server base URL (required)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	resolvedServer := strings.TrimSpace(*server)
+	if resolvedServer == "" {
+		return errors.New("--server is required")
+	}
 
 	client := &http.Client{Timeout: 5 * time.Second}
-	endpoint := strings.TrimRight(resolvedURL, "/") + "/api/health"
-	resp, err := client.Get(endpoint)
+	healthURL := strings.TrimRight(resolvedServer, "/") + "/healthz"
+	resp, err := client.Get(healthURL)
 	if err != nil {
-		return fmt.Errorf("control health: request failed: %w", err)
+		return fmt.Errorf("health: request failed: %w", err)
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("control health: unexpected status code %d", resp.StatusCode)
+		return fmt.Errorf("health: unexpected status %d", resp.StatusCode)
 	}
 
-	var payload struct {
-		Status string `json:"status"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return fmt.Errorf("control health: decode response: %w", err)
-	}
-	if payload.Status != "ok" {
-		return fmt.Errorf("control health: unexpected status %q", payload.Status)
-	}
-
-	fmt.Fprintf(os.Stdout, "control health: ok (%s)\n", resolvedURL)
+	fmt.Fprintf(os.Stdout, "health: ok (%s)\n", resolvedServer)
 	return nil
+}
+
+var doctorVarRefPattern = regexp.MustCompile(`\.vars\.([A-Za-z_][A-Za-z0-9_]*)`)
+
+type doctorReport struct {
+	Timestamp string         `json:"timestamp"`
+	Workflow  string         `json:"workflow"`
+	Summary   doctorSummary  `json:"summary"`
+	Checks    []doctorCheck  `json:"checks"`
+	Vars      map[string]any `json:"vars"`
+}
+
+type doctorSummary struct {
+	Passed int `json:"passed"`
+	Failed int `json:"failed"`
+}
+
+type doctorCheck struct {
+	Name    string   `json:"name"`
+	Kind    string   `json:"kind"`
+	Value   string   `json:"value"`
+	Status  string   `json:"status"`
+	Message string   `json:"message,omitempty"`
+	UsedBy  []string `json:"used_by,omitempty"`
+}
+
+func runDoctor(args []string) error {
+	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	var file string
+	registerFileFlags(fs, &file, "path or URL to workflow file")
+	out := fs.String("out", "", "output report path (required)")
+	vars := &varFlag{}
+	fs.Var(vars, "var", "set variable override (key=value), repeatable")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	resolvedOut := strings.TrimSpace(*out)
+	if resolvedOut == "" {
+		return errors.New("--out is required")
+	}
+
+	workflowPath := strings.TrimSpace(file)
+	if workflowPath == "" {
+		resolved, err := discoverApplyWorkflow(".")
+		if err != nil {
+			return err
+		}
+		workflowPath = resolved
+	}
+
+	isRemoteWorkflow := isHTTPWorkflowPath(workflowPath)
+	if !isRemoteWorkflow {
+		abs, err := filepath.Abs(workflowPath)
+		if err != nil {
+			return fmt.Errorf("resolve workflow path: %w", err)
+		}
+		workflowPath = abs
+	}
+
+	if isRemoteWorkflow {
+		workflowBytes, err := fetchWorkflowForApplyValidation(workflowPath)
+		if err != nil {
+			return err
+		}
+		if err := validate.Bytes(workflowPath, workflowBytes); err != nil {
+			return err
+		}
+	} else {
+		if err := validate.File(workflowPath); err != nil {
+			return err
+		}
+	}
+
+	wf, err := config.LoadWithOptions(workflowPath, config.LoadOptions{VarOverrides: varsAsAnyMap(vars.AsMap())})
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(wf.Role) != "apply" {
+		return fmt.Errorf("doctor workflow role must be apply: %s", workflowPath)
+	}
+
+	checks := make([]doctorCheck, 0)
+	checkByName := map[string]*doctorCheck{}
+	addCheck := func(c doctorCheck) {
+		if existing, ok := checkByName[c.Name]; ok {
+			usedBy := append(existing.UsedBy, c.UsedBy...)
+			sort.Strings(usedBy)
+			existing.UsedBy = dedupeStrings(usedBy)
+			if existing.Status == "passed" && c.Status == "failed" {
+				existing.Status = "failed"
+				existing.Message = c.Message
+				existing.Value = c.Value
+				existing.Kind = c.Kind
+			}
+			return
+		}
+		checks = append(checks, c)
+		checkByName[c.Name] = &checks[len(checks)-1]
+	}
+
+	refs := collectDoctorArtifactVarRefs(wf)
+	for name, usedBy := range refs {
+		v, ok := wf.Vars[name]
+		if !ok {
+			addCheck(doctorCheck{Name: "vars." + name, Kind: "var", Status: "failed", Message: "missing", UsedBy: usedBy})
+			continue
+		}
+		s, ok := v.(string)
+		if !ok {
+			addCheck(doctorCheck{Name: "vars." + name, Kind: "var", Status: "failed", Message: "not a string", UsedBy: usedBy})
+			continue
+		}
+		resolved := strings.TrimSpace(s)
+		if strings.HasPrefix(resolved, "http://") || strings.HasPrefix(resolved, "https://") {
+			status, msg := doctorCheckHTTPReachable(resolved)
+			addCheck(doctorCheck{Name: "vars." + name, Kind: "http", Value: resolved, Status: status, Message: msg, UsedBy: usedBy})
+			continue
+		}
+		status, msg := doctorCheckPathExists(resolved)
+		addCheck(doctorCheck{Name: "vars." + name, Kind: "path", Value: resolved, Status: status, Message: msg, UsedBy: usedBy})
+	}
+
+	report := doctorReport{
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Workflow:  workflowPath,
+		Checks:    checks,
+		Vars:      wf.Vars,
+	}
+	for _, c := range checks {
+		if c.Status == "failed" {
+			report.Summary.Failed++
+		} else {
+			report.Summary.Passed++
+		}
+	}
+
+	if err := os.MkdirAll(filepath.Dir(resolvedOut), 0o755); err != nil {
+		return fmt.Errorf("create report parent dir: %w", err)
+	}
+	raw, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode doctor report: %w", err)
+	}
+	if err := os.WriteFile(resolvedOut, raw, 0o644); err != nil {
+		return fmt.Errorf("write doctor report: %w", err)
+	}
+
+	fmt.Fprintf(os.Stdout, "doctor: wrote %s\n", resolvedOut)
+	if report.Summary.Failed > 0 {
+		return fmt.Errorf("doctor: failed (%d failed checks)", report.Summary.Failed)
+	}
+	return nil
+}
+
+func collectDoctorArtifactVarRefs(wf *config.Workflow) map[string][]string {
+	refs := map[string]map[string]bool{}
+	if wf == nil {
+		return map[string][]string{}
+	}
+	for _, phase := range wf.Phases {
+		for _, step := range phase.Steps {
+			fetchRaw, ok := step.Spec["fetch"].(map[string]any)
+			if !ok {
+				continue
+			}
+			sourcesRaw, ok := fetchRaw["sources"].([]any)
+			if !ok {
+				continue
+			}
+			for _, raw := range sourcesRaw {
+				s, ok := raw.(map[string]any)
+				if !ok {
+					continue
+				}
+				for _, key := range []string{"path", "url"} {
+					vRaw, ok := s[key].(string)
+					if !ok {
+						continue
+					}
+					v := strings.TrimSpace(vRaw)
+					if v == "" {
+						continue
+					}
+					matches := doctorVarRefPattern.FindAllStringSubmatch(v, -1)
+					for _, m := range matches {
+						if len(m) != 2 {
+							continue
+						}
+						name := m[1]
+						if refs[name] == nil {
+							refs[name] = map[string]bool{}
+						}
+						refs[name][step.ID] = true
+					}
+				}
+			}
+		}
+	}
+	out := map[string][]string{}
+	for name, usedBy := range refs {
+		steps := make([]string, 0, len(usedBy))
+		for stepID := range usedBy {
+			steps = append(steps, stepID)
+		}
+		sort.Strings(steps)
+		out[name] = steps
+	}
+	return out
+}
+
+func doctorCheckPathExists(path string) (string, string) {
+	if strings.TrimSpace(path) == "" {
+		return "failed", "empty path"
+	}
+	if _, err := os.Stat(path); err != nil {
+		return "failed", err.Error()
+	}
+	return "passed", ""
+}
+
+func doctorCheckHTTPReachable(url string) (string, string) {
+	client := &http.Client{Timeout: 5 * time.Second}
+	req, err := http.NewRequest(http.MethodHead, url, nil)
+	if err != nil {
+		return "failed", err.Error()
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "failed", err.Error()
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
+		return "failed", fmt.Sprintf("unexpected status %d", resp.StatusCode)
+	}
+	return "passed", ""
+}
+
+func dedupeStrings(values []string) []string {
+	if len(values) == 0 {
+		return values
+	}
+	out := make([]string, 0, len(values))
+	seen := map[string]bool{}
+	for _, v := range values {
+		if seen[v] {
+			continue
+		}
+		seen[v] = true
+		out = append(out, v)
+	}
+	return out
+}
+
+func runLogs(args []string) error {
+	fs := flag.NewFlagSet("logs", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	root := fs.String("root", ".", "serve root directory")
+	source := fs.String("source", "file", "log source (file|journal|both)")
+	path := fs.String("path", "", "explicit audit log file path")
+	unit := fs.String("unit", "", "systemd unit for journal logs")
+	output := ""
+	registerOutputFormatFlags(fs, &output, "text")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	resolvedSource := strings.ToLower(strings.TrimSpace(*source))
+	if resolvedSource != "file" && resolvedSource != "journal" && resolvedSource != "both" {
+		return errors.New("--source must be file, journal, or both")
+	}
+	if output != "text" && output != "json" {
+		return errors.New("--output must be text or json")
+	}
+
+	records := []ctrllogs.LogRecord{}
+	if resolvedSource == "file" || resolvedSource == "both" {
+		logPath, err := resolveLogsFilePath(strings.TrimSpace(*root), strings.TrimSpace(*path))
+		if err != nil {
+			return err
+		}
+		fileRecords, err := readLogsFile(logPath)
+		if err != nil {
+			return err
+		}
+		records = append(records, fileRecords...)
+	}
+	if resolvedSource == "journal" || resolvedSource == "both" {
+		resolvedUnit := strings.TrimSpace(*unit)
+		if resolvedUnit == "" {
+			return errors.New("--unit is required when --source includes journal")
+		}
+		journalRecords, err := readControlLogsJournal(resolvedUnit, 50, 0)
+		if err != nil {
+			return fmt.Errorf("logs: %w\nsuggestion: %s", err, suggestJournalctlCommand(resolvedUnit))
+		}
+		records = append(records, journalRecords...)
+	}
+
+	if output == "json" {
+		enc := json.NewEncoder(os.Stdout)
+		return enc.Encode(records)
+	}
+	for _, record := range records {
+		fmt.Fprintln(os.Stdout, ctrllogs.FormatLogText(record))
+	}
+	return nil
+}
+
+func resolveLogsFilePath(root string, path string) (string, error) {
+	if strings.TrimSpace(path) != "" {
+		if _, err := os.Stat(path); err != nil {
+			if os.IsNotExist(err) {
+				return "", fmt.Errorf("logs: log file not found: %s", path)
+			}
+			return "", fmt.Errorf("logs: stat log file: %w", err)
+		}
+		return path, nil
+	}
+	resolvedRoot := strings.TrimSpace(root)
+	if resolvedRoot == "" {
+		resolvedRoot = "."
+	}
+	logPath := filepath.Join(resolvedRoot, ".deck", "logs", "server-audit.log")
+	if _, err := os.Stat(logPath); err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("logs: log file not found: %s", logPath)
+		}
+		return "", fmt.Errorf("logs: stat log file: %w", err)
+	}
+	return logPath, nil
+}
+
+func readLogsFile(path string) ([]ctrllogs.LogRecord, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("logs: open log file: %w", err)
+	}
+	defer f.Close()
+
+	records := []ctrllogs.LogRecord{}
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		record, parseErr := ctrllogs.NormalizeJSONLine([]byte(line))
+		if parseErr != nil {
+			continue
+		}
+		records = append(records, record)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("logs: read log file: %w", err)
+	}
+	return records, nil
 }
 
 func runControlDoctor(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: deck control doctor preflight --file <wf> [--bundle <dir>] [--out <path>] [--host-checks]")
+		return errors.New("usage: deck doctor preflight --file <wf> [--root <dir>] [--out <path>] [--host-checks] [--var key=value]")
 	}
 
 	switch args[0] {
@@ -273,28 +1353,31 @@ func runControlDoctor(args []string) error {
 func runControlDoctorPreflight(args []string) error {
 	fs := flag.NewFlagSet("control doctor preflight", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	file := fs.String("file", "", "path to workflow file")
-	bundleRoot := fs.String("bundle", "", "bundle path")
+	var file string
+	registerFileFlags(fs, &file, "path or URL to workflow file")
+	bundleRoot := fs.String("root", "", "bundle path")
 	out := fs.String("out", "reports/diagnose.json", "doctor report output path")
 	hostChecks := fs.Bool("host-checks", false, "enforce host prerequisite checks")
+	vars := &varFlag{}
+	fs.Var(vars, "var", "set variable override (key=value), repeatable")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if strings.TrimSpace(*file) == "" {
-		return errors.New("--file is required")
+	if strings.TrimSpace(file) == "" {
+		return errors.New("--file (or -f) is required")
 	}
 
-	if err := validate.File(*file); err != nil {
+	if err := validate.File(file); err != nil {
 		return err
 	}
 
-	wf, err := config.Load(*file)
+	wf, err := config.LoadWithOptions(file, config.LoadOptions{VarOverrides: varsAsAnyMap(vars.AsMap())})
 	if err != nil {
 		return err
 	}
 
 	report, err := diagnose.Preflight(wf, diagnose.RunOptions{
-		WorkflowPath:      *file,
+		WorkflowPath:      file,
 		BundleRoot:        *bundleRoot,
 		OutputPath:        *out,
 		EnforceHostChecks: *hostChecks,
@@ -315,21 +1398,25 @@ func runControlDoctorPreflight(args []string) error {
 }
 
 func runControlStatus(args []string) error {
+	if len(args) == 0 {
+		return errors.New("usage: deck service status <server|agent> [--unit <name>] [--user] [--output text|json]")
+	}
+	unitType := strings.TrimSpace(args[0])
 	fs := flag.NewFlagSet("control status", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	unitType := fs.String("type", "", "control unit type (server|agent)")
 	unit := fs.String("unit", "", "systemd unit name")
 	userScope := fs.Bool("user", false, "use user systemd scope")
-	output := fs.String("output", "text", "output format (text|json)")
-	if err := fs.Parse(args); err != nil {
+	output := ""
+	registerOutputFormatFlags(fs, &output, "text")
+	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
 
-	resolvedUnit, err := resolveSystemdUnit(strings.TrimSpace(*unitType), strings.TrimSpace(*unit))
+	resolvedUnit, err := resolveSystemdUnit(unitType, strings.TrimSpace(*unit))
 	if err != nil {
 		return err
 	}
-	if *output != "text" && *output != "json" {
+	if output != "text" && output != "json" {
 		return errors.New("--output must be text or json")
 	}
 
@@ -339,9 +1426,9 @@ func runControlStatus(args []string) error {
 	}
 
 	mappedState := mapSystemctlState(rawState)
-	if *output == "json" {
+	if output == "json" {
 		return json.NewEncoder(os.Stdout).Encode(map[string]string{
-			"type":   strings.TrimSpace(*unitType),
+			"type":   unitType,
 			"unit":   resolvedUnit,
 			"status": mappedState,
 		})
@@ -352,16 +1439,19 @@ func runControlStatus(args []string) error {
 }
 
 func runControlStop(args []string) error {
+	if len(args) == 0 {
+		return errors.New("usage: deck service stop <server|agent> [--unit <name>] [--user]")
+	}
+	unitType := strings.TrimSpace(args[0])
 	fs := flag.NewFlagSet("control stop", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	unitType := fs.String("type", "", "control unit type (server|agent)")
 	unit := fs.String("unit", "", "systemd unit name")
 	userScope := fs.Bool("user", false, "use user systemd scope")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
 
-	resolvedUnit, err := resolveSystemdUnit(strings.TrimSpace(*unitType), strings.TrimSpace(*unit))
+	resolvedUnit, err := resolveSystemdUnit(unitType, strings.TrimSpace(*unit))
 	if err != nil {
 		return err
 	}
@@ -387,7 +1477,8 @@ func runControlLogs(args []string) error {
 	tail := fs.Int("tail", 200, "number of records to print")
 	follow := fs.Bool("follow", false, "follow new log records")
 	since := fs.Duration("since", 0, "only show records newer than duration")
-	output := fs.String("output", "text", "output format (text|json)")
+	output := ""
+	registerOutputFormatFlags(fs, &output, "text")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -396,7 +1487,7 @@ func runControlLogs(args []string) error {
 	if resolvedSource != "file" && resolvedSource != "journal" && resolvedSource != "both" {
 		return errors.New("--source must be file, journal, or both")
 	}
-	if *output != "text" && *output != "json" {
+	if output != "text" && output != "json" {
 		return errors.New("--output must be text or json")
 	}
 	if *tail <= 0 {
@@ -424,7 +1515,7 @@ func runControlLogs(args []string) error {
 		if resolvedUnit == "" {
 			resolvedUnit = "deck-server.service"
 		}
-		return followControlLogsJournal(resolvedUnit, *tail, *since, filters, *output)
+		return followControlLogsJournal(resolvedUnit, *tail, *since, filters, output)
 	}
 
 	var records []ctrllogs.LogRecord
@@ -456,12 +1547,12 @@ func runControlLogs(args []string) error {
 
 	filtered := filterControlLogRecords(records, filters)
 	tailed := tailControlLogRecords(filtered, *tail)
-	if err := printControlLogRecords(tailed, *output); err != nil {
+	if err := printControlLogRecords(tailed, output); err != nil {
 		return err
 	}
 
 	if *follow && resolvedSource == "file" {
-		return followControlLogsFile(resolvedFilePath, filters, *output)
+		return followControlLogsFile(resolvedFilePath, filters, output)
 	}
 	return nil
 }
@@ -738,55 +1829,9 @@ func printControlLogRecord(record ctrllogs.LogRecord, output string) error {
 	return nil
 }
 
-func resolveControlAgentArgs(args []string) ([]string, error) {
-	if hasServerFlag(args) {
-		return args, nil
-	}
-
-	resolvedURL, err := resolveServerURL("")
-	if err != nil {
-		return nil, errors.New("control start agent: --server is required (or set server.url in strategy config)")
-	}
-
-	resolvedArgs := append([]string{}, args...)
-	resolvedArgs = append(resolvedArgs, "--server", resolvedURL)
-	return resolvedArgs, nil
-}
-
-func hasServerFlag(args []string) bool {
-	for i := range args {
-		if args[i] == "--server" || strings.HasPrefix(args[i], "--server=") {
-			return true
-		}
-	}
-	return false
-}
-
-func resolveServerURL(cliValue string) (string, error) {
-	if cliValue != "" {
-		return cliValue, nil
-	}
-
-	configPath, err := strategycfg.ConfigPath()
-	if err != nil {
-		return "", err
-	}
-
-	cfg, _, err := strategycfg.Load(configPath)
-	if err != nil {
-		return "", err
-	}
-
-	url := strings.TrimSpace(cfg.Server.URL)
-	if url == "" {
-		return "", errors.New("control: server url is required (--server or strategy config server.url)")
-	}
-	return url, nil
-}
-
 func resolveSystemdUnit(unitType, unit string) (string, error) {
 	if unitType != "server" && unitType != "agent" {
-		return "", errors.New("--type must be server or agent")
+		return "", errors.New("service target must be server or agent")
 	}
 	if unit != "" {
 		return unit, nil
@@ -878,529 +1923,93 @@ func isPermissionError(msg string) bool {
 		strings.Contains(lower, "interactive authentication required")
 }
 
-func runWorkflow(args []string) error {
-	if len(args) == 0 {
-		return errors.New("usage: deck workflow <subcommand>")
-	}
-
-	switch args[0] {
-	case "validate":
-		return runValidate(args[1:])
-	case "init":
-		return runWorkflowInit(args[1:])
-	case "run":
-		return runWorkflowRun(args[1:])
-	case "convert":
-		return runWorkflowConvert(args[1:])
-	case "bundle":
-		return runWorkflowBundle(args[1:])
-	default:
-		return fmt.Errorf("unknown workflow command %q", args[0])
-	}
-}
-
-func runWorkflowConvert(args []string) error {
-	fs := flag.NewFlagSet("workflow convert", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-
-	file := fs.String("file", "", "path to workflow file")
-	out := fs.String("out", "", "output path")
-	inPlace := fs.Bool("in-place", false, "overwrite input file atomically")
-	rewriteImports := fs.Bool("rewrite-imports", true, "recursively convert relative imports")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-
-	resolvedFile := strings.TrimSpace(*file)
-	if resolvedFile == "" {
-		return errors.New("--file is required")
-	}
-	resolvedOut := strings.TrimSpace(*out)
-	if !*inPlace && resolvedOut == "" {
-		return errors.New("either --out or --in-place is required")
-	}
-	if *inPlace && resolvedOut != "" {
-		return errors.New("--out and --in-place cannot be used together")
-	}
-
-	target := resolvedOut
-	if *inPlace {
-		target = resolvedFile
-	}
-
-	result, err := workflowconvert.ConvertFile(resolvedFile, target, workflowconvert.Options{RewriteImports: *rewriteImports})
-	if err != nil {
-		return err
-	}
-	for _, warning := range result.Warnings {
-		fmt.Fprintf(os.Stderr, "warning: %s\n", warning)
-	}
-
-	validateErr := validate.File(target)
-	fmt.Fprintf(os.Stdout, "workflow convert: wrote %s\n", target)
-	if validateErr != nil {
-		return fmt.Errorf("workflow convert: validate output: %w", validateErr)
-	}
-
-	fmt.Fprintln(os.Stdout, "workflow convert: validate ok")
-	return nil
-}
-
 func runWorkflowInit(args []string) error {
 	fs := flag.NewFlagSet("workflow init", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	template := fs.String("template", "", "template name (single|multinode)")
-	output := fs.String("output", "", "output file path (single) or directory (multinode)")
-	force := fs.Bool("force", false, "overwrite destination files if they already exist")
+	template := fs.String("template", "", "template name (single|multi)")
+	output := fs.String("out", ".", "output directory")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if fs.NArg() != 0 {
+		return errors.New("usage: deck init --template single|multi [--out <dir>]")
 	}
 
 	resolvedTemplate := strings.TrimSpace(*template)
-	if resolvedTemplate != "single" && resolvedTemplate != "multinode" {
-		return errors.New("workflow init: --template is required and must be single or multinode")
+	if resolvedTemplate != "single" && resolvedTemplate != "multi" {
+		return errors.New("init: --template is required and must be single or multi")
 	}
 	resolvedOutput := strings.TrimSpace(*output)
 	if resolvedOutput == "" {
-		return errors.New("workflow init: --output is required")
+		resolvedOutput = "."
 	}
+	workflowsDir := filepath.Join(resolvedOutput, "workflows")
 
-	if resolvedTemplate == "single" {
-		destination := resolvedOutput
-		source, err := resolveWorkflowTemplateSource(filepath.Join("docs", "examples", "vagrant-smoke-install.yaml"))
-		if err != nil {
-			return err
+	if info, err := os.Stat(workflowsDir); err == nil {
+		if !info.IsDir() {
+			return fmt.Errorf("init: workflows path exists and is not a directory: %s", workflowsDir)
 		}
-		if err := writeWorkflowTemplate(source, destination, *force); err != nil {
-			return err
-		}
-		if err := validate.File(destination); err != nil {
-			return fmt.Errorf("workflow init: validate generated workflow %s: %w", destination, err)
-		}
-
-		fmt.Fprintf(os.Stdout, "workflow init: wrote %s\n", destination)
-		fmt.Fprintln(os.Stdout, "workflow init: validate ok")
-		return nil
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("init: stat workflows directory %s: %w", workflowsDir, err)
 	}
 
-	if err := os.MkdirAll(resolvedOutput, 0o755); err != nil {
-		return fmt.Errorf("workflow init: create output dir %s: %w", resolvedOutput, err)
-	}
-	controlPlanePath := filepath.Join(resolvedOutput, "control-plane.yaml")
-	workerPath := filepath.Join(resolvedOutput, "worker.yaml")
-	controlPlaneSource, err := resolveWorkflowTemplateSource(filepath.Join("docs", "examples", "offline-k8s-control-plane.yaml"))
-	if err != nil {
-		return err
-	}
-	workerSource, err := resolveWorkflowTemplateSource(filepath.Join("docs", "examples", "offline-k8s-worker.yaml"))
-	if err != nil {
-		return err
-	}
-	if err := writeWorkflowTemplate(controlPlaneSource, controlPlanePath, *force); err != nil {
-		return err
-	}
-	if err := writeWorkflowTemplate(workerSource, workerPath, *force); err != nil {
-		return err
-	}
-
-	if err := validate.File(controlPlanePath); err != nil {
-		return fmt.Errorf("workflow init: validate generated workflow %s: %w", controlPlanePath, err)
-	}
-	if err := validate.File(workerPath); err != nil {
-		return fmt.Errorf("workflow init: validate generated workflow %s: %w", workerPath, err)
-	}
-
-	fmt.Fprintf(os.Stdout, "workflow init: wrote %s and %s\n", controlPlanePath, workerPath)
-	fmt.Fprintln(os.Stdout, "workflow init: validate ok")
-	return nil
-}
-
-func writeWorkflowTemplate(sourcePath string, destinationPath string, force bool) error {
-	templateBody, err := os.ReadFile(sourcePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("workflow init: template not found: %s", sourcePath)
-		}
-		return fmt.Errorf("workflow init: read template %s: %w", sourcePath, err)
-	}
-
-	if !force {
-		if _, err := os.Stat(destinationPath); err == nil {
-			return fmt.Errorf("workflow init: destination already exists: %s (use --force to overwrite)", destinationPath)
+	templates := initTemplateFiles(resolvedTemplate)
+	overwriteTargets := make([]string, 0, len(templates))
+	for fileName := range templates {
+		targetPath := filepath.Join(workflowsDir, fileName)
+		if _, err := os.Stat(targetPath); err == nil {
+			overwriteTargets = append(overwriteTargets, targetPath)
 		} else if !os.IsNotExist(err) {
-			return fmt.Errorf("workflow init: stat destination %s: %w", destinationPath, err)
+			return fmt.Errorf("init: stat target file %s: %w", targetPath, err)
 		}
 	}
+	if len(overwriteTargets) > 0 {
+		sort.Strings(overwriteTargets)
+		return fmt.Errorf("init: workflows already contains target files; refusing to overwrite: %s (choose another --out or remove these files)", strings.Join(overwriteTargets, ", "))
+	}
 
-	parentDir := filepath.Dir(destinationPath)
-	if err := os.MkdirAll(parentDir, 0o755); err != nil {
-		return fmt.Errorf("workflow init: create parent dir %s: %w", parentDir, err)
+	if err := os.MkdirAll(workflowsDir, 0o755); err != nil {
+		return fmt.Errorf("init: create workflows directory %s: %w", workflowsDir, err)
 	}
-	if err := os.WriteFile(destinationPath, templateBody, 0o644); err != nil {
-		return fmt.Errorf("workflow init: write destination %s: %w", destinationPath, err)
+	for fileName, body := range templates {
+		targetPath := filepath.Join(workflowsDir, fileName)
+		if err := os.WriteFile(targetPath, []byte(body), 0o644); err != nil {
+			return fmt.Errorf("init: write %s: %w", targetPath, err)
+		}
 	}
+	created := make([]string, 0, len(templates))
+	for fileName := range templates {
+		created = append(created, filepath.Join(workflowsDir, fileName))
+	}
+	sort.Strings(created)
+	fmt.Fprintf(os.Stdout, "init: wrote %s\n", strings.Join(created, ", "))
 	return nil
 }
 
-func resolveWorkflowTemplateSource(relativePath string) (string, error) {
-	current := "."
-	for i := 0; i < 8; i++ {
-		candidate := filepath.Join(current, relativePath)
-		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
-			return candidate, nil
-		}
-		current = filepath.Join(current, "..")
-	}
-	return "", fmt.Errorf("workflow init: template not found: %s", relativePath)
-}
+func initTemplateFiles(template string) map[string]string {
+	packContent := strings.Join([]string{
+		"role: pack",
+		"version: v1alpha1",
+		"steps: []",
+		"",
+	}, "\n")
+	applyContent := strings.Join([]string{
+		"role: apply",
+		"version: v1alpha1",
+		"steps: []",
+		"",
+	}, "\n")
 
-func runWorkflowRun(args []string) error {
-	fs := flag.NewFlagSet("workflow run", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	file := fs.String("file", "", "path to workflow file")
-	phase := fs.String("phase", "install", "phase to execute (prepare/install)")
-	bundlePath := fs.String("bundle", "", "bundle path")
-	strategy := fs.String("use", "", "strategy override (local|server)")
-	serverURL := fs.String("server", "", "control server url")
-	jobID := fs.String("job-id", "", "job id override")
-	targetHostname := fs.String("target-hostname", "", "target hostname")
-	maxAttempts := fs.Int("max-attempts", 3, "max attempts")
-	retryDelaySec := fs.Int("retry-delay-sec", 10, "retry delay seconds")
-	wait := fs.Bool("wait", false, "wait for terminal report")
-	timeout := fs.Duration("timeout", 30*time.Minute, "wait timeout")
-	output := fs.String("output", "text", "output format (text|json)")
-	dryRun := fs.Bool("dry-run", false, "print run plan without executing steps")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if *file == "" {
-		return errors.New("--file is required")
-	}
-	selectedPhase := strings.TrimSpace(*phase)
-	if selectedPhase == "" {
-		selectedPhase = "install"
-	}
-	if selectedPhase != "prepare" && selectedPhase != "install" {
-		return errors.New("--phase must be prepare or install")
-	}
-	if *maxAttempts <= 0 {
-		return errors.New("--max-attempts must be > 0")
-	}
-	if *retryDelaySec < 0 {
-		return errors.New("--retry-delay-sec must be >= 0")
-	}
-	if *timeout <= 0 {
-		return errors.New("--timeout must be > 0")
-	}
-	if *output != "text" && *output != "json" {
-		return errors.New("--output must be text or json")
+	varsContent := "{}\n"
+	if template == "multi" {
+		varsContent = "nodes: []\n"
 	}
 
-	configPath, err := strategycfg.ConfigPath()
-	if err != nil {
-		return err
+	return map[string]string{
+		"vars.yaml":  varsContent,
+		"pack.yaml":  packContent,
+		"apply.yaml": applyContent,
 	}
-
-	cfg, hasConfig, err := strategycfg.Load(configPath)
-	if err != nil {
-		return err
-	}
-
-	resolvedStrategy, err := strategycfg.Resolve(strings.TrimSpace(*strategy), strings.TrimSpace(os.Getenv("DECK_STRATEGY")), cfg, hasConfig, configPath)
-	if err != nil {
-		return err
-	}
-
-	if resolvedStrategy.Strategy == strategycfg.StrategyServer {
-		return runWorkflowRunServer(workflowRunServerOptions{
-			File:           strings.TrimSpace(*file),
-			Phase:          selectedPhase,
-			BundlePath:     strings.TrimSpace(*bundlePath),
-			ServerURL:      strings.TrimSpace(*serverURL),
-			Config:         cfg,
-			JobID:          strings.TrimSpace(*jobID),
-			TargetHostname: strings.TrimSpace(*targetHostname),
-			MaxAttempts:    *maxAttempts,
-			RetryDelaySec:  *retryDelaySec,
-			Wait:           *wait,
-			Timeout:        *timeout,
-			Output:         *output,
-		})
-	}
-
-	if err := validate.File(*file); err != nil {
-		return err
-	}
-
-	wf, err := config.Load(*file)
-	if err != nil {
-		return err
-	}
-
-	if *dryRun {
-		return runWorkflowRunDryRun(wf, selectedPhase, *bundlePath)
-	}
-
-	switch selectedPhase {
-	case "prepare":
-		if err := prepare.Run(wf, prepare.RunOptions{BundleRoot: *bundlePath}); err != nil {
-			return err
-		}
-	case "install":
-		if err := install.Run(wf, install.RunOptions{BundleRoot: *bundlePath}); err != nil {
-			return err
-		}
-	}
-
-	fmt.Fprintf(os.Stdout, "run %s: ok\n", selectedPhase)
-	return nil
-}
-
-type workflowRunServerOptions struct {
-	File           string
-	Phase          string
-	BundlePath     string
-	ServerURL      string
-	Config         strategycfg.Config
-	JobID          string
-	TargetHostname string
-	MaxAttempts    int
-	RetryDelaySec  int
-	Wait           bool
-	Timeout        time.Duration
-	Output         string
-}
-
-var workflowRunPollInterval = 2 * time.Second
-
-func runWorkflowRunServer(opts workflowRunServerOptions) error {
-	workflowURL, err := parseWorkflowURL(opts.File)
-	if err != nil {
-		return err
-	}
-	resolvedServerURL, err := resolveWorkflowRunServerURL(opts.ServerURL, opts.Config)
-	if err != nil {
-		return err
-	}
-
-	resolvedJobID := opts.JobID
-	if resolvedJobID == "" {
-		generatedID, genErr := generateWorkflowJobID(time.Now().UTC())
-		if genErr != nil {
-			return genErr
-		}
-		resolvedJobID = generatedID
-	}
-
-	payload := map[string]any{
-		"id":              resolvedJobID,
-		"type":            "install",
-		"workflow_file":   workflowURL,
-		"bundle_root":     opts.BundlePath,
-		"phase":           opts.Phase,
-		"target_hostname": opts.TargetHostname,
-		"max_attempts":    opts.MaxAttempts,
-		"retry_delay_sec": opts.RetryDelaySec,
-	}
-
-	if err := enqueueServerJob(resolvedServerURL, payload); err != nil {
-		return err
-	}
-
-	fmt.Fprintf(os.Stdout, "job_id=%s\n", resolvedJobID)
-	if !opts.Wait {
-		return nil
-	}
-
-	report, err := waitWorkflowReport(resolvedServerURL, resolvedJobID, opts.Timeout)
-	if err != nil {
-		return err
-	}
-	status := strings.ToLower(strings.TrimSpace(valueAsString(report["status"])))
-	if opts.Output == "json" {
-		result := map[string]any{
-			"job_id":       resolvedJobID,
-			"status":       status,
-			"detail":       report["detail"],
-			"attempt":      report["attempt"],
-			"max_attempts": report["max_attempts"],
-			"received_at":  report["received_at"],
-		}
-		if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
-			return fmt.Errorf("workflow run: encode wait output: %w", err)
-		}
-	}
-
-	if status == "success" {
-		return nil
-	}
-	return &exitCodeError{code: 1, err: fmt.Errorf("workflow run: job failed (job_id=%s)", resolvedJobID)}
-}
-
-func parseWorkflowURL(raw string) (string, error) {
-	parsed, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil {
-		return "", errors.New("--file must be URL-only in server mode (http/https); place workflow under server root files/ and use /files/... URL")
-	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return "", errors.New("--file must be URL-only in server mode (http/https); place workflow under server root files/ and use /files/... URL")
-	}
-	if strings.TrimSpace(parsed.Host) == "" {
-		return "", errors.New("--file must be URL-only in server mode (http/https); place workflow under server root files/ and use /files/... URL")
-	}
-	return parsed.String(), nil
-}
-
-func resolveWorkflowRunServerURL(cliValue string, cfg strategycfg.Config) (string, error) {
-	if strings.TrimSpace(cliValue) != "" {
-		return strings.TrimSpace(cliValue), nil
-	}
-	resolved := strings.TrimSpace(cfg.Server.URL)
-	if resolved == "" {
-		return "", errors.New("workflow run: server url is required (--server or strategy config server.url)")
-	}
-	return resolved, nil
-}
-
-func generateWorkflowJobID(now time.Time) (string, error) {
-	randomBytes := make([]byte, 3)
-	if _, err := rand.Read(randomBytes); err != nil {
-		return "", fmt.Errorf("workflow run: generate job id: %w", err)
-	}
-	timestamp := now.UTC().Format("20060102T150405Z")
-	return fmt.Sprintf("wf-%s-%s", timestamp, hex.EncodeToString(randomBytes)), nil
-}
-
-func enqueueServerJob(serverURL string, payload map[string]any) error {
-	endpoint := strings.TrimRight(serverURL, "/") + "/api/agent/job"
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("workflow run: encode job payload: %w", err)
-	}
-	resp, err := http.Post(endpoint, "application/json", strings.NewReader(string(body)))
-	if err != nil {
-		return fmt.Errorf("workflow run: enqueue request failed: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("workflow run: enqueue request failed with status %d", resp.StatusCode)
-	}
-	return nil
-}
-
-func waitWorkflowReport(serverURL, jobID string, timeout time.Duration) (map[string]any, error) {
-	client := &http.Client{Timeout: 5 * time.Second}
-	deadline := time.Now().Add(timeout)
-	for {
-		report, done, err := fetchTerminalReport(client, serverURL, jobID)
-		if err != nil {
-			return nil, err
-		}
-		if done {
-			return report, nil
-		}
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			return nil, &exitCodeError{code: 2, err: fmt.Errorf("workflow run: wait timeout (job_id=%s)", jobID)}
-		}
-		sleep := workflowRunPollInterval
-		if remaining < sleep {
-			sleep = remaining
-		}
-		time.Sleep(sleep)
-	}
-}
-
-func fetchTerminalReport(client *http.Client, serverURL, jobID string) (map[string]any, bool, error) {
-	endpoint := fmt.Sprintf("%s/api/agent/reports?job_id=%s&limit=1", strings.TrimRight(serverURL, "/"), url.QueryEscape(jobID))
-	resp, err := client.Get(endpoint)
-	if err != nil {
-		return nil, false, fmt.Errorf("workflow run: poll report failed: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, false, fmt.Errorf("workflow run: poll report failed with status %d", resp.StatusCode)
-	}
-
-	var payload struct {
-		Reports []map[string]any `json:"reports"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, false, fmt.Errorf("workflow run: decode poll report response: %w", err)
-	}
-	if len(payload.Reports) == 0 {
-		return nil, false, nil
-	}
-	report := payload.Reports[0]
-	status := strings.ToLower(strings.TrimSpace(valueAsString(report["status"])))
-	if status == "success" || status == "failed" {
-		return report, true, nil
-	}
-	return nil, false, nil
-}
-
-func valueAsString(value any) string {
-	if value == nil {
-		return ""
-	}
-	if asString, ok := value.(string); ok {
-		return asString
-	}
-	return fmt.Sprintf("%v", value)
-}
-
-func runWorkflowRunDryRun(wf *config.Workflow, phase string, bundlePath string) error {
-	selectedPhase, found := findWorkflowPhaseByName(wf, phase)
-	if !found {
-		return fmt.Errorf("%s phase not found", phase)
-	}
-
-	fmt.Fprintf(os.Stdout, "PHASE=%s\n", phase)
-
-	runtimeVars := map[string]any{}
-	completed := map[string]bool{}
-	if phase == "install" {
-		state, err := loadInstallDryRunState(wf, bundlePath)
-		if err != nil {
-			return err
-		}
-		for k, v := range state.RuntimeVars {
-			runtimeVars[k] = v
-		}
-		for _, id := range state.CompletedSteps {
-			completed[id] = true
-		}
-	}
-
-	ctxData := map[string]any{"bundleRoot": wf.Context.BundleRoot, "stateFile": wf.Context.StateFile}
-	for _, step := range selectedPhase.Steps {
-		if phase == "install" && completed[step.ID] {
-			fmt.Fprintf(os.Stdout, "%s %s SKIP (completed)\n", step.ID, step.Kind)
-			continue
-		}
-
-		var (
-			ok  bool
-			err error
-		)
-		switch phase {
-		case "prepare":
-			ok, err = prepare.EvaluateWhen(step.When, wf.Vars, runtimeVars, ctxData)
-		case "install":
-			ok, err = install.EvaluateWhen(step.When, wf.Vars, runtimeVars, ctxData)
-		}
-		if err != nil {
-			return fmt.Errorf("WHEN_EVAL_ERROR: step %s (%s): %w", step.ID, step.Kind, err)
-		}
-
-		status := "PLAN"
-		if !ok {
-			status = "SKIP"
-		}
-		fmt.Fprintf(os.Stdout, "%s %s %s\n", step.ID, step.Kind, status)
-	}
-
-	return nil
 }
 
 type installDryRunState struct {
@@ -1408,17 +2017,10 @@ type installDryRunState struct {
 	RuntimeVars    map[string]any `json:"runtimeVars"`
 }
 
-func loadInstallDryRunState(wf *config.Workflow, bundlePath string) (installDryRunState, error) {
-	statePath := strings.TrimSpace(wf.Context.StateFile)
-	if statePath == "" {
-		bundleRoot := strings.TrimSpace(bundlePath)
-		if bundleRoot == "" {
-			bundleRoot = strings.TrimSpace(wf.Context.BundleRoot)
-		}
-		if bundleRoot == "" {
-			bundleRoot = "."
-		}
-		statePath = filepath.Join(bundleRoot, ".deck", "state.json")
+func loadInstallDryRunState(wf *config.Workflow) (installDryRunState, error) {
+	statePath, err := resolveInstallStatePath(wf)
+	if err != nil {
+		return installDryRunState{}, err
 	}
 
 	raw, err := os.ReadFile(statePath)
@@ -1442,6 +2044,21 @@ func loadInstallDryRunState(wf *config.Workflow, bundlePath string) (installDryR
 	return state, nil
 }
 
+func resolveInstallStatePath(wf *config.Workflow) (string, error) {
+	if wf == nil {
+		return "", errors.New("workflow is nil")
+	}
+	stateKey := strings.TrimSpace(wf.StateKey)
+	if stateKey == "" {
+		return "", errors.New("workflow state key is empty")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve user home directory: %w", err)
+	}
+	return filepath.Join(home, ".deck", "state", stateKey+".json"), nil
+}
+
 func findWorkflowPhaseByName(wf *config.Workflow, name string) (config.Phase, bool) {
 	for _, phase := range wf.Phases {
 		if phase.Name == name {
@@ -1451,168 +2068,111 @@ func findWorkflowPhaseByName(wf *config.Workflow, name string) (config.Phase, bo
 	return config.Phase{}, false
 }
 
-func runStrategy(args []string) error {
-	if len(args) == 0 {
-		return errors.New("usage: deck strategy use local|server [--server <url>] | deck strategy current [--use local|server] [--output json]")
-	}
-
-	switch args[0] {
-	case "use":
-		return runStrategyUse(args[1:])
-	case "current":
-		return runStrategyCurrent(args[1:])
-	default:
-		return fmt.Errorf("unknown strategy command %q", args[0])
-	}
-}
-
-func runStrategyUse(args []string) error {
-	if len(args) == 0 {
-		return errors.New("usage: deck strategy use local|server [--server <url>]")
-	}
-
-	strategy := args[0]
-	fs := flag.NewFlagSet("strategy use", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	serverURL := fs.String("server", "", "server url")
-	if err := fs.Parse(args[1:]); err != nil {
-		return err
-	}
-
-	configPath, err := strategycfg.ConfigPath()
-	if err != nil {
-		return err
-	}
-
-	cfg, _, err := strategycfg.Load(configPath)
-	if err != nil {
-		return err
-	}
-	cfg.Strategy = strategy
-	if strings.TrimSpace(*serverURL) != "" {
-		cfg.Server.URL = strings.TrimSpace(*serverURL)
-	}
-
-	if err := strategycfg.Save(configPath, cfg); err != nil {
-		return err
-	}
-
-	fmt.Fprintf(os.Stdout, "strategy use: ok (%s)\n", strategy)
-	return nil
-}
-
-func runStrategyCurrent(args []string) error {
-	fs := flag.NewFlagSet("strategy current", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	strategy := fs.String("use", "", "strategy override")
-	output := fs.String("output", "text", "output format (text|json)")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if *output != "text" && *output != "json" {
-		return errors.New("--output must be text or json")
-	}
-
-	configPath, err := strategycfg.ConfigPath()
-	if err != nil {
-		return err
-	}
-
-	cfg, hasConfig, err := strategycfg.Load(configPath)
-	if err != nil {
-		return err
-	}
-
-	current, err := strategycfg.Resolve(strings.TrimSpace(*strategy), strings.TrimSpace(os.Getenv("DECK_STRATEGY")), cfg, hasConfig, configPath)
-	if err != nil {
-		return err
-	}
-
-	if *output == "json" {
-		encoder := json.NewEncoder(os.Stdout)
-		return encoder.Encode(current)
-	}
-
-	fmt.Fprintf(os.Stdout, "strategy=%s source=%s config=%s server_url=%s\n", current.Strategy, current.Source, current.Config, current.ServerURL)
-	return nil
-}
-
-func runAgent(args []string) error {
-	if len(args) == 0 {
-		return errors.New("usage: deck control start agent --server <url> [--interval <duration>] [--once]")
-	}
-
-	mode := args[0]
-	if mode != "start" && mode != "run-once" {
-		return errors.New("usage: deck control start agent --server <url> [--interval <duration>] [--once]")
-	}
-
-	fs := flag.NewFlagSet("agent start", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	serverURL := fs.String("server", "", "agent control server url")
-	intervalRaw := fs.String("interval", "10s", "heartbeat interval")
-	once := fs.Bool("once", false, "send one heartbeat and exit")
-	if err := fs.Parse(args[1:]); err != nil {
-		return err
-	}
-	if *serverURL == "" {
-		return errors.New("--server is required")
-	}
-
-	interval, err := time.ParseDuration(*intervalRaw)
-	if err != nil {
-		return fmt.Errorf("invalid --interval: %w", err)
-	}
-
-	runOnce := *once || mode == "run-once"
-	if err := agent.Run(agent.RunOptions{ServerURL: *serverURL, Interval: interval, Once: runOnce}); err != nil {
-		return err
-	}
-
-	if runOnce {
-		fmt.Fprintln(os.Stdout, "agent start: heartbeat sent")
-	}
-	return nil
-}
-
 func runApply(args []string) error {
 	fs := flag.NewFlagSet("apply", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	file := fs.String("file", "", "path to workflow file")
-	bundlePath := fs.String("bundle", "", "bundle path")
-	skipPreflight := fs.Bool("skip-preflight", false, "skip preflight checks")
+	var file string
+	registerFileFlags(fs, &file, "path or URL to workflow file")
+	phase := fs.String("phase", "install", "phase name to execute")
+	prefetch := fs.Bool("prefetch", false, "execute DownloadFile steps before other steps")
+	dryRun := fs.Bool("dry-run", false, "print apply plan without executing steps")
+	vars := &varFlag{}
+	fs.Var(vars, "var", "set variable override (key=value), repeatable")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *file == "" {
-		return errors.New("--file is required")
+	if fs.NArg() > 1 {
+		return errors.New("apply accepts at most one positional bundle path")
+	}
+	positionalBundle := ""
+	if fs.NArg() == 1 {
+		positionalBundle = strings.TrimSpace(fs.Arg(0))
 	}
 
-	if err := validate.File(*file); err != nil {
-		return err
+	workflowPath := strings.TrimSpace(file)
+	isRemoteWorkflow := isHTTPWorkflowPath(workflowPath)
+	bundleRoot := ""
+	var err error
+
+	if !isRemoteWorkflow {
+		bundleRoot, err = resolveApplyBundleRoot(positionalBundle)
+		if err != nil {
+			return err
+		}
+
+		if workflowPath == "" {
+			workflowPath, err = discoverApplyWorkflow(bundleRoot)
+			if err != nil {
+				return err
+			}
+		} else {
+			workflowPath, err = filepath.Abs(workflowPath)
+			if err != nil {
+				return fmt.Errorf("resolve workflow path: %w", err)
+			}
+		}
 	}
 
-	wf, err := config.Load(*file)
-	if err != nil {
-		return err
-	}
-
-	bundleRoot := *bundlePath
-	if bundleRoot == "" {
-		bundleRoot = wf.Context.BundleRoot
-	}
-
-	if err := prepare.Run(wf, prepare.RunOptions{BundleRoot: bundleRoot}); err != nil {
-		return err
-	}
-
-	if !*skipPreflight {
-		if _, err := diagnose.Preflight(wf, diagnose.RunOptions{WorkflowPath: *file, BundleRoot: bundleRoot}); err != nil {
+	if workflowPath == "" {
+		bundleRoot, err = resolveApplyBundleRoot(positionalBundle)
+		if err != nil {
+			return err
+		}
+		workflowPath, err = discoverApplyWorkflow(bundleRoot)
+		if err != nil {
 			return err
 		}
 	}
 
-	if err := install.Run(wf, install.RunOptions{BundleRoot: bundleRoot}); err != nil {
+	if isRemoteWorkflow {
+		workflowBytes, err := fetchWorkflowForApplyValidation(workflowPath)
+		if err != nil {
+			return err
+		}
+		if err := validate.Bytes(workflowPath, workflowBytes); err != nil {
+			return err
+		}
+	} else {
+		if err := validate.File(workflowPath); err != nil {
+			return err
+		}
+	}
+
+	wf, err := config.LoadWithOptions(workflowPath, config.LoadOptions{VarOverrides: varsAsAnyMap(vars.AsMap())})
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(wf.Role) != "apply" {
+		return fmt.Errorf("apply workflow role must be apply: %s", workflowPath)
+	}
+
+	selectedPhase := strings.TrimSpace(*phase)
+	if selectedPhase == "" {
+		selectedPhase = "install"
+	}
+	applyExecutionWorkflow, err := buildApplyExecutionWorkflow(wf, selectedPhase)
+	if err != nil {
+		return err
+	}
+
+	statePath, err := resolveInstallStatePath(wf)
+	if err != nil {
+		return err
+	}
+	if *dryRun {
+		return runApplyDryRun(applyExecutionWorkflow, selectedPhase, bundleRoot)
+	}
+
+	if *prefetch {
+		prefetchWorkflow := buildApplyPrefetchWorkflow(wf)
+		if len(prefetchWorkflow.Phases) > 0 && len(prefetchWorkflow.Phases[0].Steps) > 0 {
+			if err := install.Run(prefetchWorkflow, install.RunOptions{BundleRoot: bundleRoot, StatePath: statePath}); err != nil {
+				return err
+			}
+		}
+	}
+
+	if err := install.Run(applyExecutionWorkflow, install.RunOptions{BundleRoot: bundleRoot, StatePath: statePath}); err != nil {
 		return err
 	}
 
@@ -1620,9 +2180,310 @@ func runApply(args []string) error {
 	return nil
 }
 
+func buildApplyPrefetchWorkflow(wf *config.Workflow) *config.Workflow {
+	if wf == nil {
+		return &config.Workflow{}
+	}
+
+	prefetchSteps := make([]config.Step, 0)
+	for _, phase := range wf.Phases {
+		for _, step := range phase.Steps {
+			if step.Kind == "DownloadFile" {
+				prefetchSteps = append(prefetchSteps, step)
+			}
+		}
+	}
+
+	if len(prefetchSteps) == 0 {
+		return &config.Workflow{}
+	}
+
+	return &config.Workflow{
+		Role:           wf.Role,
+		Version:        wf.Version,
+		Vars:           wf.Vars,
+		Phases:         []config.Phase{{Name: "install", Steps: prefetchSteps}},
+		StateKey:       wf.StateKey,
+		WorkflowSHA256: wf.WorkflowSHA256,
+	}
+}
+
+func buildApplyExecutionWorkflow(wf *config.Workflow, phaseName string) (*config.Workflow, error) {
+	if wf == nil {
+		return nil, errors.New("workflow is nil")
+	}
+	selectedPhase, found := findWorkflowPhaseByName(wf, phaseName)
+	if !found {
+		return nil, fmt.Errorf("%s phase not found", phaseName)
+	}
+
+	return &config.Workflow{
+		Role:           wf.Role,
+		Version:        wf.Version,
+		Vars:           wf.Vars,
+		Phases:         []config.Phase{{Name: "install", Steps: selectedPhase.Steps}},
+		StateKey:       wf.StateKey,
+		WorkflowSHA256: wf.WorkflowSHA256,
+	}, nil
+}
+
+func runApplyDryRun(wf *config.Workflow, selectedPhaseName string, bundleRoot string) error {
+	phaseView, found := findWorkflowPhaseByName(wf, "install")
+	if !found {
+		return fmt.Errorf("%s phase not found", selectedPhaseName)
+	}
+
+	fmt.Fprintf(os.Stdout, "PHASE=%s\n", selectedPhaseName)
+
+	state, err := loadInstallDryRunState(wf)
+	if err != nil {
+		return err
+	}
+
+	runtimeVars := map[string]any{}
+	for key, value := range state.RuntimeVars {
+		runtimeVars[key] = value
+	}
+
+	completed := make(map[string]bool, len(state.CompletedSteps))
+	for _, stepID := range state.CompletedSteps {
+		completed[stepID] = true
+	}
+
+	statePath, err := resolveInstallStatePath(wf)
+	if err != nil {
+		return err
+	}
+	ctxData := map[string]any{"bundleRoot": bundleRoot, "stateFile": statePath}
+
+	for _, step := range phaseView.Steps {
+		if completed[step.ID] {
+			fmt.Fprintf(os.Stdout, "%s %s SKIP (completed)\n", step.ID, step.Kind)
+			continue
+		}
+
+		ok, evalErr := install.EvaluateWhen(step.When, wf.Vars, runtimeVars, ctxData)
+		if evalErr != nil {
+			return fmt.Errorf("WHEN_EVAL_ERROR: step %s (%s): %w", step.ID, step.Kind, evalErr)
+		}
+
+		status := "PLAN"
+		if !ok {
+			status = "SKIP"
+		}
+		fmt.Fprintf(os.Stdout, "%s %s %s\n", step.ID, step.Kind, status)
+	}
+
+	return nil
+}
+
+func isHTTPWorkflowPath(raw string) bool {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return false
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return false
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return false
+	}
+	return strings.TrimSpace(parsed.Host) != ""
+}
+
+func fetchWorkflowForApplyValidation(rawURL string) ([]byte, error) {
+	resp, err := http.Get(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("get workflow url: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("get workflow url: unexpected status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read workflow url: %w", err)
+	}
+	return body, nil
+}
+
+func resolveApplyBundleRoot(positionalBundle string) (string, error) {
+	if strings.TrimSpace(positionalBundle) != "" {
+		return resolveApplyBundleCandidate(positionalBundle, true)
+	}
+
+	for _, candidate := range []string{"./bundle.tar", "./bundle", "."} {
+		resolved, err := resolveApplyBundleCandidate(candidate, false)
+		if err != nil {
+			return "", err
+		}
+		if resolved != "" {
+			return resolved, nil
+		}
+	}
+
+	return "", errors.New("bundle not found: expected positional bundle path, ./bundle.tar, ./bundle, or current directory with workflows/")
+}
+
+func resolveApplyBundleCandidate(candidate string, strict bool) (string, error) {
+	resolved, err := filepath.Abs(strings.TrimSpace(candidate))
+	if err != nil {
+		return "", fmt.Errorf("resolve bundle path: %w", err)
+	}
+
+	info, err := os.Stat(resolved)
+	if err != nil {
+		if os.IsNotExist(err) && !strict {
+			return "", nil
+		}
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("bundle path not found: %s", resolved)
+		}
+		return "", fmt.Errorf("stat bundle path: %w", err)
+	}
+
+	if info.IsDir() {
+		if hasWorkflowDir(resolved) {
+			return resolved, nil
+		}
+		if strict {
+			return "", fmt.Errorf("bundle directory must contain workflows/: %s", resolved)
+		}
+		return "", nil
+	}
+
+	if strings.ToLower(filepath.Ext(resolved)) != ".tar" {
+		if strict {
+			return "", fmt.Errorf("bundle path must be a directory or .tar archive: %s", resolved)
+		}
+		return "", nil
+	}
+
+	extractedRoot, err := extractApplyBundleArchive(resolved)
+	if err != nil {
+		return "", err
+	}
+	return extractedRoot, nil
+}
+
+func extractApplyBundleArchive(archivePath string) (string, error) {
+	sum, err := sha256FileHex(archivePath)
+	if err != nil {
+		return "", fmt.Errorf("hash bundle archive: %w", err)
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve user home directory: %w", err)
+	}
+
+	extractRoot := filepath.Join(home, ".deck", "extract", sum)
+	bundleRoot := filepath.Join(extractRoot, "bundle")
+	if hasWorkflowDir(bundleRoot) {
+		return bundleRoot, nil
+	}
+
+	if err := os.RemoveAll(extractRoot); err != nil {
+		return "", fmt.Errorf("reset extract cache: %w", err)
+	}
+	if err := os.MkdirAll(extractRoot, 0o755); err != nil {
+		return "", fmt.Errorf("create extract cache directory: %w", err)
+	}
+	if err := bundle.ImportArchive(archivePath, extractRoot); err != nil {
+		return "", err
+	}
+	if !hasWorkflowDir(bundleRoot) {
+		return "", fmt.Errorf("extracted bundle missing workflows/: %s", bundleRoot)
+	}
+
+	return bundleRoot, nil
+}
+
+func sha256FileHex(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func hasWorkflowDir(root string) bool {
+	workflowDir := filepath.Join(root, "workflows")
+	info, err := os.Stat(workflowDir)
+	if err != nil {
+		return false
+	}
+	return info.IsDir()
+}
+
+func discoverApplyWorkflow(bundleRoot string) (string, error) {
+	workflowDir := filepath.Join(bundleRoot, "workflows")
+	if !hasWorkflowDir(bundleRoot) {
+		return "", fmt.Errorf("workflow directory not found: %s", workflowDir)
+	}
+
+	preferred := filepath.Join(workflowDir, "apply.yaml")
+	if info, err := os.Stat(preferred); err == nil && !info.IsDir() {
+		wf, loadErr := config.Load(preferred)
+		if loadErr != nil {
+			return "", loadErr
+		}
+		if strings.TrimSpace(wf.Role) == "pack" {
+			return "", fmt.Errorf("apply workflow role must be apply: %s", preferred)
+		}
+		if strings.TrimSpace(wf.Role) != "apply" {
+			return "", fmt.Errorf("apply workflow role must be apply: %s", preferred)
+		}
+		return preferred, nil
+	}
+
+	entries, err := os.ReadDir(workflowDir)
+	if err != nil {
+		return "", fmt.Errorf("read workflow directory: %w", err)
+	}
+
+	matches := make([]string, 0)
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		lower := strings.ToLower(entry.Name())
+		if !strings.HasSuffix(lower, ".yaml") && !strings.HasSuffix(lower, ".yml") {
+			continue
+		}
+
+		candidate := filepath.Join(workflowDir, entry.Name())
+		wf, loadErr := config.Load(candidate)
+		if loadErr != nil {
+			return "", loadErr
+		}
+		if strings.TrimSpace(wf.Role) == "apply" {
+			matches = append(matches, candidate)
+		}
+	}
+
+	sort.Strings(matches)
+	if len(matches) == 0 {
+		return "", fmt.Errorf("apply workflow not found under %s", workflowDir)
+	}
+	if len(matches) > 1 {
+		return "", fmt.Errorf("multiple apply workflows found under %s", workflowDir)
+	}
+	return matches[0], nil
+}
+
 func runServer(args []string) error {
 	if len(args) == 0 || args[0] != "start" {
-		return errors.New("usage: deck control start server --root <dir> --addr <host:port> [--report-max <n>] [--audit-max-size-mb <n>] [--audit-max-files <n>] [--registry-seed-dir <dir>] [--registry-seed-registries <csv>] [--tls-cert <crt> --tls-key <key> | --tls-self-signed]")
+		return errors.New("usage: deck serve --root <dir> --addr <host:port> [--report-max <n>] [--audit-max-size-mb <n>] [--audit-max-files <n>] [--tls-cert <crt> --tls-key <key> | --tls-self-signed]")
 	}
 
 	fs := flag.NewFlagSet("server start", flag.ContinueOnError)
@@ -1632,10 +2493,6 @@ func runServer(args []string) error {
 	reportMax := fs.Int("report-max", 200, "max retained in-memory reports")
 	auditMaxSizeMB := fs.Int("audit-max-size-mb", 50, "max audit log size in MB before rotation")
 	auditMaxFiles := fs.Int("audit-max-files", 10, "max retained rotated audit files")
-	registryEnable := fs.Bool("registry-enable", true, "enable embedded registry at /v2")
-	registryRoot := fs.String("registry-root", "", "embedded registry storage root (default: <root>/.deck/registry)")
-	registrySeedDir := fs.String("registry-seed-dir", "", "directory with docker-archive .tar files for registry seeding")
-	registrySeedRegistries := fs.String("registry-seed-registries", "registry.k8s.io,docker.io,quay.io,ghcr.io,gcr.io,k8s.gcr.io", "comma-separated source registries whose domain is stripped when seeding")
 	tlsCert := fs.String("tls-cert", "", "TLS certificate path")
 	tlsKey := fs.String("tls-key", "", "TLS private key path")
 	tlsSelfSigned := fs.Bool("tls-self-signed", false, "auto-generate and use self-signed TLS cert")
@@ -1658,9 +2515,6 @@ func runServer(args []string) error {
 	if *auditMaxFiles <= 0 {
 		return errors.New("--audit-max-files must be > 0")
 	}
-	if strings.TrimSpace(*registrySeedDir) == "" {
-		*registrySeedDir = filepath.Join(*root, "images")
-	}
 
 	certPath := *tlsCert
 	keyPath := *tlsKey
@@ -1672,27 +2526,7 @@ func runServer(args []string) error {
 		}
 	}
 
-	effectiveRegistryRoot := strings.TrimSpace(*registryRoot)
-	if effectiveRegistryRoot == "" {
-		effectiveRegistryRoot = server.DefaultRegistryRoot(*root)
-	}
-
-	var (
-		registryHandler http.Handler
-		err             error
-	)
-	if *registryEnable {
-		registryHandler, err = server.NewRegistryHandler(effectiveRegistryRoot)
-		if err != nil {
-			return err
-		}
-		auditLogPath := filepath.Join(*root, ".deck", "logs", "server-audit.log")
-		if err := server.SeedRegistryFromDir(registryHandler, server.RegistrySeedOptions{SeedDir: *registrySeedDir, StripRegistries: strings.Split(*registrySeedRegistries, ","), AuditLogPath: auditLogPath}); err != nil {
-			return err
-		}
-	}
-
-	h, err := server.NewHandler(*root, server.HandlerOptions{ReportMax: *reportMax, RegistryEnable: *registryEnable, RegistryRoot: effectiveRegistryRoot, RegistryHandler: registryHandler, AuditMaxSizeMB: *auditMaxSizeMB, AuditMaxFiles: *auditMaxFiles})
+	h, err := server.NewHandler(*root, server.HandlerOptions{ReportMax: *reportMax, AuditMaxSizeMB: *auditMaxSizeMB, AuditMaxFiles: *auditMaxFiles})
 	if err != nil {
 		return err
 	}
@@ -1715,26 +2549,83 @@ func runServer(args []string) error {
 
 func runWorkflowBundle(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: deck workflow bundle verify --bundle <path> | deck workflow bundle import --file <bundle.tar> --dest <dir> | deck workflow bundle collect --bundle <dir> --output <bundle.tar>")
+		return errors.New("usage: bundle verify <path> | bundle inspect <path> [--output text|json] | bundle import --file <bundle.tar> --dest <dir> | bundle collect --root <dir> --out <bundle.tar> | bundle merge <bundle.tar> --to <http-url|dir> [--dry-run]")
 	}
 
 	switch args[0] {
 	case "verify":
 		fs := flag.NewFlagSet("workflow bundle verify", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
-		bundlePath := fs.String("bundle", "", "bundle path")
-		if err := fs.Parse(args[1:]); err != nil {
+		bundlePath := fs.String("file", "", "bundle path (directory or bundle.tar)")
+		parseArgs := append([]string{}, args[1:]...)
+		positionalPath := ""
+		if len(parseArgs) > 0 && !strings.HasPrefix(parseArgs[0], "-") {
+			positionalPath = strings.TrimSpace(parseArgs[0])
+			parseArgs = parseArgs[1:]
+		}
+		if err := fs.Parse(parseArgs); err != nil {
 			return err
 		}
-		if *bundlePath == "" {
-			return errors.New("--bundle is required")
+		if fs.NArg() > 0 {
+			return errors.New("bundle verify accepts a single <path>")
+		}
+		resolvedPath := strings.TrimSpace(*bundlePath)
+		if resolvedPath == "" {
+			resolvedPath = positionalPath
+		}
+		if resolvedPath == "" {
+			return errors.New("bundle path is required")
 		}
 
-		if err := bundle.VerifyManifest(*bundlePath); err != nil {
+		if err := bundle.VerifyManifest(resolvedPath); err != nil {
 			return err
 		}
 
-		fmt.Fprintf(os.Stdout, "bundle verify: ok (%s)\n", *bundlePath)
+		fmt.Fprintf(os.Stdout, "bundle verify: ok (%s)\n", resolvedPath)
+		return nil
+
+	case "inspect":
+		fs := flag.NewFlagSet("workflow bundle inspect", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		bundlePath := fs.String("file", "", "bundle path (directory or bundle.tar)")
+		output := ""
+		registerOutputFormatFlags(fs, &output, "text")
+		parseArgs := append([]string{}, args[1:]...)
+		positionalPath := ""
+		if len(parseArgs) > 0 && !strings.HasPrefix(parseArgs[0], "-") {
+			positionalPath = strings.TrimSpace(parseArgs[0])
+			parseArgs = parseArgs[1:]
+		}
+		if err := fs.Parse(parseArgs); err != nil {
+			return err
+		}
+		if fs.NArg() > 0 {
+			return errors.New("bundle inspect accepts a single <path>")
+		}
+		resolvedPath := strings.TrimSpace(*bundlePath)
+		if resolvedPath == "" {
+			resolvedPath = positionalPath
+		}
+		if resolvedPath == "" {
+			return errors.New("bundle path is required")
+		}
+		if output != "text" && output != "json" {
+			return errors.New("--output must be text or json")
+		}
+
+		entries, err := bundle.InspectManifest(resolvedPath)
+		if err != nil {
+			return err
+		}
+
+		if output == "json" {
+			return json.NewEncoder(os.Stdout).Encode(map[string]any{"entries": entries})
+		}
+		for _, entry := range entries {
+			if _, err := fmt.Fprintln(os.Stdout, entry.Path); err != nil {
+				return fmt.Errorf("bundle inspect: write output: %w", err)
+			}
+		}
 		return nil
 
 	case "import":
@@ -1762,16 +2653,16 @@ func runWorkflowBundle(args []string) error {
 	case "collect":
 		fs := flag.NewFlagSet("workflow bundle collect", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
-		bundleDir := fs.String("bundle", "", "bundle directory")
-		outputFile := fs.String("output", "", "output tar archive path")
+		bundleDir := fs.String("root", "", "bundle directory")
+		outputFile := fs.String("out", "", "output tar archive path")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
 		if *bundleDir == "" {
-			return errors.New("--bundle is required")
+			return errors.New("--root is required")
 		}
 		if *outputFile == "" {
-			return errors.New("--output is required")
+			return errors.New("--out is required")
 		}
 
 		if err := bundle.CollectArchive(*bundleDir, *outputFile); err != nil {
@@ -1779,6 +2670,43 @@ func runWorkflowBundle(args []string) error {
 		}
 
 		fmt.Fprintf(os.Stdout, "bundle collect: ok (%s -> %s)\n", *bundleDir, *outputFile)
+		return nil
+
+	case "merge":
+		fs := flag.NewFlagSet("workflow bundle merge", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		to := fs.String("to", "", "merge destination (http URL or local directory)")
+		dryRun := fs.Bool("dry-run", false, "print merge plan without writing")
+		parseArgs := append([]string{}, args[1:]...)
+		archivePath := ""
+		if len(parseArgs) > 0 && !strings.HasPrefix(parseArgs[0], "-") {
+			archivePath = strings.TrimSpace(parseArgs[0])
+			parseArgs = parseArgs[1:]
+		}
+		if err := fs.Parse(parseArgs); err != nil {
+			return err
+		}
+		if archivePath == "" {
+			return errors.New("bundle merge requires <bundle.tar>")
+		}
+		if strings.TrimSpace(*to) == "" {
+			return errors.New("--to is required")
+		}
+
+		report, err := bundle.MergeArchive(archivePath, strings.TrimSpace(*to), *dryRun)
+		if err != nil {
+			return err
+		}
+
+		if *dryRun {
+			fmt.Fprintf(os.Stdout, "bundle merge: dry-run (%s -> %s)\n", archivePath, report.Destination)
+			for _, action := range report.Actions {
+				fmt.Fprintf(os.Stdout, "PLAN %s %s (%s)\n", action.Action, action.Path, action.Reason)
+			}
+			return nil
+		}
+
+		fmt.Fprintf(os.Stdout, "bundle merge: ok (%s -> %s)\n", archivePath, report.Destination)
 		return nil
 
 	default:
@@ -1791,8 +2719,9 @@ func runValidate(args []string) error {
 	fs.SetOutput(os.Stderr)
 
 	var file string
-	fs.StringVar(&file, "f", "", "path to workflow file")
-	fs.StringVar(&file, "file", "", "path to workflow file")
+	registerFileFlags(fs, &file, "path or URL to workflow file")
+	vars := &varFlag{}
+	fs.Var(vars, "var", "set variable override (key=value), repeatable")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -1813,25 +2742,28 @@ func runRun(args []string) error {
 	fs := flag.NewFlagSet("run", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 
-	file := fs.String("file", "", "path to workflow file")
+	var file string
+	registerFileFlags(fs, &file, "path or URL to workflow file")
 	phase := fs.String("phase", "", "phase to execute (prepare/install)")
-	bundle := fs.String("bundle", "", "bundle output path")
+	bundle := fs.String("root", "", "bundle output path")
+	vars := &varFlag{}
+	fs.Var(vars, "var", "set variable override (key=value), repeatable")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
-	if *file == "" {
-		return errors.New("--file is required")
+	if file == "" {
+		return errors.New("--file (or -f) is required")
 	}
 	if *phase == "" {
 		return errors.New("--phase is required")
 	}
 
-	if err := validate.File(*file); err != nil {
+	if err := validate.File(file); err != nil {
 		return err
 	}
 
-	wf, err := config.Load(*file)
+	wf, err := config.LoadWithOptions(file, config.LoadOptions{VarOverrides: varsAsAnyMap(vars.AsMap())})
 	if err != nil {
 		return err
 	}
@@ -1858,20 +2790,23 @@ func runResume(args []string) error {
 	fs := flag.NewFlagSet("resume", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 
-	file := fs.String("file", "", "path to workflow file")
-	bundle := fs.String("bundle", "", "bundle path")
+	var file string
+	registerFileFlags(fs, &file, "path or URL to workflow file")
+	bundle := fs.String("root", "", "bundle path")
+	vars := &varFlag{}
+	fs.Var(vars, "var", "set variable override (key=value), repeatable")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *file == "" {
-		return errors.New("--file is required")
+	if file == "" {
+		return errors.New("--file (or -f) is required")
 	}
 
-	if err := validate.File(*file); err != nil {
+	if err := validate.File(file); err != nil {
 		return err
 	}
 
-	wf, err := config.Load(*file)
+	wf, err := config.LoadWithOptions(file, config.LoadOptions{VarOverrides: varsAsAnyMap(vars.AsMap())})
 	if err != nil {
 		return err
 	}
@@ -1886,30 +2821,33 @@ func runDiagnose(args []string) error {
 	fs := flag.NewFlagSet("diagnose", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 
-	file := fs.String("file", "", "path to workflow file")
-	bundle := fs.String("bundle", "", "bundle path")
+	var file string
+	registerFileFlags(fs, &file, "path or URL to workflow file")
+	bundle := fs.String("root", "", "bundle path")
 	preflight := fs.Bool("preflight", false, "run preflight checks")
 	out := fs.String("out", "reports/diagnose.json", "diagnose report output path")
+	vars := &varFlag{}
+	fs.Var(vars, "var", "set variable override (key=value), repeatable")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *file == "" {
-		return errors.New("--file is required")
+	if file == "" {
+		return errors.New("--file (or -f) is required")
 	}
 	if !*preflight {
 		return errors.New("only --preflight mode is supported")
 	}
 
-	if err := validate.File(*file); err != nil {
+	if err := validate.File(file); err != nil {
 		return err
 	}
 
-	wf, err := config.Load(*file)
+	wf, err := config.LoadWithOptions(file, config.LoadOptions{VarOverrides: varsAsAnyMap(vars.AsMap())})
 	if err != nil {
 		return err
 	}
 
-	report, err := diagnose.Preflight(wf, diagnose.RunOptions{WorkflowPath: *file, BundleRoot: *bundle, OutputPath: *out, EnforceHostChecks: true})
+	report, err := diagnose.Preflight(wf, diagnose.RunOptions{WorkflowPath: file, BundleRoot: *bundle, OutputPath: *out, EnforceHostChecks: true})
 	if err != nil {
 		fmt.Fprintf(os.Stdout, "diagnose preflight: failed (%d failed checks)\n", report.Summary.Failed)
 		return err
@@ -1921,5 +2859,5 @@ func runDiagnose(args []string) error {
 }
 
 func usageError() error {
-	return errors.New("usage: deck strategy ...\n       deck control ...\n       deck workflow ...")
+	return errors.New("usage: deck <command> [flags]\n\ncommands:\n  pack\n  apply\n  serve\n  bundle\n  list\n  validate\n  diff\n  init\n  doctor\n  health\n  logs\n  cache\n  service")
 }
