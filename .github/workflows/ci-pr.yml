@@ -46,13 +46,13 @@ jobs:
             echo "go.mod not found, skipping go test"
           fi
 
-      - name: Run deck workflow validate
+      - name: Run deck validate
         run: |
           if [ ! -f cluster.yaml ]; then
             echo "cluster.yaml not found"
             exit 1
           fi
-          ./deck workflow validate -f cluster.yaml
+          ./deck validate --file cluster.yaml
 
       - name: Validate docs examples (mode=validate)
         run: |
@@ -71,7 +71,7 @@ jobs:
             fi
 
             echo "validating ${example_path}"
-            ./deck workflow validate -f "${example_path}"
+            ./deck validate --file "${example_path}"
           done < docs/examples/cases.tsv
 
       - name: Run L2 prepare backend integration checks

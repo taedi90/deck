@@ -1,6 +1,6 @@
 # docs/examples Test Cases
 
-`docs/examples`는 문서 예제로 사용하며, 기본 검증은 `deck workflow validate` 중심으로 수행한다.
+`docs/examples`는 문서 예제로 사용하며, 기본 검증은 `deck validate` 중심으로 수행한다.
 
 ## 케이스 목록
 
@@ -12,7 +12,7 @@
 ## 실행 방법
 
 ```bash
-./deck workflow validate -f docs/examples/<file>.yaml
+./deck validate --file docs/examples/<file>.yaml
 ```
 
 `run-install` 케이스는 실제 VM 실행이 필요하므로 별도 수동 시나리오로 검증한다.

@@ -31,7 +31,7 @@ jobs:
       - name: Run smoke-lite test set
         run: |
           go test ./...
-          ./deck workflow validate -f cluster.yaml
+          ./deck validate --file cluster.yaml
           go test ./internal/prepare -run 'TestRun_ContainerBackendsWithFakeRunner|TestRun_PrepareArtifactsAndManifest|TestRun_DownloadFileFallbackLocalThenBundle|TestRun_DownloadFileFallbackRepoThenOnline|TestRun_DownloadFileOfflinePolicyBlocksOnlineFallback|TestRun_DownloadFileOfflinePolicyBlocksDirectURL'
 
       - name: Validate docs examples (mode=validate)
@@ -51,7 +51,7 @@ jobs:
             fi
 
             echo "validating ${example_path}"
-            ./deck workflow validate -f "${example_path}"
+            ./deck validate --file "${example_path}"
           done < docs/examples/cases.tsv
 
       - name: Upload smoke-lite artifacts
