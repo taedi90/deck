@@ -17,6 +17,7 @@ import (
 type RunOptions struct {
 	WorkflowPath      string
 	BundleRoot        string
+	StatePath         string
 	OutputPath        string
 	LookPath          func(file string) (string, error)
 	EnforceHostChecks bool
@@ -74,18 +75,19 @@ func Preflight(wf *config.Workflow, opts RunOptions) (*Report, error) {
 	}
 
 	bundleRoot := opts.BundleRoot
-	if bundleRoot == "" {
-		bundleRoot = wf.Context.BundleRoot
-	}
+	bundleRoot = strings.TrimSpace(bundleRoot)
 	check("bundle.root.configured", bundleRoot != "", "bundle root should be provided")
 
 	if bundleRoot != "" {
-		manifestPath := filepath.Join(bundleRoot, "manifest.json")
+		manifestPath := filepath.Join(bundleRoot, ".deck", "manifest.json")
 		_, err := os.Stat(manifestPath)
 		check("bundle.manifest.exists", err == nil, manifestPath)
 	}
 
-	statePath := wf.Context.StateFile
+	statePath := strings.TrimSpace(opts.StatePath)
+	if statePath == "" && bundleRoot != "" {
+		statePath = filepath.Join(bundleRoot, ".deck", "state.json")
+	}
 	check("state.path.configured", statePath != "", "state path should be configured")
 
 	if opts.OutputPath != "" {

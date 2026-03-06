@@ -18,12 +18,10 @@ func TestPreflight(t *testing.T) {
 		if err := os.MkdirAll(bundle, 0o755); err != nil {
 			t.Fatalf("mkdir bundle: %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(bundle, "manifest.json"), []byte(`{"entries":[{"path":"x","sha256":"a","size":1}]}`), 0o644); err != nil {
-			t.Fatalf("write manifest: %v", err)
-		}
+		writeTestManifest(t, bundle)
 
-		wf := &config.Workflow{Version: "v1alpha1", Context: config.Context{BundleRoot: bundle, StateFile: filepath.Join(dir, "state.json")}, Phases: []config.Phase{{Name: "prepare"}, {Name: "install"}}}
-		out, err := Preflight(wf, RunOptions{OutputPath: report})
+		wf := &config.Workflow{Version: "v1alpha1", Phases: []config.Phase{{Name: "prepare"}, {Name: "install"}}}
+		out, err := Preflight(wf, RunOptions{BundleRoot: bundle, StatePath: filepath.Join(dir, "state.json"), OutputPath: report})
 		if err != nil {
 			t.Fatalf("expected pass, got %v", err)
 		}
@@ -37,8 +35,8 @@ func TestPreflight(t *testing.T) {
 
 	t.Run("fail without install phase", func(t *testing.T) {
 		dir := t.TempDir()
-		wf := &config.Workflow{Version: "v1alpha1", Context: config.Context{BundleRoot: dir, StateFile: filepath.Join(dir, "state.json")}, Phases: []config.Phase{{Name: "prepare"}}}
-		if _, err := Preflight(wf, RunOptions{}); err == nil {
+		wf := &config.Workflow{Version: "v1alpha1", Phases: []config.Phase{{Name: "prepare"}}}
+		if _, err := Preflight(wf, RunOptions{BundleRoot: dir, StatePath: filepath.Join(dir, "state.json")}); err == nil {
 			t.Fatalf("expected preflight failure")
 		}
 	})
@@ -51,13 +49,10 @@ func TestPreflight_PrepareBackendChecks(t *testing.T) {
 		if err := os.MkdirAll(bundle, 0o755); err != nil {
 			t.Fatalf("mkdir bundle: %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(bundle, "manifest.json"), []byte(`{"entries":[{"path":"x","sha256":"a","size":1}]}`), 0o644); err != nil {
-			t.Fatalf("write manifest: %v", err)
-		}
+		writeTestManifest(t, bundle)
 
 		wf := &config.Workflow{
 			Version: "v1alpha1",
-			Context: config.Context{BundleRoot: bundle, StateFile: filepath.Join(dir, "state.json")},
 			Phases: []config.Phase{
 				{
 					Name: "prepare",
@@ -78,7 +73,7 @@ func TestPreflight_PrepareBackendChecks(t *testing.T) {
 			},
 		}
 
-		out, err := Preflight(wf, RunOptions{LookPath: availableLookPath("docker")})
+		out, err := Preflight(wf, RunOptions{BundleRoot: bundle, StatePath: filepath.Join(dir, "state.json"), LookPath: availableLookPath("docker")})
 		if err != nil {
 			t.Fatalf("expected pass, got %v", err)
 		}
@@ -93,13 +88,10 @@ func TestPreflight_PrepareBackendChecks(t *testing.T) {
 		if err := os.MkdirAll(bundle, 0o755); err != nil {
 			t.Fatalf("mkdir bundle: %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(bundle, "manifest.json"), []byte(`{"entries":[{"path":"x","sha256":"a","size":1}]}`), 0o644); err != nil {
-			t.Fatalf("write manifest: %v", err)
-		}
+		writeTestManifest(t, bundle)
 
 		wf := &config.Workflow{
 			Version: "v1alpha1",
-			Context: config.Context{BundleRoot: bundle, StateFile: filepath.Join(dir, "state.json")},
 			Phases: []config.Phase{
 				{
 					Name: "prepare",
@@ -113,7 +105,7 @@ func TestPreflight_PrepareBackendChecks(t *testing.T) {
 			},
 		}
 
-		_, err := Preflight(wf, RunOptions{LookPath: availableLookPath("kubectl")})
+		_, err := Preflight(wf, RunOptions{BundleRoot: bundle, StatePath: filepath.Join(dir, "state.json"), LookPath: availableLookPath("kubectl")})
 		if err == nil {
 			t.Fatalf("expected preflight failure")
 		}
@@ -128,13 +120,10 @@ func TestPreflight_PrepareBackendChecks(t *testing.T) {
 		if err := os.MkdirAll(bundle, 0o755); err != nil {
 			t.Fatalf("mkdir bundle: %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(bundle, "manifest.json"), []byte(`{"entries":[{"path":"x","sha256":"a","size":1}]}`), 0o644); err != nil {
-			t.Fatalf("write manifest: %v", err)
-		}
+		writeTestManifest(t, bundle)
 
 		wf := &config.Workflow{
 			Version: "v1alpha1",
-			Context: config.Context{BundleRoot: bundle, StateFile: filepath.Join(dir, "state.json")},
 			Phases: []config.Phase{
 				{
 					Name: "prepare",
@@ -148,7 +137,7 @@ func TestPreflight_PrepareBackendChecks(t *testing.T) {
 			},
 		}
 
-		_, err := Preflight(wf, RunOptions{LookPath: availableLookPath("docker")})
+		_, err := Preflight(wf, RunOptions{BundleRoot: bundle, StatePath: filepath.Join(dir, "state.json"), LookPath: availableLookPath("docker")})
 		if err == nil {
 			t.Fatalf("expected preflight failure")
 		}
@@ -165,12 +154,12 @@ func TestPreflight_HostChecks(t *testing.T) {
 		if err := os.MkdirAll(bundle, 0o755); err != nil {
 			t.Fatalf("mkdir bundle: %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(bundle, "manifest.json"), []byte(`{"entries":[{"path":"x","sha256":"a","size":1}]}`), 0o644); err != nil {
-			t.Fatalf("write manifest: %v", err)
-		}
+		writeTestManifest(t, bundle)
 
-		wf := &config.Workflow{Version: "v1alpha1", Context: config.Context{BundleRoot: bundle, StateFile: filepath.Join(dir, "state.json")}, Phases: []config.Phase{{Name: "prepare"}, {Name: "install"}}}
+		wf := &config.Workflow{Version: "v1alpha1", Phases: []config.Phase{{Name: "prepare"}, {Name: "install"}}}
 		_, err := Preflight(wf, RunOptions{
+			BundleRoot:        bundle,
+			StatePath:         filepath.Join(dir, "state.json"),
 			EnforceHostChecks: true,
 			LookPath:          availableLookPath("timedatectl"),
 			ReadFile: func(path string) ([]byte, error) {
@@ -206,12 +195,12 @@ func TestPreflight_HostChecks(t *testing.T) {
 		if err := os.MkdirAll(bundle, 0o755); err != nil {
 			t.Fatalf("mkdir bundle: %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(bundle, "manifest.json"), []byte(`{"entries":[{"path":"x","sha256":"a","size":1}]}`), 0o644); err != nil {
-			t.Fatalf("write manifest: %v", err)
-		}
+		writeTestManifest(t, bundle)
 
-		wf := &config.Workflow{Version: "v1alpha1", Context: config.Context{BundleRoot: bundle, StateFile: filepath.Join(dir, "state.json")}, Phases: []config.Phase{{Name: "prepare"}, {Name: "install"}}}
+		wf := &config.Workflow{Version: "v1alpha1", Phases: []config.Phase{{Name: "prepare"}, {Name: "install"}}}
 		_, err := Preflight(wf, RunOptions{
+			BundleRoot:        bundle,
+			StatePath:         filepath.Join(dir, "state.json"),
 			EnforceHostChecks: true,
 			LookPath:          availableLookPath(),
 			ReadFile: func(path string) ([]byte, error) {
@@ -252,5 +241,16 @@ func availableLookPath(bins ...string) func(file string) (string, error) {
 			return "/usr/bin/" + file, nil
 		}
 		return "", fmt.Errorf("not found")
+	}
+}
+
+func writeTestManifest(t *testing.T, bundleRoot string) {
+	t.Helper()
+	manifestPath := filepath.Join(bundleRoot, ".deck", "manifest.json")
+	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
+		t.Fatalf("mkdir manifest dir: %v", err)
+	}
+	if err := os.WriteFile(manifestPath, []byte(`{"entries":[{"path":"x","sha256":"a","size":1}]}`), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
 	}
 }

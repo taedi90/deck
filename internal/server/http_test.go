@@ -1,26 +1,19 @@
 package server
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
-
-	"github.com/google/go-containerregistry/pkg/authn"
-	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/v1/empty"
-	"github.com/google/go-containerregistry/pkg/v1/remote"
-	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
-	"github.com/google/go-containerregistry/pkg/v1/tarball"
 )
 
-func TestNewHandler(t *testing.T) {
+func TestServe_StaticETagAndPut(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, "files"), 0o755); err != nil {
 		t.Fatalf("mkdir files: %v", err)
@@ -28,23 +21,16 @@ func TestNewHandler(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, "packages"), 0o755); err != nil {
 		t.Fatalf("mkdir packages: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "files", "a.txt"), []byte("file-data"), 0o644); err != nil {
-		t.Fatalf("write files entry: %v", err)
+	if err := os.MkdirAll(filepath.Join(root, "images"), 0o755); err != nil {
+		t.Fatalf("mkdir images: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "packages", "pkg.txt"), []byte("pkg-data"), 0o644); err != nil {
-		t.Fatalf("write packages entry: %v", err)
+	if err := os.MkdirAll(filepath.Join(root, "workflows"), 0o755); err != nil {
+		t.Fatalf("mkdir workflows: %v", err)
 	}
-	if err := os.MkdirAll(filepath.Join(root, "packages", "apt", "ubuntu2204"), 0o755); err != nil {
-		t.Fatalf("mkdir apt repo: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "packages", "apt", "ubuntu2204", "Release"), []byte("apt-release"), 0o644); err != nil {
-		t.Fatalf("write apt Release: %v", err)
-	}
-	if err := os.MkdirAll(filepath.Join(root, "packages", "yum", "rhel9", "repodata"), 0o755); err != nil {
-		t.Fatalf("mkdir yum repodata: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "packages", "yum", "rhel9", "repodata", "repomd.xml"), []byte("repomd"), 0o644); err != nil {
-		t.Fatalf("write repomd.xml: %v", err)
+
+	originalBody := []byte("payload-123\n")
+	if err := os.WriteFile(filepath.Join(root, "files", "a.txt"), originalBody, 0o644); err != nil {
+		t.Fatalf("write seed file: %v", err)
 	}
 
 	h, err := NewHandler(root, HandlerOptions{})
@@ -52,912 +38,144 @@ func TestNewHandler(t *testing.T) {
 		t.Fatalf("NewHandler: %v", err)
 	}
 
-	t.Run("serves files", func(t *testing.T) {
+	t.Run("health and removed endpoints", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected /healthz 200, got %d", rr.Code)
+		}
+
+		for _, route := range []string{"/api/agent/job", "/api/agent/lease", "/v2/", "/v2"} {
+			req = httptest.NewRequest(http.MethodGet, route, nil)
+			rr = httptest.NewRecorder()
+			h.ServeHTTP(rr, req)
+			if rr.Code != http.StatusNotFound {
+				t.Fatalf("expected %s 404, got %d", route, rr.Code)
+			}
+		}
+	})
+
+	t.Run("GET HEAD parity, ETag, and If-None-Match", func(t *testing.T) {
+		getReq := httptest.NewRequest(http.MethodGet, "/files/a.txt", nil)
+		getRR := httptest.NewRecorder()
+		h.ServeHTTP(getRR, getReq)
+		if getRR.Code != http.StatusOK {
+			t.Fatalf("expected GET 200, got %d", getRR.Code)
+		}
+		if !bytes.Equal(getRR.Body.Bytes(), originalBody) {
+			t.Fatalf("unexpected GET body: %q", getRR.Body.String())
+		}
+
+		sum := sha256.Sum256(originalBody)
+		expectedETag := "\"sha256:" + hex.EncodeToString(sum[:]) + "\""
+		if got := getRR.Header().Get("ETag"); got != expectedETag {
+			t.Fatalf("unexpected ETag: got=%q want=%q", got, expectedETag)
+		}
+
+		headReq := httptest.NewRequest(http.MethodHead, "/files/a.txt", nil)
+		headRR := httptest.NewRecorder()
+		h.ServeHTTP(headRR, headReq)
+		if headRR.Code != http.StatusOK {
+			t.Fatalf("expected HEAD 200, got %d", headRR.Code)
+		}
+		if headRR.Body.Len() != 0 {
+			t.Fatalf("expected HEAD empty body, got %q", headRR.Body.String())
+		}
+		for _, headerKey := range []string{"ETag", "Content-Type", "Content-Length", "Accept-Ranges", "Cache-Control"} {
+			if getRR.Header().Get(headerKey) != headRR.Header().Get(headerKey) {
+				t.Fatalf("header mismatch for %s: GET=%q HEAD=%q", headerKey, getRR.Header().Get(headerKey), headRR.Header().Get(headerKey))
+			}
+		}
+
+		notModifiedReq := httptest.NewRequest(http.MethodGet, "/files/a.txt", nil)
+		notModifiedReq.Header.Set("If-None-Match", expectedETag)
+		notModifiedRR := httptest.NewRecorder()
+		h.ServeHTTP(notModifiedRR, notModifiedReq)
+		if notModifiedRR.Code != http.StatusNotModified {
+			t.Fatalf("expected 304, got %d", notModifiedRR.Code)
+		}
+		if notModifiedRR.Body.Len() != 0 {
+			t.Fatalf("expected 304 empty body, got %q", notModifiedRR.Body.String())
+		}
+		if notModifiedRR.Header().Get("ETag") != expectedETag {
+			t.Fatalf("304 response must keep ETag header")
+		}
+	})
+
+	t.Run("PUT upload and atomic replacement", func(t *testing.T) {
+		for _, tc := range []struct {
+			path string
+			body string
+			file string
+		}{
+			{path: "/files/new/file.txt", body: "file-data", file: filepath.Join(root, "files", "new", "file.txt")},
+			{path: "/packages/deb/pkg.txt", body: "pkg-data", file: filepath.Join(root, "packages", "deb", "pkg.txt")},
+			{path: "/images/manifests/app.json", body: "img-data", file: filepath.Join(root, "images", "manifests", "app.json")},
+			{path: "/workflows/flow.yaml", body: "wf-data", file: filepath.Join(root, "workflows", "flow.yaml")},
+			{path: "/workflows/index.json", body: "{\"v\":1}", file: filepath.Join(root, "workflows", "index.json")},
+		} {
+			putReq := httptest.NewRequest(http.MethodPut, tc.path, strings.NewReader(tc.body))
+			putRR := httptest.NewRecorder()
+			h.ServeHTTP(putRR, putReq)
+			if putRR.Code != http.StatusCreated {
+				t.Fatalf("expected PUT %s 201, got %d", tc.path, putRR.Code)
+			}
+
+			raw, err := os.ReadFile(tc.file)
+			if err != nil {
+				t.Fatalf("read uploaded file %s: %v", tc.file, err)
+			}
+			if string(raw) != tc.body {
+				t.Fatalf("unexpected file content for %s: %q", tc.file, string(raw))
+			}
+		}
+	})
+
+	t.Run("deny traversal and .deck access", func(t *testing.T) {
+		for _, tc := range []struct {
+			method string
+			path   string
+		}{
+			{method: http.MethodGet, path: "/files/../.deck/secret"},
+			{method: http.MethodPut, path: "/files/../.deck/secret"},
+			{method: http.MethodPut, path: "/files/.deck/secret"},
+			{method: http.MethodGet, path: "/files/%2e%2e/.deck/secret"},
+		} {
+			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader("x"))
+			rr := httptest.NewRecorder()
+			h.ServeHTTP(rr, req)
+			if rr.Code != http.StatusForbidden {
+				t.Fatalf("expected %s %s to be 403, got %d", tc.method, tc.path, rr.Code)
+			}
+		}
+	})
+
+	t.Run("audit log excludes alpha events", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/files/a.txt", nil)
 		rr := httptest.NewRecorder()
 		h.ServeHTTP(rr, req)
-		if rr.Code != http.StatusOK {
-			t.Fatalf("expected 200, got %d", rr.Code)
-		}
-		if rr.Body.String() != "file-data" {
-			t.Fatalf("unexpected body: %q", rr.Body.String())
-		}
-		if got := rr.Header().Get("Accept-Ranges"); got != "bytes" {
-			t.Fatalf("expected Accept-Ranges=bytes, got %q", got)
-		}
-		if got := rr.Header().Get("Cache-Control"); got != "no-store" {
-			t.Fatalf("expected Cache-Control=no-store, got %q", got)
-		}
-	})
-
-	t.Run("serves packages", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/packages/pkg.txt", nil)
-		rr := httptest.NewRecorder()
-		h.ServeHTTP(rr, req)
-		if rr.Code != http.StatusOK {
-			t.Fatalf("expected 200, got %d", rr.Code)
-		}
-		if rr.Body.String() != "pkg-data" {
-			t.Fatalf("unexpected body: %q", rr.Body.String())
-		}
-		if got := rr.Header().Get("Accept-Ranges"); got != "bytes" {
-			t.Fatalf("expected Accept-Ranges=bytes, got %q", got)
-		}
-		if got := rr.Header().Get("Cache-Control"); got != "no-store" {
-			t.Fatalf("expected Cache-Control=no-store, got %q", got)
-		}
-
-		t.Run("serves apt repo Release", func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/packages/apt/ubuntu2204/Release", nil)
-			rr := httptest.NewRecorder()
-			h.ServeHTTP(rr, req)
-			if rr.Code != http.StatusOK {
-				t.Fatalf("expected 200, got %d", rr.Code)
-			}
-			if rr.Body.String() != "apt-release" {
-				t.Fatalf("unexpected body: %q", rr.Body.String())
-			}
-			if got := rr.Header().Get("Accept-Ranges"); got != "bytes" {
-				t.Fatalf("expected Accept-Ranges=bytes, got %q", got)
-			}
-		})
-
-		t.Run("serves yum repodata", func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/packages/yum/rhel9/repodata/repomd.xml", nil)
-			rr := httptest.NewRecorder()
-			h.ServeHTTP(rr, req)
-			if rr.Code != http.StatusOK {
-				t.Fatalf("expected 200, got %d", rr.Code)
-			}
-			if rr.Body.String() != "repomd" {
-				t.Fatalf("unexpected body: %q", rr.Body.String())
-			}
-			if got := rr.Header().Get("Accept-Ranges"); got != "bytes" {
-				t.Fatalf("expected Accept-Ranges=bytes, got %q", got)
-			}
-		})
-	})
-
-	t.Run("returns 404 for unsupported routes", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/anything", nil)
-		rr := httptest.NewRecorder()
-		h.ServeHTTP(rr, req)
-		if rr.Code != http.StatusNotFound {
-			t.Fatalf("expected 404, got %d", rr.Code)
-		}
-	})
-
-	t.Run("serves registry v2 ping when enabled", func(t *testing.T) {
-		h2, err := NewHandler(root, HandlerOptions{RegistryEnable: true})
-		if err != nil {
-			t.Fatalf("NewHandler: %v", err)
-		}
-		req := httptest.NewRequest(http.MethodGet, "/v2/", nil)
-		rr := httptest.NewRecorder()
-		h2.ServeHTTP(rr, req)
-		if rr.Code != http.StatusOK {
-			t.Fatalf("expected 200, got %d (body=%q)", rr.Code, rr.Body.String())
-		}
-	})
-
-	t.Run("serves api health", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
-		rr := httptest.NewRecorder()
-		h.ServeHTTP(rr, req)
-		if rr.Code != http.StatusOK {
-			t.Fatalf("expected 200, got %d", rr.Code)
-		}
-	})
-
-	t.Run("accepts agent heartbeat", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/api/agent/heartbeat", strings.NewReader(`{"agent":"x"}`))
-		rr := httptest.NewRecorder()
-		h.ServeHTTP(rr, req)
-		if rr.Code != http.StatusOK {
-			t.Fatalf("expected 200, got %d", rr.Code)
-		}
-	})
-
-	t.Run("serves agent lease", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/api/agent/lease", strings.NewReader(`{"agent":"x"}`))
-		rr := httptest.NewRecorder()
-		h.ServeHTTP(rr, req)
-		if rr.Code != http.StatusOK {
-			t.Fatalf("expected 200, got %d", rr.Code)
-		}
-		if !strings.Contains(rr.Body.String(), `"status":"ok"`) {
-			t.Fatalf("unexpected lease response: %q", rr.Body.String())
-		}
-	})
-
-	t.Run("enqueues and dequeues alpha job", func(t *testing.T) {
-		enqReq := httptest.NewRequest(http.MethodPost, "/api/agent/job", strings.NewReader(`{"id":"j-1","type":"echo","message":"hello"}`))
-		enqRR := httptest.NewRecorder()
-		h.ServeHTTP(enqRR, enqReq)
-		if enqRR.Code != http.StatusOK {
-			t.Fatalf("expected enqueue 200, got %d", enqRR.Code)
-		}
-
-		jobsReq := httptest.NewRequest(http.MethodGet, "/api/agent/jobs", nil)
-		jobsRR := httptest.NewRecorder()
-		h.ServeHTTP(jobsRR, jobsReq)
-		if jobsRR.Code != http.StatusOK {
-			t.Fatalf("expected jobs 200, got %d", jobsRR.Code)
-		}
-		if !strings.Contains(jobsRR.Body.String(), `"id":"j-1"`) {
-			t.Fatalf("expected queued job in jobs response: %q", jobsRR.Body.String())
-		}
-
-		leaseReq := httptest.NewRequest(http.MethodPost, "/api/agent/lease", strings.NewReader(`{"agent":"x"}`))
-		leaseRR := httptest.NewRecorder()
-		h.ServeHTTP(leaseRR, leaseReq)
-		if leaseRR.Code != http.StatusOK {
-			t.Fatalf("expected lease 200, got %d", leaseRR.Code)
-		}
-		if !strings.Contains(leaseRR.Body.String(), `"id":"j-1"`) {
-			t.Fatalf("expected leased job in response: %q", leaseRR.Body.String())
-		}
-
-		leaseReq2 := httptest.NewRequest(http.MethodPost, "/api/agent/lease", strings.NewReader(`{"agent":"x"}`))
-		leaseRR2 := httptest.NewRecorder()
-		h.ServeHTTP(leaseRR2, leaseReq2)
-		if leaseRR2.Code != http.StatusOK {
-			t.Fatalf("expected second lease 200, got %d", leaseRR2.Code)
-		}
-		if !strings.Contains(leaseRR2.Body.String(), `"job":null`) {
-			t.Fatalf("expected empty queue on second lease: %q", leaseRR2.Body.String())
-		}
-
-		jobsReq2 := httptest.NewRequest(http.MethodGet, "/api/agent/jobs", nil)
-		jobsRR2 := httptest.NewRecorder()
-		h.ServeHTTP(jobsRR2, jobsReq2)
-		if jobsRR2.Code != http.StatusOK {
-			t.Fatalf("expected jobs 200, got %d", jobsRR2.Code)
-		}
-		if !strings.Contains(jobsRR2.Body.String(), `"jobs":[]`) {
-			t.Fatalf("expected empty jobs queue after lease: %q", jobsRR2.Body.String())
-		}
-	})
-
-	t.Run("leases hostname-targeted jobs deterministically", func(t *testing.T) {
-		rootTarget := t.TempDir()
-		hTarget, err := NewHandler(rootTarget, HandlerOptions{})
-		if err != nil {
-			t.Fatalf("NewHandler: %v", err)
-		}
-
-		for _, body := range []string{
-			`{"id":"job-host-a","type":"noop","target_hostname":"hostA"}`,
-			`{"id":"job-any","type":"noop"}`,
-			`{"id":"job-host-b","type":"noop","target_hostname":"hostB"}`,
-		} {
-			enqueueReq := httptest.NewRequest(http.MethodPost, "/api/agent/job", strings.NewReader(body))
-			enqueueRR := httptest.NewRecorder()
-			hTarget.ServeHTTP(enqueueRR, enqueueReq)
-			if enqueueRR.Code != http.StatusOK {
-				t.Fatalf("expected enqueue 200, got %d (body=%q)", enqueueRR.Code, enqueueRR.Body.String())
-			}
-		}
-
-		leaseForHost := func(hostname string) string {
-			reqBody := fmt.Sprintf(`{"hostname":%q,"timestamp":"2026-01-01T00:00:00Z"}`, hostname)
-			leaseReq := httptest.NewRequest(http.MethodPost, "/api/agent/lease", strings.NewReader(reqBody))
-			leaseRR := httptest.NewRecorder()
-			hTarget.ServeHTTP(leaseRR, leaseReq)
-			if leaseRR.Code != http.StatusOK {
-				t.Fatalf("expected lease 200, got %d (body=%q)", leaseRR.Code, leaseRR.Body.String())
-			}
-			return leaseRR.Body.String()
-		}
-
-		leaseHostB := leaseForHost("hostB")
-		if !strings.Contains(leaseHostB, `"id":"job-host-b"`) {
-			t.Fatalf("expected hostB-targeted job, got %q", leaseHostB)
-		}
-
-		leaseHostA := leaseForHost("hostA")
-		if !strings.Contains(leaseHostA, `"id":"job-host-a"`) {
-			t.Fatalf("expected hostA-targeted job, got %q", leaseHostA)
-		}
-
-		leaseOther := leaseForHost("hostC")
-		if !strings.Contains(leaseOther, `"id":"job-any"`) {
-			t.Fatalf("expected untargeted job for non-matching host, got %q", leaseOther)
-		}
-	})
-
-	t.Run("rejects invalid alpha job payload", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/api/agent/job", strings.NewReader(`{"id":"","type":"invalid"}`))
-		rr := httptest.NewRecorder()
-		h.ServeHTTP(rr, req)
-		if rr.Code != http.StatusBadRequest {
-			t.Fatalf("expected 400, got %d", rr.Code)
-		}
-	})
-
-	t.Run("rejects install job without workflow file", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/api/agent/job", strings.NewReader(`{"id":"j-install","type":"install"}`))
-		rr := httptest.NewRecorder()
-		h.ServeHTTP(rr, req)
-		if rr.Code != http.StatusBadRequest {
-			t.Fatalf("expected 400, got %d", rr.Code)
-		}
-	})
-
-	t.Run("rejects invalid max_attempts", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/api/agent/job", strings.NewReader(`{"id":"j-bad","type":"noop","max_attempts":-1}`))
-		rr := httptest.NewRecorder()
-		h.ServeHTTP(rr, req)
-		if rr.Code != http.StatusBadRequest {
-			t.Fatalf("expected 400, got %d", rr.Code)
-		}
-	})
-
-	t.Run("rejects invalid retry_delay_sec", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/api/agent/job", strings.NewReader(`{"id":"j-bad-delay","type":"noop","retry_delay_sec":-1}`))
-		rr := httptest.NewRecorder()
-		h.ServeHTTP(rr, req)
-		if rr.Code != http.StatusBadRequest {
-			t.Fatalf("expected 400, got %d", rr.Code)
-		}
-	})
-
-	t.Run("rejects oversized alpha job payload", func(t *testing.T) {
-		oversizedMessage := strings.Repeat("x", int(maxAgentJobBodyBytes))
-		body := fmt.Sprintf(`{"id":"j-large","type":"echo","message":"%s"}`, oversizedMessage)
-		req := httptest.NewRequest(http.MethodPost, "/api/agent/job", strings.NewReader(body))
-		rr := httptest.NewRecorder()
-		h.ServeHTTP(rr, req)
-		if rr.Code != http.StatusRequestEntityTooLarge {
-			t.Fatalf("expected 413, got %d (body=%q)", rr.Code, rr.Body.String())
-		}
-		if !strings.Contains(rr.Body.String(), `"status":"payload_too_large"`) {
-			t.Fatalf("unexpected oversized response: %q", rr.Body.String())
-		}
-	})
-
-	t.Run("requeues failed job when attempts remain", func(t *testing.T) {
-		rootRetry := t.TempDir()
-		hRetry, err := NewHandler(rootRetry, HandlerOptions{})
-		if err != nil {
-			t.Fatalf("NewHandler: %v", err)
-		}
-
-		enqReq := httptest.NewRequest(http.MethodPost, "/api/agent/job", strings.NewReader(`{"id":"j-retry","type":"echo","message":"hello","max_attempts":2}`))
-		enqRR := httptest.NewRecorder()
-		hRetry.ServeHTTP(enqRR, enqReq)
-		if enqRR.Code != http.StatusOK {
-			t.Fatalf("expected enqueue 200, got %d", enqRR.Code)
-		}
-
-		leaseReq := httptest.NewRequest(http.MethodPost, "/api/agent/lease", strings.NewReader(`{"agent":"x"}`))
-		leaseRR := httptest.NewRecorder()
-		hRetry.ServeHTTP(leaseRR, leaseReq)
-		if leaseRR.Code != http.StatusOK {
-			t.Fatalf("expected lease 200, got %d", leaseRR.Code)
-		}
-		if !strings.Contains(leaseRR.Body.String(), `"id":"j-retry"`) || !strings.Contains(leaseRR.Body.String(), `"attempt":1`) {
-			t.Fatalf("unexpected lease response: %q", leaseRR.Body.String())
-		}
-
-		repReq := httptest.NewRequest(http.MethodPost, "/api/agent/report", strings.NewReader(`{"job_id":"j-retry","status":"failed"}`))
-		repRR := httptest.NewRecorder()
-		hRetry.ServeHTTP(repRR, repReq)
-		if repRR.Code != http.StatusOK {
-			t.Fatalf("expected report 200, got %d", repRR.Code)
-		}
-
-		jobsReq := httptest.NewRequest(http.MethodGet, "/api/agent/jobs", nil)
-		jobsRR := httptest.NewRecorder()
-		hRetry.ServeHTTP(jobsRR, jobsReq)
-		if jobsRR.Code != http.StatusOK {
-			t.Fatalf("expected jobs 200, got %d", jobsRR.Code)
-		}
-		if !strings.Contains(jobsRR.Body.String(), `"id":"j-retry"`) {
-			t.Fatalf("expected retry job queued after failed report: %q", jobsRR.Body.String())
-		}
-	})
-
-	t.Run("does not requeue failed job when attempts exhausted", func(t *testing.T) {
-		rootFinal := t.TempDir()
-		hFinal, err := NewHandler(rootFinal, HandlerOptions{})
-		if err != nil {
-			t.Fatalf("NewHandler: %v", err)
-		}
-
-		enqReq := httptest.NewRequest(http.MethodPost, "/api/agent/job", strings.NewReader(`{"id":"j-final","type":"noop","max_attempts":1}`))
-		enqRR := httptest.NewRecorder()
-		hFinal.ServeHTTP(enqRR, enqReq)
-		if enqRR.Code != http.StatusOK {
-			t.Fatalf("expected enqueue 200, got %d", enqRR.Code)
-		}
-
-		leaseReq := httptest.NewRequest(http.MethodPost, "/api/agent/lease", strings.NewReader(`{"agent":"x"}`))
-		leaseRR := httptest.NewRecorder()
-		hFinal.ServeHTTP(leaseRR, leaseReq)
-		if leaseRR.Code != http.StatusOK {
-			t.Fatalf("expected lease 200, got %d", leaseRR.Code)
-		}
-
-		repReq := httptest.NewRequest(http.MethodPost, "/api/agent/report", strings.NewReader(`{"job_id":"j-final","status":"failed"}`))
-		repRR := httptest.NewRecorder()
-		hFinal.ServeHTTP(repRR, repReq)
-		if repRR.Code != http.StatusOK {
-			t.Fatalf("expected report 200, got %d", repRR.Code)
-		}
-
-		jobsReq := httptest.NewRequest(http.MethodGet, "/api/agent/jobs", nil)
-		jobsRR := httptest.NewRecorder()
-		hFinal.ServeHTTP(jobsRR, jobsReq)
-		if jobsRR.Code != http.StatusOK {
-			t.Fatalf("expected jobs 200, got %d", jobsRR.Code)
-		}
-		if strings.Contains(jobsRR.Body.String(), `"id":"j-final"`) {
-			t.Fatalf("expected exhausted job not requeued: %q", jobsRR.Body.String())
-		}
-	})
-
-	t.Run("delays retry lease until next eligible time", func(t *testing.T) {
-		rootDelay := t.TempDir()
-		hDelay, err := NewHandler(rootDelay, HandlerOptions{})
-		if err != nil {
-			t.Fatalf("NewHandler: %v", err)
-		}
-
-		enqReq := httptest.NewRequest(http.MethodPost, "/api/agent/job", strings.NewReader(`{"id":"j-delay","type":"noop","max_attempts":2,"retry_delay_sec":1}`))
-		enqRR := httptest.NewRecorder()
-		hDelay.ServeHTTP(enqRR, enqReq)
-		if enqRR.Code != http.StatusOK {
-			t.Fatalf("expected enqueue 200, got %d", enqRR.Code)
-		}
-
-		leaseReq1 := httptest.NewRequest(http.MethodPost, "/api/agent/lease", strings.NewReader(`{"agent":"x"}`))
-		leaseRR1 := httptest.NewRecorder()
-		hDelay.ServeHTTP(leaseRR1, leaseReq1)
-		if leaseRR1.Code != http.StatusOK {
-			t.Fatalf("expected first lease 200, got %d", leaseRR1.Code)
-		}
-		if !strings.Contains(leaseRR1.Body.String(), `"id":"j-delay"`) {
-			t.Fatalf("expected first lease job payload: %q", leaseRR1.Body.String())
-		}
-
-		repReq := httptest.NewRequest(http.MethodPost, "/api/agent/report", strings.NewReader(`{"job_id":"j-delay","status":"failed"}`))
-		repRR := httptest.NewRecorder()
-		hDelay.ServeHTTP(repRR, repReq)
-		if repRR.Code != http.StatusOK {
-			t.Fatalf("expected failed report 200, got %d", repRR.Code)
-		}
-
-		jobsReq := httptest.NewRequest(http.MethodGet, "/api/agent/jobs", nil)
-		jobsRR := httptest.NewRecorder()
-		hDelay.ServeHTTP(jobsRR, jobsReq)
-		if jobsRR.Code != http.StatusOK {
-			t.Fatalf("expected jobs 200, got %d", jobsRR.Code)
-		}
-		if !strings.Contains(jobsRR.Body.String(), `"id":"j-delay"`) || !strings.Contains(jobsRR.Body.String(), `"next_eligible_at"`) {
-			t.Fatalf("expected queued delayed job with scheduling metadata: %q", jobsRR.Body.String())
-		}
-
-		leaseReq2 := httptest.NewRequest(http.MethodPost, "/api/agent/lease", strings.NewReader(`{"agent":"x"}`))
-		leaseRR2 := httptest.NewRecorder()
-		hDelay.ServeHTTP(leaseRR2, leaseReq2)
-		if leaseRR2.Code != http.StatusOK {
-			t.Fatalf("expected immediate second lease 200, got %d", leaseRR2.Code)
-		}
-		if !strings.Contains(leaseRR2.Body.String(), `"job":null`) {
-			t.Fatalf("expected no lease before retry delay elapses: %q", leaseRR2.Body.String())
-		}
-
-		time.Sleep(1100 * time.Millisecond)
-
-		leaseReq3 := httptest.NewRequest(http.MethodPost, "/api/agent/lease", strings.NewReader(`{"agent":"x"}`))
-		leaseRR3 := httptest.NewRecorder()
-		hDelay.ServeHTTP(leaseRR3, leaseReq3)
-		if leaseRR3.Code != http.StatusOK {
-			t.Fatalf("expected delayed third lease 200, got %d", leaseRR3.Code)
-		}
-		if !strings.Contains(leaseRR3.Body.String(), `"id":"j-delay"`) || !strings.Contains(leaseRR3.Body.String(), `"attempt":2`) {
-			t.Fatalf("expected lease after delay with second attempt: %q", leaseRR3.Body.String())
-		}
-	})
-
-	t.Run("persists queue and reports across handler restart", func(t *testing.T) {
-		enqReq := httptest.NewRequest(http.MethodPost, "/api/agent/job", strings.NewReader(`{"id":"j-persist","type":"noop"}`))
-		enqRR := httptest.NewRecorder()
-		h.ServeHTTP(enqRR, enqReq)
-		if enqRR.Code != http.StatusOK {
-			t.Fatalf("expected enqueue 200, got %d", enqRR.Code)
-		}
-
-		repReq := httptest.NewRequest(http.MethodPost, "/api/agent/report", strings.NewReader(`{"job_id":"j-persist","status":"success"}`))
-		repRR := httptest.NewRecorder()
-		h.ServeHTTP(repRR, repReq)
-		if repRR.Code != http.StatusOK {
-			t.Fatalf("expected report 200, got %d", repRR.Code)
-		}
-
-		h2, err := NewHandler(root, HandlerOptions{})
-		if err != nil {
-			t.Fatalf("NewHandler restart: %v", err)
-		}
-
-		leaseReq := httptest.NewRequest(http.MethodPost, "/api/agent/lease", strings.NewReader(`{"agent":"x"}`))
-		leaseRR := httptest.NewRecorder()
-		h2.ServeHTTP(leaseRR, leaseReq)
-		if leaseRR.Code != http.StatusOK {
-			t.Fatalf("expected lease 200, got %d", leaseRR.Code)
-		}
-		if !strings.Contains(leaseRR.Body.String(), `"id":"j-persist"`) {
-			t.Fatalf("expected persisted queued job in lease response: %q", leaseRR.Body.String())
-		}
-
-		reportsReq := httptest.NewRequest(http.MethodGet, "/api/agent/reports?job_id=j-persist", nil)
-		reportsRR := httptest.NewRecorder()
-		h2.ServeHTTP(reportsRR, reportsReq)
-		if reportsRR.Code != http.StatusOK {
-			t.Fatalf("expected reports 200, got %d", reportsRR.Code)
-		}
-		if !strings.Contains(reportsRR.Body.String(), `"job_id":"j-persist"`) {
-			t.Fatalf("expected persisted report in response: %q", reportsRR.Body.String())
-		}
-	})
-
-	t.Run("accepts agent report", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/api/agent/report", strings.NewReader(`{"job_id":"j-1","status":"success"}`))
-		rr := httptest.NewRecorder()
-		h.ServeHTTP(rr, req)
-		if rr.Code != http.StatusOK {
-			t.Fatalf("expected 200, got %d", rr.Code)
-		}
-		if !strings.Contains(rr.Body.String(), `"status":"accepted"`) {
-			t.Fatalf("unexpected report response: %q", rr.Body.String())
-		}
-	})
-
-	t.Run("rejects oversized alpha report payload", func(t *testing.T) {
-		oversizedDetail := strings.Repeat("x", int(maxAgentReportBodyBytes))
-		body := fmt.Sprintf(`{"job_id":"j-large-report","status":"success","detail":"%s"}`, oversizedDetail)
-		req := httptest.NewRequest(http.MethodPost, "/api/agent/report", strings.NewReader(body))
-		rr := httptest.NewRecorder()
-		h.ServeHTTP(rr, req)
-		if rr.Code != http.StatusRequestEntityTooLarge {
-			t.Fatalf("expected 413, got %d (body=%q)", rr.Code, rr.Body.String())
-		}
-		if !strings.Contains(rr.Body.String(), `"status":"payload_too_large"`) {
-			t.Fatalf("unexpected oversized response: %q", rr.Body.String())
-		}
-	})
-
-	t.Run("lists recent agent reports", func(t *testing.T) {
-		postReq := httptest.NewRequest(http.MethodPost, "/api/agent/report", strings.NewReader(`{"job_id":"j-2","job_type":"echo","status":"success","detail":"hello"}`))
-		postRR := httptest.NewRecorder()
-		h.ServeHTTP(postRR, postReq)
-		if postRR.Code != http.StatusOK {
-			t.Fatalf("expected report post 200, got %d", postRR.Code)
-		}
-
-		getReq := httptest.NewRequest(http.MethodGet, "/api/agent/reports", nil)
-		getRR := httptest.NewRecorder()
-		h.ServeHTTP(getRR, getReq)
-		if getRR.Code != http.StatusOK {
-			t.Fatalf("expected reports get 200, got %d", getRR.Code)
-		}
-		if !strings.Contains(getRR.Body.String(), `"status":"ok"`) || !strings.Contains(getRR.Body.String(), `"job_id":"j-2"`) {
-			t.Fatalf("unexpected reports response: %q", getRR.Body.String())
-		}
-	})
-
-	t.Run("filters reports by job_id", func(t *testing.T) {
-		postA := httptest.NewRequest(http.MethodPost, "/api/agent/report", strings.NewReader(`{"job_id":"j-a","status":"success"}`))
-		postARR := httptest.NewRecorder()
-		h.ServeHTTP(postARR, postA)
-
-		postB := httptest.NewRequest(http.MethodPost, "/api/agent/report", strings.NewReader(`{"job_id":"j-b","status":"success"}`))
-		postBRR := httptest.NewRecorder()
-		h.ServeHTTP(postBRR, postB)
-
-		getReq := httptest.NewRequest(http.MethodGet, "/api/agent/reports?job_id=j-a", nil)
-		getRR := httptest.NewRecorder()
-		h.ServeHTTP(getRR, getReq)
-		if getRR.Code != http.StatusOK {
-			t.Fatalf("expected 200, got %d", getRR.Code)
-		}
-		if !strings.Contains(getRR.Body.String(), `"job_id":"j-a"`) || strings.Contains(getRR.Body.String(), `"job_id":"j-b"`) {
-			t.Fatalf("unexpected filtered response: %q", getRR.Body.String())
-		}
-	})
-
-	t.Run("limits reports count", func(t *testing.T) {
-		for i := 0; i < 3; i++ {
-			req := httptest.NewRequest(http.MethodPost, "/api/agent/report", strings.NewReader(`{"job_id":"j-limit","status":"success"}`))
-			rr := httptest.NewRecorder()
-			h.ServeHTTP(rr, req)
-		}
-
-		getReq := httptest.NewRequest(http.MethodGet, "/api/agent/reports?limit=1", nil)
-		getRR := httptest.NewRecorder()
-		h.ServeHTTP(getRR, getReq)
-		if getRR.Code != http.StatusOK {
-			t.Fatalf("expected 200, got %d", getRR.Code)
-		}
-		var payload struct {
-			Status  string           `json:"status"`
-			Reports []map[string]any `json:"reports"`
-		}
-		if err := json.Unmarshal(getRR.Body.Bytes(), &payload); err != nil {
-			t.Fatalf("parse reports response: %v", err)
-		}
-		if payload.Status != "ok" || len(payload.Reports) != 1 {
-			t.Fatalf("unexpected limited response: %+v", payload)
-		}
-	})
-
-	t.Run("rejects invalid limit", func(t *testing.T) {
-		getReq := httptest.NewRequest(http.MethodGet, "/api/agent/reports?limit=0", nil)
-		getRR := httptest.NewRecorder()
-		h.ServeHTTP(getRR, getReq)
-		if getRR.Code != http.StatusBadRequest {
-			t.Fatalf("expected 400, got %d", getRR.Code)
-		}
-		if !strings.Contains(getRR.Body.String(), `"status":"invalid_limit"`) {
-			t.Fatalf("unexpected invalid limit response: %q", getRR.Body.String())
-		}
-	})
-
-	t.Run("filters reports by job_type and status", func(t *testing.T) {
-		req1 := httptest.NewRequest(http.MethodPost, "/api/agent/report", strings.NewReader(`{"job_id":"j-t1","job_type":"echo","status":"success"}`))
-		rr1 := httptest.NewRecorder()
-		h.ServeHTTP(rr1, req1)
-
-		req2 := httptest.NewRequest(http.MethodPost, "/api/agent/report", strings.NewReader(`{"job_id":"j-t2","job_type":"noop","status":"failed"}`))
-		rr2 := httptest.NewRecorder()
-		h.ServeHTTP(rr2, req2)
-
-		getReq := httptest.NewRequest(http.MethodGet, "/api/agent/reports?job_type=echo&status=success", nil)
-		getRR := httptest.NewRecorder()
-		h.ServeHTTP(getRR, getReq)
-		if getRR.Code != http.StatusOK {
-			t.Fatalf("expected 200, got %d", getRR.Code)
-		}
-		if !strings.Contains(getRR.Body.String(), `"job_id":"j-t1"`) || strings.Contains(getRR.Body.String(), `"job_id":"j-t2"`) {
-			t.Fatalf("unexpected filtered response: %q", getRR.Body.String())
-		}
-	})
-
-	t.Run("applies report max retention option", func(t *testing.T) {
-		root2 := t.TempDir()
-		h2, err := NewHandler(root2, HandlerOptions{ReportMax: 2})
-		if err != nil {
-			t.Fatalf("NewHandler: %v", err)
-		}
-		for i := 0; i < 3; i++ {
-			req := httptest.NewRequest(http.MethodPost, "/api/agent/report", strings.NewReader(`{"job_id":"j-ret","job_type":"echo","status":"success"}`))
-			rr := httptest.NewRecorder()
-			h2.ServeHTTP(rr, req)
-			if rr.Code != http.StatusOK {
-				t.Fatalf("expected report post 200, got %d", rr.Code)
-			}
-		}
-
-		getReq := httptest.NewRequest(http.MethodGet, "/api/agent/reports", nil)
-		getRR := httptest.NewRecorder()
-		h2.ServeHTTP(getRR, getReq)
-		if getRR.Code != http.StatusOK {
-			t.Fatalf("expected reports 200, got %d", getRR.Code)
-		}
-		var payload struct {
-			Status  string           `json:"status"`
-			Reports []map[string]any `json:"reports"`
-		}
-		if err := json.Unmarshal(getRR.Body.Bytes(), &payload); err != nil {
-			t.Fatalf("parse reports payload: %v", err)
-		}
-		if len(payload.Reports) != 2 {
-			t.Fatalf("expected 2 retained reports, got %d", len(payload.Reports))
-		}
-	})
-
-	t.Run("writes audit logs", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
-		rr := httptest.NewRecorder()
-		h.ServeHTTP(rr, req)
-		if rr.Code != http.StatusOK {
-			t.Fatalf("expected 200, got %d", rr.Code)
-		}
 
 		auditPath := filepath.Join(root, ".deck", "logs", "server-audit.log")
 		raw, err := os.ReadFile(auditPath)
 		if err != nil {
 			t.Fatalf("read audit log: %v", err)
 		}
-		lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
-		if len(lines) == 0 {
-			t.Fatalf("expected at least one audit log line")
-		}
-		var entry map[string]any
-		if err := json.Unmarshal([]byte(lines[len(lines)-1]), &entry); err != nil {
-			t.Fatalf("parse audit log json: %v", err)
-		}
-		for _, k := range []string{"ts", "schema_version", "source", "event_type", "level", "message", "extra"} {
-			if _, ok := entry[k]; !ok {
-				t.Fatalf("missing audit field %s in %+v", k, entry)
-			}
-		}
-		if eventType, _ := entry["event_type"].(string); eventType != auditEventRequest {
-			t.Fatalf("expected request event type, got %q", eventType)
-		}
-		extra, ok := entry["extra"].(map[string]any)
-		if !ok {
-			t.Fatalf("expected extra object in request audit: %+v", entry)
-		}
-		for _, k := range []string{"method", "path", "status", "duration_ms"} {
-			if _, ok := extra[k]; !ok {
-				t.Fatalf("missing request extra field %s in %+v", extra, entry)
-			}
-		}
-	})
-
-	t.Run("writes alpha lifecycle audit events", func(t *testing.T) {
-		rootAudit := t.TempDir()
-		hAudit, err := NewHandler(rootAudit, HandlerOptions{})
-		if err != nil {
-			t.Fatalf("NewHandler: %v", err)
-		}
-
-		enqueueReq := httptest.NewRequest(http.MethodPost, "/api/agent/job", strings.NewReader(`{"id":"j-audit","type":"noop","max_attempts":2}`))
-		enqueueRR := httptest.NewRecorder()
-		hAudit.ServeHTTP(enqueueRR, enqueueReq)
-		if enqueueRR.Code != http.StatusOK {
-			t.Fatalf("expected enqueue 200, got %d", enqueueRR.Code)
-		}
-
-		leaseReq1 := httptest.NewRequest(http.MethodPost, "/api/agent/lease", strings.NewReader(`{"agent":"x"}`))
-		leaseRR1 := httptest.NewRecorder()
-		hAudit.ServeHTTP(leaseRR1, leaseReq1)
-		if leaseRR1.Code != http.StatusOK {
-			t.Fatalf("expected lease 200, got %d", leaseRR1.Code)
-		}
-
-		reportReq1 := httptest.NewRequest(http.MethodPost, "/api/agent/report", strings.NewReader(`{"job_id":"j-audit","status":"failed"}`))
-		reportRR1 := httptest.NewRecorder()
-		hAudit.ServeHTTP(reportRR1, reportReq1)
-		if reportRR1.Code != http.StatusOK {
-			t.Fatalf("expected report 200, got %d", reportRR1.Code)
-		}
-
-		leaseReq2 := httptest.NewRequest(http.MethodPost, "/api/agent/lease", strings.NewReader(`{"agent":"x"}`))
-		leaseRR2 := httptest.NewRecorder()
-		hAudit.ServeHTTP(leaseRR2, leaseReq2)
-		if leaseRR2.Code != http.StatusOK {
-			t.Fatalf("expected second lease 200, got %d", leaseRR2.Code)
-		}
-
-		reportReq2 := httptest.NewRequest(http.MethodPost, "/api/agent/report", strings.NewReader(`{"job_id":"j-audit","status":"failed"}`))
-		reportRR2 := httptest.NewRecorder()
-		hAudit.ServeHTTP(reportRR2, reportReq2)
-		if reportRR2.Code != http.StatusOK {
-			t.Fatalf("expected second report 200, got %d", reportRR2.Code)
-		}
-
-		auditPath := filepath.Join(rootAudit, ".deck", "logs", "server-audit.log")
-		raw, err := os.ReadFile(auditPath)
-		if err != nil {
-			t.Fatalf("read audit log: %v", err)
-		}
-		lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
-		if len(lines) == 0 {
-			t.Fatalf("expected audit lines")
-		}
-
-		eventSeen := map[string]bool{}
-		finalMatched := false
-		for _, line := range lines {
+		for _, line := range strings.Split(strings.TrimSpace(string(raw)), "\n") {
 			if strings.TrimSpace(line) == "" {
 				continue
 			}
-			var entry map[string]any
+			entry := map[string]any{}
 			if err := json.Unmarshal([]byte(line), &entry); err != nil {
-				t.Fatalf("parse audit json: %v", err)
+				t.Fatalf("parse audit line: %v", err)
 			}
-			etype, _ := entry["event_type"].(string)
-			if etype == "" {
-				continue
+			eventType, _ := entry["event_type"].(string)
+			if strings.HasPrefix(eventType, "alpha_") {
+				t.Fatalf("unexpected alpha audit event: %q", eventType)
 			}
-			eventSeen[etype] = true
-			if etype == "alpha_job_final_failed" {
-				extra, _ := entry["extra"].(map[string]any)
-				decision, _ := extra["decision"].(string)
-				jobID, _ := entry["job_id"].(string)
-				attempt, _ := entry["attempt"].(float64)
-				maxAttempts, _ := entry["max_attempts"].(float64)
-				if decision == "exhausted" && jobID == "j-audit" && int(attempt) == 2 && int(maxAttempts) == 2 {
-					finalMatched = true
-				}
+			if eventType == auditEventRegistrySeed {
+				t.Fatalf("unexpected registry seed audit event")
 			}
-		}
-
-		for _, eventType := range []string{"alpha_job_enqueued", "alpha_job_leased", "alpha_job_requeued", "alpha_job_final_failed"} {
-			if !eventSeen[eventType] {
-				t.Fatalf("expected lifecycle event %s in audit log", eventType)
-			}
-		}
-		if !finalMatched {
-			t.Fatalf("expected final failure audit metadata for j-audit")
 		}
 	})
-}
-
-func TestSeedRegistryFromDirIdempotent(t *testing.T) {
-	root := t.TempDir()
-	seedDir := filepath.Join(root, "images")
-	if err := os.MkdirAll(seedDir, 0o755); err != nil {
-		t.Fatalf("mkdir seed dir: %v", err)
-	}
-
-	tarPath := filepath.Join(seedDir, "kube-apiserver.tar")
-	mustWriteSeedTar(t, tarPath, "registry.k8s.io/kube-apiserver:v1.31.0")
-
-	registryHandler, err := NewRegistryHandler(DefaultRegistryRoot(root))
-	if err != nil {
-		t.Fatalf("NewRegistryHandler: %v", err)
-	}
-
-	seedOpts := RegistrySeedOptions{
-		SeedDir:         seedDir,
-		StripRegistries: []string{"registry.k8s.io", "docker.io", "quay.io", "ghcr.io", "gcr.io", "k8s.gcr.io"},
-	}
-	if err := SeedRegistryFromDir(registryHandler, seedOpts); err != nil {
-		t.Fatalf("first SeedRegistryFromDir: %v", err)
-	}
-	if err := SeedRegistryFromDir(registryHandler, seedOpts); err != nil {
-		t.Fatalf("second SeedRegistryFromDir: %v", err)
-	}
-
-	registryServer := httptest.NewServer(registryHandler)
-	defer registryServer.Close()
-	host := strings.TrimPrefix(registryServer.URL, "http://")
-
-	seededRef := mustParseReference(t, host+"/kube-apiserver:v1.31.0")
-	present, err := registryRefPresent(seededRef)
-	if err != nil {
-		t.Fatalf("check seeded ref: %v", err)
-	}
-	if !present {
-		t.Fatalf("expected seeded ref %s to exist", seededRef.Name())
-	}
-}
-
-func TestSeedRegistryFromDirStripsSourceRegistryDomain(t *testing.T) {
-	root := t.TempDir()
-	seedDir := filepath.Join(root, "images")
-	if err := os.MkdirAll(seedDir, 0o755); err != nil {
-		t.Fatalf("mkdir seed dir: %v", err)
-	}
-
-	tarPath := filepath.Join(seedDir, "pause.tar")
-	mustWriteSeedTar(t, tarPath, "registry.k8s.io/pause:3.9")
-
-	registryHandler, err := NewRegistryHandler(DefaultRegistryRoot(root))
-	if err != nil {
-		t.Fatalf("NewRegistryHandler: %v", err)
-	}
-
-	if err := SeedRegistryFromDir(registryHandler, RegistrySeedOptions{SeedDir: seedDir, StripRegistries: []string{"registry.k8s.io"}}); err != nil {
-		t.Fatalf("SeedRegistryFromDir: %v", err)
-	}
-
-	registryServer := httptest.NewServer(registryHandler)
-	defer registryServer.Close()
-	host := strings.TrimPrefix(registryServer.URL, "http://")
-
-	strippedRef := mustParseReference(t, host+"/pause:3.9")
-	originalRef := mustParseReference(t, host+"/registry.k8s.io/pause:3.9")
-
-	strippedPresent, err := registryRefPresent(strippedRef)
-	if err != nil {
-		t.Fatalf("check stripped ref: %v", err)
-	}
-	if !strippedPresent {
-		t.Fatalf("expected stripped ref %s to exist", strippedRef.Name())
-	}
-
-	originalPresent, err := registryRefPresent(originalRef)
-	if err != nil {
-		t.Fatalf("check original ref: %v", err)
-	}
-	if originalPresent {
-		t.Fatalf("expected original ref %s to be absent", originalRef.Name())
-	}
-}
-
-func TestSeedRegistryFromDirWritesAuditEvents(t *testing.T) {
-	root := t.TempDir()
-	seedDir := filepath.Join(root, "images")
-	if err := os.MkdirAll(seedDir, 0o755); err != nil {
-		t.Fatalf("mkdir seed dir: %v", err)
-	}
-
-	tarPath := filepath.Join(seedDir, "pause.tar")
-	mustWriteSeedTar(t, tarPath, "registry.k8s.io/pause:3.9")
-
-	registryHandler, err := NewRegistryHandler(DefaultRegistryRoot(root))
-	if err != nil {
-		t.Fatalf("NewRegistryHandler: %v", err)
-	}
-
-	auditPath := filepath.Join(root, ".deck", "logs", "server-audit.log")
-	if err := SeedRegistryFromDir(registryHandler, RegistrySeedOptions{SeedDir: seedDir, StripRegistries: []string{"registry.k8s.io"}, AuditLogPath: auditPath}); err != nil {
-		t.Fatalf("SeedRegistryFromDir: %v", err)
-	}
-
-	raw, err := os.ReadFile(auditPath)
-	if err != nil {
-		t.Fatalf("read audit log: %v", err)
-	}
-	lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
-	if len(lines) == 0 {
-		t.Fatalf("expected registry seed audit lines")
-	}
-
-	seenStarted := false
-	seenFinished := false
-	for _, line := range lines {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		var entry map[string]any
-		if err := json.Unmarshal([]byte(line), &entry); err != nil {
-			t.Fatalf("parse audit json: %v", err)
-		}
-		eventType, _ := entry["event_type"].(string)
-		if eventType != "registry_seed" {
-			continue
-		}
-		extra, _ := entry["extra"].(map[string]any)
-		status, _ := extra["status"].(string)
-		if status == "started" {
-			seenStarted = true
-		}
-		if status == "finished" {
-			seenFinished = true
-		}
-	}
-
-	if !seenStarted || !seenFinished {
-		t.Fatalf("expected started and finished registry seed audit events")
-	}
-}
-
-func mustWriteSeedTar(t *testing.T, tarPath, sourceRef string) {
-	t.Helper()
-	sourceTag, err := name.NewTag(sourceRef, name.WeakValidation)
-	if err != nil {
-		t.Fatalf("name.NewTag(%q): %v", sourceRef, err)
-	}
-	if err := tarball.WriteToFile(tarPath, sourceTag, empty.Image); err != nil {
-		t.Fatalf("tarball.WriteToFile(%q): %v", tarPath, err)
-	}
-}
-
-func mustParseReference(t *testing.T, ref string) name.Reference {
-	t.Helper()
-	parsed, err := name.ParseReference(ref, name.Insecure)
-	if err != nil {
-		t.Fatalf("name.ParseReference(%q): %v", ref, err)
-	}
-	return parsed
-}
-
-func registryRefPresent(ref name.Reference) (bool, error) {
-	_, err := remote.Head(ref, remote.WithAuth(authn.Anonymous))
-	if err == nil {
-		return true, nil
-	}
-
-	var transportErr *transport.Error
-	if errors.As(err, &transportErr) && transportErr.StatusCode == http.StatusNotFound {
-		return false, nil
-	}
-
-	return false, fmt.Errorf("head %s: %w", ref.Name(), err)
 }
