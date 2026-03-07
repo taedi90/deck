@@ -1,0 +1,16 @@
+role: apply
+version: v1alpha1
+phases:
+  - name: install
+    steps:
+      - id: install-runtime-deps-debian
+        apiVersion: deck/v1alpha1
+        kind: RunCommand
+        spec:
+          timeout: 20m
+          command:
+            - bash
+            - -lc
+            - |
+              set -euo pipefail
+              DEBIAN_FRONTEND=noninteractive apt-get install -y containerd containernetworking-plugins

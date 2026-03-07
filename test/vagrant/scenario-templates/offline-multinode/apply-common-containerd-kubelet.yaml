@@ -1,0 +1,69 @@
+role: apply
+version: v1alpha1
+phases:
+  - name: install
+    steps:
+      - id: write-containerd-mirror-registry-k8s
+        apiVersion: deck/v1alpha1
+        kind: WriteFile
+        spec:
+          path: /etc/containerd/certs.d/registry.k8s.io/hosts.toml
+          mode: "0644"
+          contentFromTemplate: |
+            server = "https://registry.k8s.io"
+
+            [host."http://{{ .vars.registryHost  }}"]
+              capabilities = ["pull", "resolve"]
+              skip_verify = true
+      - id: configure-containerd-runtime
+        apiVersion: deck/v1alpha1
+        kind: RunCommand
+        spec:
+          command:
+            - bash
+            - -lc
+            - |
+              set -euo pipefail
+              mkdir -p /etc/containerd
+              containerd config default > /etc/containerd/config.toml
+              sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+              sed -i 's/#\s*config_path = ""/config_path = "\/etc\/containerd\/certs.d"/' /etc/containerd/config.toml || true
+              sed -i 's/config_path = ""/config_path = "\/etc\/containerd\/certs.d"/' /etc/containerd/config.toml || true
+              sed -i 's/registry.k8s.io\/pause:3.8/registry.k8s.io\/pause:3.9/' /etc/containerd/config.toml || true
+              systemctl daemon-reload
+              systemctl enable --now containerd
+              systemctl restart containerd
+      - id: setup-kubelet-systemd
+        apiVersion: deck/v1alpha1
+        kind: RunCommand
+        spec:
+          command:
+            - bash
+            - -lc
+            - |
+              set -euo pipefail
+              mkdir -p /var/lib/kubelet /etc/default
+              cat > /etc/systemd/system/kubelet.service <<'EOF'
+              [Unit]
+              Description=kubelet
+              Documentation=https://kubernetes.io/docs/
+              Wants=network-online.target
+              After=network-online.target
+
+              [Service]
+              EnvironmentFile=-/var/lib/kubelet/kubeadm-flags.env
+              EnvironmentFile=-/etc/default/kubelet
+              ExecStart=/usr/bin/kubelet \
+                --bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf \
+                --kubeconfig=/etc/kubernetes/kubelet.conf \
+                --config=/var/lib/kubelet/config.yaml \
+                $KUBELET_KUBEADM_ARGS $KUBELET_EXTRA_ARGS
+              Restart=always
+              StartLimitInterval=0
+              RestartSec=10
+
+              [Install]
+              WantedBy=multi-user.target
+              EOF
+              systemctl daemon-reload
+              systemctl enable --now kubelet

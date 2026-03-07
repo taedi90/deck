@@ -1,0 +1,24 @@
+role: apply
+version: v1alpha1
+phases:
+  - name: install
+    steps:
+      - id: prep-disable-swap
+        apiVersion: deck/v1alpha1
+        kind: RunCommand
+        spec:
+          command: ["bash", "-lc", "swapoff -a"]
+      - id: prep-enable-ip-forward
+        apiVersion: deck/v1alpha1
+        kind: RunCommand
+        spec:
+          command:
+            - bash
+            - -lc
+            - |
+              set -euo pipefail
+              sysctl -w net.ipv4.ip_forward=1
+              cat > /etc/sysctl.d/99-kubernetes-ipforward.conf <<'EOF'
+              net.ipv4.ip_forward = 1
+              EOF
+              sysctl --system >/dev/null

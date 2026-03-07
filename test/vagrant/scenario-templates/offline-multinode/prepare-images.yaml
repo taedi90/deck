@@ -1,0 +1,21 @@
+role: pack
+version: v1alpha1
+phases:
+  - name: prepare
+    steps:
+      - id: prepare-images
+        apiVersion: deck/v1alpha1
+        kind: DownloadImages
+        spec:
+          backend:
+            engine: go-containerregistry
+          images:
+            - registry.k8s.io/kube-apiserver:{{ .vars.kubernetesVersion  }}
+            - registry.k8s.io/kube-controller-manager:{{ .vars.kubernetesVersion  }}
+            - registry.k8s.io/kube-scheduler:{{ .vars.kubernetesVersion  }}
+            - registry.k8s.io/kube-proxy:{{ .vars.kubernetesVersion  }}
+            - registry.k8s.io/pause:3.9
+            - registry.k8s.io/etcd:3.5.12-0
+            - registry.k8s.io/etcd:3.5.15-0
+            - registry.k8s.io/coredns/coredns:v1.11.1
+            - registry.k8s.io/coredns/coredns:v1.11.3
