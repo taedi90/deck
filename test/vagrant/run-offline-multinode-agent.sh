@@ -335,10 +335,18 @@ step_start_agents() {
 }
 
 step_start_server() { control_plane_action "start-server"; }
-step_enqueue_install() { control_plane_action "enqueue-install"; }
-step_wait_install() { control_plane_action "wait-install"; }
-step_enqueue_join() { control_plane_action "enqueue-join"; }
-step_wait_join() { control_plane_action "wait-join"; }
+step_enqueue_install() { control_plane_action "apply-control-plane"; }
+step_wait_install() { control_plane_action "verify-install"; }
+step_enqueue_join() {
+  load_state_env
+  run_vagrant_ssh "worker" "ART_DIR_REL=${ART_DIR_REL} SERVER_URL=${SERVER_URL} DECK_OFFLINE_RELEASE=ubuntu2404 bash /workspace/test/vagrant/scripts/run-offline-multinode-agent-vm.sh worker apply-worker"
+  run_vagrant_ssh "worker-2" "ART_DIR_REL=${ART_DIR_REL} SERVER_URL=${SERVER_URL} DECK_OFFLINE_RELEASE=rocky9 bash /workspace/test/vagrant/scripts/run-offline-multinode-agent-vm.sh worker-2 apply-worker"
+}
+step_wait_join() {
+  load_state_env
+  run_vagrant_ssh "worker" "ART_DIR_REL=${ART_DIR_REL} SERVER_URL=${SERVER_URL} DECK_OFFLINE_RELEASE=ubuntu2404 bash /workspace/test/vagrant/scripts/run-offline-multinode-agent-vm.sh worker verify-worker"
+  run_vagrant_ssh "worker-2" "ART_DIR_REL=${ART_DIR_REL} SERVER_URL=${SERVER_URL} DECK_OFFLINE_RELEASE=rocky9 bash /workspace/test/vagrant/scripts/run-offline-multinode-agent-vm.sh worker-2 verify-worker"
+}
 step_assert_cluster() { control_plane_action "assert-cluster"; }
 
 step_collect() {
