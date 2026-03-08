@@ -316,6 +316,35 @@ phases:
 			t.Fatalf("expected valid checkhost register output, got %v", err)
 		}
 	})
+
+	t.Run("reserved runtime host key is rejected", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "workflow.yaml")
+		content := []byte(`role: apply
+version: v1alpha1
+phases:
+  - name: prepare
+    steps:
+      - id: c1
+        apiVersion: deck/v1alpha1
+        kind: CheckHost
+        register:
+          host: passed
+        spec:
+          checks: [os]
+`)
+		if err := os.WriteFile(path, content, 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+
+		err := File(path)
+		if err == nil {
+			t.Fatalf("expected reserved runtime host key error")
+		}
+		if got := err.Error(); !strings.HasPrefix(got, "E_RUNTIME_VAR_RESERVED") {
+			t.Fatalf("expected E_RUNTIME_VAR_RESERVED, got %v", err)
+		}
+	})
 }
 
 func TestSchema_ApiVersionOptional(t *testing.T) {

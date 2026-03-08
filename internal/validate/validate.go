@@ -202,6 +202,9 @@ func validateSemantics(wf *config.Workflow) error {
 			if !runtimeVarNamePattern.MatchString(runtimeVar) {
 				return fmt.Errorf("E_REGISTER_VAR_INVALID: %s", runtimeVar)
 			}
+			if isReservedRuntimeVar(runtimeVar) {
+				return fmt.Errorf("E_RUNTIME_VAR_RESERVED: %s", runtimeVar)
+			}
 			if strings.TrimSpace(outputKey) == "" {
 				return fmt.Errorf("E_REGISTER_OUTPUT_NOT_FOUND: empty output key in step %s", step.ID)
 			}
@@ -216,6 +219,11 @@ func validateSemantics(wf *config.Workflow) error {
 	}
 
 	return nil
+}
+
+func isReservedRuntimeVar(runtimeVar string) bool {
+	trimmed := strings.TrimSpace(runtimeVar)
+	return trimmed == "host" || strings.HasPrefix(trimmed, "host.")
 }
 
 func isValidOutputKey(kind, outputKey string) bool {

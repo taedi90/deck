@@ -744,7 +744,7 @@ func TestRun_CheckHostStep(t *testing.T) {
 					{
 						ID:   "runtime-branch",
 						Kind: "DownloadPackages",
-						When: "runtime.hostPassed == true and vars.want == \"ok\"",
+						When: "runtime.hostPassed == true and vars.want == \"ok\" and runtime.host.os.family == \"debian\" and runtime.host.arch == \"arm64\"",
 						Spec: map[string]any{
 							"packages": []any{"containerd"},
 							"backend": map[string]any{
@@ -762,7 +762,14 @@ func TestRun_CheckHostStep(t *testing.T) {
 		oldGOOS := goosFn
 		oldGOARCH := goarchFn
 		readFileFn = func(path string) ([]byte, error) {
-			return os.ReadFile(path)
+			switch path {
+			case "/etc/os-release":
+				return []byte("ID=ubuntu\nID_LIKE=debian\nVERSION=\"24.04 LTS\"\nVERSION_ID=\"24.04\"\n"), nil
+			case "/proc/sys/kernel/osrelease":
+				return []byte("6.8.0-test\n"), nil
+			default:
+				return os.ReadFile(path)
+			}
 		}
 		goosFn = func() string { return "linux" }
 		goarchFn = func() string { return "arm64" }
