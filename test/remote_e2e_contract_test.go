@@ -28,7 +28,7 @@ func TestRemoteE2EScriptModeContracts(t *testing.T) {
 
 func TestRemoteVMDocModeContracts(t *testing.T) {
 	root := projectRoot(t)
-	docPath := filepath.Join(root, "docs", "archive", "testing", "remote-vm-test.md")
+	docPath := filepath.Join(root, "docs", "remote-vm-test.md")
 	raw, err := os.ReadFile(docPath)
 	if err != nil {
 		t.Fatalf("read doc: %v", err)
