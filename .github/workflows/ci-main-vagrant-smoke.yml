@@ -31,7 +31,7 @@ jobs:
       - name: Run smoke-lite test set
         run: |
           go test ./...
-          ./deck validate --file cluster.yaml
+          ./deck validate --file docs/examples/vagrant-smoke-install.yaml
           go test ./internal/prepare -run 'TestRun_ContainerBackendsWithFakeRunner|TestRun_PrepareArtifactsAndManifest|TestRun_DownloadFileFallbackLocalThenBundle|TestRun_DownloadFileFallbackRepoThenOnline|TestRun_DownloadFileOfflinePolicyBlocksOnlineFallback|TestRun_DownloadFileOfflinePolicyBlocksDirectURL'
 
       - name: Validate docs examples (mode=validate)

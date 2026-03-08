@@ -48,11 +48,11 @@ jobs:
 
       - name: Run deck validate
         run: |
-          if [ ! -f cluster.yaml ]; then
-            echo "cluster.yaml not found"
+          if [ ! -f docs/examples/vagrant-smoke-install.yaml ]; then
+            echo "docs/examples/vagrant-smoke-install.yaml not found"
             exit 1
           fi
-          ./deck validate --file cluster.yaml
+          ./deck validate --file docs/examples/vagrant-smoke-install.yaml
 
       - name: Validate docs examples (mode=validate)
         run: |

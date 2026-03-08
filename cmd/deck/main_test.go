@@ -542,7 +542,7 @@ func TestRunLegacyTopLevelCommandsAreRemoved(t *testing.T) {
 }
 
 func TestRunWorkflowValidateAndLegacyValidateMigration(t *testing.T) {
-	wf := filepath.Join("..", "..", "cluster.yaml")
+	wf := writeValidateWorkflowFixture(t)
 
 	t.Run("validate with -f", func(t *testing.T) {
 		out, err := runWithCapturedStdout([]string{"validate", "-f", wf})
@@ -1775,6 +1775,14 @@ func writeInstallTrueWorkflowFixture(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "install-true.yaml")
 	content := "role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: run-true\n        kind: RunCommand\n        spec:\n          command: [\"true\"]\n"
+	writeWorkflowYAML(t, path, content)
+	return path
+}
+
+func writeValidateWorkflowFixture(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "validate-workflow.yaml")
+	content := "role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: validate-run\n        apiVersion: deck/v1alpha1\n        kind: RunCommand\n        spec:\n          command: [\"true\"]\n"
 	writeWorkflowYAML(t, path, content)
 	return path
 }
