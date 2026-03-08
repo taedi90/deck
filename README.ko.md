@@ -148,3 +148,7 @@ steps:
 go test ./...
 go run ./cmd/deck validate --file <workflow.yaml>
 ```
+
+## License
+
+Apache-2.0 라이선스를 따릅니다. 자세한 내용은 `LICENSE`를 참고하세요.

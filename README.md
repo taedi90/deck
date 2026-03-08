@@ -148,3 +148,7 @@ Before sending changes, run the checks that match your work:
 go test ./...
 go run ./cmd/deck validate --file <workflow.yaml>
 ```
+
+## License
+
+Apache-2.0. See `LICENSE`.
