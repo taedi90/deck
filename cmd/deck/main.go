@@ -495,50 +495,39 @@ func runServe(args []string) error {
 }
 
 func runList(args []string) error {
-	// usage: deck list [flags]
-	if len(args) == 0 {
-		return errors.New("usage: deck list [flags]")
-	}
-	if args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
+	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help" || args[0] == "help") {
 		return errors.New("usage: deck list [flags]")
 	}
 
-	// Flags for this subcommand
 	fs := flag.NewFlagSet("list", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	var server string
 	var output string
-	// --server is required
-	fs.StringVar(&server, "server", "", "server URL for index (required)")
-	// reuse common output flag definitions
+	fs.StringVar(&server, "server", "", "server URL for index (optional; defaults to local workflows/)")
 	registerOutputFormatFlags(fs, &output, "text")
 	if err := fs.Parse(args); err != nil {
 		return err
-	}
-	if strings.TrimSpace(server) == "" {
-		return errors.New("--server is required")
 	}
 	if output != "text" && output != "json" {
 		return errors.New("--output must be text or json")
 	}
 
-	// Fetch the server index JSON
-	trimmed := strings.TrimRight(server, "/")
-	indexURL := trimmed + "/workflows/index.json"
-	resp, err := http.Get(indexURL)
-	if err != nil {
-		return fmt.Errorf("list: request failed: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("list: unexpected status %d", resp.StatusCode)
-	}
-	var items []string
-	if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
-		return fmt.Errorf("list: decode response: %w", err)
+	resolvedServer := strings.TrimSpace(server)
+	items := []string{}
+	if resolvedServer == "" {
+		localItems, err := discoverLocalWorkflowList(".")
+		if err != nil {
+			return err
+		}
+		items = localItems
+	} else {
+		remoteItems, err := fetchWorkflowIndexFromServer(resolvedServer)
+		if err != nil {
+			return err
+		}
+		items = remoteItems
 	}
 
-	// Output according to the requested format
 	if output == "json" {
 		enc := json.NewEncoder(os.Stdout)
 		if err := enc.Encode(items); err != nil {
@@ -546,7 +535,7 @@ func runList(args []string) error {
 		}
 		return nil
 	}
-	// text output: one path per line
+
 	w := bufio.NewWriter(os.Stdout)
 	for _, it := range items {
 		if _, err := fmt.Fprintln(w, it); err != nil {
@@ -554,6 +543,68 @@ func runList(args []string) error {
 		}
 	}
 	return w.Flush()
+}
+
+func fetchWorkflowIndexFromServer(server string) ([]string, error) {
+	trimmed := strings.TrimRight(server, "/")
+	indexURL := trimmed + "/workflows/index.json"
+	resp, err := http.Get(indexURL)
+	if err != nil {
+		return nil, fmt.Errorf("list: request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return []string{}, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("list: unexpected status %d", resp.StatusCode)
+	}
+
+	var items []string
+	if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
+		return nil, fmt.Errorf("list: decode response: %w", err)
+	}
+	return items, nil
+}
+
+func discoverLocalWorkflowList(root string) ([]string, error) {
+	workflowDir := filepath.Join(root, "workflows")
+	info, err := os.Stat(workflowDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("list: local workflows directory not found: %s", workflowDir)
+		}
+		return nil, fmt.Errorf("list: stat local workflows directory: %w", err)
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("list: local workflows path is not a directory: %s", workflowDir)
+	}
+
+	items := make([]string, 0)
+	err = filepath.WalkDir(workflowDir, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() {
+			return nil
+		}
+		name := strings.ToLower(d.Name())
+		if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".yml") {
+			return nil
+		}
+		relPath, err := filepath.Rel(workflowDir, path)
+		if err != nil {
+			return err
+		}
+		items = append(items, filepath.ToSlash(filepath.Join("workflows", relPath)))
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list: read local workflows directory: %w", err)
+	}
+
+	sort.Strings(items)
+	return items, nil
 }
 
 func runDiff(args []string) error {
@@ -1922,18 +1973,12 @@ func isPermissionError(msg string) bool {
 func runWorkflowInit(args []string) error {
 	fs := flag.NewFlagSet("workflow init", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	template := fs.String("template", "", "template name (single|multi)")
 	output := fs.String("out", ".", "output directory")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New("usage: deck init --template single|multi [--out <dir>]")
-	}
-
-	resolvedTemplate := strings.TrimSpace(*template)
-	if resolvedTemplate != "single" && resolvedTemplate != "multi" {
-		return errors.New("init: --template is required and must be single or multi")
+		return errors.New("usage: deck init [--out <dir>]")
 	}
 	resolvedOutput := strings.TrimSpace(*output)
 	if resolvedOutput == "" {
@@ -1949,7 +1994,7 @@ func runWorkflowInit(args []string) error {
 		return fmt.Errorf("init: stat workflows directory %s: %w", workflowsDir, err)
 	}
 
-	templates := initTemplateFiles(resolvedTemplate)
+	templates := initTemplateFiles()
 	overwriteTargets := make([]string, 0, len(templates))
 	for fileName := range templates {
 		targetPath := filepath.Join(workflowsDir, fileName)
@@ -1982,7 +2027,7 @@ func runWorkflowInit(args []string) error {
 	return nil
 }
 
-func initTemplateFiles(template string) map[string]string {
+func initTemplateFiles() map[string]string {
 	packContent := strings.Join([]string{
 		"role: pack",
 		"version: v1alpha1",
@@ -1996,13 +2041,8 @@ func initTemplateFiles(template string) map[string]string {
 		"",
 	}, "\n")
 
-	varsContent := "{}\n"
-	if template == "multi" {
-		varsContent = "nodes: []\n"
-	}
-
 	return map[string]string{
-		"vars.yaml":  varsContent,
+		"vars.yaml":  "{}\n",
 		"pack.yaml":  packContent,
 		"apply.yaml": applyContent,
 	}
@@ -2077,15 +2117,42 @@ func runApply(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if fs.NArg() > 1 {
-		return errors.New("apply accepts at most one positional bundle path")
+	if fs.NArg() > 2 {
+		return errors.New("apply accepts at most two positional arguments: [workflow] [bundle]")
 	}
+	workflowPath := strings.TrimSpace(file)
+	positionalWorkflow := ""
 	positionalBundle := ""
-	if fs.NArg() == 1 {
-		positionalBundle = strings.TrimSpace(fs.Arg(0))
+	if workflowPath != "" {
+		if fs.NArg() == 2 {
+			return errors.New("apply accepts at most one positional bundle path when --file is set")
+		}
+		if fs.NArg() == 1 {
+			positionalBundle = strings.TrimSpace(fs.Arg(0))
+		}
+	} else {
+		if fs.NArg() == 1 {
+			arg0 := strings.TrimSpace(fs.Arg(0))
+			if looksLikeWorkflowReference(arg0) {
+				positionalWorkflow = arg0
+			} else {
+				positionalBundle = arg0
+			}
+		}
+		if fs.NArg() == 2 {
+			arg0 := strings.TrimSpace(fs.Arg(0))
+			arg1 := strings.TrimSpace(fs.Arg(1))
+			if !looksLikeWorkflowReference(arg0) {
+				return errors.New("apply with two positional arguments requires [workflow] [bundle]")
+			}
+			positionalWorkflow = arg0
+			positionalBundle = arg1
+		}
+	}
+	if workflowPath == "" {
+		workflowPath = positionalWorkflow
 	}
 
-	workflowPath := strings.TrimSpace(file)
 	isRemoteWorkflow := isHTTPWorkflowPath(workflowPath)
 	bundleRoot := ""
 	var err error
@@ -2174,6 +2241,29 @@ func runApply(args []string) error {
 
 	fmt.Fprintln(os.Stdout, "apply: ok")
 	return nil
+}
+
+func looksLikeWorkflowReference(raw string) bool {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return false
+	}
+	if isHTTPWorkflowPath(trimmed) {
+		return true
+	}
+	lower := strings.ToLower(trimmed)
+	if strings.HasSuffix(lower, ".yaml") || strings.HasSuffix(lower, ".yml") {
+		return true
+	}
+	resolved, err := filepath.Abs(trimmed)
+	if err != nil {
+		return false
+	}
+	info, statErr := os.Stat(resolved)
+	if statErr != nil {
+		return false
+	}
+	return !info.IsDir()
 }
 
 func buildApplyPrefetchWorkflow(wf *config.Workflow) *config.Workflow {
