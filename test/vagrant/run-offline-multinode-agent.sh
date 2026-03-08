@@ -11,6 +11,7 @@ TS="$(date +%Y%m%d-%H%M%S)"
 ART_DIR_REL="test/artifacts/offline-multinode-${TS}"
 ART_DIR_ABS="${ROOT_DIR}/${ART_DIR_REL}"
 CHECKPOINT_DIR=""
+PREPARED_BUNDLE_REL=""
 
 DECK_VAGRANT_PROVIDER="libvirt"
 DECK_VAGRANT_BOX_CONTROL_PLANE="${DECK_VAGRANT_BOX_CONTROL_PLANE:-${DECK_VAGRANT_BOX:-generic/ubuntu2204}}"
@@ -220,6 +221,7 @@ save_state_env() {
 DECK_VAGRANT_VM_PREFIX=${DECK_VAGRANT_VM_PREFIX}
 SERVER_IP=${SERVER_IP:-}
 SERVER_URL=${SERVER_URL:-}
+PREPARED_BUNDLE_REL=${PREPARED_BUNDLE_REL:-}
 EOF
 }
 
@@ -283,7 +285,54 @@ step_prepare_host() {
   source "${LIBVIRT_ENV_HELPER}"
   prepare_libvirt_environment
   "${BUILD_BINARIES_HELPER}" "${ROOT_DIR}"
+
+  local host_bin="${ROOT_DIR}/test/artifacts/bin/deck-host"
+  local pack_root="${ART_DIR_ABS}/host-pack"
+  local workflow_dir="${pack_root}/workflows"
+  local fragment_dir="${workflow_dir}/offline-multinode"
+  local bundle_tar="${ART_DIR_ABS}/prepared-bundle.tar"
+  local bundle_dir="${ART_DIR_ABS}/prepared-bundle"
+  local backend_runtime="podman"
+  local arch="amd64"
+
+  if ! command -v podman >/dev/null 2>&1 && command -v docker >/dev/null 2>&1; then
+    backend_runtime="docker"
+  fi
+  case "$(uname -m)" in
+    x86_64)
+      arch="amd64"
+      ;;
+    aarch64|arm64)
+      arch="arm64"
+      ;;
+  esac
+
+  rm -rf "${pack_root}" "${bundle_dir}"
+  mkdir -p "${workflow_dir}" "${fragment_dir}"
+  cp -a "${ROOT_DIR}/test/vagrant/workflows/offline-multinode/." "${fragment_dir}/"
+  cp "${ROOT_DIR}/test/vagrant/workflows/offline-multinode/profile/prepare.yaml" "${workflow_dir}/pack.yaml"
+  cat > "${workflow_dir}/apply.yaml" <<'EOF'
+role: apply
+version: v1alpha1
+phases:
+  - name: install
+    steps:
+      - id: noop
+        apiVersion: deck/v1alpha1
+        kind: RunCommand
+        spec:
+          command: ["sh", "-c", "true"]
+EOF
+  printf '{}\n' > "${workflow_dir}/vars.yaml"
+  (cd "${pack_root}" && "${host_bin}" pack --out "${bundle_tar}" \
+    --var "kubernetesVersion=v1.30.1" \
+    --var "arch=${arch}" \
+    --var "backendRuntime=${backend_runtime}")
+  mkdir -p "${bundle_dir}"
+  tar -xf "${bundle_tar}" -C "${bundle_dir}" --strip-components=1
+  PREPARED_BUNDLE_REL="${ART_DIR_REL}/prepared-bundle"
   load_state_env
+  save_state_env
 }
 
 step_up_vms() {
@@ -296,6 +345,7 @@ step_up_vms() {
   delete_stale_volume "worker"
   delete_stale_volume "worker-2"
   DECK_VAGRANT_BOX="${DECK_VAGRANT_BOX}" DECK_VAGRANT_PROVIDER="${DECK_VAGRANT_PROVIDER}" DECK_VAGRANT_VM_PREFIX="${DECK_VAGRANT_VM_PREFIX}" vagrant up control-plane worker worker-2 --provider "${DECK_VAGRANT_PROVIDER}"
+  DECK_VAGRANT_BOX="${DECK_VAGRANT_BOX}" DECK_VAGRANT_PROVIDER="${DECK_VAGRANT_PROVIDER}" DECK_VAGRANT_VM_PREFIX="${DECK_VAGRANT_VM_PREFIX}" vagrant rsync control-plane worker worker-2
   SERVER_IP="$(DECK_VAGRANT_BOX="${DECK_VAGRANT_BOX}" DECK_VAGRANT_PROVIDER="${DECK_VAGRANT_PROVIDER}" DECK_VAGRANT_VM_PREFIX="${DECK_VAGRANT_VM_PREFIX}" vagrant ssh-config control-plane 2>/dev/null | awk '/^[[:space:]]*HostName[[:space:]]+/ {print $2; exit}')"
   if [[ -z "${SERVER_IP}" ]]; then
     echo "[deck] failed to resolve control-plane IPv4 address"
@@ -314,7 +364,7 @@ EOF
 control_plane_action() {
   local action="$1"
   load_state_env
-  run_vagrant_ssh "control-plane" "ART_DIR_REL=${ART_DIR_REL} SERVER_URL=${SERVER_URL} DECK_KUBEADM_ADVERTISE_ADDRESS=${SERVER_IP} DECK_OFFLINE_RELEASE_CONTROL_PLANE=ubuntu2204 DECK_OFFLINE_RELEASE_WORKER=ubuntu2404 DECK_OFFLINE_RELEASE_WORKER_2=rocky9 bash /workspace/test/vagrant/run-offline-multinode-vm.sh control-plane ${action}"
+  run_vagrant_ssh "control-plane" "ART_DIR_REL=${ART_DIR_REL} SERVER_URL=${SERVER_URL} DECK_KUBEADM_ADVERTISE_ADDRESS=${SERVER_IP} DECK_OFFLINE_RELEASE_CONTROL_PLANE=ubuntu2204 DECK_OFFLINE_RELEASE_WORKER=ubuntu2404 DECK_OFFLINE_RELEASE_WORKER_2=rocky9 DECK_PREPARED_BUNDLE_REL=${PREPARED_BUNDLE_REL:-} bash /workspace/test/vagrant/run-offline-multinode-vm.sh control-plane ${action}"
 }
 
 step_start_agents() {

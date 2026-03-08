@@ -1,0 +1,57 @@
+role: apply
+version: v1alpha1
+phases:
+  - name: install
+    steps:
+      - id: install-runtime-deps-rhel
+        apiVersion: deck/v1alpha1
+        kind: RunCommand
+        spec:
+          timeout: 20m
+          command:
+            - bash
+            - -lc
+            - |
+              set -euo pipefail
+              case "$(uname -m)" in
+                x86_64)
+                  if ! command -v containerd >/dev/null 2>&1; then
+                    curl -fsSL "http://{{ .vars.serverURL  }}/files/bin/linux/amd64/containerd.tar.gz" -o /tmp/containerd.tar.gz
+                    tar -xzf /tmp/containerd.tar.gz -C /usr/local
+                  fi
+                  install -m 0755 /usr/local/bin/containerd /usr/bin/containerd
+                  install -m 0755 /usr/local/bin/ctr /usr/bin/ctr
+                  install -m 0755 /usr/local/bin/containerd-shim-runc-v2 /usr/bin/containerd-shim-runc-v2
+                  if [[ ! -x /usr/local/sbin/runc ]]; then
+                    curl -fsSL "http://{{ .vars.serverURL  }}/files/bin/linux/amd64/runc" -o /usr/local/sbin/runc
+                    chmod 0755 /usr/local/sbin/runc
+                  fi
+                  mkdir -p /opt/cni/bin
+                  curl -fsSL "http://{{ .vars.serverURL  }}/files/bin/linux/amd64/cni-plugins.tgz" -o /tmp/cni-plugins.tgz
+                  tar -xzf /tmp/cni-plugins.tgz -C /opt/cni/bin
+                  ;;
+                aarch64|arm64)
+                  if ! command -v containerd >/dev/null 2>&1; then
+                    curl -fsSL "http://{{ .vars.serverURL  }}/files/bin/linux/arm64/containerd.tar.gz" -o /tmp/containerd.tar.gz
+                    tar -xzf /tmp/containerd.tar.gz -C /usr/local
+                  fi
+                  install -m 0755 /usr/local/bin/containerd /usr/bin/containerd
+                  install -m 0755 /usr/local/bin/ctr /usr/bin/ctr
+                  install -m 0755 /usr/local/bin/containerd-shim-runc-v2 /usr/bin/containerd-shim-runc-v2
+                  if [[ ! -x /usr/local/sbin/runc ]]; then
+                    curl -fsSL "http://{{ .vars.serverURL  }}/files/bin/linux/arm64/runc" -o /usr/local/sbin/runc
+                    chmod 0755 /usr/local/sbin/runc
+                  fi
+                  mkdir -p /opt/cni/bin
+                  curl -fsSL "http://{{ .vars.serverURL  }}/files/bin/linux/arm64/cni-plugins.tgz" -o /tmp/cni-plugins.tgz
+                  tar -xzf /tmp/cni-plugins.tgz -C /opt/cni/bin
+                  ;;
+                *)
+                  echo "unsupported arch: $(uname -m)" >&2
+                  exit 1
+                  ;;
+              esac
+              ln -sf /usr/local/sbin/runc /usr/bin/runc
+              if [[ ! -f /etc/systemd/system/containerd.service ]]; then
+                printf '%s\n' '[Unit]' 'Description=containerd container runtime' 'Documentation=https://containerd.io' 'After=network.target local-fs.target' '' '[Service]' 'ExecStart=/usr/local/bin/containerd' 'Type=notify' 'Delegate=yes' 'KillMode=process' 'Restart=always' 'RestartSec=5' 'LimitNPROC=infinity' 'LimitCORE=infinity' 'LimitNOFILE=infinity' 'TasksMax=infinity' 'OOMScoreAdjust=-999' '' '[Install]' 'WantedBy=multi-user.target' > /etc/systemd/system/containerd.service
+              fi

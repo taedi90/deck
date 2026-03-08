@@ -1,0 +1,65 @@
+role: pack
+version: v1alpha1
+phases:
+  - name: prepare
+    steps:
+      - id: prepare-kubelet-binary
+        apiVersion: deck/v1alpha1
+        kind: DownloadFile
+        spec:
+          source:
+            url: https://dl.k8s.io/release/{{ .vars.kubernetesVersion  }}/bin/linux/{{ .vars.arch  }}/kubelet
+          output:
+            path: files/bin/linux/{{ .vars.arch  }}/kubelet
+            chmod: "0755"
+      - id: prepare-kubeadm-binary
+        apiVersion: deck/v1alpha1
+        kind: DownloadFile
+        spec:
+          source:
+            url: https://dl.k8s.io/release/{{ .vars.kubernetesVersion  }}/bin/linux/{{ .vars.arch  }}/kubeadm
+          output:
+            path: files/bin/linux/{{ .vars.arch  }}/kubeadm
+            chmod: "0755"
+      - id: prepare-kubectl-binary
+        apiVersion: deck/v1alpha1
+        kind: DownloadFile
+        spec:
+          source:
+            url: https://dl.k8s.io/release/{{ .vars.kubernetesVersion  }}/bin/linux/{{ .vars.arch  }}/kubectl
+          output:
+            path: files/bin/linux/{{ .vars.arch  }}/kubectl
+            chmod: "0755"
+      - id: prepare-crictl-archive
+        apiVersion: deck/v1alpha1
+        kind: DownloadFile
+        spec:
+          source:
+            url: https://github.com/kubernetes-sigs/cri-tools/releases/download/{{ .vars.kubernetesVersion  }}/crictl-{{ .vars.kubernetesVersion  }}-linux-{{ .vars.arch  }}.tar.gz
+          output:
+            path: files/bin/linux/{{ .vars.arch  }}/crictl.tar.gz
+      - id: prepare-containerd-archive
+        apiVersion: deck/v1alpha1
+        kind: DownloadFile
+        spec:
+          source:
+            url: https://github.com/containerd/containerd/releases/download/v1.7.28/containerd-1.7.28-linux-{{ .vars.arch  }}.tar.gz
+          output:
+            path: files/bin/linux/{{ .vars.arch  }}/containerd.tar.gz
+      - id: prepare-runc-binary
+        apiVersion: deck/v1alpha1
+        kind: DownloadFile
+        spec:
+          source:
+            url: https://github.com/opencontainers/runc/releases/download/v1.1.12/runc.{{ .vars.arch  }}
+          output:
+            path: files/bin/linux/{{ .vars.arch  }}/runc
+            chmod: "0755"
+      - id: prepare-cni-plugins-archive
+        apiVersion: deck/v1alpha1
+        kind: DownloadFile
+        spec:
+          source:
+            url: https://github.com/containernetworking/plugins/releases/download/v1.5.1/cni-plugins-linux-{{ .vars.arch  }}-v1.5.1.tgz
+          output:
+            path: files/bin/linux/{{ .vars.arch  }}/cni-plugins.tgz

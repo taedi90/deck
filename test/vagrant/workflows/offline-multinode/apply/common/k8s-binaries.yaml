@@ -1,0 +1,58 @@
+role: apply
+version: v1alpha1
+phases:
+  - name: install
+    steps:
+      - id: install-k8s-binaries
+        apiVersion: deck/v1alpha1
+        kind: RunCommand
+        spec:
+          command:
+            - bash
+            - -lc
+            - |
+              set -euo pipefail
+              case "$(uname -m)" in
+                x86_64)
+                  if [[ ! -x /usr/bin/kubelet ]]; then
+                    curl -fsSL "http://{{ .vars.serverURL  }}/files/bin/linux/amd64/kubelet" -o /usr/bin/kubelet
+                    chmod 0755 /usr/bin/kubelet
+                  fi
+                  if [[ ! -x /usr/bin/kubeadm ]]; then
+                    curl -fsSL "http://{{ .vars.serverURL  }}/files/bin/linux/amd64/kubeadm" -o /usr/bin/kubeadm
+                    chmod 0755 /usr/bin/kubeadm
+                  fi
+                  if [[ ! -x /usr/bin/kubectl ]]; then
+                    curl -fsSL "http://{{ .vars.serverURL  }}/files/bin/linux/amd64/kubectl" -o /usr/bin/kubectl
+                    chmod 0755 /usr/bin/kubectl
+                  fi
+                  if [[ ! -x /usr/bin/crictl ]]; then
+                    curl -fsSL "http://{{ .vars.serverURL  }}/files/bin/linux/amd64/crictl.tar.gz" -o /tmp/crictl.tar.gz
+                    tar -xzf /tmp/crictl.tar.gz -C /usr/bin crictl
+                    chmod 0755 /usr/bin/crictl
+                  fi
+                  ;;
+                aarch64|arm64)
+                  if [[ ! -x /usr/bin/kubelet ]]; then
+                    curl -fsSL "http://{{ .vars.serverURL  }}/files/bin/linux/arm64/kubelet" -o /usr/bin/kubelet
+                    chmod 0755 /usr/bin/kubelet
+                  fi
+                  if [[ ! -x /usr/bin/kubeadm ]]; then
+                    curl -fsSL "http://{{ .vars.serverURL  }}/files/bin/linux/arm64/kubeadm" -o /usr/bin/kubeadm
+                    chmod 0755 /usr/bin/kubeadm
+                  fi
+                  if [[ ! -x /usr/bin/kubectl ]]; then
+                    curl -fsSL "http://{{ .vars.serverURL  }}/files/bin/linux/arm64/kubectl" -o /usr/bin/kubectl
+                    chmod 0755 /usr/bin/kubectl
+                  fi
+                  if [[ ! -x /usr/bin/crictl ]]; then
+                    curl -fsSL "http://{{ .vars.serverURL  }}/files/bin/linux/arm64/crictl.tar.gz" -o /tmp/crictl.tar.gz
+                    tar -xzf /tmp/crictl.tar.gz -C /usr/bin crictl
+                    chmod 0755 /usr/bin/crictl
+                  fi
+                  ;;
+                *)
+                  echo "unsupported arch: $(uname -m)" >&2
+                  exit 1
+                  ;;
+              esac

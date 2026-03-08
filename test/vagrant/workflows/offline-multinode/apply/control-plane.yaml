@@ -1,0 +1,129 @@
+role: apply
+version: v1alpha1
+phases:
+  - name: install
+    steps:
+      - id: reset-kubeadm-state
+        apiVersion: deck/v1alpha1
+        kind: RunCommand
+        spec:
+          command:
+            - bash
+            - -lc
+            - |
+              set -euo pipefail
+              systemctl stop kubelet || true
+              kubeadm reset -f || true
+              rm -rf /etc/cni/net.d /var/lib/etcd /etc/kubernetes/manifests /var/lib/kubelet/pki
+              rm -f /etc/kubernetes/admin.conf /etc/kubernetes/kubelet.conf /etc/kubernetes/controller-manager.conf /etc/kubernetes/scheduler.conf
+              crictl --runtime-endpoint unix:///run/containerd/containerd.sock rm -f $(crictl --runtime-endpoint unix:///run/containerd/containerd.sock ps -a --name kube-apiserver -q) >/dev/null 2>&1 || true
+              crictl --runtime-endpoint unix:///run/containerd/containerd.sock rm -f $(crictl --runtime-endpoint unix:///run/containerd/containerd.sock ps -a --name kube-controller-manager -q) >/dev/null 2>&1 || true
+              crictl --runtime-endpoint unix:///run/containerd/containerd.sock rm -f $(crictl --runtime-endpoint unix:///run/containerd/containerd.sock ps -a --name kube-scheduler -q) >/dev/null 2>&1 || true
+              crictl --runtime-endpoint unix:///run/containerd/containerd.sock rm -f $(crictl --runtime-endpoint unix:///run/containerd/containerd.sock ps -a --name etcd -q) >/dev/null 2>&1 || true
+              systemctl restart containerd
+      - id: wait-runtime-ready
+        apiVersion: deck/v1alpha1
+        kind: RunCommand
+        spec:
+          timeout: 5m
+          command:
+            - bash
+            - -lc
+            - |
+              set -euo pipefail
+              for i in $(seq 1 60); do
+                if systemctl is-active --quiet containerd; then
+                  break
+                fi
+                sleep 2
+              done
+              systemctl is-active --quiet containerd
+              for i in $(seq 1 60); do
+                if crictl --runtime-endpoint unix:///run/containerd/containerd.sock info >/dev/null 2>&1; then
+                  break
+                fi
+                sleep 2
+              done
+              crictl --runtime-endpoint unix:///run/containerd/containerd.sock info >/dev/null 2>&1
+              for i in $(seq 1 30); do
+                if ss -lnt | grep -E ':(10257|10259)\s' >/dev/null 2>&1; then
+                  sleep 2
+                  continue
+                fi
+                break
+              done
+              if ss -lnt | grep -E ':(10257|10259)\s' >/dev/null 2>&1; then
+                echo "stale control-plane ports still in use" >&2
+                ss -lntp | grep -E ':(10257|10259)\s' || true
+                exit 1
+              fi
+              if ls /etc/kubernetes/manifests/*.yaml >/dev/null 2>&1; then
+                echo "stale static pod manifests still present" >&2
+                ls -l /etc/kubernetes/manifests || true
+                exit 1
+              fi
+              systemctl enable --now kubelet
+              systemctl is-active --quiet kubelet
+      - id: prepull-control-plane-images
+        apiVersion: deck/v1alpha1
+        kind: RunCommand
+        spec:
+          timeout: 20m
+          command:
+            - bash
+            - -lc
+            - |
+              set -euo pipefail
+              kubeadm config images pull --kubernetes-version "{{ .vars.kubernetesVersion  }}" --cri-socket unix:///run/containerd/containerd.sock
+      - id: write-kubeadm-init-config
+        apiVersion: deck/v1alpha1
+        kind: RunCommand
+        spec:
+          command:
+            - bash
+            - -lc
+            - |
+              set -euo pipefail
+              ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i=1; i<=NF; i++) if ($i=="src") {print $(i+1); exit}}' > /tmp/deck/kubeadm-node-ip.txt || true
+              if [[ ! -s /tmp/deck/kubeadm-node-ip.txt ]]; then
+                ip -4 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -n1 > /tmp/deck/kubeadm-node-ip.txt || true
+              fi
+              if [[ ! -s /tmp/deck/kubeadm-node-ip.txt ]]; then
+                echo "failed to detect node IPv4 for kubeadm init" >&2
+                exit 1
+              fi
+              cat > /tmp/deck/kubeadm-init.yaml <<EOF
+              apiVersion: kubeadm.k8s.io/v1beta3
+              kind: InitConfiguration
+              localAPIEndpoint:
+                advertiseAddress: $(cat /tmp/deck/kubeadm-node-ip.txt)
+                bindPort: 6443
+              nodeRegistration:
+                criSocket: unix:///run/containerd/containerd.sock
+              ---
+              apiVersion: kubeadm.k8s.io/v1beta3
+              kind: ClusterConfiguration
+              kubernetesVersion: {{ .vars.kubernetesVersion  }}
+              networking:
+                podSubnet: 10.244.0.0/16
+              EOF
+      - id: install-control-plane
+        apiVersion: deck/v1alpha1
+        kind: KubeadmInit
+        spec:
+          mode: real
+          timeout: 20m
+          configFile: /tmp/deck/kubeadm-init.yaml
+          outputJoinFile: /tmp/deck/join.txt
+          ignorePreflightErrors: [Swap, FileExisting-crictl, FileExisting-conntrack, FileExisting-socat, Port-10250]
+      - id: publish-join-file
+        apiVersion: deck/v1alpha1
+        kind: RunCommand
+        spec:
+          command:
+            - bash
+            - -lc
+            - |
+              set -euo pipefail
+              mkdir -p /tmp/deck/server-root/files/cluster
+              cp -f /tmp/deck/join.txt /tmp/deck/server-root/files/cluster/join.txt

@@ -1,0 +1,55 @@
+role: apply
+version: v1alpha1
+phases:
+  - name: install
+    steps:
+      - id: write-apt-offline-repo
+        when: runtime.host.os.family == "debian"
+        apiVersion: deck/v1alpha1
+        kind: WriteFile
+        spec:
+          path: /tmp/deck-offline-apt.list
+          mode: "0644"
+          contentFromTemplate: |
+            deb [trusted=yes] http://{{ .vars.serverURL  }}/packages/apt/{{ .vars.release  }} ./
+      - id: write-yum-offline-repo
+        when: runtime.host.os.family == "rhel"
+        apiVersion: deck/v1alpha1
+        kind: WriteFile
+        spec:
+          path: /tmp/deck-offline.repo
+          mode: "0644"
+          contentFromTemplate: |
+            [deck-os]
+            name=deck-os
+            baseurl=http://{{ .vars.serverURL  }}/packages/yum/{{ .vars.release  }}
+            enabled=1
+            gpgcheck=0
+      - id: apply-offline-repo-config-debian
+        when: runtime.host.os.family == "debian"
+        apiVersion: deck/v1alpha1
+        kind: RunCommand
+        spec:
+          command:
+            - bash
+            - -lc
+            - |
+              set -euo pipefail
+              mkdir -p /etc/apt/sources.list.d
+              rm -f /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources
+              cp -f /tmp/deck-offline-apt.list /etc/apt/sources.list.d/offline.list
+              apt-get clean
+              apt-get update
+      - id: apply-offline-repo-config-rhel
+        when: runtime.host.os.family == "rhel"
+        apiVersion: deck/v1alpha1
+        kind: RunCommand
+        spec:
+          command:
+            - bash
+            - -lc
+            - |
+              set -euo pipefail
+              cp -f /tmp/deck-offline.repo /etc/yum.repos.d/deck-offline.repo
+              dnf clean all
+              dnf makecache || true

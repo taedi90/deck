@@ -1,0 +1,37 @@
+role: pack
+version: v1alpha1
+phases:
+  - name: prepare
+    steps:
+      - id: prepare-os-packages-ubuntu2204
+        apiVersion: deck/v1alpha1
+        kind: DownloadPackages
+        spec:
+          backend:
+            mode: container
+            runtime: "{{ .vars.backendRuntime  }}"
+            image: ubuntu:22.04
+          distro:
+            family: debian
+            arch: "{{ .vars.arch  }}"
+            release: ubuntu2204
+          packages: [containerd, containernetworking-plugins, iptables]
+          repo:
+            type: apt-flat
+            generate: true
+      - id: prepare-os-packages-ubuntu2404
+        apiVersion: deck/v1alpha1
+        kind: DownloadPackages
+        spec:
+          backend:
+            mode: container
+            runtime: "{{ .vars.backendRuntime  }}"
+            image: ubuntu:24.04
+          distro:
+            family: debian
+            arch: "{{ .vars.arch  }}"
+            release: ubuntu2404
+          packages: [containerd, containernetworking-plugins, iptables]
+          repo:
+            type: apt-flat
+            generate: true

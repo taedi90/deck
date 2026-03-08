@@ -1,0 +1,20 @@
+role: apply
+version: v1alpha1
+varImports:
+  - ./offline-multinode/vars/control-plane.yaml
+phases:
+  - name: install
+    imports:
+      - path: ./offline-multinode/apply/common/prereq.yaml
+      - path: ./offline-multinode/apply/common/offline-repo-debian.yaml
+        when: runtime.host.os.family == "debian"
+      - path: ./offline-multinode/apply/common/offline-repo-rhel.yaml
+        when: runtime.host.os.family == "rhel"
+      - path: ./offline-multinode/apply/common/runtime-deps-debian.yaml
+        when: runtime.host.os.family == "debian"
+      - path: ./offline-multinode/apply/common/runtime-deps-rhel.yaml
+        when: runtime.host.os.family == "rhel"
+      - path: ./offline-multinode/apply/common/k8s-binaries.yaml
+      - path: ./offline-multinode/apply/common/containerd-kubelet.yaml
+      - path: ./offline-multinode/apply/control-plane.yaml
+      - path: ./offline-multinode/apply/common/cni.yaml

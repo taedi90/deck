@@ -17,12 +17,13 @@ OFFLINE_RELEASE_CONTROL_PLANE="${DECK_OFFLINE_RELEASE_CONTROL_PLANE:-ubuntu2204}
 OFFLINE_RELEASE_WORKER="${DECK_OFFLINE_RELEASE_WORKER:-ubuntu2404}"
 OFFLINE_RELEASE_WORKER_2="${DECK_OFFLINE_RELEASE_WORKER_2:-rocky9}"
 KUBERNETES_VERSION="${DECK_KUBERNETES_VERSION:-v1.30.1}"
+PREPARED_BUNDLE_REL="${DECK_PREPARED_BUNDLE_REL:-}"
 SERVER_ROOT="/tmp/deck/server-root"
 DECK_BIN="/tmp/deck/deck"
 SERVER_PID=""
 REPO_TYPE="apt-flat"
 OFFLINE_GUARD_ACTIVE=0
-TEMPLATE_DIR="/workspace/test/vagrant/scenario-templates"
+TEMPLATE_DIR="/workspace/test/vagrant/workflows"
 KEEP_PROCESSES=0
 SERVER_PID_FILE="/tmp/deck/offline-server.pid"
 
@@ -94,22 +95,16 @@ trap cleanup EXIT INT TERM
 
 render_prepare_fragments() {
 	local target_dir="$1"
+	rm -rf "${target_dir}"
 	mkdir -p "${target_dir}"
-	for src in "${TEMPLATE_DIR}/offline-multinode/"*.yaml; do
-		local name
-		name="$(basename "${src}")"
-		cp "${src}" "${target_dir}/${name}"
-	done
+	cp -a "${TEMPLATE_DIR}/offline-multinode/." "${target_dir}/"
 }
 
 render_apply_fragments() {
 	local target_dir="$1"
+	rm -rf "${target_dir}"
 	mkdir -p "${target_dir}"
-	for src in "${TEMPLATE_DIR}/offline-multinode/"*.yaml; do
-		local name
-		name="$(basename "${src}")"
-		cp "${src}" "${target_dir}/${name}"
-	done
+	cp -a "${TEMPLATE_DIR}/offline-multinode/." "${target_dir}/"
 }
 
 wait_server_health() {
@@ -156,7 +151,7 @@ write_prepare_workflows() {
 	rm -rf "${root}"
 	mkdir -p "${wf_dir}"
 	render_prepare_fragments "${fragment_dir}"
-	cp "${TEMPLATE_DIR}/offline-multinode-prepare.yaml" "${wf_dir}/pack.yaml"
+	cp "${TEMPLATE_DIR}/offline-multinode/profile/prepare.yaml" "${wf_dir}/pack.yaml"
   cat > "${wf_dir}/apply.yaml" <<'EOF'
 role: apply
 version: v1alpha1
@@ -173,6 +168,14 @@ EOF
 }
 
 prepare_server_bundle() {
+  if [[ -n "${PREPARED_BUNDLE_REL}" ]] && [[ -f "/workspace/${PREPARED_BUNDLE_REL}/.deck/manifest.json" ]]; then
+    sudo -n rm -rf "${SERVER_ROOT}"
+    mkdir -p "${SERVER_ROOT}"
+    cp -a "/workspace/${PREPARED_BUNDLE_REL}/." "${SERVER_ROOT}/"
+    printf 'prepared-bundle=%s\n' "${PREPARED_BUNDLE_REL}" > "${CASE_DIR}/01-prepare.log"
+    return 0
+  fi
+
   write_prepare_workflows
   local out_tar="/tmp/deck/offline-pack-bundle.tar"
   (cd /tmp/deck/offline-pack && sudo -n "${DECK_BIN}" pack --out "${out_tar}" \
@@ -194,9 +197,9 @@ write_runtime_workflows() {
 	mkdir -p "${workflow_dir}"
 	ensure_advertise_address
 	render_apply_fragments "${fragment_dir}"
-	cp "${TEMPLATE_DIR}/offline-multinode-control-plane.yaml" "${workflow_dir}/offline-pull-control-plane.yaml"
-	cp "${TEMPLATE_DIR}/offline-multinode-worker.yaml" "${workflow_dir}/offline-pull-worker.yaml"
-	cp "${TEMPLATE_DIR}/offline-multinode-worker.yaml" "${workflow_dir}/offline-pull-worker-2.yaml"
+	cp "${TEMPLATE_DIR}/offline-multinode/profile/control-plane.yaml" "${workflow_dir}/offline-pull-control-plane.yaml"
+	cp "${TEMPLATE_DIR}/offline-multinode/profile/worker.yaml" "${workflow_dir}/offline-pull-worker.yaml"
+	cp "${TEMPLATE_DIR}/offline-multinode/profile/worker.yaml" "${workflow_dir}/offline-pull-worker-2.yaml"
 }
 
 start_server_background() {

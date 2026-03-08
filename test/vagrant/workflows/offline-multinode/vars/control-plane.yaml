@@ -1,0 +1,4 @@
+serverURL: 127.0.0.1:18080
+release: ubuntu2204
+registryHost: 127.0.0.1:18080
+kubernetesVersion: v1.30.1

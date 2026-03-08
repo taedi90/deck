@@ -1,0 +1,10 @@
+role: pack
+version: v1alpha1
+varImports:
+  - ./offline-multinode/vars/prepare.yaml
+phases:
+  - name: prepare
+    imports:
+      - path: ./offline-multinode/prepare/packages.yaml
+      - path: ./offline-multinode/prepare/binaries.yaml
+      - path: ./offline-multinode/prepare/images.yaml
