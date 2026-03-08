@@ -1,8 +1,7 @@
+role: apply
 version: v1alpha1
 vars:
   role: control-plane
-context:
-  stateFile: /tmp/deck/state-control-offline.json
 phases:
   - name: install
     steps:

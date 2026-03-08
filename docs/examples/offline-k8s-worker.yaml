@@ -1,8 +1,7 @@
+role: apply
 version: v1alpha1
 vars:
   role: worker
-context:
-  stateFile: /tmp/deck/state-worker-offline.json
 phases:
   - name: install
     steps:
