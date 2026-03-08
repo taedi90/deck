@@ -3,13 +3,12 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 VAGRANT_DIR="${ROOT_DIR}/test/vagrant"
-LIBVIRT_POOL_HELPER="${VAGRANT_DIR}/scripts/libvirt-pool.sh"
-ENSURE_BINARIES_HELPER="${VAGRANT_DIR}/scripts/ensure-deck-binaries.sh"
-PREPARE_CACHE_HELPER="${VAGRANT_DIR}/scripts/prepare-cache.sh"
-VM_SCENARIO_SCRIPT="${VAGRANT_DIR}/scripts/run-offline-multinode-agent-vm.sh"
+LIBVIRT_ENV_HELPER="${VAGRANT_DIR}/libvirt-env.sh"
+BUILD_BINARIES_HELPER="${VAGRANT_DIR}/build-deck-binaries.sh"
+VM_SCENARIO_SCRIPT="${VAGRANT_DIR}/run-offline-multinode-vm.sh"
 
 TS="$(date +%Y%m%d-%H%M%S)"
-ART_DIR_REL=".ci/artifacts/offline-multinode-agent-${TS}"
+ART_DIR_REL="test/artifacts/offline-multinode-${TS}"
 ART_DIR_ABS="${ROOT_DIR}/${ART_DIR_REL}"
 CHECKPOINT_DIR=""
 
@@ -18,7 +17,7 @@ DECK_VAGRANT_BOX_CONTROL_PLANE="${DECK_VAGRANT_BOX_CONTROL_PLANE:-${DECK_VAGRANT
 DECK_VAGRANT_BOX_WORKER="${DECK_VAGRANT_BOX_WORKER:-bento/ubuntu-24.04}"
 DECK_VAGRANT_BOX_WORKER_2="${DECK_VAGRANT_BOX_WORKER_2:-generic/rocky9}"
 DECK_VAGRANT_BOX="${DECK_VAGRANT_BOX:-${DECK_VAGRANT_BOX_CONTROL_PLANE}}"
-DECK_VAGRANT_VM_PREFIX="${DECK_VAGRANT_VM_PREFIX:-deck-offline-multinode-agent-${TS}-$$}"
+DECK_VAGRANT_VM_PREFIX="${DECK_VAGRANT_VM_PREFIX:-deck-offline-multinode-${TS}-$$}"
 DECK_VAGRANT_SKIP_CLEANUP="${DECK_VAGRANT_SKIP_CLEANUP:-0}"
 
 STEP=""
@@ -129,7 +128,7 @@ if [[ -n "${STEP}" ]]; then
 fi
 
 if [[ ${RESUME} -eq 1 && -z "${STEP}" && -z "${FROM_STEP}" && -z "${TO_STEP}" && ! -d "${ART_DIR_ABS}" ]]; then
-  latest_rel="$(ls -dt "${ROOT_DIR}"/.ci/artifacts/offline-multinode-agent-* 2>/dev/null | head -n1 | sed "s#^${ROOT_DIR}/##" || true)"
+  latest_rel="$(ls -dt "${ROOT_DIR}"/test/artifacts/offline-multinode-* 2>/dev/null | head -n1 | sed "s#^${ROOT_DIR}/##" || true)"
   if [[ -n "${latest_rel}" ]]; then
     ART_DIR_REL="${latest_rel}"
     ART_DIR_ABS="${ROOT_DIR}/${ART_DIR_REL}"
@@ -209,10 +208,6 @@ run_vagrant_ssh() {
 }
 
 load_state_env() {
-  if [[ -f "${ART_DIR_ABS}/prepare-cache.env" ]]; then
-    # shellcheck disable=SC1090
-    source "${ART_DIR_ABS}/prepare-cache.env"
-  fi
   if [[ -f "${STATE_ENV_PATH}" ]]; then
     # shellcheck disable=SC1090
     source "${STATE_ENV_PATH}"
@@ -285,14 +280,9 @@ check_provider_available() {
 
 step_prepare_host() {
   mkdir -p "${ART_DIR_ABS}"
-  source "${LIBVIRT_POOL_HELPER}"
+  source "${LIBVIRT_ENV_HELPER}"
   prepare_libvirt_environment
-  "${ENSURE_BINARIES_HELPER}" "${ROOT_DIR}"
-  DECK_HOST_BIN="${ROOT_DIR}/.ci/artifacts/deck-host" \
-  DECK_VAGRANT_PROVIDER="${DECK_VAGRANT_PROVIDER}" \
-  DECK_VAGRANT_BOX="${DECK_VAGRANT_BOX_CONTROL_PLANE},${DECK_VAGRANT_BOX_WORKER},${DECK_VAGRANT_BOX_WORKER_2}" \
-  DECK_PREPARE_TEMPLATE_PATH="${ROOT_DIR}/test/vagrant/scenario-templates/offline-multinode-prepare.yaml" \
-    "${PREPARE_CACHE_HELPER}" "${ROOT_DIR}" "${ART_DIR_ABS}" "offline-multinode-agent"
+  "${BUILD_BINARIES_HELPER}" "${ROOT_DIR}"
   load_state_env
 }
 
@@ -324,13 +314,13 @@ EOF
 control_plane_action() {
   local action="$1"
   load_state_env
-  run_vagrant_ssh "control-plane" "ART_DIR_REL=${ART_DIR_REL} SERVER_URL=${SERVER_URL} DECK_KUBEADM_ADVERTISE_ADDRESS=${SERVER_IP} DECK_OFFLINE_RELEASE_CONTROL_PLANE=ubuntu2204 DECK_OFFLINE_RELEASE_WORKER=ubuntu2404 DECK_OFFLINE_RELEASE_WORKER_2=rocky9 DECK_PREPARED_BUNDLE_REL=${DECK_PREPARED_BUNDLE_REL:-} DECK_PREPARE_CACHE_STATUS=${DECK_PREPARE_CACHE_STATUS:-none} bash /workspace/test/vagrant/scripts/run-offline-multinode-agent-vm.sh control-plane ${action}"
+  run_vagrant_ssh "control-plane" "ART_DIR_REL=${ART_DIR_REL} SERVER_URL=${SERVER_URL} DECK_KUBEADM_ADVERTISE_ADDRESS=${SERVER_IP} DECK_OFFLINE_RELEASE_CONTROL_PLANE=ubuntu2204 DECK_OFFLINE_RELEASE_WORKER=ubuntu2404 DECK_OFFLINE_RELEASE_WORKER_2=rocky9 bash /workspace/test/vagrant/run-offline-multinode-vm.sh control-plane ${action}"
 }
 
 step_start_agents() {
   load_state_env
-  run_vagrant_ssh "worker" "ART_DIR_REL=${ART_DIR_REL} SERVER_URL=${SERVER_URL} DECK_OFFLINE_RELEASE=ubuntu2404 bash /workspace/test/vagrant/scripts/run-offline-multinode-agent-vm.sh worker start-agent"
-  run_vagrant_ssh "worker-2" "ART_DIR_REL=${ART_DIR_REL} SERVER_URL=${SERVER_URL} DECK_OFFLINE_RELEASE=rocky9 bash /workspace/test/vagrant/scripts/run-offline-multinode-agent-vm.sh worker-2 start-agent"
+  run_vagrant_ssh "worker" "ART_DIR_REL=${ART_DIR_REL} SERVER_URL=${SERVER_URL} DECK_OFFLINE_RELEASE=ubuntu2404 bash /workspace/test/vagrant/run-offline-multinode-vm.sh worker start-agent"
+  run_vagrant_ssh "worker-2" "ART_DIR_REL=${ART_DIR_REL} SERVER_URL=${SERVER_URL} DECK_OFFLINE_RELEASE=rocky9 bash /workspace/test/vagrant/run-offline-multinode-vm.sh worker-2 start-agent"
   control_plane_action "start-agent"
 }
 
@@ -339,13 +329,13 @@ step_enqueue_install() { control_plane_action "apply-control-plane"; }
 step_wait_install() { control_plane_action "verify-install"; }
 step_enqueue_join() {
   load_state_env
-  run_vagrant_ssh "worker" "ART_DIR_REL=${ART_DIR_REL} SERVER_URL=${SERVER_URL} DECK_OFFLINE_RELEASE=ubuntu2404 bash /workspace/test/vagrant/scripts/run-offline-multinode-agent-vm.sh worker apply-worker"
-  run_vagrant_ssh "worker-2" "ART_DIR_REL=${ART_DIR_REL} SERVER_URL=${SERVER_URL} DECK_OFFLINE_RELEASE=rocky9 bash /workspace/test/vagrant/scripts/run-offline-multinode-agent-vm.sh worker-2 apply-worker"
+  run_vagrant_ssh "worker" "ART_DIR_REL=${ART_DIR_REL} SERVER_URL=${SERVER_URL} DECK_OFFLINE_RELEASE=ubuntu2404 bash /workspace/test/vagrant/run-offline-multinode-vm.sh worker apply-worker"
+  run_vagrant_ssh "worker-2" "ART_DIR_REL=${ART_DIR_REL} SERVER_URL=${SERVER_URL} DECK_OFFLINE_RELEASE=rocky9 bash /workspace/test/vagrant/run-offline-multinode-vm.sh worker-2 apply-worker"
 }
 step_wait_join() {
   load_state_env
-  run_vagrant_ssh "worker" "ART_DIR_REL=${ART_DIR_REL} SERVER_URL=${SERVER_URL} DECK_OFFLINE_RELEASE=ubuntu2404 bash /workspace/test/vagrant/scripts/run-offline-multinode-agent-vm.sh worker verify-worker"
-  run_vagrant_ssh "worker-2" "ART_DIR_REL=${ART_DIR_REL} SERVER_URL=${SERVER_URL} DECK_OFFLINE_RELEASE=rocky9 bash /workspace/test/vagrant/scripts/run-offline-multinode-agent-vm.sh worker-2 verify-worker"
+  run_vagrant_ssh "worker" "ART_DIR_REL=${ART_DIR_REL} SERVER_URL=${SERVER_URL} DECK_OFFLINE_RELEASE=ubuntu2404 bash /workspace/test/vagrant/run-offline-multinode-vm.sh worker verify-worker"
+  run_vagrant_ssh "worker-2" "ART_DIR_REL=${ART_DIR_REL} SERVER_URL=${SERVER_URL} DECK_OFFLINE_RELEASE=rocky9 bash /workspace/test/vagrant/run-offline-multinode-vm.sh worker-2 verify-worker"
 }
 step_assert_cluster() { control_plane_action "assert-cluster"; }
 
@@ -358,8 +348,8 @@ step_collect() {
   popd >/dev/null
   IN_VAGRANT_DIR=0
 
-  if [[ ! -f "${ART_DIR_ABS}/offline-multinode-agent-pass.txt" ]]; then
-    echo "[deck] PASS marker missing: ${ART_DIR_ABS}/offline-multinode-agent-pass.txt"
+  if [[ ! -f "${ART_DIR_ABS}/offline-multinode-pass.txt" ]]; then
+    echo "[deck] PASS marker missing: ${ART_DIR_ABS}/offline-multinode-pass.txt"
     exit 1
   fi
   if [[ ! -f "${ART_DIR_ABS}/cluster-nodes.txt" ]]; then
@@ -403,7 +393,7 @@ run_step() {
   echo "[deck] step=${step_name} done"
 }
 
-for p in "${VAGRANT_DIR}/Vagrantfile" "${VM_SCENARIO_SCRIPT}" "${LIBVIRT_POOL_HELPER}" "${ENSURE_BINARIES_HELPER}" "${PREPARE_CACHE_HELPER}"; do
+for p in "${VAGRANT_DIR}/Vagrantfile" "${VM_SCENARIO_SCRIPT}" "${LIBVIRT_ENV_HELPER}" "${BUILD_BINARIES_HELPER}"; do
   if [[ ! -e "${p}" ]]; then
     echo "[deck] missing required path: ${p}"
     exit 1
@@ -427,4 +417,4 @@ run_step collect
 run_step cleanup
 
 trap - EXIT INT TERM
-echo "[deck] offline multi-node agent artifacts: ${ART_DIR_ABS}"
+echo "[deck] offline-multinode artifacts: ${ART_DIR_ABS}"

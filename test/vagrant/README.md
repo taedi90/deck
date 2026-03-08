@@ -1,44 +1,32 @@
-# Vagrant Test Scripts
+# Vagrant offline-multinode scenario
 
-이 디렉터리는 Vagrant 기반 수동/원격 E2E 검증 스크립트와 VM 정의를 포함한다.
+이 디렉터리는 Vagrant 기반 `offline-multinode` 단일 시나리오만 유지한다.
 
 ## 구성 파일
 
 - `Vagrantfile`: control-plane + worker 2대(총 3노드) VM 정의
-- `run-single-node-real.sh`: A. 단일 노드(real) 시나리오
-- `run-smoke.sh`: B. 다중 노드(real) 시나리오
-- `run-offline-multinode-agent.sh`: C. server/agent pull 시나리오
-  - 기본 토폴로지: `control-plane` 1대 + `worker` 2대
-  - 기본 박스: `generic/ubuntu2204`(control-plane), `bento/ubuntu-24.04`(worker), `generic/rocky9`(worker-2)
+- `run-offline-multinode-agent.sh`: 호스트 오케스트레이터
   - 단계 실행 옵션: `--step`, `--from-step`, `--to-step`, `--resume`, `--art-dir`
-- `run-vm-ssh-preflight.sh`: VM 생성/SSH 접근 preflight 시나리오
+- `run-offline-multinode-vm.sh`: VM 내부 단계 실행 스크립트
+- `build-deck-binaries.sh`: 호스트에서 테스트용 `deck` 바이너리 빌드
+- `libvirt-env.sh`: libvirt pool/network 및 Vagrant 환경 준비
 
-## 시나리오 요약
+## 아티팩트 경로
 
-- control-plane
-  - 로컬 번들(`.ci/cache/prepare/*/bundle`) 마운트 경로 사용
-  - `InstallPackages(source=local-repo)` + `KubeadmInit(mode=real)` 수행
-- worker
-  - 로컬 번들(`.ci/cache/prepare/*/bundle`) 마운트 경로 사용
-  - `InstallPackages(source=local-repo)` + `KubeadmJoin(mode=real)` 수행
+- `test/artifacts/offline-multinode-*/`
 
-## 아티팩트
+주요 출력:
 
-- `.ci/artifacts/smoke-*/`
-- `.ci/artifacts/offline-multinode-agent-*/`
-- `.ci/artifacts/vm-ssh-*/`
+- `checkpoints/<step>.done`
+- `error-<step>.log`
+- `cluster-nodes.txt`
+- `offline-multinode-pass.txt`
 
-각 아티팩트 디렉터리에는 상태 파일, manifest, vagrant status가 저장된다.
-
-각 시나리오는 verifier 스크립트로 필수 아티팩트 존재 여부를 검증한다.
-
-## offline-multinode-agent 단계 실행
+## 단계 실행
 
 - Step 목록:
   - `prepare-host`, `up-vms`, `start-agents`, `start-server`
   - `enqueue-install`, `wait-install`, `enqueue-join`, `wait-join`
   - `assert-cluster`, `collect`, `cleanup`
-- 체크포인트:
-  - `.ci/artifacts/offline-multinode-agent-*/checkpoints/<step>.done`
 - 재개 예시:
-  - `test/vagrant/run-offline-multinode-agent.sh --from-step wait-install --to-step collect --resume --art-dir .ci/artifacts/offline-multinode-agent-<ts>`
+  - `test/vagrant/run-offline-multinode-agent.sh --from-step wait-install --to-step collect --resume --art-dir test/artifacts/offline-multinode-<ts>`

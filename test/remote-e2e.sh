@@ -2,14 +2,14 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MODE="${MODE:-single}"
+MODE="${MODE:-offline-multinode}"
 REF="${REF:-}"
 ENV_FILE="${DECK_REMOTE_ENV_FILE:-}"
 SYNC_MODE="${DECK_REMOTE_SYNC_MODE:-auto}"
 EFFECTIVE_SYNC_MODE="${SYNC_MODE}"
 DECK_VAGRANT_SKIP_CLEANUP_PRESET=0
 DECK_VAGRANT_SKIP_CLEANUP_PRESET_VALUE="0"
-OUT_DIR_REL=".ci/artifacts/remote-e2e-$(date +%Y%m%d-%H%M%S)"
+OUT_DIR_REL="test/artifacts/remote-e2e-$(date +%Y%m%d-%H%M%S)"
 OUT_DIR_ABS="${ROOT_DIR}/${OUT_DIR_REL}"
 
 usage() {
@@ -17,7 +17,7 @@ usage() {
 Run deck Vagrant E2E on remote host.
 
 Usage:
-  test/remote-e2e.sh --env-file <path> [--mode single|smoke|vm-ssh|offline-multinode-agent] [--ref <git-ref>] [--sync auto|git|upload] [--skip-cleanup]
+  test/remote-e2e.sh --env-file <path> [--mode offline-multinode] [--ref <git-ref>] [--sync auto|git|upload] [--skip-cleanup]
 
 Required env file keys:
   DECK_REMOTE_HOST
@@ -103,24 +103,12 @@ if [[ -z "${REF}" ]]; then
 fi
 
 case "${MODE}" in
-  single)
-    REMOTE_CMD="DECK_PREPARE_FORCE_REDOWNLOAD=${DECK_PREPARE_FORCE_REDOWNLOAD:-0} DECK_VAGRANT_PROVIDER=libvirt test/vagrant/run-single-node-real.sh"
-    REMOTE_GLOB=".ci/artifacts/single-node-*"
-    ;;
-  smoke)
-    REMOTE_CMD="DECK_PREPARE_FORCE_REDOWNLOAD=${DECK_PREPARE_FORCE_REDOWNLOAD:-0} DECK_VAGRANT_PROVIDER=libvirt test/vagrant/run-smoke.sh"
-    REMOTE_GLOB=".ci/artifacts/smoke-*"
-    ;;
-  vm-ssh)
-    REMOTE_CMD="DECK_VAGRANT_PROVIDER=libvirt test/vagrant/run-vm-ssh-preflight.sh"
-    REMOTE_GLOB=".ci/artifacts/vm-ssh-*"
-    ;;
-  offline-multinode-agent)
+  offline-multinode)
     REMOTE_CMD="DECK_PREPARE_FORCE_REDOWNLOAD=${DECK_PREPARE_FORCE_REDOWNLOAD:-0} DECK_VAGRANT_PROVIDER=libvirt test/vagrant/run-offline-multinode-agent.sh"
-    REMOTE_GLOB=".ci/artifacts/offline-multinode-agent-*"
+    REMOTE_GLOB="test/artifacts/offline-multinode-*"
     ;;
   *)
-    echo "MODE must be one of: single, smoke, vm-ssh, offline-multinode-agent"
+    echo "MODE must be one of: offline-multinode"
     exit 1
     ;;
 esac
@@ -145,8 +133,8 @@ archive_working_tree() {
   local out_file="$1"
   tar -czf "${out_file}" \
     --exclude='.git' \
-    --exclude='.ci/artifacts' \
-    --exclude='.ci/cache' \
+    --exclude='test/artifacts' \
+    --exclude='test/cache' \
     --exclude='.vagrant' \
     --exclude='tmp' \
     -C "${ROOT_DIR}" .
@@ -263,11 +251,8 @@ else
 fi
 
 cd "${DECK_REMOTE_WORKDIR}"
-if [[ "${MODE}" == "single" || "${MODE}" == "smoke" || "${MODE}" == "offline-multinode-agent" ]]; then
-  mkdir -p .ci/artifacts
-  GOOS=linux GOARCH=amd64 go build -o .ci/artifacts/deck-linux-amd64 ./cmd/deck
-  GOOS=linux GOARCH=arm64 go build -o .ci/artifacts/deck-linux-arm64 ./cmd/deck
-  go build -o .ci/artifacts/deck-host ./cmd/deck
+if [[ "${MODE}" == "offline-multinode" ]]; then
+  bash test/vagrant/build-deck-binaries.sh "$(pwd)"
 fi
 bash -lc "${REMOTE_CMD}"
 REMOTE

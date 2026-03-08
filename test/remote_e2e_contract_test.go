@@ -17,17 +17,12 @@ func TestRemoteE2EScriptModeContracts(t *testing.T) {
 	content := string(raw)
 
 	expectContainsAll(t, content,
-		"[--mode single|smoke|vm-ssh|offline-multinode-agent]",
-		"single)",
-		"smoke)",
-		"vm-ssh)",
-		"REMOTE_CMD=\"DECK_PREPARE_FORCE_REDOWNLOAD=${DECK_PREPARE_FORCE_REDOWNLOAD:-0} DECK_VAGRANT_PROVIDER=libvirt test/vagrant/run-single-node-real.sh\"",
-		"REMOTE_CMD=\"DECK_PREPARE_FORCE_REDOWNLOAD=${DECK_PREPARE_FORCE_REDOWNLOAD:-0} DECK_VAGRANT_PROVIDER=libvirt test/vagrant/run-smoke.sh\"",
-		"REMOTE_CMD=\"DECK_VAGRANT_PROVIDER=libvirt test/vagrant/run-vm-ssh-preflight.sh\"",
-		"REMOTE_GLOB=\".ci/artifacts/single-node-*\"",
-		"REMOTE_GLOB=\".ci/artifacts/smoke-*\"",
-		"REMOTE_GLOB=\".ci/artifacts/vm-ssh-*\"",
-		"MODE must be one of: single, smoke, vm-ssh, offline-multinode-agent",
+		"MODE=\"${MODE:-offline-multinode}\"",
+		"[--mode offline-multinode]",
+		"offline-multinode)",
+		"REMOTE_CMD=\"DECK_PREPARE_FORCE_REDOWNLOAD=${DECK_PREPARE_FORCE_REDOWNLOAD:-0} DECK_VAGRANT_PROVIDER=libvirt test/vagrant/run-offline-multinode-agent.sh\"",
+		"REMOTE_GLOB=\"test/artifacts/offline-multinode-*\"",
+		"MODE must be one of: offline-multinode",
 	)
 }
 
@@ -41,29 +36,10 @@ func TestRemoteVMDocModeContracts(t *testing.T) {
 	content := string(raw)
 
 	expectContainsAll(t, content,
-		"- 모드: `offline-multinode`",
-		"--mode offline-multinode",
+		"offline-multinode",
+		"test/remote-e2e.sh",
 		"--skip-cleanup",
 	)
-}
-
-func TestVMSSHMatrixIncludesRequiredBoxes(t *testing.T) {
-	root := projectRoot(t)
-	required := []string{"generic/ubuntu2204", "bento/ubuntu-24.04", "generic/rocky9"}
-	files := []string{filepath.Join(root, "test", "vagrant", "nightly-boxes-libvirt.txt")}
-
-	for _, path := range files {
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("read nightly matrix file %s: %v", path, err)
-		}
-		content := string(raw)
-		for _, box := range required {
-			if !strings.Contains(content, box) {
-				t.Fatalf("matrix file %s missing required box %s", path, box)
-			}
-		}
-	}
 }
 
 func expectContainsAll(t *testing.T, content string, expected ...string) {
