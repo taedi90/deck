@@ -1,6 +1,5 @@
+role: apply
 version: v1alpha1
-context:
-  stateFile: /tmp/deck/state-vagrant-smoke-example.json
 phases:
   - name: install
     steps:

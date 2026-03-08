@@ -1,11 +1,10 @@
+role: apply
 version: v1alpha1
 vars:
   serverURL: 192.168.56.1:8080
   release: ubuntu2204
   registryHost: 192.168.56.1:5000
   joinFile: /tmp/deck/join.txt
-context:
-  stateFile: /tmp/deck/state-offline-pull-worker.json
 phases:
   - name: install
     steps:
@@ -21,8 +20,8 @@ phases:
           path: /tmp/deck-offline-apt.list
           mode: "0644"
           contentFromTemplate: |
-            deb [trusted=yes] http://{ .vars.serverURL }/packages/apt/{ .vars.release } ./
-            deb [trusted=yes] http://{ .vars.serverURL }/packages/apt-k8s/{ .vars.release } ./
+            deb [trusted=yes] http://{{ .vars.serverURL }}/packages/apt/{{ .vars.release }} ./
+            deb [trusted=yes] http://{{ .vars.serverURL }}/packages/apt-k8s/{{ .vars.release }} ./
       - id: write-yum-offline-repo
         apiVersion: deck/v1alpha1
         kind: WriteFile
@@ -32,13 +31,13 @@ phases:
           contentFromTemplate: |
             [deck-os]
             name=deck-os
-            baseurl=http://{ .vars.serverURL }/packages/yum/{ .vars.release }
+            baseurl=http://{{ .vars.serverURL }}/packages/yum/{{ .vars.release }}
             enabled=1
             gpgcheck=0
 
             [deck-k8s]
             name=deck-k8s
-            baseurl=http://{ .vars.serverURL }/packages/yum-k8s/{ .vars.release }
+            baseurl=http://{{ .vars.serverURL }}/packages/yum-k8s/{{ .vars.release }}
             enabled=1
             gpgcheck=0
       - id: apply-offline-repo-config
@@ -90,7 +89,7 @@ phases:
           contentFromTemplate: |
             server = "https://registry.k8s.io"
 
-            [host."http://{ .vars.registryHost }"]
+            [host."http://{{ .vars.registryHost }}"]
               capabilities = ["pull", "resolve"]
               skip_verify = true
       - id: configure-containerd-runtime
@@ -113,5 +112,5 @@ phases:
         kind: KubeadmJoin
         spec:
           mode: real
-          joinFile: "{ .vars.joinFile }"
+          joinFile: "{{ .vars.joinFile }}"
           extraArgs: ["--cri-socket", "unix:///run/containerd/containerd.sock", "--ignore-preflight-errors=Swap"]
