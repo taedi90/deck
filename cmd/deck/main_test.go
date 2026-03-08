@@ -815,6 +815,78 @@ func TestRunPackDryRunDoesNotWrite(t *testing.T) {
 	}
 }
 
+func TestRunPackVarFlagOverridesWorkflowVars(t *testing.T) {
+	root := t.TempDir()
+	workflowsDir := filepath.Join(root, "workflows")
+	if err := os.MkdirAll(workflowsDir, 0o755); err != nil {
+		t.Fatalf("mkdir workflows: %v", err)
+	}
+	seedDir := filepath.Join(root, "seed", "files")
+	if err := os.MkdirAll(seedDir, 0o755); err != nil {
+		t.Fatalf("mkdir seed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(seedDir, "source.bin"), []byte("seed\n"), 0o644); err != nil {
+		t.Fatalf("write seed file: %v", err)
+	}
+
+	packPath := filepath.Join(workflowsDir, "pack.yaml")
+	packBody := fmt.Sprintf(`role: pack
+version: v1alpha1
+vars:
+  relPath: default.bin
+phases:
+  - name: prepare
+    steps:
+      - id: p1
+        kind: DownloadFile
+        spec:
+          source:
+            path: files/source.bin
+          fetch:
+            sources:
+              - type: local
+                path: %q
+          output:
+            path: files/{{ .vars.relPath  }}
+`, filepath.Join(root, "seed"))
+	if err := os.WriteFile(packPath, []byte(packBody), 0o644); err != nil {
+		t.Fatalf("write pack workflow: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(workflowsDir, "apply.yaml"), []byte("role: apply\nversion: v1alpha1\nsteps: []\n"), 0o644); err != nil {
+		t.Fatalf("write apply workflow: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(workflowsDir, "vars.yaml"), []byte("kubernetesVersion: v1.30.1\n"), 0o644); err != nil {
+		t.Fatalf("write vars workflow: %v", err)
+	}
+
+	originalCWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(originalCWD)
+	})
+
+	outTar := filepath.Join(root, "bundle.tar")
+	if _, err := runWithCapturedStdout([]string{"pack", "--out", outTar, "--var", "relPath=override.bin"}); err != nil {
+		t.Fatalf("pack failed: %v", err)
+	}
+
+	names, err := tarEntryNamesFromFile(outTar)
+	if err != nil {
+		t.Fatalf("read tar entries: %v", err)
+	}
+	if !sliceContains(names, "bundle/files/override.bin") {
+		t.Fatalf("expected override output in tar entries: %#v", names)
+	}
+	if sliceContains(names, "bundle/files/default.bin") {
+		t.Fatalf("unexpected default output in tar entries: %#v", names)
+	}
+}
+
 func TestResolveInstallStatePathUsesHomeAndStateKey(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "home")
 	if err := os.MkdirAll(home, 0o755); err != nil {

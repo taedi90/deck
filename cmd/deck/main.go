@@ -177,6 +177,8 @@ func runPack(args []string) error {
 	dryRun := fs.Bool("dry-run", false, "print pack plan without writing files")
 	cacheDir := fs.String("cache-dir", "", "artifact cache directory")
 	noCache := fs.Bool("no-cache", false, "disable artifact cache reuse")
+	vars := &varFlag{}
+	fs.Var(vars, "var", "set variable override (key=value), repeatable")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -231,7 +233,7 @@ func runPack(args []string) error {
 	defer os.RemoveAll(stagingRoot)
 	bundleRoot := filepath.Join(stagingRoot, "bundle")
 
-	packWorkflow, err := config.Load(packWorkflowPath)
+	packWorkflow, err := config.LoadWithOptions(packWorkflowPath, config.LoadOptions{VarOverrides: varsAsAnyMap(vars.AsMap())})
 	if err != nil {
 		return err
 	}
