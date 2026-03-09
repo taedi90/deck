@@ -13,3 +13,5 @@ coverage.out
 # Local artifacts
 /bundle/
 /reports/
+/test/vagrant/.vagrant/
+/test/artifacts/cache/

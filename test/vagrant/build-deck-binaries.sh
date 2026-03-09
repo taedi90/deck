@@ -35,7 +35,7 @@ if [[ "${current_stamp}" != "${desired_stamp}" ]]; then
 fi
 
 if [[ "${needs_build}" == "1" ]]; then
-  echo "[deck] building deck binaries on remote host"
+  echo "[deck] building deck binaries for local vagrant tests"
   GOOS=linux GOARCH=amd64 go build -o "${DECK_BIN_AMD64}" ./cmd/deck
   GOOS=linux GOARCH=arm64 go build -o "${DECK_BIN_ARM64}" ./cmd/deck
   go build -o "${DECK_HOST_BIN}" ./cmd/deck

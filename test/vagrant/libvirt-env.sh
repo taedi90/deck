@@ -22,7 +22,6 @@ if [[ -z "${DECK_BACKUP_ROOT}" ]]; then
 fi
 DECK_LIBVIRT_POOL_PATH="${DECK_LIBVIRT_POOL_PATH:-${DECK_BACKUP_ROOT}/libvirt/pool}"
 DECK_VAGRANT_HOME="${DECK_VAGRANT_HOME:-${DECK_BACKUP_ROOT}/vagrant/home}"
-DECK_VAGRANT_DOTFILE_PATH="${DECK_VAGRANT_DOTFILE_PATH:-${DECK_BACKUP_ROOT}/vagrant/dotfiles}"
 
 prepare_libvirt_environment() {
   local uri="${DECK_LIBVIRT_URI}"
@@ -69,7 +68,7 @@ prepare_libvirt_environment() {
     fi
   fi
 
-  mkdir -p "${DECK_BACKUP_ROOT}" "${DECK_BACKUP_ROOT}/libvirt" "${DECK_LIBVIRT_POOL_PATH}" "${DECK_VAGRANT_HOME}" "${DECK_VAGRANT_DOTFILE_PATH}"
+  mkdir -p "${DECK_BACKUP_ROOT}" "${DECK_BACKUP_ROOT}/libvirt" "${DECK_LIBVIRT_POOL_PATH}" "${DECK_VAGRANT_HOME}"
   chmod 711 "${DECK_BACKUP_ROOT}" || true
   chmod 755 "${DECK_BACKUP_ROOT}/libvirt" || true
   chmod 777 "${DECK_LIBVIRT_POOL_PATH}" || true
@@ -192,7 +191,6 @@ EOF
   fi
 
   export VAGRANT_HOME="${DECK_VAGRANT_HOME}"
-  export VAGRANT_DOTFILE_PATH="${DECK_VAGRANT_DOTFILE_PATH}"
 
   if ! command -v vagrant >/dev/null 2>&1; then
     echo "[deck] vagrant command not found"
@@ -212,7 +210,6 @@ EOF
   export DECK_VAGRANT_QEMU_USE_SESSION
   export DECK_VAGRANT_BOOT_TIMEOUT
   export DECK_VAGRANT_HOME
-  export DECK_VAGRANT_DOTFILE_PATH
   export LIBVIRT_DEFAULT_STORAGE_POOL="${DECK_LIBVIRT_POOL_NAME}"
   export LIBVIRT_DEFAULT_URI="${DECK_LIBVIRT_URI}"
 }

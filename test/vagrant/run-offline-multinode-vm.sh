@@ -352,22 +352,10 @@ if [[ "${ACTION}" != "orchestrate" && "${ACTION}" != "cleanup" ]]; then
   KEEP_PROCESSES=1
 fi
 
-if [[ "${ACTION}" == "start-agent" ]]; then
-  printf '%s\n' "started" > "${ART_DIR}/${ROLE}-agent-started.txt"
-  echo "[deck] ${ROLE} workflow-runner marker created"
-  exit 0
-fi
-
 if [[ "${ACTION}" == "apply-worker" ]]; then
   apply_worker_workflow
   printf '%s\n' "ok" > "${ART_DIR}/${ROLE}-apply-done.txt"
   echo "[deck] ${ROLE} apply completed"
-  exit 0
-fi
-
-if [[ "${ACTION}" == "verify-worker" ]]; then
-  printf '%s\n' "ok" > "${ART_DIR}/${ROLE}-verify-done.txt"
-  echo "[deck] ${ROLE} verify completed"
   exit 0
 fi
 

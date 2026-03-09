@@ -163,7 +163,13 @@ Before sending changes, run the checks that match your work:
 ```bash
 go test ./...
 go run ./cmd/deck validate --file <workflow.yaml>
+
+# linux host with libvirt-backed vagrant
+bash test/vagrant/run-offline-multinode-agent.sh
 ```
+
+Local Vagrant runs keep machine state in `test/vagrant/.vagrant/` and reuse the prepared bundle cache in `test/artifacts/cache/offline-multinode-prepared-bundle/` across runs.
+The default local loop now prefers `rsync`, keeps VMs alive, and reuses `test/artifacts/offline-multinode-local/` unless you choose a different `--art-dir` or run with `--fresh`.
 
 ## License
 
