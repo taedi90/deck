@@ -21,6 +21,7 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/google/go-containerregistry/pkg/v1/types"
+	"github.com/taedi90/deck/internal/site/store"
 )
 
 type auditLogger struct {
@@ -46,6 +47,7 @@ const (
 
 	defaultAuditMaxSizeMB = 50
 	defaultAuditMaxFiles  = 10
+	defaultSiteAPIToken   = "deck-site-v1"
 )
 
 func newAuditLogger(root string, opts auditLoggerOptions) (*auditLogger, error) {
@@ -158,12 +160,20 @@ type HandlerOptions struct {
 	ReportMax      int
 	AuditMaxSizeMB int
 	AuditMaxFiles  int
+	APIToken       string
 }
 
 type serverHandler struct {
-	rootAbs string
-	logger  *auditLogger
-	base    http.Handler
+	rootAbs   string
+	logger    *auditLogger
+	siteStore *store.Store
+	apiToken  string
+	base      http.Handler
+}
+
+type sessionStatusResponse struct {
+	Session store.Session                  `json:"session"`
+	Status  store.SessionStatusAggregation `json:"status"`
 }
 
 type registryCatalogEntry struct {
@@ -212,12 +222,24 @@ func NewHandler(root string, opts HandlerOptions) (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
+	siteStore, err := store.New(resolvedRoot)
+	if err != nil {
+		return nil, fmt.Errorf("init site store: %w", err)
+	}
+	apiToken := strings.TrimSpace(opts.APIToken)
+	if apiToken == "" {
+		apiToken = defaultSiteAPIToken
+	}
 
-	h := &serverHandler{rootAbs: resolvedRoot, logger: logger}
+	h := &serverHandler{rootAbs: resolvedRoot, logger: logger, siteStore: siteStore, apiToken: apiToken}
 	h.base = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.URL.Path == "/healthz":
 			h.handleHealthz(w, r)
+		case strings.HasPrefix(r.URL.Path, "/api/site/v1/"):
+			h.handleSiteAPI(w, r)
+		case strings.HasPrefix(r.URL.Path, "/site/releases/"):
+			h.handleReleaseBundleRead(w, r)
 		case r.URL.Path == "/v2" || r.URL.Path == "/v2/" || strings.HasPrefix(r.URL.Path, "/v2/"):
 			h.handleRegistry(w, r)
 		case strings.HasPrefix(r.URL.Path, "/files/") || strings.HasPrefix(r.URL.Path, "/packages/") || strings.HasPrefix(r.URL.Path, "/images/") || strings.HasPrefix(r.URL.Path, "/workflows/"):
@@ -247,6 +269,261 @@ func NewHandler(root string, opts HandlerOptions) (http.Handler, error) {
 		})
 		logger.Write(entry)
 	}), nil
+}
+
+func (h *serverHandler) handleSiteAPI(w http.ResponseWriter, r *http.Request) {
+	if !h.authorizeSiteAPIToken(w, r) {
+		return
+	}
+	relPath := strings.TrimPrefix(r.URL.Path, "/api/site/v1/")
+	parts := strings.Split(relPath, "/")
+	if len(parts) < 2 {
+		h.writeJSONError(w, http.StatusNotFound, "not_found")
+		return
+	}
+
+	switch parts[0] {
+	case "releases":
+		if len(parts) == 2 && r.Method == http.MethodGet {
+			h.handleSiteReleaseGet(w, parts[1])
+			return
+		}
+	case "sessions":
+		if len(parts) == 2 && r.Method == http.MethodGet {
+			h.handleSiteSessionGet(w, parts[1])
+			return
+		}
+		if len(parts) == 3 && parts[2] == "assignment" && r.Method == http.MethodGet {
+			h.handleSiteSessionAssignmentGet(w, r, parts[1])
+			return
+		}
+		if len(parts) == 3 && parts[2] == "reports" && r.Method == http.MethodPost {
+			h.handleSiteSessionReportPost(w, r, parts[1])
+			return
+		}
+		if len(parts) == 3 && parts[2] == "status" && r.Method == http.MethodGet {
+			h.handleSiteSessionStatusGet(w, parts[1])
+			return
+		}
+	}
+
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	h.writeJSONError(w, http.StatusNotFound, "not_found")
+}
+
+func (h *serverHandler) authorizeSiteAPIToken(w http.ResponseWriter, r *http.Request) bool {
+	raw := strings.TrimSpace(r.Header.Get("Authorization"))
+	if !strings.HasPrefix(raw, "Bearer ") {
+		w.Header().Set("WWW-Authenticate", "Bearer")
+		h.writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return false
+	}
+	token := strings.TrimSpace(strings.TrimPrefix(raw, "Bearer "))
+	if token == "" || token != h.apiToken {
+		w.Header().Set("WWW-Authenticate", "Bearer")
+		h.writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return false
+	}
+	return true
+}
+
+func (h *serverHandler) handleSiteReleaseGet(w http.ResponseWriter, releaseID string) {
+	release, found, err := h.siteStore.GetRelease(releaseID)
+	if err != nil {
+		h.writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if !found {
+		h.writeJSONError(w, http.StatusNotFound, "release_not_found")
+		return
+	}
+	h.writeJSON(w, http.StatusOK, release)
+}
+
+func (h *serverHandler) handleSiteSessionGet(w http.ResponseWriter, sessionID string) {
+	session, found, err := h.siteStore.GetSession(sessionID)
+	if err != nil {
+		h.writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if !found {
+		h.writeJSONError(w, http.StatusNotFound, "session_not_found")
+		return
+	}
+	h.writeJSON(w, http.StatusOK, session)
+}
+
+func (h *serverHandler) handleSiteSessionAssignmentGet(w http.ResponseWriter, r *http.Request, sessionID string) {
+	nodeID := strings.TrimSpace(r.URL.Query().Get("node_id"))
+	action := strings.TrimSpace(r.URL.Query().Get("action"))
+	if nodeID == "" {
+		h.writeJSONError(w, http.StatusBadRequest, "node_id is required")
+		return
+	}
+	if action != "diff" && action != "doctor" && action != "apply" {
+		h.writeJSONError(w, http.StatusBadRequest, "action must be one of diff|doctor|apply")
+		return
+	}
+	assignment, err := h.siteStore.ResolveAssignment(sessionID, nodeID, action)
+	if err != nil {
+		if isNotFoundStoreError(err) {
+			h.writeJSONError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		h.writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	h.writeJSON(w, http.StatusOK, assignment)
+}
+
+func (h *serverHandler) handleSiteSessionReportPost(w http.ResponseWriter, r *http.Request, sessionID string) {
+	defer r.Body.Close()
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024*1024))
+	decoder.DisallowUnknownFields()
+	report := store.ExecutionReport{}
+	if err := decoder.Decode(&report); err != nil {
+		h.writeJSONError(w, http.StatusBadRequest, "invalid report payload")
+		return
+	}
+	if err := h.siteStore.SaveExecutionReport(sessionID, report); err != nil {
+		switch {
+		case strings.Contains(err.Error(), " is closed"):
+			h.writeJSONError(w, http.StatusConflict, err.Error())
+		case isNotFoundStoreError(err):
+			h.writeJSONError(w, http.StatusNotFound, err.Error())
+		default:
+			h.writeJSONError(w, http.StatusBadRequest, err.Error())
+		}
+		return
+	}
+	h.writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
+}
+
+func (h *serverHandler) handleSiteSessionStatusGet(w http.ResponseWriter, sessionID string) {
+	session, found, err := h.siteStore.GetSession(sessionID)
+	if err != nil {
+		h.writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if !found {
+		h.writeJSONError(w, http.StatusNotFound, "session_not_found")
+		return
+	}
+	aggregated, err := h.siteStore.SessionStatusAggregation(sessionID)
+	if err != nil {
+		h.writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	out := sessionStatusResponse{Session: session, Status: aggregated}
+	h.writeJSON(w, http.StatusOK, out)
+}
+
+func (h *serverHandler) handleReleaseBundleRead(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	releaseID, relPath, targetPath, status := h.resolveReleaseBundlePath(r.URL.Path)
+	if status != 0 {
+		w.WriteHeader(status)
+		return
+	}
+	if _, found, err := h.siteStore.GetRelease(releaseID); err != nil || !found {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	data, err := os.ReadFile(targetPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	hash := sha256.Sum256(data)
+	etag := fmt.Sprintf("\"sha256:%s\"", hex.EncodeToString(hash[:]))
+	setStaticHeaders(w.Header(), "site-release-bundle", relPath, etag, len(data), data)
+	if matchETag(r.Header.Get("If-None-Match"), etag) {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	if r.Method == http.MethodHead {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
+}
+
+func (h *serverHandler) resolveReleaseBundlePath(urlPath string) (string, string, string, int) {
+	prefix := "/site/releases/"
+	if !strings.HasPrefix(urlPath, prefix) {
+		return "", "", "", http.StatusNotFound
+	}
+	rest := strings.TrimPrefix(urlPath, prefix)
+	parts := strings.SplitN(rest, "/bundle/", 2)
+	if len(parts) != 2 {
+		return "", "", "", http.StatusNotFound
+	}
+	releaseID := strings.TrimSpace(parts[0])
+	relPath := strings.TrimSpace(parts[1])
+	if releaseID == "" || relPath == "" {
+		return "", "", "", http.StatusNotFound
+	}
+	if strings.Contains(relPath, "\\") {
+		return "", "", "", http.StatusForbidden
+	}
+	for _, segment := range strings.Split(relPath, "/") {
+		if segment == ".." {
+			return "", "", "", http.StatusForbidden
+		}
+	}
+	cleanRel := strings.TrimPrefix(path.Clean("/"+relPath), "/")
+	if cleanRel == "." || cleanRel == "" {
+		return "", "", "", http.StatusNotFound
+	}
+	bundleRoot := filepath.Join(h.rootAbs, ".deck", "site", "releases", releaseID, "bundle")
+	targetPath := filepath.Join(bundleRoot, filepath.FromSlash(cleanRel))
+	resolvedTarget, err := filepath.Abs(targetPath)
+	if err != nil {
+		return "", "", "", http.StatusForbidden
+	}
+	resolvedBundleRoot, err := filepath.Abs(bundleRoot)
+	if err != nil {
+		return "", "", "", http.StatusForbidden
+	}
+	rootPrefix := resolvedBundleRoot + string(os.PathSeparator)
+	if resolvedTarget != resolvedBundleRoot && !strings.HasPrefix(resolvedTarget, rootPrefix) {
+		return "", "", "", http.StatusForbidden
+	}
+	return releaseID, cleanRel, resolvedTarget, 0
+}
+
+func isNotFoundStoreError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, " not found") || strings.Contains(msg, "no assignment matched")
+}
+
+func (h *serverHandler) writeJSONError(w http.ResponseWriter, code int, message string) {
+	h.writeJSON(w, code, map[string]string{"error": message})
+}
+
+func (h *serverHandler) writeJSON(w http.ResponseWriter, code int, payload any) {
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	_, _ = w.Write(raw)
 }
 
 func (h *serverHandler) handleHealthz(w http.ResponseWriter, r *http.Request) {
@@ -593,7 +870,7 @@ func readLayerCompressed(layer v1.Layer) ([]byte, error) {
 }
 
 func (h *serverHandler) handleStatic(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodPut {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
@@ -601,15 +878,6 @@ func (h *serverHandler) handleStatic(w http.ResponseWriter, r *http.Request) {
 	category, relPath, targetPath, status := h.resolveCategoryPath(r.URL.Path)
 	if status != 0 {
 		w.WriteHeader(status)
-		return
-	}
-
-	if r.Method == http.MethodPut {
-		if err := writeFileAtomic(targetPath, r.Body); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusCreated)
 		return
 	}
 
@@ -715,35 +983,4 @@ func (h *serverHandler) resolveCategoryPath(urlPath string) (string, string, str
 	}
 
 	return category, cleanRel, resolvedTarget, 0
-}
-
-func writeFileAtomic(targetPath string, src io.Reader) error {
-	dir := filepath.Dir(targetPath)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("create parent directory: %w", err)
-	}
-
-	tmpFile, err := os.CreateTemp(dir, ".upload-*")
-	if err != nil {
-		return fmt.Errorf("create temp file: %w", err)
-	}
-	tmpPath := tmpFile.Name()
-	defer func() {
-		_ = os.Remove(tmpPath)
-	}()
-
-	if _, err := io.Copy(tmpFile, src); err != nil {
-		_ = tmpFile.Close()
-		return fmt.Errorf("write temp file: %w", err)
-	}
-	if err := tmpFile.Close(); err != nil {
-		return fmt.Errorf("close temp file: %w", err)
-	}
-	if err := os.Chmod(tmpPath, 0o644); err != nil {
-		return fmt.Errorf("chmod temp file: %w", err)
-	}
-	if err := os.Rename(tmpPath, targetPath); err != nil {
-		return fmt.Errorf("replace file: %w", err)
-	}
-	return nil
 }

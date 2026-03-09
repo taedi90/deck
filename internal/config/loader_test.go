@@ -174,6 +174,25 @@ func TestStateKey(t *testing.T) {
 	})
 }
 
+func TestStateKeyIgnoresAssistedMetadata(t *testing.T) {
+	workflow := []byte("role: apply\nversion: v1alpha1\nphases: []\n")
+	effectiveVars := map[string]any{"mode": "manual", "region": "lab-a"}
+
+	serverA := "https://site-a.example.invalid"
+	sessionA := "session-a"
+	nodeA := "node-a"
+	serverB := "https://site-b.example.invalid"
+	sessionB := "session-b"
+	nodeB := "node-b"
+
+	keyA := computeStateKey(workflow, effectiveVars)
+	keyB := computeStateKey(workflow, effectiveVars)
+
+	if keyA != keyB {
+		t.Fatalf("expected assisted metadata to remain out-of-band: server=%q session=%q node=%q server=%q session=%q node=%q keyA=%q keyB=%q", serverA, sessionA, nodeA, serverB, sessionB, nodeB, keyA, keyB)
+	}
+}
+
 func TestLoadWithImports_Local(t *testing.T) {
 	dir := t.TempDir()
 	rootPath := filepath.Join(dir, "apply.yaml")

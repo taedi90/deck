@@ -70,6 +70,20 @@ func TestEnsureSelfSignedTLS(t *testing.T) {
 	})
 }
 
+func TestTLSSelfSigned(t *testing.T) {
+	root := t.TempDir()
+	certPath, keyPath, err := EnsureSelfSignedTLS(root, ":8443")
+	if err != nil {
+		t.Fatalf("EnsureSelfSignedTLS: %v", err)
+	}
+	if _, err := os.Stat(certPath); err != nil {
+		t.Fatalf("cert file missing: %v", err)
+	}
+	if _, err := os.Stat(keyPath); err != nil {
+		t.Fatalf("key file missing: %v", err)
+	}
+}
+
 func containsString(items []string, target string) bool {
 	for _, it := range items {
 		if it == target {

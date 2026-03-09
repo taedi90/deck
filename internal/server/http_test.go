@@ -18,7 +18,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 )
 
-func TestServe_StaticETagAndPut(t *testing.T) {
+func TestServe_StaticReadOnly(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, "files"), 0o755); err != nil {
 		t.Fatalf("mkdir files: %v", err)
@@ -226,7 +226,7 @@ func TestServe_StaticETagAndPut(t *testing.T) {
 		}
 	})
 
-	t.Run("PUT upload and atomic replacement", func(t *testing.T) {
+	t.Run("legacy PUT uploads rejected", func(t *testing.T) {
 		for _, tc := range []struct {
 			path string
 			body string
@@ -241,16 +241,13 @@ func TestServe_StaticETagAndPut(t *testing.T) {
 			putReq := httptest.NewRequest(http.MethodPut, tc.path, strings.NewReader(tc.body))
 			putRR := httptest.NewRecorder()
 			h.ServeHTTP(putRR, putReq)
-			if putRR.Code != http.StatusCreated {
-				t.Fatalf("expected PUT %s 201, got %d", tc.path, putRR.Code)
+			if putRR.Code != http.StatusMethodNotAllowed {
+				t.Fatalf("expected PUT %s 405, got %d", tc.path, putRR.Code)
 			}
 
 			raw, err := os.ReadFile(tc.file)
-			if err != nil {
-				t.Fatalf("read uploaded file %s: %v", tc.file, err)
-			}
-			if string(raw) != tc.body {
-				t.Fatalf("unexpected file content for %s: %q", tc.file, string(raw))
+			if !os.IsNotExist(err) {
+				t.Fatalf("expected PUT %s to keep file absent, got err=%v content=%q", tc.path, err, string(raw))
 			}
 		}
 	})
@@ -261,8 +258,6 @@ func TestServe_StaticETagAndPut(t *testing.T) {
 			path   string
 		}{
 			{method: http.MethodGet, path: "/files/../.deck/secret"},
-			{method: http.MethodPut, path: "/files/../.deck/secret"},
-			{method: http.MethodPut, path: "/files/.deck/secret"},
 			{method: http.MethodGet, path: "/files/%2e%2e/.deck/secret"},
 		} {
 			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader("x"))
@@ -301,4 +296,56 @@ func TestServe_StaticETagAndPut(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestHealth(t *testing.T) {
+	root := t.TempDir()
+	h, err := NewHandler(root, HandlerOptions{})
+	if err != nil {
+		t.Fatalf("NewHandler: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected GET /healthz 200, got %d", rr.Code)
+	}
+}
+
+func TestHandlerRejectsLegacyPutUploads(t *testing.T) {
+	root := t.TempDir()
+	for _, category := range []string{"files", "packages", "images", "workflows"} {
+		if err := os.MkdirAll(filepath.Join(root, category), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", category, err)
+		}
+	}
+
+	h, err := NewHandler(root, HandlerOptions{})
+	if err != nil {
+		t.Fatalf("NewHandler: %v", err)
+	}
+
+	for _, tc := range []struct {
+		path string
+		file string
+		body string
+	}{
+		{path: "/files/new/file.txt", file: filepath.Join(root, "files", "new", "file.txt"), body: "file-data"},
+		{path: "/packages/deb/pkg.txt", file: filepath.Join(root, "packages", "deb", "pkg.txt"), body: "pkg-data"},
+		{path: "/images/manifests/app.json", file: filepath.Join(root, "images", "manifests", "app.json"), body: "img-data"},
+		{path: "/workflows/flow.yaml", file: filepath.Join(root, "workflows", "flow.yaml"), body: "wf-data"},
+	} {
+		putReq := httptest.NewRequest(http.MethodPut, tc.path, strings.NewReader(tc.body))
+		putRR := httptest.NewRecorder()
+		h.ServeHTTP(putRR, putReq)
+		if putRR.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("expected PUT %s 405, got %d", tc.path, putRR.Code)
+		}
+
+		raw, readErr := os.ReadFile(tc.file)
+		if !os.IsNotExist(readErr) {
+			t.Fatalf("expected no file write for PUT %s, got err=%v content=%q", tc.path, readErr, string(raw))
+		}
+	}
 }
