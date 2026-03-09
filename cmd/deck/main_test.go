@@ -20,6 +20,7 @@ import (
 
 	"github.com/taedi90/deck/internal/config"
 	"github.com/taedi90/deck/internal/install"
+	sitestore "github.com/taedi90/deck/internal/site/store"
 )
 
 func TestRunUsageShowsTopLevelAxes(t *testing.T) {
@@ -40,7 +41,7 @@ func TestRunUsageShowsTopLevelAxes(t *testing.T) {
 			}
 
 			msg := err.Error()
-			for _, cmd := range []string{"pack", "apply", "serve", "bundle", "list", "validate", "diff", "init", "doctor", "health", "logs", "cache", "source", "service"} {
+			for _, cmd := range []string{"pack", "apply", "serve", "bundle", "list", "validate", "diff", "init", "doctor", "health", "logs", "cache", "node", "site"} {
 				if !strings.Contains(msg, cmd) {
 					t.Fatalf("usage must include %q, got %q", cmd, msg)
 				}
@@ -74,6 +75,100 @@ func TestRunTopLevelStubUsage(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
+}
+
+func TestNodeIDCLIShowSetInit(t *testing.T) {
+	root := t.TempDir()
+	operatorPath := filepath.Join(root, "etc", "deck", "node-id")
+	generatedPath := filepath.Join(root, "var", "lib", "deck", "node-id")
+	t.Setenv("DECK_NODE_ID_OPERATOR_PATH", operatorPath)
+	t.Setenv("DECK_NODE_ID_GENERATED_PATH", generatedPath)
+
+	initOut, err := runWithCapturedStdout([]string{"node", "id", "init"})
+	if err != nil {
+		t.Fatalf("node id init failed: %v", err)
+	}
+	if !strings.Contains(initOut, "node id init: created generated node-id") {
+		t.Fatalf("expected init create output, got %q", initOut)
+	}
+	if !strings.Contains(initOut, "source=generated") && !strings.Contains(initOut, "source=generated-new") {
+		t.Fatalf("expected generated source after init, got %q", initOut)
+	}
+
+	showOut, err := runWithCapturedStdout([]string{"node", "id", "show"})
+	if err != nil {
+		t.Fatalf("node id show failed: %v", err)
+	}
+	if !strings.Contains(showOut, "node-id=node-") {
+		t.Fatalf("expected generated node id in show output, got %q", showOut)
+	}
+	if !strings.Contains(showOut, "source=generated") {
+		t.Fatalf("expected source=generated, got %q", showOut)
+	}
+	if !strings.Contains(showOut, "hostname=") {
+		t.Fatalf("expected hostname output, got %q", showOut)
+	}
+
+	_, err = runWithCapturedStdout([]string{"node", "id", "set", "INVALID_UPPERCASE"})
+	if err == nil || !strings.Contains(err.Error(), "node-id must match") {
+		t.Fatalf("expected invalid node-id validation error, got %v", err)
+	}
+
+	setOut, err := runWithCapturedStdout([]string{"node", "id", "set", "operator-1"})
+	if err != nil {
+		t.Fatalf("node id set failed: %v", err)
+	}
+	if !strings.Contains(setOut, "node id set: operator-1") {
+		t.Fatalf("expected set output, got %q", setOut)
+	}
+
+	showOut, err = runWithCapturedStdout([]string{"node", "id", "show"})
+	if err != nil {
+		t.Fatalf("node id show failed after set: %v", err)
+	}
+	if !strings.Contains(showOut, "node-id=operator-1") {
+		t.Fatalf("expected operator node-id after set, got %q", showOut)
+	}
+	if !strings.Contains(showOut, "source=operator") {
+		t.Fatalf("expected operator source after set, got %q", showOut)
+	}
+	if !strings.Contains(showOut, "mismatch=true") {
+		t.Fatalf("expected mismatch output when both files differ, got %q", showOut)
+	}
+}
+
+func TestNodeAssignmentShow(t *testing.T) {
+	root := t.TempDir()
+	operatorPath := filepath.Join(t.TempDir(), "etc", "deck", "node-id")
+	t.Setenv("DECK_NODE_ID_OPERATOR_PATH", operatorPath)
+	t.Setenv("DECK_NODE_ID_GENERATED_PATH", filepath.Join(t.TempDir(), "var", "lib", "deck", "node-id"))
+	if err := os.MkdirAll(filepath.Dir(operatorPath), 0o755); err != nil {
+		t.Fatalf("mkdir operator path: %v", err)
+	}
+	if err := os.WriteFile(operatorPath, []byte("node-1\n"), 0o644); err != nil {
+		t.Fatalf("write operator node id: %v", err)
+	}
+
+	st, err := sitestore.New(root)
+	if err != nil {
+		t.Fatalf("new site store: %v", err)
+	}
+	if err := st.CreateSession(sitestore.Session{ID: "session-1", ReleaseID: "rel-1", Status: "open"}); err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if err := st.SaveAssignment("session-1", sitestore.Assignment{ID: "assign-1", SessionID: "session-1", NodeID: "node-1", Role: "apply", Workflow: "workflows/apply.yaml"}); err != nil {
+		t.Fatalf("save assignment: %v", err)
+	}
+
+	out, err := runWithCapturedStdout([]string{"node", "assignment", "show", "--root", root, "--session", "session-1"})
+	if err != nil {
+		t.Fatalf("node assignment show failed: %v", err)
+	}
+	for _, want := range []string{"session=session-1", "node-id=node-1", "assignment=assign-1", "role=apply", "workflow=workflows/apply.yaml"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected %q in output, got %q", want, out)
+		}
+	}
 }
 
 func TestHealth(t *testing.T) {
@@ -117,177 +212,13 @@ func TestHealth(t *testing.T) {
 		}
 	})
 
-	t.Run("uses configured default server when --server omitted", func(t *testing.T) {
-		home := filepath.Join(t.TempDir(), "home")
-		if err := os.MkdirAll(home, 0o755); err != nil {
-			t.Fatalf("mkdir home: %v", err)
-		}
-		t.Setenv("HOME", home)
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path != "/healthz" {
-				t.Fatalf("unexpected path: %s", r.URL.Path)
-			}
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer srv.Close()
-
-		if _, err := runWithCapturedStdout([]string{"source", "set", "--server", srv.URL}); err != nil {
-			t.Fatalf("source set server failed: %v", err)
-		}
-
-		out, err := runWithCapturedStdout([]string{"health"})
-		if err != nil {
-			t.Fatalf("health without --server should use source config: %v", err)
-		}
-		expected := fmt.Sprintf("health: ok (%s)\n", srv.URL)
-		if out != expected {
-			t.Fatalf("unexpected output\nwant: %q\ngot : %q", expected, out)
-		}
-	})
-}
-
-func TestSource(t *testing.T) {
-	home := filepath.Join(t.TempDir(), "home")
-	if err := os.MkdirAll(home, 0o755); err != nil {
-		t.Fatalf("mkdir home: %v", err)
-	}
-	t.Setenv("HOME", home)
-
-	t.Run("set server and show", func(t *testing.T) {
-		server := "http://127.0.0.1:18080"
-		out, err := runWithCapturedStdout([]string{"source", "set", "--server", server})
-		if err != nil {
-			t.Fatalf("source set server failed: %v", err)
-		}
-		if !strings.Contains(out, "mode=server") || !strings.Contains(out, server) {
-			t.Fatalf("unexpected set output: %q", out)
-		}
-
-		showOut, err := runWithCapturedStdout([]string{"source", "show"})
-		if err != nil {
-			t.Fatalf("source show failed: %v", err)
-		}
-		if !strings.Contains(showOut, "mode=server") || !strings.Contains(showOut, "server="+server) {
-			t.Fatalf("unexpected show output: %q", showOut)
-		}
-	})
-
-	t.Run("set local-root and list without --server", func(t *testing.T) {
-		root := t.TempDir()
-		if err := os.MkdirAll(filepath.Join(root, "workflows"), 0o755); err != nil {
-			t.Fatalf("mkdir workflows: %v", err)
-		}
-		if err := os.WriteFile(filepath.Join(root, "workflows", "apply.yaml"), []byte("role: apply\n"), 0o644); err != nil {
-			t.Fatalf("write apply.yaml: %v", err)
-		}
-
-		if _, err := runWithCapturedStdout([]string{"source", "set", "--local-root", root}); err != nil {
-			t.Fatalf("source set local-root failed: %v", err)
-		}
-
-		otherDir := t.TempDir()
-		originalCWD, err := os.Getwd()
-		if err != nil {
-			t.Fatalf("getwd: %v", err)
-		}
-		if err := os.Chdir(otherDir); err != nil {
-			t.Fatalf("chdir other dir: %v", err)
-		}
-		t.Cleanup(func() {
-			_ = os.Chdir(originalCWD)
-		})
-
-		out, err := runWithCapturedStdout([]string{"list"})
-		if err != nil {
-			t.Fatalf("list without --server should use source local-root: %v", err)
-		}
-		if out != "workflows/apply.yaml\n" {
-			t.Fatalf("unexpected list output: %q", out)
-		}
-	})
-
-	t.Run("clear resets to default local mode", func(t *testing.T) {
-		if _, err := runWithCapturedStdout([]string{"source", "clear"}); err != nil {
-			t.Fatalf("source clear failed: %v", err)
-		}
-
-		showOut, err := runWithCapturedStdout([]string{"source", "show"})
-		if err != nil {
-			t.Fatalf("source show after clear failed: %v", err)
-		}
-		if !strings.Contains(showOut, "mode=local") {
-			t.Fatalf("unexpected show output after clear: %q", showOut)
-		}
-	})
-}
-
-func TestService(t *testing.T) {
-	t.Run("usage lists install status stop only", func(t *testing.T) {
-		err := run([]string{"service"})
+	t.Run("requires explicit --server when omitted", func(t *testing.T) {
+		_, err := runWithCapturedStdout([]string{"health"})
 		if err == nil {
-			t.Fatalf("expected usage error")
+			t.Fatalf("expected error when --server omitted")
 		}
-		if !strings.Contains(err.Error(), "usage: deck service <install|status|stop>") {
+		if !strings.Contains(err.Error(), "--server is required") {
 			t.Fatalf("unexpected error: %v", err)
-		}
-	})
-
-	t.Run("install writes deck-server.service with serve execstart", func(t *testing.T) {
-		outDir := t.TempDir()
-		stdout, err := runWithCapturedStdout([]string{"service", "install", "--out", outDir, "--root", "/var/lib/deck/bundle", "--addr", ":18080"})
-		if err != nil {
-			t.Fatalf("expected success, got %v", err)
-		}
-		unitPath := filepath.Join(outDir, "deck-server.service")
-		if !strings.Contains(stdout, unitPath) {
-			t.Fatalf("expected output path in stdout, got %q", stdout)
-		}
-		raw, readErr := os.ReadFile(unitPath)
-		if readErr != nil {
-			t.Fatalf("read service unit: %v", readErr)
-		}
-		if !strings.Contains(string(raw), "ExecStart=deck serve --root /var/lib/deck/bundle --addr :18080") {
-			t.Fatalf("unexpected unit content: %q", string(raw))
-		}
-	})
-
-	t.Run("status and stop are server-only", func(t *testing.T) {
-		installFakeSystemctl(t, `#!/bin/sh
-if [ "$1" = "is-active" ] && [ "$2" = "deck-server.service" ]; then
-  echo active
-  exit 0
-fi
-if [ "$1" = "stop" ] && [ "$2" = "deck-server.service" ]; then
-  exit 0
-fi
-exit 1
-`)
-
-		statusOut, err := runWithCapturedStdout([]string{"service", "status"})
-		if err != nil {
-			t.Fatalf("status should succeed: %v", err)
-		}
-		if statusOut != "service status: active (deck-server.service)\n" {
-			t.Fatalf("unexpected status output: %q", statusOut)
-		}
-
-		stopOut, err := runWithCapturedStdout([]string{"service", "stop"})
-		if err != nil {
-			t.Fatalf("stop should succeed: %v", err)
-		}
-		if stopOut != "service stop: ok (deck-server.service)\n" {
-			t.Fatalf("unexpected stop output: %q", stopOut)
-		}
-
-		_, err = runWithCapturedStdout([]string{"service", "status", "server"})
-		if err == nil || !strings.Contains(err.Error(), "usage: deck service status") {
-			t.Fatalf("expected usage error for positional arg, got %v", err)
-		}
-
-		_, err = runWithCapturedStdout([]string{"service", "status", "--unknown", "server"})
-		if err == nil || !strings.Contains(err.Error(), "flag provided but not defined: -unknown") {
-			t.Fatalf("expected undefined flag error, got %v", err)
 		}
 	})
 }
@@ -357,64 +288,6 @@ func TestDoctor(t *testing.T) {
 		}
 		if _, statErr := os.Stat(reportPath); statErr != nil {
 			t.Fatalf("expected report file, got stat error: %v", statErr)
-		}
-	})
-}
-
-func TestRunControlStatusAndStopWithFakeSystemctl(t *testing.T) {
-	t.Run("status maps inactive output", func(t *testing.T) {
-		installFakeSystemctl(t, `#!/bin/sh
-if [ "$1" = "is-active" ]; then
-  echo inactive
-  exit 3
-fi
-exit 1
-`)
-
-		out, err := runWithCapturedStdout([]string{"service", "status"})
-		if err != nil {
-			t.Fatalf("expected success, got %v", err)
-		}
-		if out != "service status: inactive (deck-server.service)\n" {
-			t.Fatalf("unexpected output: %q", out)
-		}
-	})
-
-	t.Run("status missing systemctl suggests one command", func(t *testing.T) {
-		t.Setenv("PATH", t.TempDir())
-
-		_, err := runWithCapturedStdout([]string{"service", "status"})
-		if err == nil {
-			t.Fatalf("expected error")
-		}
-		msg := err.Error()
-		if strings.Count(msg, "suggestion:") != 1 {
-			t.Fatalf("expected exactly one suggestion, got %q", msg)
-		}
-		if !strings.Contains(msg, "suggestion: sudo systemctl status deck-server.service") {
-			t.Fatalf("unexpected suggestion: %q", msg)
-		}
-	})
-
-	t.Run("stop failure suggests one command", func(t *testing.T) {
-		installFakeSystemctl(t, `#!/bin/sh
-if [ "$1" = "stop" ]; then
-  echo permission denied
-  exit 1
-fi
-exit 1
-`)
-
-		_, err := runWithCapturedStdout([]string{"service", "stop"})
-		if err == nil {
-			t.Fatalf("expected error")
-		}
-		msg := err.Error()
-		if strings.Count(msg, "suggestion:") != 1 {
-			t.Fatalf("expected exactly one suggestion, got %q", msg)
-		}
-		if !strings.Contains(msg, "suggestion: sudo systemctl status deck-server.service") {
-			t.Fatalf("unexpected suggestion: %q", msg)
 		}
 	})
 }
@@ -526,7 +399,7 @@ func TestRunServerAuditRotationFlagValidation(t *testing.T) {
 }
 
 func TestRunLegacyTopLevelCommandsAreRemoved(t *testing.T) {
-	for _, cmd := range []string{"run", "resume", "diagnose", "server", "agent", "workflow", "control", "strategy"} {
+	for _, cmd := range []string{"run", "resume", "diagnose", "server", "agent", "workflow", "control", "strategy", "source", "service"} {
 		t.Run(cmd, func(t *testing.T) {
 			err := run([]string{cmd})
 			if err == nil {
@@ -538,6 +411,26 @@ func TestRunLegacyTopLevelCommandsAreRemoved(t *testing.T) {
 				t.Fatalf("unexpected error\nwant: %q\ngot : %q", want, msg)
 			}
 		})
+	}
+}
+
+func TestLegacyServiceSurfaceRemoved(t *testing.T) {
+	err := run([]string{"service"})
+	if err == nil {
+		t.Fatalf("expected unknown command error")
+	}
+	if err.Error() != `unknown command "service"` {
+		t.Fatalf("unexpected error: %q", err.Error())
+	}
+}
+
+func TestLegacySourceSurfaceRemoved(t *testing.T) {
+	err := run([]string{"source"})
+	if err == nil {
+		t.Fatalf("expected unknown command error")
+	}
+	if err.Error() != `unknown command "source"` {
+		t.Fatalf("unexpected error: %q", err.Error())
 	}
 }
 
@@ -1454,6 +1347,264 @@ func TestDiff(t *testing.T) {
 	}
 }
 
+func TestAssistedApplyUsesLocalEngine(t *testing.T) {
+	assistedRoot := t.TempDir()
+	t.Setenv("DECK_ASSISTED_ROOT", assistedRoot)
+	operatorPath := filepath.Join(t.TempDir(), "etc", "deck", "node-id")
+	t.Setenv("DECK_NODE_ID_OPERATOR_PATH", operatorPath)
+	t.Setenv("DECK_NODE_ID_GENERATED_PATH", filepath.Join(t.TempDir(), "var", "lib", "deck", "node-id"))
+	if err := os.MkdirAll(filepath.Dir(operatorPath), 0o755); err != nil {
+		t.Fatalf("mkdir operator path: %v", err)
+	}
+	if err := os.WriteFile(operatorPath, []byte("node-1\n"), 0o644); err != nil {
+		t.Fatalf("write node id: %v", err)
+	}
+
+	logPath := filepath.Join(t.TempDir(), "assisted-apply.log")
+	bundleFilePath := filepath.Join(assistedRoot, "releases", "release-1", "bundle", "files", "seed.txt")
+	workflowBody := fmt.Sprintf("role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: assisted-apply\n        kind: RunCommand\n        spec:\n          command: [\"sh\", \"-c\", \"test -f %s && echo assisted >> %s\"]\n", strings.ReplaceAll(bundleFilePath, "\\", "\\\\"), strings.ReplaceAll(logPath, "\\", "\\\\"))
+	seedContent := []byte("seed\n")
+	seedSum := sha256.Sum256(seedContent)
+	manifestBody := fmt.Sprintf("{\n  \"entries\": [\n    {\"path\": %q, \"sha256\": %q, \"size\": %d}\n  ]\n}\n", "files/seed.txt", hex.EncodeToString(seedSum[:]), len(seedContent))
+
+	var uploadedReport struct {
+		Action string `json:"action"`
+		Status string `json:"status"`
+		NodeID string `json:"node_id"`
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/site/v1/") && r.Header.Get("Authorization") != "Bearer token-1" {
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"error":"unauthorized"}`))
+			return
+		}
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/site/v1/sessions/session-1":
+			_, _ = w.Write([]byte(`{"id":"session-1","release_id":"release-1","status":"open"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/site/v1/sessions/session-1/assignment":
+			_, _ = w.Write([]byte(`{"id":"assign-1","session_id":"session-1","node_id":"node-1","role":"apply","workflow":"workflows/apply.yaml"}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/api/site/v1/sessions/session-1/reports":
+			if err := json.NewDecoder(r.Body).Decode(&uploadedReport); err != nil {
+				t.Fatalf("decode uploaded report: %v", err)
+			}
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = w.Write([]byte(`{"status":"accepted"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/site/releases/release-1/bundle/.deck/manifest.json":
+			_, _ = w.Write([]byte(manifestBody))
+		case r.Method == http.MethodGet && r.URL.Path == "/site/releases/release-1/bundle/workflows/apply.yaml":
+			_, _ = w.Write([]byte(workflowBody))
+		case r.Method == http.MethodGet && r.URL.Path == "/site/releases/release-1/bundle/workflows/vars.yaml":
+			_, _ = w.Write([]byte("{}\n"))
+		case r.Method == http.MethodGet && r.URL.Path == "/site/releases/release-1/bundle/files/seed.txt":
+			_, _ = w.Write(seedContent)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	out, err := runWithCapturedStdout([]string{"apply", "--server", srv.URL, "--session", "session-1", "--api-token", "token-1"})
+	if err != nil {
+		t.Fatalf("assisted apply failed: %v", err)
+	}
+	if out != "apply: ok\n" {
+		t.Fatalf("unexpected apply output: %q", out)
+	}
+	if uploadedReport.Action != "apply" || uploadedReport.Status != "ok" || uploadedReport.NodeID != "node-1" {
+		t.Fatalf("unexpected uploaded report: %#v", uploadedReport)
+	}
+	if raw, readErr := os.ReadFile(logPath); readErr != nil || !strings.Contains(string(raw), "assisted") {
+		t.Fatalf("expected local engine execution log, err=%v raw=%q", readErr, string(raw))
+	}
+}
+
+func TestAssistedDiffUsesLocalEngine(t *testing.T) {
+	assistedRoot := t.TempDir()
+	t.Setenv("DECK_ASSISTED_ROOT", assistedRoot)
+	operatorPath := filepath.Join(t.TempDir(), "etc", "deck", "node-id")
+	t.Setenv("DECK_NODE_ID_OPERATOR_PATH", operatorPath)
+	t.Setenv("DECK_NODE_ID_GENERATED_PATH", filepath.Join(t.TempDir(), "var", "lib", "deck", "node-id"))
+	_ = os.MkdirAll(filepath.Dir(operatorPath), 0o755)
+	_ = os.WriteFile(operatorPath, []byte("node-1\n"), 0o644)
+
+	workflowBody := "role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: assisted-diff\n        kind: RunCommand\n        spec:\n          command: [\"true\"]\n"
+	manifestBody := "{\n  \"entries\": []\n}\n"
+	uploaded := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/site/v1/sessions/session-1":
+			_, _ = w.Write([]byte(`{"id":"session-1","release_id":"release-1","status":"open"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/site/v1/sessions/session-1/assignment":
+			_, _ = w.Write([]byte(`{"id":"assign-diff","session_id":"session-1","node_id":"node-1","role":"diff","workflow":"workflows/apply.yaml"}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/api/site/v1/sessions/session-1/reports":
+			uploaded = true
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = w.Write([]byte(`{"status":"accepted"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/site/releases/release-1/bundle/.deck/manifest.json":
+			_, _ = w.Write([]byte(manifestBody))
+		case r.Method == http.MethodGet && r.URL.Path == "/site/releases/release-1/bundle/workflows/apply.yaml":
+			_, _ = w.Write([]byte(workflowBody))
+		case r.Method == http.MethodGet && r.URL.Path == "/site/releases/release-1/bundle/workflows/vars.yaml":
+			_, _ = w.Write([]byte("{}\n"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	out, err := runWithCapturedStdout([]string{"diff", "--server", srv.URL, "--session", "session-1", "--api-token", "deck-site-v1"})
+	if err != nil {
+		t.Fatalf("assisted diff failed: %v", err)
+	}
+	if !strings.Contains(out, "RUN") {
+		t.Fatalf("expected RUN diff output, got %q", out)
+	}
+	if !uploaded {
+		t.Fatalf("expected assisted diff report upload")
+	}
+}
+
+func TestAssistedDoctorUsesLocalEngine(t *testing.T) {
+	assistedRoot := t.TempDir()
+	t.Setenv("DECK_ASSISTED_ROOT", assistedRoot)
+	operatorPath := filepath.Join(t.TempDir(), "etc", "deck", "node-id")
+	t.Setenv("DECK_NODE_ID_OPERATOR_PATH", operatorPath)
+	t.Setenv("DECK_NODE_ID_GENERATED_PATH", filepath.Join(t.TempDir(), "var", "lib", "deck", "node-id"))
+	_ = os.MkdirAll(filepath.Dir(operatorPath), 0o755)
+	_ = os.WriteFile(operatorPath, []byte("node-1\n"), 0o644)
+
+	localRepo := t.TempDir()
+	reportPath := filepath.Join(t.TempDir(), "doctor-assist.json")
+	workflowBody := "role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: doctor-check\n        kind: DownloadFile\n        spec:\n          source:\n            path: files/dummy.txt\n          fetch:\n            sources:\n              - type: local\n                path: \"{{ .vars.localRepo }}\"\n          output:\n            path: files/dummy.txt\n"
+	varsBody := fmt.Sprintf("localRepo: %q\n", localRepo)
+	manifestBody := "{\n  \"entries\": []\n}\n"
+	uploaded := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/site/v1/sessions/session-1":
+			_, _ = w.Write([]byte(`{"id":"session-1","release_id":"release-1","status":"open"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/site/v1/sessions/session-1/assignment":
+			_, _ = w.Write([]byte(`{"id":"assign-doctor","session_id":"session-1","node_id":"node-1","role":"doctor","workflow":"workflows/apply.yaml"}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/api/site/v1/sessions/session-1/reports":
+			uploaded = true
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = w.Write([]byte(`{"status":"accepted"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/site/releases/release-1/bundle/.deck/manifest.json":
+			_, _ = w.Write([]byte(manifestBody))
+		case r.Method == http.MethodGet && r.URL.Path == "/site/releases/release-1/bundle/workflows/apply.yaml":
+			_, _ = w.Write([]byte(workflowBody))
+		case r.Method == http.MethodGet && r.URL.Path == "/site/releases/release-1/bundle/workflows/vars.yaml":
+			_, _ = w.Write([]byte(varsBody))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	out, err := runWithCapturedStdout([]string{"doctor", "--server", srv.URL, "--session", "session-1", "--api-token", "deck-site-v1", "--out", reportPath})
+	if err != nil {
+		t.Fatalf("assisted doctor failed: %v", err)
+	}
+	if !strings.Contains(out, "doctor: wrote") {
+		t.Fatalf("unexpected doctor output: %q", out)
+	}
+	if !uploaded {
+		t.Fatalf("expected assisted doctor report upload")
+	}
+}
+
+func TestAssistedModeNoAssignmentSkips(t *testing.T) {
+	assistedRoot := t.TempDir()
+	t.Setenv("DECK_ASSISTED_ROOT", assistedRoot)
+	operatorPath := filepath.Join(t.TempDir(), "etc", "deck", "node-id")
+	t.Setenv("DECK_NODE_ID_OPERATOR_PATH", operatorPath)
+	t.Setenv("DECK_NODE_ID_GENERATED_PATH", filepath.Join(t.TempDir(), "var", "lib", "deck", "node-id"))
+	_ = os.MkdirAll(filepath.Dir(operatorPath), 0o755)
+	_ = os.WriteFile(operatorPath, []byte("node-1\n"), 0o644)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/site/v1/sessions/session-1":
+			_, _ = w.Write([]byte(`{"id":"session-1","release_id":"release-1","status":"open"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/site/v1/sessions/session-1/assignment":
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":"no assignment matched session \"session-1\" node_id \"node-1\" role \"apply\""}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/api/site/v1/sessions/session-1/reports":
+			t.Fatalf("no-assignment path must not upload report")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	out, err := runWithCapturedStdout([]string{"apply", "--server", srv.URL, "--session", "session-1"})
+	if err != nil {
+		t.Fatalf("assisted apply no-assignment should succeed with skip, got %v", err)
+	}
+	if !strings.Contains(out, "apply: skipped (no-assignment)") {
+		t.Fatalf("unexpected skip output: %q", out)
+	}
+	reportDir := filepath.Join(assistedRoot, "reports", "session-1", "node-1")
+	entries, readErr := os.ReadDir(reportDir)
+	if readErr != nil || len(entries) == 0 {
+		t.Fatalf("expected local skipped report at %s: err=%v", reportDir, readErr)
+	}
+}
+
+func TestAssistedApplyServerDownAfterAssignment(t *testing.T) {
+	assistedRoot := t.TempDir()
+	t.Setenv("DECK_ASSISTED_ROOT", assistedRoot)
+	operatorPath := filepath.Join(t.TempDir(), "etc", "deck", "node-id")
+	t.Setenv("DECK_NODE_ID_OPERATOR_PATH", operatorPath)
+	t.Setenv("DECK_NODE_ID_GENERATED_PATH", filepath.Join(t.TempDir(), "var", "lib", "deck", "node-id"))
+	_ = os.MkdirAll(filepath.Dir(operatorPath), 0o755)
+	_ = os.WriteFile(operatorPath, []byte("node-1\n"), 0o644)
+
+	logPath := filepath.Join(t.TempDir(), "assisted-upload-fail.log")
+	bundleFilePath := filepath.Join(assistedRoot, "releases", "release-1", "bundle", "files", "seed.txt")
+	workflowBody := fmt.Sprintf("role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: assisted-apply\n        kind: RunCommand\n        spec:\n          command: [\"sh\", \"-c\", \"test -f %s && echo assisted >> %s\"]\n", strings.ReplaceAll(bundleFilePath, "\\", "\\\\"), strings.ReplaceAll(logPath, "\\", "\\\\"))
+	seedContent := []byte("seed\n")
+	seedSum := sha256.Sum256(seedContent)
+	manifestBody := fmt.Sprintf("{\n  \"entries\": [\n    {\"path\": %q, \"sha256\": %q, \"size\": %d}\n  ]\n}\n", "files/seed.txt", hex.EncodeToString(seedSum[:]), len(seedContent))
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/site/v1/sessions/session-1":
+			_, _ = w.Write([]byte(`{"id":"session-1","release_id":"release-1","status":"open"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/site/v1/sessions/session-1/assignment":
+			_, _ = w.Write([]byte(`{"id":"assign-1","session_id":"session-1","node_id":"node-1","role":"apply","workflow":"workflows/apply.yaml"}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/api/site/v1/sessions/session-1/reports":
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"error":"temporary_unavailable"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/site/releases/release-1/bundle/.deck/manifest.json":
+			_, _ = w.Write([]byte(manifestBody))
+		case r.Method == http.MethodGet && r.URL.Path == "/site/releases/release-1/bundle/workflows/apply.yaml":
+			_, _ = w.Write([]byte(workflowBody))
+		case r.Method == http.MethodGet && r.URL.Path == "/site/releases/release-1/bundle/workflows/vars.yaml":
+			_, _ = w.Write([]byte("{}\n"))
+		case r.Method == http.MethodGet && r.URL.Path == "/site/releases/release-1/bundle/files/seed.txt":
+			_, _ = w.Write(seedContent)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	_, err := runWithCapturedStdout([]string{"apply", "--server", srv.URL, "--session", "session-1"})
+	if err == nil {
+		t.Fatalf("expected upload transport failure")
+	}
+	if !strings.Contains(err.Error(), "report upload transport failure") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(err.Error(), filepath.Join(assistedRoot, "reports", "session-1", "node-1")) {
+		t.Fatalf("expected local report path in error: %v", err)
+	}
+	if raw, readErr := os.ReadFile(logPath); readErr != nil || !strings.Contains(string(raw), "assisted") {
+		t.Fatalf("expected apply execution to complete before upload failure, err=%v raw=%q", readErr, string(raw))
+	}
+}
+
 func TestRunApplyPhaseNotFound(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "home")
 	if err := os.MkdirAll(home, 0o755); err != nil {
@@ -1704,6 +1855,125 @@ func TestRunUnknownCommand(t *testing.T) {
 	}
 }
 
+func TestSiteReleaseImportList(t *testing.T) {
+	root := t.TempDir()
+	bundlePath := filepath.Join(t.TempDir(), "site-release.tar")
+	writeSiteReleaseBundleTarFixture(t, bundlePath)
+
+	out, err := runWithCapturedStdout([]string{"site", "release", "import", "--root", root, "--id", "release-1", "--bundle", bundlePath})
+	if err != nil {
+		t.Fatalf("site release import failed: %v", err)
+	}
+	if !strings.Contains(out, "site release import: ok") {
+		t.Fatalf("unexpected import output: %q", out)
+	}
+
+	listOut, err := runWithCapturedStdout([]string{"site", "release", "list", "--root", root})
+	if err != nil {
+		t.Fatalf("site release list failed: %v", err)
+	}
+	if !strings.Contains(listOut, "release-1") {
+		t.Fatalf("expected imported release in list output, got %q", listOut)
+	}
+}
+
+func TestSiteSessionCreateClose(t *testing.T) {
+	root := t.TempDir()
+	bundlePath := filepath.Join(t.TempDir(), "site-release.tar")
+	writeSiteReleaseBundleTarFixture(t, bundlePath)
+
+	if _, err := runWithCapturedStdout([]string{"site", "release", "import", "--root", root, "--id", "release-1", "--bundle", bundlePath}); err != nil {
+		t.Fatalf("site release import failed: %v", err)
+	}
+
+	createOut, err := runWithCapturedStdout([]string{"site", "session", "create", "--root", root, "--id", "session-1", "--release", "release-1"})
+	if err != nil {
+		t.Fatalf("site session create failed: %v", err)
+	}
+	if !strings.Contains(createOut, "site session create: ok") {
+		t.Fatalf("unexpected create output: %q", createOut)
+	}
+
+	closeOut, err := runWithCapturedStdout([]string{"site", "session", "close", "--root", root, "--id", "session-1"})
+	if err != nil {
+		t.Fatalf("site session close failed: %v", err)
+	}
+	if !strings.Contains(closeOut, "status=closed") {
+		t.Fatalf("expected closed status output, got %q", closeOut)
+	}
+}
+
+func TestSiteAssignRoleNode(t *testing.T) {
+	root := t.TempDir()
+	bundlePath := filepath.Join(t.TempDir(), "site-release.tar")
+	writeSiteReleaseBundleTarFixture(t, bundlePath)
+
+	if _, err := runWithCapturedStdout([]string{"site", "release", "import", "--root", root, "--id", "release-1", "--bundle", bundlePath}); err != nil {
+		t.Fatalf("site release import failed: %v", err)
+	}
+	if _, err := runWithCapturedStdout([]string{"site", "session", "create", "--root", root, "--id", "session-1", "--release", "release-1"}); err != nil {
+		t.Fatalf("site session create failed: %v", err)
+	}
+
+	roleOut, err := runWithCapturedStdout([]string{"site", "assign", "role", "--root", root, "--session", "session-1", "--assignment", "assign-role", "--role", "apply", "--workflow", "workflows/apply.yaml"})
+	if err != nil {
+		t.Fatalf("site assign role failed: %v", err)
+	}
+	if !strings.Contains(roleOut, "site assign role: ok") {
+		t.Fatalf("unexpected role assignment output: %q", roleOut)
+	}
+
+	nodeOut, err := runWithCapturedStdout([]string{"site", "assign", "node", "--root", root, "--session", "session-1", "--assignment", "assign-node", "--node", "node-1", "--role", "apply", "--workflow", "workflows/apply.yaml"})
+	if err != nil {
+		t.Fatalf("site assign node failed: %v", err)
+	}
+	if !strings.Contains(nodeOut, "site assign node: ok") {
+		t.Fatalf("unexpected node assignment output: %q", nodeOut)
+	}
+
+	statusOut, err := runWithCapturedStdout([]string{"site", "status", "--root", root})
+	if err != nil {
+		t.Fatalf("site status failed: %v", err)
+	}
+	if !strings.Contains(statusOut, "node node-1") || !strings.Contains(statusOut, "apply=not-run") {
+		t.Fatalf("unexpected site status output: %q", statusOut)
+	}
+}
+
+func TestSiteAssignRejectsUnknownSession(t *testing.T) {
+	root := t.TempDir()
+	bundlePath := filepath.Join(t.TempDir(), "site-release.tar")
+	writeSiteReleaseBundleTarFixture(t, bundlePath)
+
+	if _, err := runWithCapturedStdout([]string{"site", "release", "import", "--root", root, "--id", "release-1", "--bundle", bundlePath}); err != nil {
+		t.Fatalf("site release import failed: %v", err)
+	}
+
+	_, err := runWithCapturedStdout([]string{"site", "assign", "role", "--root", root, "--session", "missing-session", "--assignment", "assign-role", "--role", "apply", "--workflow", "workflows/apply.yaml"})
+	if err == nil {
+		t.Fatalf("expected unknown session error")
+	}
+	if !strings.Contains(err.Error(), "session \"missing-session\" not found") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestSiteReleaseImportRejectsInvalidBundle(t *testing.T) {
+	root := t.TempDir()
+	invalidPath := filepath.Join(t.TempDir(), "invalid.tar")
+	if err := os.WriteFile(invalidPath, []byte("not-a-tar"), 0o644); err != nil {
+		t.Fatalf("write invalid bundle file: %v", err)
+	}
+
+	_, err := runWithCapturedStdout([]string{"site", "release", "import", "--root", root, "--id", "release-1", "--bundle", invalidPath})
+	if err == nil {
+		t.Fatalf("expected invalid bundle rejection")
+	}
+	if !strings.Contains(err.Error(), "site release import") {
+		t.Fatalf("expected site release import error context, got %v", err)
+	}
+}
+
 func runWithCapturedStdout(args []string) (string, error) {
 	oldStdout := os.Stdout
 	r, w, err := os.Pipe()
@@ -1889,6 +2159,52 @@ func writeApplyBundleTarFixture(t *testing.T, archivePath string) {
 	}{
 		{name: "bundle/workflows/", mode: 0o755},
 		{name: "bundle/workflows/apply.yaml", body: []byte("role: apply\nversion: v1alpha1\nsteps: []\n"), mode: 0o644},
+	}
+
+	for _, entry := range entries {
+		h := &tar.Header{Name: entry.name, Mode: entry.mode}
+		if strings.HasSuffix(entry.name, "/") {
+			h.Typeflag = tar.TypeDir
+			h.Size = 0
+		} else {
+			h.Typeflag = tar.TypeReg
+			h.Size = int64(len(entry.body))
+		}
+		if err := tw.WriteHeader(h); err != nil {
+			t.Fatalf("write tar header %s: %v", entry.name, err)
+		}
+		if h.Typeflag == tar.TypeReg {
+			if _, err := tw.Write(entry.body); err != nil {
+				t.Fatalf("write tar body %s: %v", entry.name, err)
+			}
+		}
+	}
+}
+
+func writeSiteReleaseBundleTarFixture(t *testing.T, archivePath string) {
+	t.Helper()
+	workflowBody := []byte("role: apply\nversion: v1alpha1\nsteps: []\n")
+	workflowSum := sha256.Sum256(workflowBody)
+	manifest := fmt.Sprintf("{\n  \"entries\": [\n    {\"path\": %q, \"sha256\": %q, \"size\": %d}\n  ]\n}\n", "workflows/apply.yaml", hex.EncodeToString(workflowSum[:]), len(workflowBody))
+
+	f, err := os.Create(archivePath)
+	if err != nil {
+		t.Fatalf("create archive: %v", err)
+	}
+	defer f.Close()
+
+	tw := tar.NewWriter(f)
+	defer tw.Close()
+
+	entries := []struct {
+		name string
+		body []byte
+		mode int64
+	}{
+		{name: "bundle/.deck/", mode: 0o755},
+		{name: "bundle/.deck/manifest.json", body: []byte(manifest), mode: 0o644},
+		{name: "bundle/workflows/", mode: 0o755},
+		{name: "bundle/workflows/apply.yaml", body: workflowBody, mode: 0o644},
 	}
 
 	for _, entry := range entries {
