@@ -5,36 +5,40 @@ phases:
     steps:
       - id: setup-basic-cni
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: EnsureDir
         spec:
-          command:
-            - bash
-            - -lc
-            - |
-              set -euo pipefail
-              mkdir -p /etc/cni/net.d
-              cat > /etc/cni/net.d/10-deck-bridge.conflist <<CNIEOF
-              {
-                "cniVersion": "0.4.0",
-                "name": "deck-bridge",
-                "plugins": [
-                  {
-                    "type": "bridge",
-                    "bridge": "cni0",
-                    "isGateway": true,
-                    "ipMasq": true,
-                    "promiscMode": true,
-                    "ipam": {
-                      "type": "host-local",
-                      "subnet": "10.244.0.0/16",
-                      "routes": [{"dst": "0.0.0.0/0"}]
-                    }
-                  },
-                  {
-                    "type": "portmap",
-                    "capabilities": {"portMappings": true}
+          path: /etc/cni/net.d
+      - id: write-basic-cni-config
+        apiVersion: deck/v1alpha1
+        kind: InstallFile
+        spec:
+          path: /etc/cni/net.d/10-deck-bridge.conflist
+          content: |
+            {
+              "cniVersion": "0.4.0",
+              "name": "deck-bridge",
+              "plugins": [
+                {
+                  "type": "bridge",
+                  "bridge": "cni0",
+                  "isGateway": true,
+                  "ipMasq": true,
+                  "promiscMode": true,
+                  "ipam": {
+                    "type": "host-local",
+                    "subnet": "10.244.0.0/16",
+                    "routes": [{"dst": "0.0.0.0/0"}]
                   }
-                ]
-              }
-              CNIEOF
-              systemctl restart kubelet
+                },
+                {
+                  "type": "portmap",
+                  "capabilities": {"portMappings": true}
+                }
+              ]
+            }
+      - id: restart-kubelet-after-cni
+        apiVersion: deck/v1alpha1
+        kind: Service
+        spec:
+          name: kubelet
+          state: restarted

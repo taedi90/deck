@@ -118,12 +118,12 @@ phases:
           ignorePreflightErrors: [Swap, FileExisting-crictl, FileExisting-conntrack, FileExisting-socat, Port-10250]
       - id: publish-join-file
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: EnsureDir
         spec:
-          command:
-            - bash
-            - -lc
-            - |
-              set -euo pipefail
-              mkdir -p /tmp/deck/server-root/files/cluster
-              cp -f /tmp/deck/join.txt /tmp/deck/server-root/files/cluster/join.txt
+          path: /tmp/deck/server-root/files/cluster
+      - id: copy-join-file
+        apiVersion: deck/v1alpha1
+        kind: CopyFile
+        spec:
+          src: /tmp/deck/join.txt
+          dest: /tmp/deck/server-root/files/cluster/join.txt

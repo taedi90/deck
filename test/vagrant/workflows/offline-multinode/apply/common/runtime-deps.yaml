@@ -6,15 +6,10 @@ phases:
       - id: install-runtime-deps-debian
         when: runtime.host.os.family == "debian"
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: InstallPackages
+        timeout: 20m
         spec:
-          timeout: 20m
-          command:
-            - bash
-            - -lc
-            - |
-              set -euo pipefail
-              DEBIAN_FRONTEND=noninteractive apt-get install -y containerd containernetworking-plugins
+          packages: [containerd, containernetworking-plugins]
       - id: install-runtime-deps-rhel
         when: runtime.host.os.family == "rhel"
         apiVersion: deck/v1alpha1

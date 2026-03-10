@@ -5,12 +5,12 @@ phases:
     steps:
       - id: fetch-join-file
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: DownloadFile
         spec:
-          command:
-            - bash
-            - -lc
-            - curl -fsSL http://{{ .vars.serverURL  }}/files/cluster/join.txt -o {{ .vars.joinFile  }}
+          source:
+            url: http://{{ .vars.serverURL  }}/files/cluster/join.txt
+          output:
+            path: "{{ .vars.joinFile  }}"
       - id: join-worker
         apiVersion: deck/v1alpha1
         kind: KubeadmJoin

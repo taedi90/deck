@@ -10,9 +10,10 @@ phases:
     steps:
       - id: prep-disable-swap
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: Swap
         spec:
-          command: ["bash", "-lc", "swapoff -a"]
+          disable: true
+          persist: false
       - id: write-apt-offline-repo
         apiVersion: deck/v1alpha1
         kind: WriteFile
@@ -65,21 +66,9 @@ phases:
               fi
       - id: install-k8s-deps
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: InstallPackages
         spec:
-          command:
-            - bash
-            - -lc
-            - |
-              set -euo pipefail
-              if [[ -d /etc/apt ]]; then
-                DEBIAN_FRONTEND=noninteractive apt-get install -y containerd kubelet kubeadm kubectl
-              elif [[ -d /etc/yum.repos.d ]]; then
-                dnf install -y containerd kubelet kubeadm kubectl
-              else
-                echo "unsupported distro" >&2
-                exit 1
-              fi
+          packages: [containerd, kubelet, kubeadm, kubectl]
       - id: write-containerd-mirror-registry-k8s
         apiVersion: deck/v1alpha1
         kind: WriteFile
@@ -94,19 +83,25 @@ phases:
               skip_verify = true
       - id: configure-containerd-runtime
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: ContainerdConfig
         spec:
-          command:
-            - bash
-            - -lc
-            - |
-              set -euo pipefail
-              mkdir -p /etc/containerd
-              containerd config default > /etc/containerd/config.toml
-              sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
-              systemctl daemon-reload
-              systemctl enable --now containerd kubelet
-              systemctl restart containerd
+          path: /etc/containerd/config.toml
+          configPath: /etc/containerd/certs.d
+          systemdCgroup: true
+      - id: restart-containerd
+        apiVersion: deck/v1alpha1
+        kind: Service
+        spec:
+          name: containerd
+          enabled: true
+          state: restarted
+      - id: start-kubelet
+        apiVersion: deck/v1alpha1
+        kind: Service
+        spec:
+          name: kubelet
+          enabled: true
+          state: started
       - id: kubeadm-init
         apiVersion: deck/v1alpha1
         kind: KubeadmInit

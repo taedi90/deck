@@ -17,22 +17,28 @@ phases:
               skip_verify = true
       - id: configure-containerd-runtime
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: ContainerdConfig
         spec:
-          command:
-            - bash
-            - -lc
-            - |
-              set -euo pipefail
-              mkdir -p /etc/containerd
-              containerd config default > /etc/containerd/config.toml
-              sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
-              sed -i 's/#\s*config_path = ""/config_path = "\/etc\/containerd\/certs.d"/' /etc/containerd/config.toml || true
-              sed -i 's/config_path = ""/config_path = "\/etc\/containerd\/certs.d"/' /etc/containerd/config.toml || true
-              sed -i 's/registry.k8s.io\/pause:3.8/registry.k8s.io\/pause:3.9/' /etc/containerd/config.toml || true
-              systemctl daemon-reload
-              systemctl enable --now containerd
-              systemctl restart containerd
+          path: /etc/containerd/config.toml
+          configPath: /etc/containerd/certs.d
+          systemdCgroup: true
+      - id: update-containerd-pause-image
+        apiVersion: deck/v1alpha1
+        kind: EditFile
+        spec:
+          path: /etc/containerd/config.toml
+          backup: false
+          edits:
+            - op: replace
+              match: registry.k8s.io/pause:3.8
+              with: registry.k8s.io/pause:3.9
+      - id: restart-containerd
+        apiVersion: deck/v1alpha1
+        kind: Service
+        spec:
+          name: containerd
+          enabled: true
+          state: restarted
       - id: setup-kubelet-systemd
         apiVersion: deck/v1alpha1
         kind: RunCommand

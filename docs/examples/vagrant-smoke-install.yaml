@@ -5,9 +5,9 @@ phases:
     steps:
       - id: create-smoke-marker
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: WriteFile
         spec:
-          command:
-            - bash
-            - -lc
-            - mkdir -p /tmp/deck/examples && printf '%s\n' ok > /tmp/deck/examples/vagrant-smoke.txt
+          path: /tmp/deck/examples/vagrant-smoke.txt
+          mode: "0644"
+          content: |
+            ok
