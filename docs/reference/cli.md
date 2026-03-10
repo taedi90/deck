@@ -8,7 +8,7 @@ This page describes the current `deck` command surface, starting with the defaul
 - `validate`: validate a workflow file against the top-level workflow schema and the relevant step schema
 - `pack`: gather artifacts, copy workflows, embed the `deck` binary, and write `bundle.tar`
 - `diff`: inspect which apply steps would run or skip before you execute
-- `doctor`: generate a validation or preflight-style report
+- `doctor`: generate a validation report for workflow inputs and referenced artifacts
 - `apply`: execute the `apply` workflow locally
 
 ## Optional site-local helpers

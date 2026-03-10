@@ -68,3 +68,50 @@ func TestAssignmentMissingMatch(t *testing.T) {
 		t.Fatalf("expected explicit assignment miss error, got %v", err)
 	}
 }
+
+func TestAssignmentRejectsMissingSession(t *testing.T) {
+	root := t.TempDir()
+	st, err := New(root)
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+
+	err = st.SaveAssignment("session-missing", Assignment{ID: "assign-1", NodeID: "node-1"})
+	if err == nil {
+		t.Fatalf("expected missing session rejection")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Fatalf("expected missing session error, got %v", err)
+	}
+}
+
+func TestAssignmentRejectsClosedSession(t *testing.T) {
+	st := newSessionStore(t, "session-assign-closed")
+	if _, err := st.CloseSession("session-assign-closed", "2026-03-08T12:00:00Z"); err != nil {
+		t.Fatalf("close session: %v", err)
+	}
+
+	err := st.SaveAssignment("session-assign-closed", Assignment{ID: "assign-1", NodeID: "node-1"})
+	if err == nil {
+		t.Fatalf("expected closed session rejection")
+	}
+	if !strings.Contains(err.Error(), "is closed") {
+		t.Fatalf("expected closed session error, got %v", err)
+	}
+}
+
+func TestAssignmentSessionMismatchPreserved(t *testing.T) {
+	root := t.TempDir()
+	st, err := New(root)
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+
+	err = st.SaveAssignment("session-1", Assignment{ID: "assign-1", SessionID: "session-2", NodeID: "node-1"})
+	if err == nil {
+		t.Fatalf("expected session mismatch rejection")
+	}
+	if !strings.Contains(err.Error(), "session_id must match") {
+		t.Fatalf("expected mismatch error, got %v", err)
+	}
+}
