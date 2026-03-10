@@ -30,6 +30,9 @@ func (s *Store) SaveAssignment(sessionID string, assignment Assignment) error {
 	if assignment.SessionID != sessionID {
 		return fmt.Errorf("assignment session_id must match %q", sessionID)
 	}
+	if _, err := s.requireOpenSession(sessionID); err != nil {
+		return err
+	}
 
 	path := filepath.Join(s.sessionDir(sessionID), "assignments", assignment.ID+".json")
 	return writeAtomicJSON(path, assignment)
