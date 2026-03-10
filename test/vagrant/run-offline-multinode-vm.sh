@@ -69,12 +69,11 @@ cleanup() {
     return
   fi
   if [[ -n "${SERVER_PID}" ]]; then
-    kill "${SERVER_PID}" >/dev/null 2>&1 || true
-    wait "${SERVER_PID}" >/dev/null 2>&1 || true
+    sudo -n kill "${SERVER_PID}" >/dev/null 2>&1 || true
     SERVER_PID=""
   fi
   if [[ -f "${SERVER_PID_FILE}" ]]; then
-    kill "$(cat "${SERVER_PID_FILE}")" >/dev/null 2>&1 || true
+    sudo -n kill "$(cat "${SERVER_PID_FILE}")" >/dev/null 2>&1 || true
     rm -f "${SERVER_PID_FILE}"
   fi
   if [[ "${OFFLINE_GUARD_ACTIVE}" == "1" ]]; then
@@ -207,13 +206,18 @@ start_server_background() {
     local existing
     existing="$(cat "${SERVER_PID_FILE}")"
     if sudo -n kill -0 "${existing}" >/dev/null 2>&1; then
+      SERVER_PID="${existing}"
       return 0
     fi
   fi
   echo "[deck] starting server ${SERVER_BIND_ADDR}"
-  sudo -n "${DECK_BIN}" serve --root "${SERVER_ROOT}" --addr "${SERVER_BIND_ADDR}" > "${CASE_DIR}/02-server.log" 2>&1 &
-  SERVER_PID=$!
-  printf '%s\n' "${SERVER_PID}" > "${SERVER_PID_FILE}"
+  rm -f "${SERVER_PID_FILE}"
+  sudo -n bash -c "nohup \"${DECK_BIN}\" serve --root \"${SERVER_ROOT}\" --addr \"${SERVER_BIND_ADDR}\" > \"${CASE_DIR}/02-server.log\" 2>&1 < /dev/null & echo \$! > \"${SERVER_PID_FILE}\""
+  SERVER_PID="$(cat "${SERVER_PID_FILE}")"
+  if ! sudo -n kill -0 "${SERVER_PID}" >/dev/null 2>&1; then
+    echo "[deck] server failed to stay running after start"
+    exit 1
+  fi
 }
 
 wait_for_join_file() {
