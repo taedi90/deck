@@ -43,8 +43,6 @@ const (
 	auditSourceServer  = "server"
 	auditEventRequest  = "http_request"
 
-	auditEventRegistrySeed = "registry_seed"
-
 	defaultAuditMaxSizeMB = 50
 	defaultAuditMaxFiles  = 10
 	defaultSiteAPIToken   = "deck-site-v1"

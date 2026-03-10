@@ -291,7 +291,7 @@ func TestServe_StaticReadOnly(t *testing.T) {
 			if strings.HasPrefix(eventType, "alpha_") {
 				t.Fatalf("unexpected alpha audit event: %q", eventType)
 			}
-			if eventType == auditEventRegistrySeed {
+			if eventType == "registry_seed" {
 				t.Fatalf("unexpected registry seed audit event")
 			}
 		}

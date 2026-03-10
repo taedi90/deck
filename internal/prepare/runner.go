@@ -1121,10 +1121,6 @@ func runDownloadK8sPackages(runner CommandRunner, bundleRoot string, spec map[st
 	return append(files, metaRel), nil
 }
 
-func runContainerPackageDownload(runner CommandRunner, bundleRoot, dir string, spec map[string]any, packages []string) ([]string, error) {
-	return runContainerPackageDownloadAll(runner, bundleRoot, dir, spec, packages)
-}
-
 func runContainerPackageRepoBuild(
 	runner CommandRunner,
 	bundleRoot string,
@@ -1421,14 +1417,6 @@ func runContainerPackageDownloadWithScript(runner CommandRunner, bundleRoot, dir
 		return nil, fmt.Errorf("%s: no package artifacts generated in %s", errCodePrepareArtifactsEmpty, dir)
 	}
 	return files, nil
-}
-
-func buildPackageDownloadScript(family, pkg string) string {
-	safePkg := shellEscape(pkg)
-	if family == "rhel" {
-		return fmt.Sprintf("set -euo pipefail; (dnf -y install 'dnf-command(download)' >/dev/null 2>&1 || yum -y install yum-utils >/dev/null 2>&1 || true); (dnf -y download --destdir /out %s || yumdownloader --destdir /out %s)", safePkg, safePkg)
-	}
-	return fmt.Sprintf("set -euo pipefail; mkdir -p /tmp/deck-pkg-download; cd /tmp/deck-pkg-download; apt-get update -y >/dev/null; (apt-get download %s || true); cp -a ./*.deb /out/ 2>/dev/null || true", safePkg)
 }
 
 func buildK8sPackageDownloadScript(family, pkg, version string) string {
