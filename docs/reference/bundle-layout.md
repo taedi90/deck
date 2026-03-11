@@ -1,6 +1,8 @@
 # Bundle Layout
 
-`deck pack` is built around a hermetic bundle contract. The offline site should receive everything needed to execute the workflow locally.
+`deck pack` builds a self-contained bundle because disconnected work gets harder when dependencies stay implicit.
+
+The bundle is part of the product model, not an afterthought.
 
 ## Typical bundle contents
 
@@ -14,10 +16,11 @@
 
 ## Why the bundle matters
 
-- It reduces hidden runtime dependencies inside the air gap.
-- It keeps the operator handoff concrete: a bundle can be inspected, transferred, verified, and executed.
-- It aligns with the project goal of being hermetic and self-contained.
+- it keeps offline handoff explicit
+- it reduces hidden runtime dependencies
+- it makes the procedure easier to inspect before transport
+- it supports the simple local execution model
 
 ## Core rule
 
-If an offline site needs it to execute the workflow, the safest default is to make it part of the bundle rather than assuming it already exists.
+If the site needs it to run the workflow, the safest default is to include it in the bundle rather than assume it already exists.

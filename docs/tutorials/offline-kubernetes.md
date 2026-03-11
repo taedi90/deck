@@ -1,6 +1,8 @@
 # Offline Kubernetes Tutorial
 
-This tutorial shows how to use `deck` for a manual-first Kubernetes maintenance session in the environment it is built for: a site with no internet, no SSH-based orchestration, no PXE, and no BMC dependencies.
+This tutorial shows how `deck` fits a Kubernetes maintenance session in the environment it is built for: no internet, no SSH-driven orchestration, and a local operator path.
+
+The reason to use `deck` here is not only offline transport. It is also that Kubernetes host-prep and bootstrap procedures grow quickly, and raw shell becomes hard to review.
 
 ## Goal
 
@@ -16,20 +18,34 @@ Relevant examples in this repository:
 - `../examples/offline-containerd-mirror.yaml`
 - `../examples/offline-verify-images.yaml`
 
-These examples are intentionally YAML-first so operators can review and adapt them before carrying anything into the site.
+These examples are meant to be read and adapted, not treated as opaque automation blobs.
 
 ## 2. Keep the two jobs separate
 
-- `pack` is the preparation step outside the air gap
-- `apply` is the execution step inside the air gap
+- `pack` gathers what the site needs before transport
+- `apply` executes the procedure locally on the node
 
-The core mental model is:
+The mental model is:
 
 ```text
 prepare artifacts -> pack bundle -> transfer bundle -> run locally on each node
 ```
 
-## 3. Prepare the bundle in the connected environment
+## 3. Model the procedure clearly
+
+Use steps and phases to show the operator what the procedure is doing.
+
+Typical boundaries in Kubernetes workflows:
+
+- host preparation
+- package or image setup
+- runtime configuration
+- kubeadm bootstrap or join
+- verification
+
+Prefer typed steps where possible. Keep `RunCommand` for the edges that are not modeled yet.
+
+## 4. Prepare the bundle in the connected environment
 
 Author a `pack` workflow that gathers the packages, container images, files, and templates your site needs.
 
@@ -41,13 +57,13 @@ deck pack --out ./bundle.tar
 
 The bundle can include `packages/`, `images/`, `files/`, `workflows/`, the `deck` binary, and `.deck/manifest.json` checksums.
 
-## 4. Move the bundle into the offline site
+## 5. Move the bundle into the offline site
 
-Transfer `bundle.tar` through the approved path for your environment: removable media, controlled gateway, or any other site-approved handoff.
+Transfer `bundle.tar` through the approved path for your environment: removable media, controlled gateway, or another site-approved handoff.
 
-`deck` assumes this transfer step is out-of-band. It does not depend on SSH automation or a remote control service.
+`deck` assumes this step is out-of-band. It does not require a remote control service.
 
-## 5. Run workflows locally on the target nodes
+## 6. Run workflows locally on the target nodes
 
 At the offline site, execute on the target machine itself:
 
@@ -55,36 +71,22 @@ At the offline site, execute on the target machine itself:
 deck apply
 ```
 
-Use the control-plane and worker examples as building blocks for kubeadm-based cluster bootstrap and follow-on maintenance.
+Use the control-plane and worker examples as starting points for kubeadm-based bootstrap and follow-on maintenance.
 
-## 6. Add site assistance only when it solves a real local problem
+## 7. Add site assistance only when it solves a local problem
 
 Some sites want a temporary shared source for bundle contents or a local place to collect session status. That can help when multiple nodes need the same release inside the same air gap.
 
-Keep that choice explicit and secondary. The operator workflow still centers on local `deck` execution on each node, not remote triggering.
+Keep that choice explicit and secondary. The operator workflow still centers on local `deck` execution on each node.
 
-## 7. When to use deck here
-
-- You are walking nodes one by one in a disconnected Kubernetes environment.
-- You need deterministic local steps for bootstrap, repair, upgrade prep, or validation.
-- You want optional site-local coordination without changing the local execution model.
-
-## 8. When not to use deck here
-
-- You want cluster-wide remote orchestration from a central controller.
-- You expect unattended execution pushed from a service.
-- You need a general online Kubernetes platform manager instead of an offline maintenance-session tool.
-
-## 9. Validate the workflow shape and artifact assumptions
-
-Before transport or execution, validate your YAML and schema compatibility:
+## 8. Validate before transport and execution
 
 ```bash
 deck validate --file ./workflows/pack.yaml
 deck validate --file ./workflows/apply.yaml
 ```
 
-For workflow planning and diagnostics, also review:
+For planning and diagnostics, also review:
 
 - `../reference/workflow-model.md`
 - `../reference/schema-reference.md`

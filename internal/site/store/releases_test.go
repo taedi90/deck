@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -98,5 +99,42 @@ func TestSiteStoreSeparateFromInstallState(t *testing.T) {
 	installStatePath := filepath.Join(home, ".deck", "state")
 	if _, err := os.Stat(installStatePath); !os.IsNotExist(err) {
 		t.Fatalf("expected no writes to local install-state path %q, got err=%v", installStatePath, err)
+	}
+}
+
+func TestImportReleaseCleansPartialArtifactsOnCopyFailure(t *testing.T) {
+	root := t.TempDir()
+	importedBundle := filepath.Join(t.TempDir(), "bundle-src")
+	if err := os.MkdirAll(importedBundle, 0o755); err != nil {
+		t.Fatalf("mkdir imported bundle: %v", err)
+	}
+
+	st, err := New(root)
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+
+	originalCopyDir := copyDirFunc
+	copyDirFunc = func(srcDir, dstDir string) error {
+		if err := os.MkdirAll(dstDir, 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(dstDir, "partial.txt"), []byte("partial"), 0o644); err != nil {
+			return err
+		}
+		return fmt.Errorf("forced copy failure")
+	}
+	defer func() {
+		copyDirFunc = originalCopyDir
+	}()
+
+	err = st.ImportRelease(Release{ID: "release-partial"}, importedBundle)
+	if err == nil {
+		t.Fatalf("expected import failure")
+	}
+
+	releaseDir := filepath.Join(root, ".deck", "site", "releases", "release-partial")
+	if _, statErr := os.Stat(releaseDir); !os.IsNotExist(statErr) {
+		t.Fatalf("expected no leftover release dir, got err=%v", statErr)
 	}
 }

@@ -1,8 +1,14 @@
 # Quick Start
 
-This tutorial shows the default `deck` path: initialize a workspace, validate it, build a bundle, carry it into the site, and run it locally.
+This tutorial shows the default `deck` path:
 
-If you later add site-assisted execution, treat that as an explicit extension of the same local workflow, not a different product mode.
+1. create a workspace
+2. express the procedure as a workflow
+3. validate it
+4. build the bundle
+5. run it locally
+
+That small loop is the point of the tool.
 
 ## 1. Create a workspace
 
@@ -18,9 +24,9 @@ This creates:
 
 ## 2. Add or edit steps
 
-`deck init` starts with empty workflow files. Add the preparation work to `pack.yaml` and the maintenance steps to `apply.yaml`.
+`deck init` starts with empty workflow files. Put preparation work in `pack.yaml` and target-machine work in `apply.yaml`.
 
-Start with typed step kinds when they fit the job. Keep shell commands for edge cases only.
+Prefer typed steps first. The goal is to keep the procedure readable when it grows.
 
 Minimal example:
 
@@ -57,7 +63,7 @@ cd ./demo
 deck pack --out ./bundle.tar
 ```
 
-The resulting bundle is designed to be self-contained for offline transport.
+The resulting bundle is designed to be the thing you carry into the site.
 
 ## 5. Apply locally at the target site
 
@@ -65,18 +71,16 @@ The resulting bundle is designed to be self-contained for offline transport.
 deck apply
 ```
 
-`apply` executes the `apply` workflow locally. That is the base `deck` story: prepare outside the air gap, move the bundle in, then run the maintenance session on the target machine.
+`apply` executes the workflow locally. That is the default `deck` story: make the procedure understandable, package what it needs, then run it on the machine that needs the change.
 
-## 6. Optional: add site-assisted execution
+## 6. Optional: add site assistance
 
-Use a site-assisted path only when you explicitly want a temporary site-local server, shared bundle source, or session visibility inside the air gap.
+Use site-assisted features only when you explicitly want a temporary local server, shared bundle source, or session visibility inside the air gap.
 
-That choice is additive. Operators still run `deck diff`, `deck doctor`, and `deck apply` locally on the nodes that need the work.
-
-`RunCommand` is still supported, but keep it as a last resort when a clearer step kind does not fit yet.
+That path extends the same local workflow. It does not replace it.
 
 ## What to read next
 
-- `../tutorials/offline-kubernetes.md`
+- `../concepts/why-deck.md`
 - `../reference/workflow-model.md`
 - `../reference/bundle-layout.md`

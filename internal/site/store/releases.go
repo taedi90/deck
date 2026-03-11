@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+var copyDirFunc = copyDir
+
 func (s *Store) ImportRelease(release Release, importedBundlePath string) error {
 	if err := validateRecordID(release.ID, "release id"); err != nil {
 		return err
@@ -38,15 +40,32 @@ func (s *Store) ImportRelease(release Release, importedBundlePath string) error 
 		return fmt.Errorf("check release bundle path: %w", err)
 	}
 
-	if err := os.MkdirAll(releaseDir, 0o755); err != nil {
-		return fmt.Errorf("create release directory: %w", err)
+	if err := os.MkdirAll(s.releasesDir(), 0o755); err != nil {
+		return fmt.Errorf("create releases directory: %w", err)
 	}
-	if err := copyDir(importedBundlePath, bundlePath); err != nil {
+	tmpDir, err := os.MkdirTemp(s.releasesDir(), release.ID+".tmp-")
+	if err != nil {
+		return fmt.Errorf("create temporary release directory: %w", err)
+	}
+	cleanupTmp := true
+	defer func() {
+		if cleanupTmp {
+			_ = os.RemoveAll(tmpDir)
+		}
+	}()
+
+	tmpBundlePath := filepath.Join(tmpDir, "bundle")
+	tmpManifestPath := filepath.Join(tmpDir, "manifest.json")
+	if err := copyDirFunc(importedBundlePath, tmpBundlePath); err != nil {
 		return fmt.Errorf("copy release bundle: %w", err)
 	}
-	if err := writeAtomicJSON(manifestPath, release); err != nil {
+	if err := writeAtomicJSON(tmpManifestPath, release); err != nil {
 		return fmt.Errorf("write release manifest: %w", err)
 	}
+	if err := os.Rename(tmpDir, releaseDir); err != nil {
+		return fmt.Errorf("finalize release import: %w", err)
+	}
+	cleanupTmp = false
 	return nil
 }
 
