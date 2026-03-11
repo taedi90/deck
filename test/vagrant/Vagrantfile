@@ -70,9 +70,9 @@ Vagrant.configure("2") do |config|
         ".git/",
         ".vagrant/",
         "test/vagrant/.vagrant/",
-        "test/artifacts/offline-multinode-*/",
-        "test/artifacts/cache/offline-multinode-rsync-root/",
-        "test/artifacts/cache/offline-multinode-rsync-root.stage/"
+        "test/artifacts/runs/*/",
+        "test/artifacts/cache/vagrant/*/rsync-root/",
+        "test/artifacts/cache/vagrant/*/rsync-root.stage/"
       ]
   else
     config.vm.synced_folder sync_source, "/workspace", type: "nfs", nfs_version: 4, nfs_udp: false
