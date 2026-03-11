@@ -1,20 +1,22 @@
 # 시나리오 템플릿 YAML
 
-이 디렉터리는 Vagrant 기반 `offline-multinode` 단일 시나리오 템플릿만 제공한다.
+이 디렉터리는 legacy Vagrant shim 호환성 표식만 둔다. 실제 유지보수 기준 경로는 이곳이 아니라 `test/workflows/*`다.
 
 ## 구조
 
-- `offline-multinode/profile/`
-  - `prepare.yaml`, `control-plane.yaml`, `worker.yaml`
-- `offline-multinode/prepare/`
-  - pack 단계 fragment
-- `offline-multinode/apply/`
-  - install 단계 fragment
-  - 공통 fragment는 `offline-multinode/apply/common/`에 위치
-- `offline-multinode/vars/`
-  - profile에서 `varImports`로 가져오는 변수 파일
+- `test/workflows/_shared/k8s/`
+  - bootstrap, join, node-reset이 함께 쓰는 공통 fragment와 vars
+- `test/workflows/k8s-control-plane-bootstrap/`
+  - control-plane bootstrap 시나리오 profile, apply, vars
+- `test/workflows/k8s-worker-join/`
+  - worker join 시나리오 profile, apply, vars
+- `test/workflows/k8s-node-reset/`
+  - node reset 시나리오 profile, apply, vars
+- `offline-multinode/`
+  - shim 호환성 표식만 유지하는 최소 디렉터리 (legacy workflow 본문은 유지하지 않음)
 
 ## 사용 원칙
 
-- 템플릿은 로컬 Vagrant 회귀 테스트와 시나리오 유지보수의 기준점이며, 환경에 맞게 `vars`, `context`, 경로를 조정한다.
-- `join` 계열 템플릿은 control-plane에서 생성된 `join.txt`를 참조한다.
+- 새 시나리오 수정은 `test/workflows/*`에서 한다.
+- 이 디렉터리의 `offline-multinode` 트리는 migration window 동안 entrypoint 호환성 표식만 유지한다.
+- `join` 계열 시나리오는 control-plane에서 생성된 `join.txt`를 참조한다.

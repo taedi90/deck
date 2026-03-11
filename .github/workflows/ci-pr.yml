@@ -53,6 +53,9 @@ jobs:
             exit 1
           fi
           ./deck validate --file docs/examples/vagrant-smoke-install.yaml
+          ./deck validate --file test/workflows/k8s-control-plane-bootstrap/profile/control-plane.yaml
+          ./deck validate --file test/workflows/k8s-worker-join/profile/worker.yaml
+          ./deck validate --file test/workflows/k8s-node-reset/profile/node-reset.yaml
 
       - name: Validate docs examples (mode=validate)
         run: |

@@ -163,13 +163,19 @@ Before sending changes, run the checks that match your work:
 ```bash
 go test ./...
 go run ./cmd/deck validate --file <workflow.yaml>
+go run ./cmd/deck validate --file test/workflows/k8s-control-plane-bootstrap/profile/control-plane.yaml
+go run ./cmd/deck validate --file test/workflows/k8s-worker-join/profile/worker.yaml
+go run ./cmd/deck validate --file test/workflows/k8s-node-reset/profile/node-reset.yaml
 
 # linux host with libvirt-backed vagrant
-bash test/vagrant/run-offline-multinode-agent.sh
+bash test/e2e/vagrant/run-scenario.sh --scenario k8s-control-plane-bootstrap
+bash test/e2e/vagrant/run-scenario.sh --scenario k8s-worker-join
+bash test/e2e/vagrant/run-scenario.sh --scenario k8s-node-reset
 ```
 
-Local Vagrant runs keep machine state in `test/vagrant/.vagrant/` and reuse the prepared bundle cache in `test/artifacts/cache/offline-multinode-prepared-bundle/` across runs.
-The default local loop now prefers `rsync`, keeps VMs alive, and reuses `test/artifacts/offline-multinode-local/` unless you choose a different `--art-dir` or run with `--fresh`.
+The maintained Kubernetes regression layout now lives under `test/workflows/`, grouped by `k8s-control-plane-bootstrap`, `k8s-worker-join`, and `k8s-node-reset`, with the shared fragments in `test/workflows/_shared/k8s/`.
+Local Vagrant runs keep machine state in `test/vagrant/.vagrant/`, reuse scenario caches under `test/artifacts/cache/bundles/<scenario>/`, and reuse run artifacts under `test/artifacts/runs/<scenario>/<run-id>/` unless you choose a different `--art-dir` or run with `--fresh`.
+The legacy `test/vagrant/run-offline-multinode-agent.sh` entrypoint still exists as a temporary compatibility shim during migration.
 
 ## License
 
