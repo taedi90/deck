@@ -72,7 +72,7 @@ func TestRunTopLevelStubUsage(t *testing.T) {
 		if err == nil {
 			t.Fatalf("expected usage error")
 		}
-		if !strings.Contains(err.Error(), "usage: deck cache list|clean") {
+		if !strings.Contains(err.Error(), "deck cache <list|clean>") {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})

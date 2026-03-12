@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,10 +14,10 @@ import (
 
 func runCache(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: deck cache list|clean [flags]")
+		return errors.New(cacheHelpText())
 	}
-	if args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
-		return errors.New("usage: deck cache list|clean [flags]")
+	if wantsHelp(args) {
+		return errors.New(cacheHelpText())
 	}
 
 	switch args[0] {
@@ -38,11 +37,10 @@ type cacheEntry struct {
 }
 
 func runCacheList(args []string) error {
-	fs := flag.NewFlagSet("cache list", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	fs := newHelpFlagSet("cache list")
 	output := ""
 	registerOutputFormatFlags(fs, &output, "text")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args, cacheListHelpText()); err != nil {
 		return err
 	}
 	if output != "text" && output != "json" {
@@ -68,11 +66,10 @@ func runCacheList(args []string) error {
 }
 
 func runCacheClean(args []string) error {
-	fs := flag.NewFlagSet("cache clean", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	fs := newHelpFlagSet("cache clean")
 	olderThan := fs.String("older-than", "", "delete entries not modified within this duration (e.g. 30d, 24h)")
 	dryRun := fs.Bool("dry-run", false, "print deletion plan without deleting")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args, cacheCleanHelpText()); err != nil {
 		return err
 	}
 

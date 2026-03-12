@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"github.com/taedi90/deck/internal/bundle"
 	"os"
@@ -13,14 +12,13 @@ import (
 )
 
 func runWorkflowInit(args []string) error {
-	fs := flag.NewFlagSet("workflow init", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	fs := newHelpFlagSet("workflow init")
 	output := fs.String("out", ".", "output directory")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args, initHelpText()); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New("usage: deck init [--out <dir>]")
+		return errors.New(initHelpText())
 	}
 	resolvedOutput := strings.TrimSpace(*output)
 	if resolvedOutput == "" {
@@ -91,13 +89,15 @@ func initTemplateFiles() map[string]string {
 }
 func runWorkflowBundle(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: bundle verify <path> | bundle inspect <path> [--output text|json] | bundle import --file <bundle.tar> --dest <dir> | bundle collect --root <dir> --out <bundle.tar> | bundle merge <bundle.tar> --to <dir> [--dry-run]")
+		return errors.New(bundleHelpText())
+	}
+	if wantsHelp(args) {
+		return errors.New(bundleHelpText())
 	}
 
 	switch args[0] {
 	case "verify":
-		fs := flag.NewFlagSet("workflow bundle verify", flag.ContinueOnError)
-		fs.SetOutput(os.Stderr)
+		fs := newHelpFlagSet("workflow bundle verify")
 		bundlePath := fs.String("file", "", "bundle path (directory or bundle.tar)")
 		parseArgs := append([]string{}, args[1:]...)
 		positionalPath := ""
@@ -105,7 +105,7 @@ func runWorkflowBundle(args []string) error {
 			positionalPath = strings.TrimSpace(parseArgs[0])
 			parseArgs = parseArgs[1:]
 		}
-		if err := fs.Parse(parseArgs); err != nil {
+		if err := parseFlags(fs, parseArgs, bundleVerifyHelpText()); err != nil {
 			return err
 		}
 		if fs.NArg() > 0 {
@@ -127,8 +127,7 @@ func runWorkflowBundle(args []string) error {
 		return nil
 
 	case "inspect":
-		fs := flag.NewFlagSet("workflow bundle inspect", flag.ContinueOnError)
-		fs.SetOutput(os.Stderr)
+		fs := newHelpFlagSet("workflow bundle inspect")
 		bundlePath := fs.String("file", "", "bundle path (directory or bundle.tar)")
 		output := ""
 		registerOutputFormatFlags(fs, &output, "text")
@@ -138,7 +137,7 @@ func runWorkflowBundle(args []string) error {
 			positionalPath = strings.TrimSpace(parseArgs[0])
 			parseArgs = parseArgs[1:]
 		}
-		if err := fs.Parse(parseArgs); err != nil {
+		if err := parseFlags(fs, parseArgs, bundleInspectHelpText()); err != nil {
 			return err
 		}
 		if fs.NArg() > 0 {
@@ -171,11 +170,10 @@ func runWorkflowBundle(args []string) error {
 		return nil
 
 	case "import":
-		fs := flag.NewFlagSet("workflow bundle import", flag.ContinueOnError)
-		fs.SetOutput(os.Stderr)
+		fs := newHelpFlagSet("workflow bundle import")
 		archiveFile := fs.String("file", "", "bundle archive file path")
 		destDir := fs.String("dest", "", "destination directory")
-		if err := fs.Parse(args[1:]); err != nil {
+		if err := parseFlags(fs, args[1:], bundleImportHelpText()); err != nil {
 			return err
 		}
 		if *archiveFile == "" {
@@ -193,11 +191,10 @@ func runWorkflowBundle(args []string) error {
 		return nil
 
 	case "collect":
-		fs := flag.NewFlagSet("workflow bundle collect", flag.ContinueOnError)
-		fs.SetOutput(os.Stderr)
+		fs := newHelpFlagSet("workflow bundle collect")
 		bundleDir := fs.String("root", "", "bundle directory")
 		outputFile := fs.String("out", "", "output tar archive path")
-		if err := fs.Parse(args[1:]); err != nil {
+		if err := parseFlags(fs, args[1:], bundleCollectHelpText()); err != nil {
 			return err
 		}
 		if *bundleDir == "" {
@@ -215,8 +212,7 @@ func runWorkflowBundle(args []string) error {
 		return nil
 
 	case "merge":
-		fs := flag.NewFlagSet("workflow bundle merge", flag.ContinueOnError)
-		fs.SetOutput(os.Stderr)
+		fs := newHelpFlagSet("workflow bundle merge")
 		to := fs.String("to", "", "merge destination (local directory)")
 		dryRun := fs.Bool("dry-run", false, "print merge plan without writing")
 		parseArgs := append([]string{}, args[1:]...)
@@ -225,7 +221,7 @@ func runWorkflowBundle(args []string) error {
 			archivePath = strings.TrimSpace(parseArgs[0])
 			parseArgs = parseArgs[1:]
 		}
-		if err := fs.Parse(parseArgs); err != nil {
+		if err := parseFlags(fs, parseArgs, bundleMergeHelpText()); err != nil {
 			return err
 		}
 		if archivePath == "" {

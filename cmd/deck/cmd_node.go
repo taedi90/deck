@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"github.com/taedi90/deck/internal/nodeid"
 	"os"
@@ -12,10 +11,10 @@ import (
 
 func runNode(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: deck node <id|assignment> [flags]")
+		return errors.New(nodeHelpText())
 	}
-	if args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
-		return errors.New("usage: deck node <id|assignment> [flags]")
+	if wantsHelp(args) {
+		return errors.New(nodeHelpText())
 	}
 	switch args[0] {
 	case "id":
@@ -29,7 +28,10 @@ func runNode(args []string) error {
 
 func runNodeID(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: deck node id <show|set|init>")
+		return errors.New(nodeIDHelpText())
+	}
+	if wantsHelp(args) {
+		return errors.New(nodeIDHelpText())
 	}
 	switch args[0] {
 	case "show":
@@ -44,13 +46,12 @@ func runNodeID(args []string) error {
 }
 
 func runNodeIDShow(args []string) error {
-	fs := flag.NewFlagSet("node id show", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	if err := fs.Parse(args); err != nil {
+	fs := newHelpFlagSet("node id show")
+	if err := parseFlags(fs, args, nodeIDShowHelpText()); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New("usage: deck node id show")
+		return errors.New(nodeIDShowHelpText())
 	}
 
 	result, err := nodeid.Resolve(resolveNodeIDPathsFromEnv())
@@ -62,13 +63,12 @@ func runNodeIDShow(args []string) error {
 }
 
 func runNodeIDSet(args []string) error {
-	fs := flag.NewFlagSet("node id set", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	if err := fs.Parse(args); err != nil {
+	fs := newHelpFlagSet("node id set")
+	if err := parseFlags(fs, args, nodeIDSetHelpText()); err != nil {
 		return err
 	}
 	if fs.NArg() != 1 {
-		return errors.New("usage: deck node id set <node-id>")
+		return errors.New(nodeIDSetHelpText())
 	}
 
 	result, err := nodeid.SetOperator(resolveNodeIDPathsFromEnv(), strings.TrimSpace(fs.Arg(0)))
@@ -81,13 +81,12 @@ func runNodeIDSet(args []string) error {
 }
 
 func runNodeIDInit(args []string) error {
-	fs := flag.NewFlagSet("node id init", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	if err := fs.Parse(args); err != nil {
+	fs := newHelpFlagSet("node id init")
+	if err := parseFlags(fs, args, nodeIDInitHelpText()); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New("usage: deck node id init")
+		return errors.New(nodeIDInitHelpText())
 	}
 
 	result, err := nodeid.Init(resolveNodeIDPathsFromEnv())
@@ -127,7 +126,10 @@ func printNodeIDResult(result nodeid.Result) {
 
 func runNodeAssignment(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: deck node assignment show [flags]")
+		return errors.New(nodeAssignmentHelpText())
+	}
+	if wantsHelp(args) {
+		return errors.New(nodeAssignmentHelpText())
 	}
 	switch args[0] {
 	case "show":
@@ -138,18 +140,17 @@ func runNodeAssignment(args []string) error {
 }
 
 func runNodeAssignmentShow(args []string) error {
-	fs := flag.NewFlagSet("node assignment show", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	fs := newHelpFlagSet("node assignment show")
 	root := fs.String("root", ".", "site server root")
 	sessionID := fs.String("session", "", "session id")
 	action := fs.String("action", "apply", "assignment action (diff|doctor|apply)")
 	output := ""
 	registerOutputFormatFlags(fs, &output, "text")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args, nodeAssignmentHelpText()); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New("usage: deck node assignment show --session <session-id> [--action diff|doctor|apply] [--root <dir>] [--output text|json]")
+		return errors.New(nodeAssignmentHelpText())
 	}
 	resolvedSessionID := strings.TrimSpace(*sessionID)
 	if resolvedSessionID == "" {
