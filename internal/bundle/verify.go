@@ -190,7 +190,7 @@ func fileDigest(filePath string) (int64, string, error) {
 	if err != nil {
 		return 0, "", err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	h := sha256.New()
 	size, err := io.Copy(h, f)
@@ -206,7 +206,7 @@ func scanTarBundle(archivePath string) ([]byte, map[string]tarFileInfo, map[stri
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("open bundle archive: %w", err)
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 
 	files := make(map[string]tarFileInfo)
 	dirs := map[string]struct{}{".": {}}
@@ -233,7 +233,7 @@ func scanTarBundle(archivePath string) ([]byte, map[string]tarFileInfo, map[stri
 		switch hdr.Typeflag {
 		case tar.TypeDir:
 			addTarPathDirectories(dirs, rel)
-		case tar.TypeReg, tar.TypeRegA:
+		case tar.TypeReg:
 			addTarPathDirectories(dirs, rel)
 			h := sha256.New()
 			if rel == manifestRelativePath {
@@ -265,7 +265,7 @@ func readManifestFromTar(archivePath string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open bundle archive: %w", err)
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 
 	tr := tar.NewReader(src)
 	for {
@@ -284,7 +284,7 @@ func readManifestFromTar(archivePath string) ([]byte, error) {
 		if rel != manifestRelativePath {
 			continue
 		}
-		if hdr.Typeflag != tar.TypeReg && hdr.Typeflag != tar.TypeRegA {
+		if hdr.Typeflag != tar.TypeReg {
 			return nil, fmt.Errorf("E_BUNDLE_INTEGRITY: manifest entry must be regular file")
 		}
 

@@ -21,7 +21,7 @@ func ImportArchive(archivePath, destRoot string) error {
 	if err != nil {
 		return fmt.Errorf("open bundle archive: %w", err)
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 
 	if err := os.MkdirAll(destRoot, 0o755); err != nil {
 		return fmt.Errorf("create import destination: %w", err)
@@ -74,7 +74,7 @@ func ImportArchive(archivePath, destRoot string) error {
 			if err := os.MkdirAll(target, os.FileMode(hdr.Mode)); err != nil {
 				return fmt.Errorf("create import directory: %w", err)
 			}
-		case tar.TypeReg, tar.TypeRegA:
+		case tar.TypeReg:
 			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 				return fmt.Errorf("create import parent directory: %w", err)
 			}
