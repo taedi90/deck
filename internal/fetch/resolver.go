@@ -1,6 +1,7 @@
 package fetch
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -27,7 +28,10 @@ const (
 	defaultHTTPTimeout  = 30 * time.Second
 )
 
-func ResolveBytes(relPath string, sources []SourceConfig, opts ResolveOptions) ([]byte, error) {
+func ResolveBytes(ctx context.Context, relPath string, sources []SourceConfig, opts ResolveOptions) ([]byte, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if strings.TrimSpace(relPath) == "" {
 		return nil, fmt.Errorf("relative path is empty")
 	}
@@ -60,7 +64,7 @@ func ResolveBytes(relPath string, sources []SourceConfig, opts ResolveOptions) (
 				continue
 			}
 			targetURL := strings.TrimRight(baseURL, "/") + "/" + strings.TrimLeft(filepath.ToSlash(relPath), "/")
-			raw, err := readHTTP(targetURL, opts)
+			raw, err := readHTTP(ctx, targetURL, opts)
 			if err == nil {
 				return raw, nil
 			}
@@ -77,7 +81,10 @@ func ResolveBytes(relPath string, sources []SourceConfig, opts ResolveOptions) (
 	return nil, fmt.Errorf("all fetch sources failed for %s: %s", relPath, strings.Join(attempts, ", "))
 }
 
-func readHTTP(url string, opts ResolveOptions) ([]byte, error) {
+func readHTTP(ctx context.Context, url string, opts ResolveOptions) ([]byte, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	maxBytes := opts.MaxBytes
 	if maxBytes <= 0 {
 		maxBytes = defaultHTTPMaxBytes
@@ -88,7 +95,7 @@ func readHTTP(url string, opts ResolveOptions) ([]byte, error) {
 	}
 
 	client := &http.Client{Timeout: timeout}
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}

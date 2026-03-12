@@ -5,7 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -401,6 +404,58 @@ func TestRun_RunCommandErrorCodes(t *testing.T) {
 			t.Fatalf("expected E_INSTALL_RUNCOMMAND_TIMEOUT, got %v", err)
 		}
 	})
+
+	t.Run("timeout classification", func(t *testing.T) {
+		dir := t.TempDir()
+		bundle := filepath.Join(dir, "bundle")
+		statePath := filepath.Join(dir, "state", "state.json")
+		if err := os.MkdirAll(bundle, 0o755); err != nil {
+			t.Fatalf("mkdir bundle: %v", err)
+		}
+		artifact := filepath.Join(bundle, "files", "a.txt")
+		if err := os.MkdirAll(filepath.Dir(artifact), 0o755); err != nil {
+			t.Fatalf("mkdir files: %v", err)
+		}
+		if err := os.WriteFile(artifact, []byte("ok"), 0o644); err != nil {
+			t.Fatalf("write artifact: %v", err)
+		}
+		if err := writeManifestForTest(bundle, "files/a.txt", []byte("ok")); err != nil {
+			t.Fatalf("write manifest: %v", err)
+		}
+
+		fakeList := filepath.Join(dir, "fake-images-timeout.sh")
+		script := "#!/usr/bin/env bash\nset -euo pipefail\nsleep 1\n"
+		if err := os.WriteFile(fakeList, []byte(script), 0o755); err != nil {
+			t.Fatalf("write fake list script: %v", err)
+		}
+
+		wf := &config.Workflow{
+			Version: "v1",
+			Phases: []config.Phase{{
+				Name: "install",
+				Steps: []config.Step{{
+					ID:   "verify-images",
+					Kind: "VerifyImages",
+					Spec: map[string]any{
+						"images":  []any{"registry.k8s.io/pause:3.10.1"},
+						"command": []any{fakeList},
+						"timeout": "20ms",
+					},
+				}},
+			}},
+		}
+
+		err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, StatePath: statePath})
+		if err == nil {
+			t.Fatalf("expected verify images timeout")
+		}
+		if !strings.Contains(err.Error(), errCodeInstallImagesCmdFailed) {
+			t.Fatalf("expected verify images error code, got %v", err)
+		}
+		if !strings.Contains(err.Error(), "image verification timed out") {
+			t.Fatalf("expected timeout classification, got %v", err)
+		}
+	})
 }
 
 func TestRun_KubeadmJoinMissingFileErrorCode(t *testing.T) {
@@ -790,6 +845,274 @@ func TestRun_RetrySemantics(t *testing.T) {
 	})
 }
 
+func TestRun_RetryStopsWhenParentContextDone(t *testing.T) {
+	dir := t.TempDir()
+	bundle := filepath.Join(dir, "bundle")
+	statePath := filepath.Join(dir, "state", "state.json")
+	if err := os.MkdirAll(bundle, 0o755); err != nil {
+		t.Fatalf("mkdir bundle: %v", err)
+	}
+	artifact := filepath.Join(bundle, "files", "a.txt")
+	if err := os.MkdirAll(filepath.Dir(artifact), 0o755); err != nil {
+		t.Fatalf("mkdir files: %v", err)
+	}
+	if err := os.WriteFile(artifact, []byte("ok"), 0o644); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+	if err := writeManifestForTest(bundle, "files/a.txt", []byte("ok")); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	counterPath := filepath.Join(dir, "counter")
+	scriptPath := filepath.Join(dir, "slow-fail.sh")
+	script := "#!/usr/bin/env bash\nset -euo pipefail\ncount=0\nif [[ -f \"" + counterPath + "\" ]]; then\n  count=$(cat \"" + counterPath + "\")\nfi\ncount=$((count+1))\necho \"${count}\" > \"" + counterPath + "\"\nsleep 1\nexit 1\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name:  "install",
+			Steps: []config.Step{{ID: "retry-cmd", Kind: "RunCommand", Retry: 4, Spec: map[string]any{"command": []any{scriptPath}, "timeout": "5s"}}},
+		}},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	err := Run(ctx, wf, RunOptions{BundleRoot: bundle, StatePath: statePath})
+	if err == nil {
+		t.Fatalf("expected parent context cancellation")
+	}
+
+	counterRaw, readErr := os.ReadFile(counterPath)
+	if readErr != nil {
+		t.Fatalf("read counter: %v", readErr)
+	}
+	if strings.TrimSpace(string(counterRaw)) != "1" {
+		t.Fatalf("expected exactly one attempt when parent context ends, got %q", strings.TrimSpace(string(counterRaw)))
+	}
+}
+
+func TestRun_RunCommandParentCancelNotRelabeledAsTimeout(t *testing.T) {
+	dir := t.TempDir()
+	bundle := filepath.Join(dir, "bundle")
+	statePath := filepath.Join(dir, "state", "state.json")
+	if err := os.MkdirAll(bundle, 0o755); err != nil {
+		t.Fatalf("mkdir bundle: %v", err)
+	}
+	artifact := filepath.Join(bundle, "files", "a.txt")
+	if err := os.MkdirAll(filepath.Dir(artifact), 0o755); err != nil {
+		t.Fatalf("mkdir files: %v", err)
+	}
+	if err := os.WriteFile(artifact, []byte("ok"), 0o644); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+	if err := writeManifestForTest(bundle, "files/a.txt", []byte("ok")); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name:  "install",
+			Steps: []config.Step{{ID: "cmd", Kind: "RunCommand", Spec: map[string]any{"command": []any{"true"}, "timeout": "3s"}}},
+		}},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := Run(ctx, wf, RunOptions{BundleRoot: bundle, StatePath: statePath})
+	if err == nil {
+		t.Fatalf("expected canceled context error")
+	}
+	if strings.Contains(err.Error(), errCodeInstallCommandTimeout) {
+		t.Fatalf("expected parent cancellation to not be mapped to timeout, got %v", err)
+	}
+	if !strings.Contains(err.Error(), context.Canceled.Error()) {
+		t.Fatalf("expected canceled context in error, got %v", err)
+	}
+}
+
+func TestRun_DownloadFileRespectsParentContext(t *testing.T) {
+	dir := t.TempDir()
+	bundle := filepath.Join(dir, "bundle")
+	statePath := filepath.Join(dir, "state", "state.json")
+	if err := os.MkdirAll(bundle, 0o755); err != nil {
+		t.Fatalf("mkdir bundle: %v", err)
+	}
+	artifact := filepath.Join(bundle, "files", "a.txt")
+	if err := os.MkdirAll(filepath.Dir(artifact), 0o755); err != nil {
+		t.Fatalf("mkdir files: %v", err)
+	}
+	if err := os.WriteFile(artifact, []byte("ok"), 0o644); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+	if err := writeManifestForTest(bundle, "files/a.txt", []byte("ok")); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(250 * time.Millisecond)
+		_, _ = w.Write([]byte("payload"))
+	}))
+	defer srv.Close()
+
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "install",
+			Steps: []config.Step{{
+				ID:   "download",
+				Kind: "DownloadFile",
+				Spec: map[string]any{"source": map[string]any{"url": srv.URL + "/files/payload.txt"}, "output": map[string]any{"path": "files/payload.txt"}},
+			}},
+		}},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	defer cancel()
+	err := Run(ctx, wf, RunOptions{BundleRoot: bundle, StatePath: statePath})
+	if err == nil {
+		t.Fatalf("expected download cancellation")
+	}
+	if !strings.Contains(err.Error(), context.DeadlineExceeded.Error()) {
+		t.Fatalf("expected deadline exceeded in error, got %v", err)
+	}
+}
+
+func TestResolveSourceBytes_PreservesContextCancellation(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(250 * time.Millisecond)
+		_, _ = w.Write([]byte("payload"))
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := resolveSourceBytes(ctx, map[string]any{
+		"fetch": map[string]any{
+			"sources": []any{map[string]any{"type": "online", "url": srv.URL}},
+		},
+	}, "files/payload.txt")
+	if err == nil {
+		t.Fatalf("expected context cancellation error")
+	}
+	if strings.Contains(err.Error(), "E_INSTALL_SOURCE_NOT_FOUND") {
+		t.Fatalf("expected cancellation to not be mapped to source-not-found, got %v", err)
+	}
+	if !strings.Contains(err.Error(), context.Canceled.Error()) {
+		t.Fatalf("expected canceled context in error, got %v", err)
+	}
+}
+
+func TestRunCommandOutputWithContext_TimeoutReturnsSentinel(t *testing.T) {
+	_, err := runCommandOutputWithContext(context.Background(), []string{"sleep", "1"}, 10*time.Millisecond)
+	if err == nil {
+		t.Fatalf("expected timeout error")
+	}
+	if !errors.Is(err, errStepCommandTimeout) {
+		t.Fatalf("expected step timeout sentinel, got %v", err)
+	}
+}
+
+func TestRun_ContainerdConfigDefaultGenerationRespectsParentContext(t *testing.T) {
+	dir := t.TempDir()
+	bundle := filepath.Join(dir, "bundle")
+	statePath := filepath.Join(dir, "state", "state.json")
+	if err := os.MkdirAll(bundle, 0o755); err != nil {
+		t.Fatalf("mkdir bundle: %v", err)
+	}
+	artifact := filepath.Join(bundle, "files", "a.txt")
+	if err := os.MkdirAll(filepath.Dir(artifact), 0o755); err != nil {
+		t.Fatalf("mkdir files: %v", err)
+	}
+	if err := os.WriteFile(artifact, []byte("ok"), 0o644); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+	if err := writeManifestForTest(bundle, "files/a.txt", []byte("ok")); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	binDir := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatalf("mkdir bin: %v", err)
+	}
+	fakeContainerd := filepath.Join(binDir, "containerd")
+	script := "#!/usr/bin/env bash\nset -euo pipefail\nif [[ \"${1:-}\" == \"config\" && \"${2:-}\" == \"default\" ]]; then\n  sleep 1\n  echo 'version = 2'\n  exit 0\nfi\nexit 1\n"
+	if err := os.WriteFile(fakeContainerd, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake containerd: %v", err)
+	}
+	t.Setenv("PATH", fmt.Sprintf("%s:%s", binDir, os.Getenv("PATH")))
+
+	target := filepath.Join(dir, "containerd", "config.toml")
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name:  "install",
+			Steps: []config.Step{{ID: "containerd-config", Kind: "ContainerdConfig", Spec: map[string]any{"path": target, "timeout": "5s"}}},
+		}},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	err := Run(ctx, wf, RunOptions{BundleRoot: bundle, StatePath: statePath})
+	if err == nil {
+		t.Fatalf("expected canceled containerd config generation")
+	}
+	if !strings.Contains(err.Error(), context.DeadlineExceeded.Error()) {
+		t.Fatalf("expected deadline exceeded in error, got %v", err)
+	}
+}
+
+func TestRun_ContainerdConfigDefaultGenerationTimeoutUsesTimeoutClassification(t *testing.T) {
+	dir := t.TempDir()
+	bundle := filepath.Join(dir, "bundle")
+	statePath := filepath.Join(dir, "state", "state.json")
+	if err := os.MkdirAll(bundle, 0o755); err != nil {
+		t.Fatalf("mkdir bundle: %v", err)
+	}
+	artifact := filepath.Join(bundle, "files", "a.txt")
+	if err := os.MkdirAll(filepath.Dir(artifact), 0o755); err != nil {
+		t.Fatalf("mkdir files: %v", err)
+	}
+	if err := os.WriteFile(artifact, []byte("ok"), 0o644); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+	if err := writeManifestForTest(bundle, "files/a.txt", []byte("ok")); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	binDir := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatalf("mkdir bin: %v", err)
+	}
+	fakeContainerd := filepath.Join(binDir, "containerd")
+	script := "#!/usr/bin/env bash\nset -euo pipefail\nif [[ \"${1:-}\" == \"config\" && \"${2:-}\" == \"default\" ]]; then\n  sleep 1\n  echo 'version = 2'\n  exit 0\nfi\nexit 1\n"
+	if err := os.WriteFile(fakeContainerd, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake containerd: %v", err)
+	}
+	t.Setenv("PATH", fmt.Sprintf("%s:%s", binDir, os.Getenv("PATH")))
+
+	target := filepath.Join(dir, "containerd", "config.toml")
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name:  "install",
+			Steps: []config.Step{{ID: "containerd-config", Kind: "ContainerdConfig", Spec: map[string]any{"path": target, "timeout": "20ms"}}},
+		}},
+	}
+
+	err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, StatePath: statePath})
+	if err == nil {
+		t.Fatalf("expected containerd config timeout")
+	}
+	if !strings.Contains(err.Error(), "containerd config default generation timed out") {
+		t.Fatalf("expected timeout classification, got %v", err)
+	}
+}
+
 func TestRun_WhenInvalidExpression(t *testing.T) {
 	dir := t.TempDir()
 	bundle := filepath.Join(dir, "bundle")
@@ -1043,6 +1366,64 @@ func TestRun_InstallPackagesInstallsFromLocalRepo(t *testing.T) {
 	}
 	if !strings.Contains(args, debA) || !strings.Contains(args, debB) {
 		t.Fatalf("local deb artifacts were not passed to apt-get: %q", args)
+	}
+}
+
+func TestRun_InstallPackagesTimeoutUsesTimeoutClassification(t *testing.T) {
+	dir := t.TempDir()
+	bundle := filepath.Join(dir, "bundle")
+	statePath := filepath.Join(dir, "state", "state.json")
+	if err := os.MkdirAll(bundle, 0o755); err != nil {
+		t.Fatalf("mkdir bundle: %v", err)
+	}
+	artifact := filepath.Join(bundle, "files", "a.txt")
+	if err := os.MkdirAll(filepath.Dir(artifact), 0o755); err != nil {
+		t.Fatalf("mkdir files: %v", err)
+	}
+	if err := os.WriteFile(artifact, []byte("ok"), 0o644); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+	if err := writeManifestForTest(bundle, "files/a.txt", []byte("ok")); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	binDir := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatalf("mkdir bin: %v", err)
+	}
+	fakeApt := filepath.Join(binDir, "apt-get")
+	script := "#!/usr/bin/env bash\nset -euo pipefail\nsleep 1\n"
+	if err := os.WriteFile(fakeApt, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake apt-get: %v", err)
+	}
+	originalPath := os.Getenv("PATH")
+	t.Setenv("PATH", fmt.Sprintf("%s:%s", binDir, originalPath))
+
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "install",
+			Steps: []config.Step{{
+				ID:      "install-pkgs",
+				Kind:    "InstallPackages",
+				Timeout: "20ms",
+				Spec:    map[string]any{"packages": []any{"containerd"}},
+			}},
+		}},
+	}
+
+	err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, StatePath: statePath})
+	if err == nil {
+		t.Fatalf("expected install packages timeout")
+	}
+	if !strings.Contains(err.Error(), errCodeInstallPkgFailed) {
+		t.Fatalf("expected package install error code, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "timed out") {
+		t.Fatalf("expected timeout classification, got %v", err)
+	}
+	if strings.Contains(err.Error(), "package installation failed") {
+		t.Fatalf("expected timeout path instead of generic failure, got %v", err)
 	}
 }
 
@@ -1397,7 +1778,7 @@ func TestContainerdConfigStep(t *testing.T) {
 		t.Fatalf("write initial config: %v", err)
 	}
 	spec := map[string]any{"path": target, "configPath": "/etc/containerd/certs.d", "systemdCgroup": true}
-	if err := runContainerdConfig(spec); err != nil {
+	if err := runContainerdConfig(context.Background(), spec); err != nil {
 		t.Fatalf("runContainerdConfig failed: %v", err)
 	}
 	raw, err := os.ReadFile(target)

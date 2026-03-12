@@ -1,6 +1,7 @@
 package fetch
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -20,7 +21,7 @@ func TestResolveBytes(t *testing.T) {
 			t.Fatalf("write local file: %v", err)
 		}
 
-		raw, err := ResolveBytes("files/a.txt", []SourceConfig{{Type: "local", Path: local}}, ResolveOptions{})
+		raw, err := ResolveBytes(context.Background(), "files/a.txt", []SourceConfig{{Type: "local", Path: local}}, ResolveOptions{})
 		if err != nil {
 			t.Fatalf("resolve bytes: %v", err)
 		}
@@ -44,7 +45,7 @@ func TestResolveBytes(t *testing.T) {
 		}))
 		defer online.Close()
 
-		raw, err := ResolveBytes("files/a.txt", []SourceConfig{
+		raw, err := ResolveBytes(context.Background(), "files/a.txt", []SourceConfig{
 			{Type: "repo", URL: repo.URL},
 			{Type: "online", URL: online.URL},
 		}, ResolveOptions{})
@@ -57,7 +58,7 @@ func TestResolveBytes(t *testing.T) {
 	})
 
 	t.Run("returns deterministic miss error", func(t *testing.T) {
-		_, err := ResolveBytes("files/missing.txt", []SourceConfig{{Type: "local", Path: t.TempDir()}}, ResolveOptions{})
+		_, err := ResolveBytes(context.Background(), "files/missing.txt", []SourceConfig{{Type: "local", Path: t.TempDir()}}, ResolveOptions{})
 		if err == nil {
 			t.Fatalf("expected resolve error")
 		}
@@ -72,7 +73,7 @@ func TestResolveBytes(t *testing.T) {
 		}))
 		defer online.Close()
 
-		_, err := ResolveBytes("files/a.txt", []SourceConfig{{Type: "online", URL: online.URL}}, ResolveOptions{OfflineOnly: true})
+		_, err := ResolveBytes(context.Background(), "files/a.txt", []SourceConfig{{Type: "online", URL: online.URL}}, ResolveOptions{OfflineOnly: true})
 		if err == nil {
 			t.Fatalf("expected offline policy error")
 		}
@@ -87,12 +88,31 @@ func TestResolveBytes(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		_, err := ResolveBytes("files/a.txt", []SourceConfig{{Type: "online", URL: srv.URL}}, ResolveOptions{MaxBytes: 10, Timeout: time.Second})
+		_, err := ResolveBytes(context.Background(), "files/a.txt", []SourceConfig{{Type: "online", URL: srv.URL}}, ResolveOptions{MaxBytes: 10, Timeout: time.Second})
 		if err == nil {
 			t.Fatalf("expected max-bytes error")
 		}
 		if !strings.Contains(err.Error(), "exceeds max bytes") {
 			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("returns context cancellation when parent is done", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			time.Sleep(250 * time.Millisecond)
+			_, _ = w.Write([]byte("online"))
+		}))
+		defer srv.Close()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+		defer cancel()
+
+		_, err := ResolveBytes(ctx, "files/a.txt", []SourceConfig{{Type: "online", URL: srv.URL}}, ResolveOptions{Timeout: time.Second})
+		if err == nil {
+			t.Fatalf("expected cancellation error")
+		}
+		if !strings.Contains(err.Error(), context.DeadlineExceeded.Error()) {
+			t.Fatalf("expected context deadline exceeded text, got %v", err)
 		}
 	})
 }

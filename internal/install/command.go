@@ -12,6 +12,8 @@ import (
 	"github.com/taedi90/deck/internal/workflowexec"
 )
 
+var errStepCommandTimeout = errors.New("step command timeout")
+
 type runCommandSpec struct {
 	Command []string `json:"command"`
 	Timeout string   `json:"timeout"`
@@ -31,7 +33,7 @@ func runCommand(ctx context.Context, spec map[string]any) error {
 	if err == nil {
 		return nil
 	}
-	if errors.Is(err, context.DeadlineExceeded) {
+	if errors.Is(err, errStepCommandTimeout) {
 		return fmt.Errorf("%s: command timed out after %s", errCodeInstallCommandTimeout, commandTimeout(spec))
 	}
 	var exitErr *exec.ExitError
@@ -64,6 +66,9 @@ func runTimedCommandWithContext(parent context.Context, name string, args []stri
 	if parent == nil {
 		parent = context.Background()
 	}
+	if err := parent.Err(); err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 
@@ -72,7 +77,16 @@ func runTimedCommandWithContext(parent context.Context, name string, args []stri
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		return context.DeadlineExceeded
+		if parent.Err() != nil {
+			return parent.Err()
+		}
+		return errStepCommandTimeout
+	}
+	if errors.Is(ctx.Err(), context.Canceled) {
+		if parent.Err() != nil {
+			return parent.Err()
+		}
+		return context.Canceled
 	}
 	return err
 }
@@ -85,13 +99,25 @@ func runCommandOutputWithContext(parent context.Context, cmdArgs []string, timeo
 	if parent == nil {
 		parent = context.Background()
 	}
+	if err := parent.Err(); err != nil {
+		return "", err
+	}
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, cmdArgs[0], cmdArgs[1:]...)
 	output, err := cmd.CombinedOutput()
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		return "", fmt.Errorf("command timed out after %s", timeout)
+		if parent.Err() != nil {
+			return "", parent.Err()
+		}
+		return "", errStepCommandTimeout
+	}
+	if errors.Is(ctx.Err(), context.Canceled) {
+		if parent.Err() != nil {
+			return "", parent.Err()
+		}
+		return "", context.Canceled
 	}
 	if err != nil {
 		msg := strings.TrimSpace(string(output))

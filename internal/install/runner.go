@@ -139,6 +139,10 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 			attempts = 1
 		}
 		for i := 0; i < attempts; i++ {
+			if err := ctx.Err(); err != nil {
+				execErr = err
+				break
+			}
 			rendered, renderErr := workflowexec.RenderSpec(step.Spec, wf, runtimeVars, ctxData)
 			if renderErr != nil {
 				execErr = fmt.Errorf("render spec template: %w", renderErr)
@@ -156,6 +160,9 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 				}
 			}
 			if execErr == nil {
+				break
+			}
+			if ctx.Err() != nil {
 				break
 			}
 		}

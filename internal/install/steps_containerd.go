@@ -2,6 +2,7 @@ package install
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,7 +11,7 @@ import (
 	"time"
 )
 
-func runContainerdConfig(spec map[string]any) error {
+func runContainerdConfig(ctx context.Context, spec map[string]any) error {
 	path := stringValue(spec, "path")
 	if path == "" {
 		path = "/etc/containerd/config.toml"
@@ -27,8 +28,11 @@ func runContainerdConfig(spec map[string]any) error {
 		if createDefault, ok := spec["createDefault"].(bool); ok && !createDefault {
 			content = []byte{}
 		} else {
-			generated, genErr := runCommandOutputWithContext(context.Background(), []string{"containerd", "config", "default"}, commandTimeoutWithDefault(spec, 30*time.Second))
+			generated, genErr := runCommandOutputWithContext(ctx, []string{"containerd", "config", "default"}, commandTimeoutWithDefault(spec, 30*time.Second))
 			if genErr != nil {
+				if errors.Is(genErr, errStepCommandTimeout) || errors.Is(genErr, context.DeadlineExceeded) {
+					return fmt.Errorf("containerd config default generation timed out: %w", genErr)
+				}
 				return genErr
 			}
 			content = []byte(generated)

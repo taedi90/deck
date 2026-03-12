@@ -1,8 +1,10 @@
 package install
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,7 +17,10 @@ import (
 	"github.com/taedi90/deck/internal/fetch"
 )
 
-func runDownloadFile(bundleRoot string, spec map[string]any) (string, error) {
+func runDownloadFile(ctx context.Context, bundleRoot string, spec map[string]any) (string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	source := mapValue(spec, "source")
 	output := mapValue(spec, "output")
 	fetchCfg := mapValue(spec, "fetch")
@@ -36,7 +41,7 @@ func runDownloadFile(bundleRoot string, spec map[string]any) (string, error) {
 		return "", fmt.Errorf("create output directory: %w", err)
 	}
 
-	reuse, err := canReuseDownloadFile(spec, target)
+	reuse, err := canReuseDownloadFile(ctx, spec, target)
 	if err != nil {
 		return "", err
 	}
@@ -51,7 +56,7 @@ func runDownloadFile(bundleRoot string, spec map[string]any) (string, error) {
 	defer func() { _ = f.Close() }()
 
 	if sourcePath != "" {
-		raw, resolveErr := resolveSourceBytes(spec, sourcePath)
+		raw, resolveErr := resolveSourceBytes(ctx, spec, sourcePath)
 		if resolveErr == nil {
 			if _, err := f.Write(raw); err != nil {
 				return "", fmt.Errorf("write output file: %w", err)
@@ -69,7 +74,7 @@ func runDownloadFile(bundleRoot string, spec map[string]any) (string, error) {
 			if err := f.Truncate(0); err != nil {
 				return "", fmt.Errorf("truncate output file: %w", err)
 			}
-			if err := downloadURLToFile(f, url, commandTimeout(spec)); err != nil {
+			if err := downloadURLToFile(ctx, f, url, commandTimeout(spec)); err != nil {
 				return "", err
 			}
 		}
@@ -77,7 +82,7 @@ func runDownloadFile(bundleRoot string, spec map[string]any) (string, error) {
 		if offlineOnly {
 			return "", fmt.Errorf("%s: source.url blocked by offline policy", errCodeInstallOfflineBlocked)
 		}
-		if err := downloadURLToFile(f, url, commandTimeout(spec)); err != nil {
+		if err := downloadURLToFile(ctx, f, url, commandTimeout(spec)); err != nil {
 			return "", err
 		}
 	}
@@ -101,9 +106,16 @@ func runDownloadFile(bundleRoot string, spec map[string]any) (string, error) {
 	return outPath, nil
 }
 
-func downloadURLToFile(target *os.File, url string, timeout time.Duration) error {
+func downloadURLToFile(ctx context.Context, target *os.File, url string, timeout time.Duration) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	client := &http.Client{Timeout: timeout}
-	resp, err := client.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("download %s: %w", url, err)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("download %s: %w", url, err)
 	}
@@ -117,7 +129,7 @@ func downloadURLToFile(target *os.File, url string, timeout time.Duration) error
 	return nil
 }
 
-func resolveSourceBytes(spec map[string]any, sourcePath string) ([]byte, error) {
+func resolveSourceBytes(ctx context.Context, spec map[string]any, sourcePath string) ([]byte, error) {
 	fetchCfg := mapValue(spec, "fetch")
 	sourcesRaw, ok := fetchCfg["sources"].([]any)
 	offlineOnly := boolValue(fetchCfg, "offlineOnly")
@@ -137,9 +149,15 @@ func resolveSourceBytes(spec map[string]any, sourcePath string) ([]byte, error) 
 		if len(sources) == 0 {
 			return nil, fmt.Errorf("%s: source.path %s not found in configured fetch sources", errCodeInstallSourceNotFound, sourcePath)
 		}
-		raw, err := fetch.ResolveBytes(sourcePath, sources, fetch.ResolveOptions{OfflineOnly: offlineOnly})
+		raw, err := fetch.ResolveBytes(ctx, sourcePath, sources, fetch.ResolveOptions{OfflineOnly: offlineOnly})
 		if err == nil {
 			return raw, nil
+		}
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
+		if ctx != nil && ctx.Err() != nil {
+			return nil, ctx.Err()
 		}
 		return nil, fmt.Errorf("%s: source.path %s not found in configured fetch sources", errCodeInstallSourceNotFound, sourcePath)
 	}
@@ -164,7 +182,7 @@ func verifyFileSHA256(path, expected string) error {
 	return nil
 }
 
-func canReuseDownloadFile(spec map[string]any, target string) (bool, error) {
+func canReuseDownloadFile(ctx context.Context, spec map[string]any, target string) (bool, error) {
 	info, err := os.Stat(target)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -189,7 +207,7 @@ func canReuseDownloadFile(spec map[string]any, target string) (bool, error) {
 	if sourcePath == "" {
 		return false, nil
 	}
-	raw, err := resolveSourceBytes(spec, sourcePath)
+	raw, err := resolveSourceBytes(ctx, spec, sourcePath)
 	if err != nil {
 		return false, nil
 	}

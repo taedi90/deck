@@ -12,7 +12,11 @@ import (
 	"time"
 )
 
-func runInstallPackages(spec map[string]any) error {
+func runInstallPackages(ctx context.Context, spec map[string]any) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	pkgs := stringSlice(spec["packages"])
 	if len(pkgs) == 0 {
 		return fmt.Errorf("%s: InstallPackages requires packages", errCodeInstallPackagesRequired)
@@ -51,8 +55,8 @@ func runInstallPackages(spec map[string]any) error {
 			}
 			args := []string{"install", "-y"}
 			args = append(args, artifacts...)
-			if err := runTimedCommand("apt-get", args, commandTimeoutWithDefault(spec, 10*time.Minute)); err != nil {
-				if errors.Is(err, context.DeadlineExceeded) {
+			if err := runTimedCommandWithContext(ctx, "apt-get", args, commandTimeoutWithDefault(spec, 10*time.Minute)); err != nil {
+				if errors.Is(err, errStepCommandTimeout) || errors.Is(err, context.DeadlineExceeded) {
 					return fmt.Errorf("%s: package installation timed out: %w", errCodeInstallPkgFailed, err)
 				}
 				return fmt.Errorf("%s: package installation failed: %w", errCodeInstallPkgFailed, err)
@@ -66,8 +70,8 @@ func runInstallPackages(spec map[string]any) error {
 		}
 		args := []string{"install", "-y"}
 		args = append(args, artifacts...)
-		if err := runTimedCommand("dnf", args, commandTimeoutWithDefault(spec, 10*time.Minute)); err != nil {
-			if errors.Is(err, context.DeadlineExceeded) {
+		if err := runTimedCommandWithContext(ctx, "dnf", args, commandTimeoutWithDefault(spec, 10*time.Minute)); err != nil {
+			if errors.Is(err, errStepCommandTimeout) || errors.Is(err, context.DeadlineExceeded) {
 				return fmt.Errorf("%s: package installation timed out: %w", errCodeInstallPkgFailed, err)
 			}
 			return fmt.Errorf("%s: package installation failed: %w", errCodeInstallPkgFailed, err)
@@ -77,8 +81,8 @@ func runInstallPackages(spec map[string]any) error {
 
 	args := []string{"install", "-y"}
 	args = append(args, pkgs...)
-	if err := runTimedCommand(installer, args, commandTimeoutWithDefault(spec, 10*time.Minute)); err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
+	if err := runTimedCommandWithContext(ctx, installer, args, commandTimeoutWithDefault(spec, 10*time.Minute)); err != nil {
+		if errors.Is(err, errStepCommandTimeout) || errors.Is(err, context.DeadlineExceeded) {
 			return fmt.Errorf("%s: package installation timed out: %w", errCodeInstallPkgFailed, err)
 		}
 		return fmt.Errorf("%s: package installation failed: %w", errCodeInstallPkgFailed, err)

@@ -8,10 +8,10 @@ import (
 func executeStep(ctx context.Context, kind string, spec map[string]any, bundleRoot string) error {
 	switch kind {
 	case "DownloadFile":
-		_, err := runDownloadFile(bundleRoot, spec)
+		_, err := runDownloadFile(ctx, bundleRoot, spec)
 		return err
 	case "InstallPackages":
-		return runInstallPackages(spec)
+		return runInstallPackages(ctx, spec)
 	case "WriteFile":
 		return runWriteFile(spec)
 	case "EditFile":
@@ -33,7 +33,7 @@ func executeStep(ctx context.Context, kind string, spec map[string]any, bundleRo
 	case "RepoConfig":
 		return runRepoConfig(spec)
 	case "ContainerdConfig":
-		return runContainerdConfig(spec)
+		return runContainerdConfig(ctx, spec)
 	case "Swap":
 		return runSwap(spec)
 	case "KernelModule":

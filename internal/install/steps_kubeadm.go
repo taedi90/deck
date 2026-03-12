@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -89,27 +88,21 @@ func runKubeadmInitReal(parent context.Context, spec map[string]any) error {
 	}
 
 	if err := runTimedCommandWithContext(parent, "kubeadm", args, commandTimeoutWithDefault(spec, 10*time.Minute)); err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, errStepCommandTimeout) {
 			return fmt.Errorf("%s: kubeadm init timed out: %w", errCodeInstallInitFailed, err)
 		}
 		return fmt.Errorf("%s: kubeadm init failed: %w", errCodeInstallInitFailed, err)
 	}
 
 	joinArgs := []string{"token", "create", "--print-join-command"}
-	if parent == nil {
-		parent = context.Background()
-	}
-	ctx, cancel := context.WithTimeout(parent, commandTimeoutWithDefault(spec, 10*time.Minute))
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "kubeadm", joinArgs...)
-	joinOut, err := cmd.Output()
+	joinOut, err := runCommandOutputWithContext(parent, append([]string{"kubeadm"}, joinArgs...), commandTimeoutWithDefault(spec, 10*time.Minute))
 	if err != nil {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		if errors.Is(err, errStepCommandTimeout) {
 			return fmt.Errorf("%s: kubeadm token create timed out", errCodeInstallInitFailed)
 		}
 		return fmt.Errorf("%s: kubeadm token create failed: %w", errCodeInstallInitFailed, err)
 	}
-	joinCmd := strings.TrimSpace(string(joinOut))
+	joinCmd := strings.TrimSpace(joinOut)
 	if joinCmd == "" {
 		return fmt.Errorf("%s: empty kubeadm join command output", errCodeInstallInitFailed)
 	}
@@ -142,7 +135,7 @@ func runKubeadmJoinReal(ctx context.Context, spec map[string]any) error {
 	}
 
 	if err := runTimedCommandWithContext(ctx, args[0], args[1:], commandTimeoutWithDefault(spec, 5*time.Minute)); err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, errStepCommandTimeout) {
 			return fmt.Errorf("%s: kubeadm join timed out: %w", errCodeInstallJoinFailed, err)
 		}
 		return fmt.Errorf("%s: kubeadm join failed: %w", errCodeInstallJoinFailed, err)
