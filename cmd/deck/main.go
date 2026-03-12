@@ -58,5 +58,5 @@ func run(args []string) error {
 }
 
 func usageError() error {
-	return errors.New("usage: deck <command> [flags]\n\ncommands:\n  pack\n  apply\n  serve\n  bundle\n  list\n  validate\n  diff\n  init\n  doctor\n  health\n  logs\n  cache\n  node\n  site")
+	return errors.New(mainHelpText())
 }

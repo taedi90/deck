@@ -382,10 +382,10 @@ func assistedReleaseBundleRoot(releaseID string) string {
 }
 func runSite(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: deck site <release|session|assign|status> [flags]")
+		return errors.New(siteHelpText())
 	}
-	if args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
-		return errors.New("usage: deck site <release|session|assign|status> [flags]")
+	if wantsHelp(args) {
+		return errors.New(siteHelpText())
 	}
 
 	switch args[0] {
@@ -404,7 +404,10 @@ func runSite(args []string) error {
 
 func runSiteRelease(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: deck site release <import|list> [flags]")
+		return errors.New(siteReleaseHelpText())
+	}
+	if wantsHelp(args) {
+		return errors.New(siteReleaseHelpText())
 	}
 	switch args[0] {
 	case "import":
@@ -417,17 +420,16 @@ func runSiteRelease(args []string) error {
 }
 
 func runSiteReleaseImport(args []string) error {
-	fs := flag.NewFlagSet("site release import", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	fs := newHelpFlagSet("site release import")
 	root := fs.String("root", ".", "site server root")
 	releaseID := fs.String("id", "", "release id")
 	bundlePath := fs.String("bundle", "", "local bundle archive path")
 	createdAt := fs.String("created-at", "", "release timestamp (RFC3339, optional)")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args, siteReleaseImportHelpText()); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New("usage: deck site release import --id <release-id> --bundle <bundle.tar> [--root <dir>]")
+		return errors.New(siteReleaseImportHelpText())
 	}
 
 	resolvedReleaseID := strings.TrimSpace(*releaseID)
@@ -480,16 +482,15 @@ func runSiteReleaseImport(args []string) error {
 }
 
 func runSiteReleaseList(args []string) error {
-	fs := flag.NewFlagSet("site release list", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	fs := newHelpFlagSet("site release list")
 	root := fs.String("root", ".", "site server root")
 	output := ""
 	registerOutputFormatFlags(fs, &output, "text")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args, siteReleaseListHelpText()); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New("usage: deck site release list [--root <dir>] [--output text|json]")
+		return errors.New(siteReleaseListHelpText())
 	}
 	if output != "text" && output != "json" {
 		return errors.New("--output must be text or json")
@@ -517,7 +518,10 @@ func runSiteReleaseList(args []string) error {
 
 func runSiteSession(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: deck site session <create|close> [flags]")
+		return errors.New(siteSessionHelpText())
+	}
+	if wantsHelp(args) {
+		return errors.New(siteSessionHelpText())
 	}
 	switch args[0] {
 	case "create":
@@ -530,17 +534,16 @@ func runSiteSession(args []string) error {
 }
 
 func runSiteSessionCreate(args []string) error {
-	fs := flag.NewFlagSet("site session create", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	fs := newHelpFlagSet("site session create")
 	root := fs.String("root", ".", "site server root")
 	sessionID := fs.String("id", "", "session id")
 	releaseID := fs.String("release", "", "release id")
 	startedAt := fs.String("started-at", "", "session start timestamp (RFC3339, optional)")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args, siteSessionCreateHelpText()); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New("usage: deck site session create --id <session-id> --release <release-id> [--root <dir>]")
+		return errors.New(siteSessionCreateHelpText())
 	}
 
 	resolvedSessionID := strings.TrimSpace(*sessionID)
@@ -577,16 +580,15 @@ func runSiteSessionCreate(args []string) error {
 }
 
 func runSiteSessionClose(args []string) error {
-	fs := flag.NewFlagSet("site session close", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	fs := newHelpFlagSet("site session close")
 	root := fs.String("root", ".", "site server root")
 	sessionID := fs.String("id", "", "session id")
 	closedAt := fs.String("closed-at", "", "session close timestamp (RFC3339, optional)")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args, siteSessionCloseHelpText()); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New("usage: deck site session close --id <session-id> [--root <dir>]")
+		return errors.New(siteSessionCloseHelpText())
 	}
 
 	resolvedSessionID := strings.TrimSpace(*sessionID)
@@ -613,7 +615,10 @@ func runSiteSessionClose(args []string) error {
 
 func runSiteAssign(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: deck site assign <role|node> [flags]")
+		return errors.New(siteAssignHelpText())
+	}
+	if wantsHelp(args) {
+		return errors.New(siteAssignHelpText())
 	}
 	switch args[0] {
 	case "role":
@@ -626,18 +631,17 @@ func runSiteAssign(args []string) error {
 }
 
 func runSiteAssignRole(args []string) error {
-	fs := flag.NewFlagSet("site assign role", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	fs := newHelpFlagSet("site assign role")
 	root := fs.String("root", ".", "site server root")
 	sessionID := fs.String("session", "", "session id")
 	assignmentID := fs.String("assignment", "", "assignment id")
 	role := fs.String("role", "", "role")
 	workflow := fs.String("workflow", "", "workflow path inside release bundle")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args, siteAssignRoleHelpText()); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New("usage: deck site assign role --session <session-id> --assignment <assignment-id> --role <role> --workflow <path> [--root <dir>]")
+		return errors.New(siteAssignRoleHelpText())
 	}
 
 	resolvedSessionID := strings.TrimSpace(*sessionID)
@@ -680,19 +684,18 @@ func runSiteAssignRole(args []string) error {
 }
 
 func runSiteAssignNode(args []string) error {
-	fs := flag.NewFlagSet("site assign node", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	fs := newHelpFlagSet("site assign node")
 	root := fs.String("root", ".", "site server root")
 	sessionID := fs.String("session", "", "session id")
 	assignmentID := fs.String("assignment", "", "assignment id")
 	nodeID := fs.String("node", "", "node id")
 	role := fs.String("role", "", "role (optional)")
 	workflow := fs.String("workflow", "", "workflow path inside release bundle")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args, siteAssignNodeHelpText()); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New("usage: deck site assign node --session <session-id> --assignment <assignment-id> --node <node-id> --workflow <path> [--role <role>] [--root <dir>]")
+		return errors.New(siteAssignNodeHelpText())
 	}
 
 	resolvedSessionID := strings.TrimSpace(*sessionID)
@@ -755,16 +758,15 @@ type siteStatusOutput struct {
 }
 
 func runSiteStatus(args []string) error {
-	fs := flag.NewFlagSet("site status", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	fs := newHelpFlagSet("site status")
 	root := fs.String("root", ".", "site server root")
 	output := ""
 	registerOutputFormatFlags(fs, &output, "text")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args, siteStatusHelpText()); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New("usage: deck site status [--root <dir>] [--output text|json]")
+		return errors.New(siteStatusHelpText())
 	}
 	if output != "text" && output != "json" {
 		return errors.New("--output must be text or json")

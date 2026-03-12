@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -23,24 +22,19 @@ import (
 )
 
 func runServe(args []string) error {
-	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help" || args[0] == "help") {
-		return errors.New("usage: deck serve [flags]")
+	if wantsHelp(args) {
+		return errors.New(serveHelpText())
 	}
 	return runServer(append([]string{"start"}, args...))
 }
 
 func runList(args []string) error {
-	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help" || args[0] == "help") {
-		return errors.New("usage: deck list [flags]")
-	}
-
-	fs := flag.NewFlagSet("list", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	fs := newHelpFlagSet("list")
 	var server string
 	var output string
 	fs.StringVar(&server, "server", "", "server URL for index (optional; defaults to local workflows/)")
 	registerOutputFormatFlags(fs, &output, "text")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args, listHelpText()); err != nil {
 		return err
 	}
 	if output != "text" && output != "json" {
@@ -148,10 +142,9 @@ func discoverLocalWorkflowList(root string) ([]string, error) {
 	return items, nil
 }
 func runHealth(args []string) error {
-	fs := flag.NewFlagSet("health", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	fs := newHelpFlagSet("health")
 	server := fs.String("server", "", "server base URL (required)")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args, healthHelpText()); err != nil {
 		return err
 	}
 	resolvedServer := strings.TrimSpace(*server)
@@ -178,15 +171,14 @@ func runHealth(args []string) error {
 	return nil
 }
 func runLogs(args []string) error {
-	fs := flag.NewFlagSet("logs", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	fs := newHelpFlagSet("logs")
 	root := fs.String("root", ".", "serve root directory")
 	source := fs.String("source", "file", "log source (file|journal|both)")
 	path := fs.String("path", "", "explicit audit log file path")
 	unit := fs.String("unit", "", "systemd unit for journal logs")
 	output := ""
 	registerOutputFormatFlags(fs, &output, "text")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args, logsHelpText()); err != nil {
 		return err
 	}
 	resolvedSource := strings.ToLower(strings.TrimSpace(*source))
@@ -342,11 +334,10 @@ func isPermissionError(msg string) bool {
 }
 func runServer(args []string) error {
 	if len(args) == 0 || args[0] != "start" {
-		return errors.New("usage: deck serve --root <dir> --addr <host:port> [--api-token <token>] [--report-max <n>] [--audit-max-size-mb <n>] [--audit-max-files <n>] [--tls-cert <crt> --tls-key <key> | --tls-self-signed]")
+		return errors.New(serveHelpText())
 	}
 
-	fs := flag.NewFlagSet("server start", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	fs := newHelpFlagSet("server start")
 	root := fs.String("root", "./bundle", "server content root")
 	addr := fs.String("addr", ":8080", "server listen address")
 	apiToken := fs.String("api-token", "deck-site-v1", "bearer token required for /api/site/v1 endpoints")
@@ -356,7 +347,7 @@ func runServer(args []string) error {
 	tlsCert := fs.String("tls-cert", "", "TLS certificate path")
 	tlsKey := fs.String("tls-key", "", "TLS private key path")
 	tlsSelfSigned := fs.Bool("tls-self-signed", false, "auto-generate and use self-signed TLS cert")
-	if err := fs.Parse(args[1:]); err != nil {
+	if err := parseFlags(fs, args[1:], serveHelpText()); err != nil {
 		return err
 	}
 

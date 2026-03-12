@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -25,8 +24,7 @@ import (
 )
 
 func runDiff(args []string) error {
-	fs := flag.NewFlagSet("diff", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	fs := newHelpFlagSet("diff")
 	var file string
 	registerFileFlags(fs, &file, "path to workflow file")
 	server := ""
@@ -38,7 +36,7 @@ func runDiff(args []string) error {
 	registerOutputFormatFlags(fs, &output, "text")
 	vars := &varFlag{}
 	fs.Var(vars, "var", "set variable override (key=value), repeatable")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args, diffHelpText()); err != nil {
 		return err
 	}
 
@@ -160,8 +158,7 @@ type doctorCheck struct {
 }
 
 func runDoctor(args []string) error {
-	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	fs := newHelpFlagSet("doctor")
 	var file string
 	registerFileFlags(fs, &file, "path or URL to workflow file")
 	server := ""
@@ -171,7 +168,7 @@ func runDoctor(args []string) error {
 	out := fs.String("out", "", "output report path (required)")
 	vars := &varFlag{}
 	fs.Var(vars, "var", "set variable override (key=value), repeatable")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args, doctorHelpText()); err != nil {
 		return err
 	}
 
@@ -521,8 +518,7 @@ func findWorkflowPhaseByName(wf *config.Workflow, name string) (config.Phase, bo
 }
 
 func runApply(args []string) error {
-	fs := flag.NewFlagSet("apply", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	fs := newHelpFlagSet("apply")
 	var file string
 	registerFileFlags(fs, &file, "path or URL to workflow file")
 	server := ""
@@ -534,7 +530,7 @@ func runApply(args []string) error {
 	dryRun := fs.Bool("dry-run", false, "print apply plan without executing steps")
 	vars := &varFlag{}
 	fs.Var(vars, "var", "set variable override (key=value), repeatable")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args, applyHelpText()); err != nil {
 		return err
 	}
 	if fs.NArg() > 2 {
@@ -1007,14 +1003,13 @@ func discoverApplyWorkflow(bundleRoot string) (string, error) {
 	return matches[0], nil
 }
 func runValidate(args []string) error {
-	fs := flag.NewFlagSet("validate", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	fs := newHelpFlagSet("validate")
 
 	var file string
 	registerFileFlags(fs, &file, "path or URL to workflow file")
 	vars := &varFlag{}
 	fs.Var(vars, "var", "set variable override (key=value), repeatable")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args, validateHelpText()); err != nil {
 		return err
 	}
 

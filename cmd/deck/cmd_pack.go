@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"github.com/taedi90/deck/internal/bundle"
 	"github.com/taedi90/deck/internal/config"
@@ -18,19 +17,18 @@ import (
 )
 
 func runPack(args []string) error {
-	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help" || args[0] == "help") {
-		return errors.New("usage: deck pack [flags]")
+	if wantsHelp(args) {
+		return errors.New(packHelpText())
 	}
 
-	fs := flag.NewFlagSet("pack", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	fs := newHelpFlagSet("pack")
 	outPath := fs.String("out", "", "output tar archive path")
 	dryRun := fs.Bool("dry-run", false, "print pack plan without writing files")
 	cacheDir := fs.String("cache-dir", "", "artifact cache directory")
 	noCache := fs.Bool("no-cache", false, "disable artifact cache reuse")
 	vars := &varFlag{}
 	fs.Var(vars, "var", "set variable override (key=value), repeatable")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args, packHelpText()); err != nil {
 		return err
 	}
 	resolvedOut := strings.TrimSpace(*outPath)
