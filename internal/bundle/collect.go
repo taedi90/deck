@@ -30,10 +30,10 @@ func CollectArchive(bundleRoot, outputPath string) error {
 	if err != nil {
 		return fmt.Errorf("create output archive: %w", err)
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 
 	tw := tar.NewWriter(out)
-	defer tw.Close()
+	defer func() { _ = tw.Close() }()
 
 	walkErr := filepath.WalkDir(absRoot, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -78,7 +78,7 @@ func CollectArchive(bundleRoot, outputPath string) error {
 		if err != nil {
 			return err
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		if _, err := io.Copy(tw, f); err != nil {
 			return err
 		}
