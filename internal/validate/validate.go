@@ -8,13 +8,16 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/taedi90/deck/internal/config"
 	"github.com/xeipuuv/gojsonschema"
 	"gopkg.in/yaml.v3"
+
+	"github.com/taedi90/deck/internal/config"
 )
 
-var runtimeVarNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-var singleBraceTemplatePattern = regexp.MustCompile(`(^|[^\{])(\{\s*\.(vars|runtime)\.[^{}]+\})([^\}]|$)`)
+var (
+	runtimeVarNamePattern      = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	singleBraceTemplatePattern = regexp.MustCompile(`(^|[^\{])(\{\s*\.(vars|runtime)\.[^{}]+\})([^\}]|$)`)
+)
 
 //go:embed schemas/deck-workflow.schema.json schemas/tools/*.schema.json
 var schemaFS embed.FS
@@ -201,6 +204,7 @@ func validateSchema(name string, content []byte) error {
 	}
 	return fmt.Errorf("E_SCHEMA_INVALID: %s", strings.Join(msgs, "; "))
 }
+
 func validateSemantics(wf *config.Workflow) error {
 	seenStepID := map[string]bool{}
 	assignedRuntime := map[string]string{}
