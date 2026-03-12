@@ -126,7 +126,9 @@ go test ./...
 go run ./cmd/deck validate --file <workflow.yaml>
 
 # linux host with libvirt-backed vagrant
-bash test/vagrant/run-offline-multinode-agent.sh
+bash test/e2e/vagrant/run-scenario.sh --scenario k8s-control-plane-bootstrap
+bash test/e2e/vagrant/run-scenario.sh --scenario k8s-worker-join
+bash test/e2e/vagrant/run-scenario.sh --scenario k8s-node-reset
 ```
 
 ## License

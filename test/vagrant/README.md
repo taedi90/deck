@@ -58,7 +58,7 @@ bash test/e2e/vagrant/run-scenario.sh --scenario k8s-node-reset
 
 - `checkpoints/<step>.done`
 - `error-<step>.log`
-- `cluster-nodes.txt`
+- `reports/cluster-nodes.txt`
 - `result.json`
 - `pass.txt`
 - 공유 prepared bundle cache는 run별 artifact 디렉터리가 아니라 `test/artifacts/cache/bundles/<scenario>/...`에 유지된다.
@@ -66,7 +66,6 @@ bash test/e2e/vagrant/run-scenario.sh --scenario k8s-node-reset
 - rsync 모드에서는 guest가 실제로 읽는 파일만 `test/artifacts/cache/vagrant/<scenario>/...`에 staging 한 뒤 `/workspace`로 sync한다.
 - Vagrant machine state는 기본 `.vagrant` 경로인 `test/vagrant/.vagrant/`에 유지된다.
 - `nfs`/`9p` shared folder에서 결과 파일이 호스트에 바로 보이면 collect는 fetch 대신 검증만 수행한다.
-- 호환성 창 동안 legacy `offline-multinode-pass.txt`, `offline-multinode-result.txt`도 함께 기록되지만 기본 계약은 `pass.txt`, `result.json`이다.
 
 ## 단계 실행
 
