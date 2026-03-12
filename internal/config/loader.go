@@ -538,7 +538,7 @@ func getRequiredHTTP(ctx context.Context, rawURL string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("get workflow url: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("get workflow url: unexpected status %d", resp.StatusCode)
@@ -560,7 +560,7 @@ func getOptionalHTTP(ctx context.Context, rawURL string) ([]byte, bool, error) {
 	if err != nil {
 		return nil, false, fmt.Errorf("get vars url: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, false, nil
