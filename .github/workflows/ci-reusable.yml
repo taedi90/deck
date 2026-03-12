@@ -1,17 +1,13 @@
-name: CI Main Smoke
+name: CI Reusable
 
 on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+  workflow_call:
 
-concurrency:
-  group: ci-main-vagrant-smoke-${{ github.ref }}
-  cancel-in-progress: true
+permissions:
+  contents: read
 
 jobs:
-  smoke-lite:
+  checks:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -23,18 +19,37 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-          check-latest: true
 
       - name: Build deck CLI
         run: go build -o ./deck ./cmd/deck
 
-      - name: Run smoke-lite test set
+      - name: Run golangci-lint
+        run: make lint
+
+      - name: Validate JSON schema files are parseable
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path('.')
+          files = sorted((root / 'docs' / 'schemas').rglob('*.json'))
+          if not files:
+              print('No schema files found, skipping')
+              raise SystemExit(0)
+
+          for f in files:
+              with f.open('r', encoding='utf-8') as fp:
+                  json.load(fp)
+              print(f'OK: {f}')
+          PY
+
+      - name: Run core test set
         run: |
           go test ./...
-          ./deck validate --file docs/examples/vagrant-smoke-install.yaml
-          ./deck validate --file test/workflows/k8s-control-plane-bootstrap/profile/control-plane.yaml
-          ./deck validate --file test/workflows/k8s-worker-join/profile/worker.yaml
-          ./deck validate --file test/workflows/k8s-node-reset/profile/node-reset.yaml
+          ./deck validate --file test/workflows/scenarios/control-plane-bootstrap.yaml
+          ./deck validate --file test/workflows/scenarios/worker-join.yaml
+          ./deck validate --file test/workflows/scenarios/node-reset.yaml
           go test ./internal/prepare -run 'TestRun_ContainerBackendsWithFakeRunner|TestRun_PrepareArtifactsAndManifest|TestRun_DownloadFileFallbackLocalThenBundle|TestRun_DownloadFileFallbackRepoThenOnline|TestRun_DownloadFileOfflinePolicyBlocksOnlineFallback|TestRun_DownloadFileOfflinePolicyBlocksDirectURL'
 
       - name: Validate docs examples (mode=validate)
@@ -56,12 +71,3 @@ jobs:
             echo "validating ${example_path}"
             ./deck validate --file "${example_path}"
           done < docs/examples/cases.tsv
-
-      - name: Upload smoke-lite artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: main-smoke-lite-artifacts
-          path: |
-            .ci/artifacts/**
-          if-no-files-found: warn

@@ -1,14 +1,16 @@
-name: CI PR
+name: CI Main
 
 on:
-  pull_request:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-pr-${{ github.event.pull_request.number || github.ref }}
+  group: ci-main-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
