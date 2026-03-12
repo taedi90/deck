@@ -1,0 +1,12 @@
+role: pack
+version: v1alpha1
+varImports:
+  - ../vars.yaml
+phases:
+  - name: prepare
+    imports:
+      - path: ../components/prepare/download-packages-ubuntu2204.yaml
+      - path: ../components/prepare/download-packages-ubuntu2404.yaml
+      - path: ../components/prepare/download-packages-rhel9.yaml
+      - path: ../components/prepare/download-images.yaml
+      - path: ../components/prepare/download-binaries.yaml

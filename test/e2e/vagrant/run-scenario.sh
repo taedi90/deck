@@ -4,10 +4,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 source "${ROOT_DIR}/test/e2e/vagrant/common.sh"
 
-CONTRACT_WORKFLOW_SHARED_ROOT="test/workflows/_shared/k8s"
-CONTRACT_WORKFLOW_SCENARIO_CONTROL_PLANE_BOOTSTRAP="test/workflows/k8s-control-plane-bootstrap"
-CONTRACT_WORKFLOW_SCENARIO_WORKER_JOIN="test/workflows/k8s-worker-join"
-CONTRACT_WORKFLOW_SCENARIO_NODE_RESET="test/workflows/k8s-node-reset"
+CONTRACT_WORKFLOW_COMPONENTS_ROOT="test/workflows/components"
+CONTRACT_WORKFLOW_SCENARIOS_ROOT="test/workflows/scenarios"
 CONTRACT_E2E_VAGRANT_ROOT="test/e2e/vagrant"
 CONTRACT_COMPATIBILITY_POLICY="offline-multinode entrypoints are temporary shims for one migration window"
 

@@ -1,0 +1,19 @@
+role: pack
+version: v1alpha1
+steps:
+  - id: runtime-deps-ubuntu2204
+    apiVersion: deck/v1alpha1
+    kind: DownloadPackages
+    spec:
+      distro:
+        family: debian
+        release: ubuntu2204
+        arch: "{{ .vars.arch }}"
+      repo:
+        type: apt-flat
+        generate: true
+      packages: [containerd, containernetworking-plugins]
+      backend:
+        mode: container
+        runtime: "{{ .vars.backendRuntime }}"
+        image: ubuntu:22.04

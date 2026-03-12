@@ -121,13 +121,13 @@ worker_join_prepare() {
 }
 
 worker_join_apply() {
-  local workflow_url="${SERVER_URL}/files/workflows/k8s-worker-join/profile/worker.yaml"
+  local workflow_url="${SERVER_URL}/files/workflows/scenarios/worker-join.yaml"
   local release="${OFFLINE_RELEASE_WORKER}"
   local os_family="debian"
   local server_no_scheme="${SERVER_URL#http://}"
   server_no_scheme="${server_no_scheme#https://}"
   if [[ "${ROLE}" == "control-plane" ]]; then
-    source "/workspace/test/workflows/k8s-control-plane-bootstrap/vm-scenario.sh"
+    source "/workspace/test/e2e/scenario-hooks/control-plane-bootstrap.sh"
     bootstrap_apply_control_plane_workflow
     return 0
   fi

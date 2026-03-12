@@ -1,0 +1,19 @@
+role: pack
+version: v1alpha1
+steps:
+  - id: runtime-deps-rocky9
+    apiVersion: deck/v1alpha1
+    kind: DownloadPackages
+    spec:
+      distro:
+        family: rhel
+        release: rocky9
+        arch: "{{ .vars.arch }}"
+      repo:
+        type: yum
+        generate: true
+      packages: [bash]
+      backend:
+        mode: container
+        runtime: "{{ .vars.backendRuntime }}"
+        image: rockylinux:9

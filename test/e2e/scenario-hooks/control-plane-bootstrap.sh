@@ -64,7 +64,7 @@ PY
 }
 
 bootstrap_apply_control_plane_workflow() {
-  CONTROL_PLANE_WORKFLOW_URL="${SERVER_URL}/files/workflows/k8s-control-plane-bootstrap/profile/control-plane.yaml"
+  CONTROL_PLANE_WORKFLOW_URL="${SERVER_URL}/files/workflows/scenarios/control-plane-bootstrap.yaml"
   local server_no_scheme="${SERVER_URL#http://}"
   server_no_scheme="${server_no_scheme#https://}"
   sudo -n "${DECK_BIN}" apply --file "${CONTROL_PLANE_WORKFLOW_URL}" --phase install \

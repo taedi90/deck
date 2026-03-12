@@ -13,7 +13,7 @@ import (
 
 func TestWorkflowIntegrationBootstrap(t *testing.T) {
 	root := projectRoot(t)
-	workflowPath := filepath.Join(root, "test", "workflows", "k8s-control-plane-bootstrap", "profile", "control-plane.yaml")
+	workflowPath := filepath.Join(root, "test", "workflows", "scenarios", "control-plane-bootstrap.yaml")
 
 	wf, err := config.LoadWithOptions(context.Background(), workflowPath, config.LoadOptions{VarOverrides: map[string]any{"clusterName": "bootstrap-cli"}})
 	if err != nil {
@@ -54,7 +54,7 @@ func TestWorkflowIntegrationBootstrap(t *testing.T) {
 
 func TestWorkflowIntegrationWorkerJoin(t *testing.T) {
 	root := projectRoot(t)
-	workflowPath := filepath.Join(root, "test", "workflows", "k8s-worker-join", "profile", "worker.yaml")
+	workflowPath := filepath.Join(root, "test", "workflows", "scenarios", "worker-join.yaml")
 
 	wf, err := config.LoadWithOptions(context.Background(), workflowPath, config.LoadOptions{VarOverrides: map[string]any{"joinFile": "/tmp/join-cli.txt"}})
 	if err != nil {
@@ -80,7 +80,7 @@ func TestWorkflowIntegrationWorkerJoin(t *testing.T) {
 
 func TestWorkflowIntegrationNodeReset(t *testing.T) {
 	root := projectRoot(t)
-	workflowPath := filepath.Join(root, "test", "workflows", "k8s-node-reset", "profile", "node-reset.yaml")
+	workflowPath := filepath.Join(root, "test", "workflows", "scenarios", "node-reset.yaml")
 
 	wf, err := config.Load(context.Background(), workflowPath)
 	if err != nil {
