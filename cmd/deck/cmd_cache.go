@@ -64,7 +64,9 @@ func runCacheList(args []string) error {
 		return enc.Encode(entries)
 	}
 	for _, e := range entries {
-		fmt.Fprintf(os.Stdout, "%s\t%d\t%s\n", e.Path, e.SizeBytes, e.ModTime)
+		if err := stdoutPrintf("%s\t%d\t%s\n", e.Path, e.SizeBytes, e.ModTime); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -90,7 +92,9 @@ func runCacheClean(args []string) error {
 		return err
 	}
 	for _, p := range plan {
-		fmt.Fprintln(os.Stdout, p)
+		if err := stdoutPrintln(p); err != nil {
+			return err
+		}
 	}
 	if *dryRun {
 		return nil

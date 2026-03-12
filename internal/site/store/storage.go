@@ -99,13 +99,13 @@ func copyFile(src, dst string, mode os.FileMode) error {
 	if err != nil {
 		return fmt.Errorf("open source file %q: %w", src, err)
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }()
 
 	out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
 	if err != nil {
 		return fmt.Errorf("create destination file %q: %w", dst, err)
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 
 	if _, err := io.Copy(out, in); err != nil {
 		return fmt.Errorf("copy file %q to %q: %w", src, dst, err)

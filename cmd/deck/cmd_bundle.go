@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/taedi90/deck/internal/bundle"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/taedi90/deck/internal/bundle"
 )
 
 func runWorkflowInit(args []string) error {
@@ -63,8 +64,7 @@ func runWorkflowInit(args []string) error {
 		created = append(created, filepath.Join(workflowsDir, fileName))
 	}
 	sort.Strings(created)
-	fmt.Fprintf(os.Stdout, "init: wrote %s\n", strings.Join(created, ", "))
-	return nil
+	return stdoutPrintf("init: wrote %s\n", strings.Join(created, ", "))
 }
 
 func initTemplateFiles() map[string]string {
@@ -87,6 +87,7 @@ func initTemplateFiles() map[string]string {
 		"apply.yaml": applyContent,
 	}
 }
+
 func runWorkflowBundle(args []string) error {
 	if len(args) == 0 {
 		return helpRequest{text: bundleHelpText()}
@@ -127,8 +128,7 @@ func runWorkflowBundle(args []string) error {
 			return err
 		}
 
-		fmt.Fprintf(os.Stdout, "bundle verify: ok (%s)\n", resolvedPath)
-		return nil
+		return stdoutPrintf("bundle verify: ok (%s)\n", resolvedPath)
 
 	case "inspect":
 		fs := newHelpFlagSet("workflow bundle inspect")
@@ -191,8 +191,7 @@ func runWorkflowBundle(args []string) error {
 			return err
 		}
 
-		fmt.Fprintf(os.Stdout, "bundle import: ok (%s -> %s)\n", *archiveFile, *destDir)
-		return nil
+		return stdoutPrintf("bundle import: ok (%s -> %s)\n", *archiveFile, *destDir)
 
 	case "collect":
 		fs := newHelpFlagSet("workflow bundle collect")
@@ -212,8 +211,7 @@ func runWorkflowBundle(args []string) error {
 			return err
 		}
 
-		fmt.Fprintf(os.Stdout, "bundle collect: ok (%s -> %s)\n", *bundleDir, *outputFile)
-		return nil
+		return stdoutPrintf("bundle collect: ok (%s -> %s)\n", *bundleDir, *outputFile)
 
 	case "merge":
 		fs := newHelpFlagSet("workflow bundle merge")
@@ -241,15 +239,18 @@ func runWorkflowBundle(args []string) error {
 		}
 
 		if *dryRun {
-			fmt.Fprintf(os.Stdout, "bundle merge: dry-run (%s -> %s)\n", archivePath, report.Destination)
+			if err := stdoutPrintf("bundle merge: dry-run (%s -> %s)\n", archivePath, report.Destination); err != nil {
+				return err
+			}
 			for _, action := range report.Actions {
-				fmt.Fprintf(os.Stdout, "PLAN %s %s (%s)\n", action.Action, action.Path, action.Reason)
+				if err := stdoutPrintf("PLAN %s %s (%s)\n", action.Action, action.Path, action.Reason); err != nil {
+					return err
+				}
 			}
 			return nil
 		}
 
-		fmt.Fprintf(os.Stdout, "bundle merge: ok (%s -> %s)\n", archivePath, report.Destination)
-		return nil
+		return stdoutPrintf("bundle merge: ok (%s -> %s)\n", archivePath, report.Destination)
 
 	default:
 		return fmt.Errorf("unknown bundle command %q", args[0])

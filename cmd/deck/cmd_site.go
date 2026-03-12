@@ -75,8 +75,7 @@ func runAssistedAction(config assistedExecutionConfig, action string, execute fu
 		return err
 	}
 	if ctx.Skipped {
-		fmt.Fprintf(os.Stdout, "%s: skipped (%s)\n", action, ctx.SkipReason)
-		return nil
+		return stdoutPrintf("%s: skipped (%s)\n", action, ctx.SkipReason)
 	}
 
 	start := time.Now().UTC()
@@ -229,7 +228,7 @@ func uploadAssistedExecutionReport(config assistedExecutionConfig, report sitest
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer closeSilently(resp.Body)
 	if resp.StatusCode != http.StatusAccepted {
 		body, _ := io.ReadAll(resp.Body)
 		msg := strings.TrimSpace(string(body))
@@ -252,7 +251,7 @@ func fetchAssistedSession(config assistedExecutionConfig, sessionID string) (sit
 	if err != nil {
 		return sitestore.Session{}, err
 	}
-	defer resp.Body.Close()
+	defer closeSilently(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return sitestore.Session{}, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
@@ -275,7 +274,7 @@ func fetchAssistedAssignment(config assistedExecutionConfig, sessionID, nodeID, 
 	if err != nil {
 		return sitestore.Assignment{}, false, err
 	}
-	defer resp.Body.Close()
+	defer closeSilently(resp.Body)
 	if resp.StatusCode == http.StatusNotFound {
 		body, _ := io.ReadAll(resp.Body)
 		if strings.Contains(string(body), "no assignment matched") {
@@ -358,7 +357,7 @@ func fetchAssistedReleaseBundleFile(config assistedExecutionConfig, releaseID, r
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer closeSilently(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("release bundle fetch %q failed: status %d: %s", relPath, resp.StatusCode, strings.TrimSpace(string(body)))
@@ -380,6 +379,7 @@ func assistedDataRoot() string {
 func assistedReleaseBundleRoot(releaseID string) string {
 	return filepath.Join(assistedDataRoot(), "releases", releaseID, "bundle")
 }
+
 func runSite(args []string) error {
 	if len(args) == 0 {
 		return helpRequest{text: siteHelpText()}
@@ -467,7 +467,7 @@ func runSiteReleaseImport(args []string) error {
 	if err != nil {
 		return fmt.Errorf("site release import: create temp dir: %w", err)
 	}
-	defer os.RemoveAll(importRoot)
+	defer func() { _ = os.RemoveAll(importRoot) }()
 
 	if err := bundle.ImportArchive(resolvedBundlePath, importRoot); err != nil {
 		return fmt.Errorf("site release import: %w", err)
@@ -485,8 +485,7 @@ func runSiteReleaseImport(args []string) error {
 		return err
 	}
 
-	fmt.Fprintf(os.Stdout, "site release import: ok (release=%s bundle=%s store=%s)\n", resolvedReleaseID, resolvedBundlePath, resolvedRoot)
-	return nil
+	return stdoutPrintf("site release import: ok (release=%s bundle=%s store=%s)\n", resolvedReleaseID, resolvedBundlePath, resolvedRoot)
 }
 
 func runSiteReleaseList(args []string) error {
@@ -587,8 +586,7 @@ func runSiteSessionCreate(args []string) error {
 		return err
 	}
 
-	fmt.Fprintf(os.Stdout, "site session create: ok (session=%s release=%s)\n", resolvedSessionID, resolvedReleaseID)
-	return nil
+	return stdoutPrintf("site session create: ok (session=%s release=%s)\n", resolvedSessionID, resolvedReleaseID)
 }
 
 func runSiteSessionClose(args []string) error {
@@ -621,8 +619,7 @@ func runSiteSessionClose(args []string) error {
 		return err
 	}
 
-	fmt.Fprintf(os.Stdout, "site session close: ok (session=%s status=%s)\n", closed.ID, closed.Status)
-	return nil
+	return stdoutPrintf("site session close: ok (session=%s status=%s)\n", closed.ID, closed.Status)
 }
 
 func runSiteAssign(args []string) error {
@@ -695,8 +692,7 @@ func runSiteAssignRole(args []string) error {
 		return err
 	}
 
-	fmt.Fprintf(os.Stdout, "site assign role: ok (session=%s assignment=%s role=%s)\n", resolvedSession.ID, resolvedAssignmentID, resolvedRole)
-	return nil
+	return stdoutPrintf("site assign role: ok (session=%s assignment=%s role=%s)\n", resolvedSession.ID, resolvedAssignmentID, resolvedRole)
 }
 
 func runSiteAssignNode(args []string) error {
@@ -759,8 +755,7 @@ func runSiteAssignNode(args []string) error {
 		return fmt.Errorf("site assign node: node assignment did not take precedence for session %q node %q", resolvedSession.ID, resolvedNodeID)
 	}
 
-	fmt.Fprintf(os.Stdout, "site assign node: ok (session=%s assignment=%s node=%s)\n", resolvedSession.ID, resolvedAssignmentID, resolvedNodeID)
-	return nil
+	return stdoutPrintf("site assign node: ok (session=%s assignment=%s node=%s)\n", resolvedSession.ID, resolvedAssignmentID, resolvedNodeID)
 }
 
 type siteSessionStatus struct {
@@ -820,9 +815,13 @@ func runSiteStatus(args []string) error {
 		return json.NewEncoder(os.Stdout).Encode(status)
 	}
 
-	fmt.Fprintf(os.Stdout, "site status: releases=%d sessions=%d\n", status.Releases, len(status.Sessions))
+	if err := stdoutPrintf("site status: releases=%d sessions=%d\n", status.Releases, len(status.Sessions)); err != nil {
+		return err
+	}
 	for _, session := range status.Sessions {
-		fmt.Fprintf(os.Stdout, "session %s release=%s status=%s\n", session.Session.ID, session.Session.ReleaseID, session.Session.Status)
+		if err := stdoutPrintf("session %s release=%s status=%s\n", session.Session.ID, session.Session.ReleaseID, session.Session.Status); err != nil {
+			return err
+		}
 		nodeIDs := make([]string, 0, len(session.Status.Nodes))
 		for nodeID := range session.Status.Nodes {
 			nodeIDs = append(nodeIDs, nodeID)
@@ -830,9 +829,11 @@ func runSiteStatus(args []string) error {
 		sort.Strings(nodeIDs)
 		for _, nodeID := range nodeIDs {
 			node := session.Status.Nodes[nodeID]
-			fmt.Fprintf(os.Stdout, "  node %s hostname=%s diff=%s doctor=%s apply=%s\n", node.NodeID, node.Hostname, node.Actions.Diff, node.Actions.Doctor, node.Actions.Apply)
+			if err := stdoutPrintf("  node %s hostname=%s diff=%s doctor=%s apply=%s\n", node.NodeID, node.Hostname, node.Actions.Diff, node.Actions.Doctor, node.Actions.Apply); err != nil {
+				return err
+			}
 		}
-		fmt.Fprintf(os.Stdout, "  groups diff(ok=%v failed=%v skipped=%v not-run=%v) doctor(ok=%v failed=%v skipped=%v not-run=%v) apply(ok=%v failed=%v skipped=%v not-run=%v)\n",
+		if err := stdoutPrintf("  groups diff(ok=%v failed=%v skipped=%v not-run=%v) doctor(ok=%v failed=%v skipped=%v not-run=%v) apply(ok=%v failed=%v skipped=%v not-run=%v)\n",
 			session.Status.Groups.Diff.OK,
 			session.Status.Groups.Diff.Failed,
 			session.Status.Groups.Diff.Skipped,
@@ -845,7 +846,9 @@ func runSiteStatus(args []string) error {
 			session.Status.Groups.Apply.Failed,
 			session.Status.Groups.Apply.Skipped,
 			session.Status.Groups.Apply.NotRun,
-		)
+		); err != nil {
+			return err
+		}
 	}
 	return nil
 }

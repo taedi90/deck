@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/taedi90/deck/internal/nodeid"
 	"os"
 	"strings"
+
+	"github.com/taedi90/deck/internal/nodeid"
 )
 
 func runNode(args []string) error {
@@ -66,8 +67,7 @@ func runNodeIDShow(args []string) error {
 	if err != nil {
 		return err
 	}
-	printNodeIDResult(result)
-	return nil
+	return printNodeIDResult(result)
 }
 
 func runNodeIDSet(args []string) error {
@@ -83,9 +83,10 @@ func runNodeIDSet(args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stdout, "node id set: %s\n", result.ID)
-	printNodeIDResult(result)
-	return nil
+	if err := stdoutPrintf("node id set: %s\n", result.ID); err != nil {
+		return err
+	}
+	return printNodeIDResult(result)
 }
 
 func runNodeIDInit(args []string) error {
@@ -102,12 +103,15 @@ func runNodeIDInit(args []string) error {
 		return err
 	}
 	if result.GeneratedCreated {
-		fmt.Fprintln(os.Stdout, "node id init: created generated node-id")
+		if err := stdoutPrintln("node id init: created generated node-id"); err != nil {
+			return err
+		}
 	} else {
-		fmt.Fprintln(os.Stdout, "node id init: generated node-id already exists")
+		if err := stdoutPrintln("node id init: generated node-id already exists"); err != nil {
+			return err
+		}
 	}
-	printNodeIDResult(result)
-	return nil
+	return printNodeIDResult(result)
 }
 
 func resolveNodeIDPathsFromEnv() nodeid.Paths {
@@ -121,15 +125,28 @@ func resolveNodeIDPathsFromEnv() nodeid.Paths {
 	return paths
 }
 
-func printNodeIDResult(result nodeid.Result) {
-	fmt.Fprintf(os.Stdout, "node-id=%s\n", result.ID)
-	fmt.Fprintf(os.Stdout, "source=%s\n", result.Source)
-	fmt.Fprintf(os.Stdout, "hostname=%s\n", result.Hostname)
-	if result.Mismatch {
-		fmt.Fprintln(os.Stdout, "mismatch=true")
-		fmt.Fprintf(os.Stdout, "operator-node-id=%s\n", result.OperatorID)
-		fmt.Fprintf(os.Stdout, "generated-node-id=%s\n", result.GeneratedID)
+func printNodeIDResult(result nodeid.Result) error {
+	if err := stdoutPrintf("node-id=%s\n", result.ID); err != nil {
+		return err
 	}
+	if err := stdoutPrintf("source=%s\n", result.Source); err != nil {
+		return err
+	}
+	if err := stdoutPrintf("hostname=%s\n", result.Hostname); err != nil {
+		return err
+	}
+	if result.Mismatch {
+		if err := stdoutPrintln("mismatch=true"); err != nil {
+			return err
+		}
+		if err := stdoutPrintf("operator-node-id=%s\n", result.OperatorID); err != nil {
+			return err
+		}
+		if err := stdoutPrintf("generated-node-id=%s\n", result.GeneratedID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func runNodeAssignment(args []string) error {
@@ -191,10 +208,17 @@ func runNodeAssignmentShow(args []string) error {
 	if output == "json" {
 		return json.NewEncoder(os.Stdout).Encode(assignment)
 	}
-	fmt.Fprintf(os.Stdout, "session=%s\n", assignment.SessionID)
-	fmt.Fprintf(os.Stdout, "node-id=%s\n", assignment.NodeID)
-	fmt.Fprintf(os.Stdout, "assignment=%s\n", assignment.ID)
-	fmt.Fprintf(os.Stdout, "role=%s\n", assignment.Role)
-	fmt.Fprintf(os.Stdout, "workflow=%s\n", assignment.Workflow)
-	return nil
+	if err := stdoutPrintf("session=%s\n", assignment.SessionID); err != nil {
+		return err
+	}
+	if err := stdoutPrintf("node-id=%s\n", assignment.NodeID); err != nil {
+		return err
+	}
+	if err := stdoutPrintf("assignment=%s\n", assignment.ID); err != nil {
+		return err
+	}
+	if err := stdoutPrintf("role=%s\n", assignment.Role); err != nil {
+		return err
+	}
+	return stdoutPrintf("workflow=%s\n", assignment.Workflow)
 }

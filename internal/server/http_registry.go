@@ -371,7 +371,7 @@ func readLayerCompressed(layer v1.Layer) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 	buf := bytes.Buffer{}
 	if _, err := io.Copy(&buf, rc); err != nil {
 		return nil, err

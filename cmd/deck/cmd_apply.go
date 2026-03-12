@@ -125,10 +125,14 @@ func executeDiff(workflowPath, selectedPhase, output string, varOverrides map[st
 	}
 	for _, s := range steps {
 		if s.Action == "skip" && s.Reason != "" {
-			fmt.Fprintf(os.Stdout, "%s %s SKIP (%s)\n", s.ID, s.Kind, s.Reason)
+			if err := stdoutPrintf("%s %s SKIP (%s)\n", s.ID, s.Kind, s.Reason); err != nil {
+				return err
+			}
 			continue
 		}
-		fmt.Fprintf(os.Stdout, "%s %s %s\n", s.ID, s.Kind, strings.ToUpper(s.Action))
+		if err := stdoutPrintf("%s %s %s\n", s.ID, s.Kind, strings.ToUpper(s.Action)); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -274,7 +278,9 @@ func executeDoctor(workflowPath string, varOverrides map[string]any, resolvedOut
 		return fmt.Errorf("write doctor report: %w", err)
 	}
 
-	fmt.Fprintf(os.Stdout, "doctor: wrote %s\n", resolvedOut)
+	if err := stdoutPrintf("doctor: wrote %s\n", resolvedOut); err != nil {
+		return err
+	}
 	if report.Summary.Failed > 0 {
 		return fmt.Errorf("doctor: failed (%d failed checks)", report.Summary.Failed)
 	}
@@ -364,51 +370,16 @@ func doctorCheckHTTPReachable(url string) (string, string) {
 	return "passed", ""
 }
 
-type installDryRunState struct {
-	CompletedSteps []string       `json:"completedSteps"`
-	RuntimeVars    map[string]any `json:"runtimeVars"`
-}
-
-func loadInstallDryRunState(wf *config.Workflow) (installDryRunState, error) {
+func loadInstallDryRunState(wf *config.Workflow) (*install.State, error) {
 	statePath, err := resolveInstallStatePath(wf)
 	if err != nil {
-		return installDryRunState{}, err
+		return nil, err
 	}
-
-	raw, err := os.ReadFile(statePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return installDryRunState{CompletedSteps: []string{}, RuntimeVars: map[string]any{}}, nil
-		}
-		return installDryRunState{}, fmt.Errorf("read state file: %w", err)
-	}
-
-	var state installDryRunState
-	if err := json.Unmarshal(raw, &state); err != nil {
-		return installDryRunState{}, fmt.Errorf("parse state file: %w", err)
-	}
-	if state.CompletedSteps == nil {
-		state.CompletedSteps = []string{}
-	}
-	if state.RuntimeVars == nil {
-		state.RuntimeVars = map[string]any{}
-	}
-	return state, nil
+	return install.LoadState(statePath)
 }
 
 func resolveInstallStatePath(wf *config.Workflow) (string, error) {
-	if wf == nil {
-		return "", errors.New("workflow is nil")
-	}
-	stateKey := strings.TrimSpace(wf.StateKey)
-	if stateKey == "" {
-		return "", errors.New("workflow state key is empty")
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve user home directory: %w", err)
-	}
-	return filepath.Join(home, ".deck", "state", stateKey+".json"), nil
+	return install.DefaultStatePath(wf)
 }
 
 type applyExecutionRequestOptions struct {
@@ -465,7 +436,8 @@ func resolveApplyExecutionRequest(opts applyExecutionRequestOptions) (applyExecu
 		}
 	}
 
-	wf, err := config.LoadWithOptions(context.Background(), workflowPath, config.LoadOptions{VarOverrides: opts.VarOverrides})
+	ctx := context.Background()
+	wf, err := config.LoadWithOptions(ctx, workflowPath, config.LoadOptions{VarOverrides: opts.VarOverrides})
 	if err != nil {
 		return applyExecutionRequest{}, err
 	}
@@ -559,6 +531,8 @@ func runApply(args []string) error {
 }
 
 func executeApply(workflowPath, bundleRoot, selectedPhase string, prefetch, dryRun bool, varOverrides map[string]any) error {
+	ctx := context.Background()
+
 	resolvedRequest, err := resolveApplyExecutionRequest(applyExecutionRequestOptions{
 		CommandName:                  "apply",
 		WorkflowPath:                 workflowPath,
@@ -584,18 +558,17 @@ func executeApply(workflowPath, bundleRoot, selectedPhase string, prefetch, dryR
 	if prefetch {
 		prefetchWorkflow := buildApplyPrefetchWorkflow(wf)
 		if len(prefetchWorkflow.Phases) > 0 && len(prefetchWorkflow.Phases[0].Steps) > 0 {
-			if err := install.Run(context.Background(), prefetchWorkflow, install.RunOptions{BundleRoot: bundleRoot, StatePath: statePath}); err != nil {
+			if err := install.Run(ctx, prefetchWorkflow, install.RunOptions{BundleRoot: bundleRoot, StatePath: statePath}); err != nil {
 				return err
 			}
 		}
 	}
 
-	if err := install.Run(context.Background(), applyExecutionWorkflow, install.RunOptions{BundleRoot: bundleRoot, StatePath: statePath}); err != nil {
+	if err := install.Run(ctx, applyExecutionWorkflow, install.RunOptions{BundleRoot: bundleRoot, StatePath: statePath}); err != nil {
 		return err
 	}
 
-	fmt.Fprintln(os.Stdout, "apply: ok")
-	return nil
+	return stdoutPrintln("apply: ok")
 }
 
 func resolveApplyWorkflowAndBundle(fileFlagValue string, positionalArgs []string) (string, string, error) {
@@ -751,7 +724,9 @@ func runApplyDryRun(wf *config.Workflow, selectedPhaseName string, bundleRoot st
 		return fmt.Errorf("%s phase not found", selectedPhaseName)
 	}
 
-	fmt.Fprintf(os.Stdout, "PHASE=%s\n", selectedPhaseName)
+	if err := stdoutPrintf("PHASE=%s\n", selectedPhaseName); err != nil {
+		return err
+	}
 
 	state, err := loadInstallDryRunState(wf)
 	if err != nil {
@@ -776,7 +751,9 @@ func runApplyDryRun(wf *config.Workflow, selectedPhaseName string, bundleRoot st
 
 	for _, step := range phaseView.Steps {
 		if completed[step.ID] {
-			fmt.Fprintf(os.Stdout, "%s %s SKIP (completed)\n", step.ID, step.Kind)
+			if err := stdoutPrintf("%s %s SKIP (completed)\n", step.ID, step.Kind); err != nil {
+				return err
+			}
 			continue
 		}
 
@@ -789,7 +766,9 @@ func runApplyDryRun(wf *config.Workflow, selectedPhaseName string, bundleRoot st
 		if !ok {
 			status = "SKIP"
 		}
-		fmt.Fprintf(os.Stdout, "%s %s %s\n", step.ID, step.Kind, status)
+		if err := stdoutPrintf("%s %s %s\n", step.ID, step.Kind, status); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -811,7 +790,8 @@ func isHTTPWorkflowPath(raw string) bool {
 }
 
 func fetchWorkflowForApplyValidation(rawURL string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, rawURL, nil)
+	ctx := context.Background()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("get workflow url: %w", err)
 	}
@@ -819,7 +799,7 @@ func fetchWorkflowForApplyValidation(rawURL string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("get workflow url: %w", err)
 	}
-	defer resp.Body.Close()
+	defer closeSilently(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("get workflow url: unexpected status %d", resp.StatusCode)
@@ -929,7 +909,7 @@ func sha256FileHex(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer closeSilently(f)
 
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {
@@ -948,6 +928,8 @@ func hasWorkflowDir(root string) bool {
 }
 
 func discoverApplyWorkflow(bundleRoot string) (string, error) {
+	ctx := context.Background()
+
 	workflowDir := filepath.Join(bundleRoot, "workflows")
 	if !hasWorkflowDir(bundleRoot) {
 		return "", fmt.Errorf("workflow directory not found: %s", workflowDir)
@@ -955,7 +937,7 @@ func discoverApplyWorkflow(bundleRoot string) (string, error) {
 
 	preferred := filepath.Join(workflowDir, "apply.yaml")
 	if info, err := os.Stat(preferred); err == nil && !info.IsDir() {
-		wf, loadErr := config.Load(context.Background(), preferred)
+		wf, loadErr := config.Load(ctx, preferred)
 		if loadErr != nil {
 			return "", loadErr
 		}
@@ -984,7 +966,7 @@ func discoverApplyWorkflow(bundleRoot string) (string, error) {
 		}
 
 		candidate := filepath.Join(workflowDir, entry.Name())
-		wf, loadErr := config.Load(context.Background(), candidate)
+		wf, loadErr := config.Load(ctx, candidate)
 		if loadErr != nil {
 			return "", loadErr
 		}
@@ -1002,6 +984,7 @@ func discoverApplyWorkflow(bundleRoot string) (string, error) {
 	}
 	return matches[0], nil
 }
+
 func runValidate(args []string) error {
 	fs := newHelpFlagSet("validate")
 
@@ -1021,6 +1004,5 @@ func runValidate(args []string) error {
 		return err
 	}
 
-	fmt.Fprintln(os.Stdout, "validate: ok")
-	return nil
+	return stdoutPrintln("validate: ok")
 }

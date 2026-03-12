@@ -18,6 +18,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
+
 	"github.com/taedi90/deck/internal/config"
 )
 
@@ -121,7 +122,7 @@ func TestRun_PrepareArtifactsAndManifest(t *testing.T) {
 		if strings.HasPrefix(e.Path, "workflows/") || e.Path == "deck" {
 			t.Fatalf("manifest must exclude workflow and root deck entries: %+v", e)
 		}
-		if !(strings.HasPrefix(e.Path, "packages/") || strings.HasPrefix(e.Path, "images/") || strings.HasPrefix(e.Path, "files/")) {
+		if !strings.HasPrefix(e.Path, "packages/") && !strings.HasPrefix(e.Path, "images/") && !strings.HasPrefix(e.Path, "files/") {
 			t.Fatalf("manifest entry outside allowed prefixes: %+v", e)
 		}
 	}
@@ -710,7 +711,7 @@ func TestWhen_NamespaceEnforced(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected context namespace to fail")
 	}
-	if !strings.Contains(err.Error(), "unknown identifier \"context.nodeRole\"; supported prefixes are vars. and runtime.") {
+	if !strings.Contains(err.Error(), "unknown identifier \"context.nodeRole\"; supported prefixes are vars. and runtime") {
 		t.Fatalf("expected namespace restriction message, got %v", err)
 	}
 
@@ -718,7 +719,7 @@ func TestWhen_NamespaceEnforced(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected unknown dotted namespace to fail")
 	}
-	if !strings.Contains(err.Error(), "unknown identifier \"other.nodeRole\"; supported prefixes are vars. and runtime.") {
+	if !strings.Contains(err.Error(), "unknown identifier \"other.nodeRole\"; supported prefixes are vars. and runtime") {
 		t.Fatalf("expected namespace restriction message, got %v", err)
 	}
 }

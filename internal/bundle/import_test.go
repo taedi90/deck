@@ -81,10 +81,10 @@ func writeTarArchive(path string, entries []tarEntry) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	tw := tar.NewWriter(f)
-	defer tw.Close()
+	defer func() { _ = tw.Close() }()
 
 	for _, e := range entries {
 		h := &tar.Header{Name: e.name, Mode: 0o644, Size: int64(len(e.body)), Typeflag: tar.TypeReg}

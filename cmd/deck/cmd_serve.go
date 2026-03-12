@@ -44,7 +44,7 @@ func runList(args []string) error {
 	resolvedServer := strings.TrimSpace(server)
 	localRoot := "."
 
-	items := []string{}
+	var items []string
 	if resolvedServer == "" {
 		localItems, err := discoverLocalWorkflowList(localRoot)
 		if err != nil {
@@ -87,7 +87,7 @@ func fetchWorkflowIndexFromServer(server string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("list: request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer closeSilently(resp.Body)
 	if resp.StatusCode == http.StatusNotFound {
 		return []string{}, nil
 	}
@@ -141,6 +141,7 @@ func discoverLocalWorkflowList(root string) ([]string, error) {
 	sort.Strings(items)
 	return items, nil
 }
+
 func runHealth(args []string) error {
 	fs := newHelpFlagSet("health")
 	server := fs.String("server", "", "server base URL (required)")
@@ -162,14 +163,14 @@ func runHealth(args []string) error {
 	if err != nil {
 		return fmt.Errorf("health: request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer closeSilently(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("health: unexpected status %d", resp.StatusCode)
 	}
 
-	fmt.Fprintf(os.Stdout, "health: ok (%s)\n", resolvedServer)
-	return nil
+	return stdoutPrintf("health: ok (%s)\n", resolvedServer)
 }
+
 func runLogs(args []string) error {
 	fs := newHelpFlagSet("logs")
 	root := fs.String("root", ".", "serve root directory")
@@ -218,7 +219,9 @@ func runLogs(args []string) error {
 		return enc.Encode(records)
 	}
 	for _, record := range records {
-		fmt.Fprintln(os.Stdout, ctrllogs.FormatLogText(record))
+		if err := stdoutPrintln(ctrllogs.FormatLogText(record)); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -252,7 +255,7 @@ func readLogsFile(path string) ([]ctrllogs.LogRecord, error) {
 	if err != nil {
 		return nil, fmt.Errorf("logs: open log file: %w", err)
 	}
-	defer f.Close()
+	defer closeSilently(f)
 
 	records := []ctrllogs.LogRecord{}
 	scanner := bufio.NewScanner(f)
@@ -332,6 +335,7 @@ func isPermissionError(msg string) bool {
 		strings.Contains(lower, "access denied") ||
 		strings.Contains(lower, "interactive authentication required")
 }
+
 func runServer(args []string) error {
 	if len(args) == 0 || args[0] != "start" {
 		return helpRequest{text: serveHelpText()}
@@ -400,9 +404,13 @@ func runServer(args []string) error {
 		errCh <- httpServer.ListenAndServe()
 	}()
 	if certPath != "" {
-		fmt.Fprintf(os.Stdout, "server start: listening on https://%s (root=%s)\n", *addr, *root)
+		if err := stdoutPrintf("server start: listening on https://%s (root=%s)\n", *addr, *root); err != nil {
+			return err
+		}
 	} else {
-		fmt.Fprintf(os.Stdout, "server start: listening on http://%s (root=%s)\n", *addr, *root)
+		if err := stdoutPrintf("server start: listening on http://%s (root=%s)\n", *addr, *root); err != nil {
+			return err
+		}
 	}
 	select {
 	case <-ctx.Done():

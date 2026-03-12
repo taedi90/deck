@@ -2020,45 +2020,6 @@ func runWithCapturedStdout(args []string) (string, error) {
 	return string(raw), runErr
 }
 
-func runWithCapturedOutput(args []string) (string, string, error) {
-	oldStdout := os.Stdout
-	oldStderr := os.Stderr
-	stdoutR, stdoutW, err := os.Pipe()
-	if err != nil {
-		return "", "", err
-	}
-	stderrR, stderrW, err := os.Pipe()
-	if err != nil {
-		_ = stdoutR.Close()
-		_ = stdoutW.Close()
-		return "", "", err
-	}
-
-	os.Stdout = stdoutW
-	os.Stderr = stderrW
-
-	runErr := run(args)
-
-	_ = stdoutW.Close()
-	_ = stderrW.Close()
-	os.Stdout = oldStdout
-	os.Stderr = oldStderr
-
-	stdoutRaw, stdoutReadErr := io.ReadAll(stdoutR)
-	_ = stdoutR.Close()
-	if stdoutReadErr != nil {
-		_ = stderrR.Close()
-		return "", "", stdoutReadErr
-	}
-	stderrRaw, stderrReadErr := io.ReadAll(stderrR)
-	_ = stderrR.Close()
-	if stderrReadErr != nil {
-		return "", "", stderrReadErr
-	}
-
-	return string(stdoutRaw), string(stderrRaw), runErr
-}
-
 func writeWorkflowYAML(t *testing.T, path string, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
@@ -2109,7 +2070,7 @@ func tarEntryNamesFromFile(path string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer closeSilently(f)
 	tr := tar.NewReader(f)
 	names := make([]string, 0)
 	for {
@@ -2144,10 +2105,10 @@ func writeBundleTarFixture(t *testing.T, archivePath string) {
 	if err != nil {
 		t.Fatalf("create archive: %v", err)
 	}
-	defer f.Close()
+	defer closeSilently(f)
 
 	tw := tar.NewWriter(f)
-	defer tw.Close()
+	defer closeSilently(tw)
 
 	for _, entry := range []struct {
 		name string
@@ -2172,10 +2133,10 @@ func writeApplyBundleTarFixture(t *testing.T, archivePath string) {
 	if err != nil {
 		t.Fatalf("create archive: %v", err)
 	}
-	defer f.Close()
+	defer closeSilently(f)
 
 	tw := tar.NewWriter(f)
-	defer tw.Close()
+	defer closeSilently(tw)
 
 	entries := []struct {
 		name string
@@ -2216,10 +2177,10 @@ func writeSiteReleaseBundleTarFixture(t *testing.T, archivePath string) {
 	if err != nil {
 		t.Fatalf("create archive: %v", err)
 	}
-	defer f.Close()
+	defer closeSilently(f)
 
 	tw := tar.NewWriter(f)
-	defer tw.Close()
+	defer closeSilently(tw)
 
 	entries := []struct {
 		name string
@@ -2250,28 +2211,6 @@ func writeSiteReleaseBundleTarFixture(t *testing.T, archivePath string) {
 			}
 		}
 	}
-}
-
-func writeDoctorWorkflowFile(t *testing.T, includePrepare bool) string {
-	t.Helper()
-	prepareSection := ""
-	if includePrepare {
-		prepareSection = `  - name: prepare
-    steps:
-      - id: prepare-sample
-        apiVersion: deck/v1alpha1
-        kind: DownloadPackages
-        spec:
-          packages: [containerd]
-`
-	}
-	content := fmt.Sprintf("role: apply\nversion: v1alpha1\nphases:\n%s  - name: install\n    steps:\n      - id: install-sample\n        apiVersion: deck/v1alpha1\n        kind: RunCommand\n        spec:\n          command: [\"true\"]\n", prepareSection)
-
-	wfPath := filepath.Join(t.TempDir(), "workflow.yaml")
-	if err := os.WriteFile(wfPath, []byte(content), 0o644); err != nil {
-		t.Fatalf("write workflow: %v", err)
-	}
-	return wfPath
 }
 
 func TestList(t *testing.T) {
@@ -2376,14 +2315,4 @@ func TestList(t *testing.T) {
 			t.Fatalf("expected empty json list, got %#v", got)
 		}
 	})
-}
-
-func installFakeSystemctl(t *testing.T, script string) {
-	t.Helper()
-	dir := t.TempDir()
-	systemctlPath := filepath.Join(dir, "systemctl")
-	if err := os.WriteFile(systemctlPath, []byte(script), 0o755); err != nil {
-		t.Fatalf("write fake systemctl: %v", err)
-	}
-	t.Setenv("PATH", dir)
 }

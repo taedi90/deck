@@ -82,7 +82,7 @@ func generateSelfSignedCertificate(certPath, keyPath string, hosts []string) err
 	if err != nil {
 		return fmt.Errorf("create cert file: %w", err)
 	}
-	defer certOut.Close()
+	defer func() { _ = certOut.Close() }()
 	if err := pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: der}); err != nil {
 		return fmt.Errorf("encode cert pem: %w", err)
 	}
@@ -91,7 +91,7 @@ func generateSelfSignedCertificate(certPath, keyPath string, hosts []string) err
 	if err != nil {
 		return fmt.Errorf("create key file: %w", err)
 	}
-	defer keyOut.Close()
+	defer func() { _ = keyOut.Close() }()
 	if err := pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)}); err != nil {
 		return fmt.Errorf("encode key pem: %w", err)
 	}

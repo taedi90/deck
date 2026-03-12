@@ -231,7 +231,7 @@ func (p *condParser) resolveIdentifier(id string) (any, bool) {
 
 func unknownIdentifierError(id string) error {
 	if strings.Contains(id, ".") {
-		return fmt.Errorf("unknown identifier %q; supported prefixes are vars. and runtime.", id)
+		return fmt.Errorf("unknown identifier %q; supported prefixes are vars. and runtime", id)
 	}
 	return fmt.Errorf("unknown identifier %q; use vars.%s", id, id)
 }

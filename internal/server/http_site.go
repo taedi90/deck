@@ -122,7 +122,7 @@ func (h *serverHandler) handleSiteSessionAssignmentGet(w http.ResponseWriter, r 
 }
 
 func (h *serverHandler) handleSiteSessionReportPost(w http.ResponseWriter, r *http.Request, sessionID string) {
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024*1024))
 	decoder.DisallowUnknownFields()
 	report := store.ExecutionReport{}

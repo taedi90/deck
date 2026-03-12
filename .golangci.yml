@@ -5,12 +5,29 @@ run:
   tests: true
 
 linters:
+  default: none
   enable:
     - errcheck
     - govet
+    - bodyclose
     - ineffassign
+    - misspell
     - staticcheck
     - unused
+
+formatters:
+  enable:
+    - gci
+    - gofumpt
+  settings:
+    gci:
+      custom-order: true
+      sections:
+        - standard
+        - default
+        - prefix(github.com/taedi90/deck)
+    gofumpt:
+      module-path: github.com/taedi90/deck
 
 issues:
   max-issues-per-linter: 0

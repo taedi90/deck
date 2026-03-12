@@ -48,7 +48,7 @@ func runDownloadFile(bundleRoot string, spec map[string]any) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("create output file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	if sourcePath != "" {
 		raw, resolveErr := resolveSourceBytes(spec, sourcePath)
@@ -107,7 +107,7 @@ func downloadURLToFile(target *os.File, url string, timeout time.Duration) error
 	if err != nil {
 		return fmt.Errorf("download %s: %w", url, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("download %s: unexpected status %d", url, resp.StatusCode)
 	}

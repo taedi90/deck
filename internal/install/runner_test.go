@@ -856,7 +856,7 @@ func TestWhen_NamespaceEnforced(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected context namespace to fail")
 	}
-	if !strings.Contains(err.Error(), "unknown identifier \"context.nodeRole\"; supported prefixes are vars. and runtime.") {
+	if !strings.Contains(err.Error(), "unknown identifier \"context.nodeRole\"; supported prefixes are vars. and runtime") {
 		t.Fatalf("expected namespace restriction message, got %v", err)
 	}
 
@@ -864,7 +864,7 @@ func TestWhen_NamespaceEnforced(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected unknown dotted namespace to fail")
 	}
-	if !strings.Contains(err.Error(), "unknown identifier \"other.nodeRole\"; supported prefixes are vars. and runtime.") {
+	if !strings.Contains(err.Error(), "unknown identifier \"other.nodeRole\"; supported prefixes are vars. and runtime") {
 		t.Fatalf("expected namespace restriction message, got %v", err)
 	}
 }

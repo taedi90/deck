@@ -3,6 +3,9 @@ package main
 import (
 	"errors"
 	"flag"
+	"fmt"
+	"io"
+	"os"
 	"strings"
 )
 
@@ -68,6 +71,21 @@ func varsAsAnyMap(vars map[string]string) map[string]any {
 	}
 	return converted
 }
+
+func stdoutPrintf(format string, args ...any) error {
+	_, err := fmt.Fprintf(os.Stdout, format, args...)
+	return err
+}
+
+func stdoutPrintln(args ...any) error {
+	_, err := fmt.Fprintln(os.Stdout, args...)
+	return err
+}
+
+func closeSilently(closer io.Closer) {
+	_ = closer.Close()
+}
+
 func dedupeStrings(values []string) []string {
 	if len(values) == 0 {
 		return values

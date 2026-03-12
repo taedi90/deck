@@ -137,10 +137,10 @@ func writeMergeBundleTarFixture(t *testing.T, archivePath string) {
 	if err != nil {
 		t.Fatalf("create archive: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	tw := tar.NewWriter(f)
-	defer tw.Close()
+	defer func() { _ = tw.Close() }()
 
 	orderedPaths := []string{".deck/manifest.json", "packages/pkg-a.txt", "images/img-a.tar", "files/new.conf", "files/deck", "workflows/apply.yaml", "workflows/worker.yaml"}
 	for _, rel := range orderedPaths {

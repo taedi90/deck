@@ -57,7 +57,7 @@ func stageBundleForMerge(archivePath string) (stagedBundle, func(), error) {
 	if err != nil {
 		return stagedBundle{}, nil, fmt.Errorf("open bundle archive: %w", err)
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 
 	stageDir, err := os.MkdirTemp("", "deck-bundle-merge-")
 	if err != nil {
@@ -90,7 +90,7 @@ func stageBundleForMerge(archivePath string) (stagedBundle, func(), error) {
 		if rel == "" {
 			continue
 		}
-		if hdr.Typeflag != tar.TypeReg && hdr.Typeflag != tar.TypeRegA {
+		if hdr.Typeflag != tar.TypeReg {
 			continue
 		}
 
@@ -278,7 +278,7 @@ func copyStagedFile(targetPath string, staged stagedFile) error {
 	if err != nil {
 		return fmt.Errorf("open staged file %s: %w", staged.tempPath, err)
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }()
 
 	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
 		return fmt.Errorf("create destination parent for %s: %w", targetPath, err)
@@ -361,9 +361,7 @@ func normalizeWorkflowIndexPath(raw string) string {
 	if cleaned == "" || cleaned == "." {
 		return ""
 	}
-	if strings.HasPrefix(cleaned, "/") {
-		cleaned = strings.TrimPrefix(cleaned, "/")
-	}
+	cleaned = strings.TrimPrefix(cleaned, "/")
 	if cleaned == "workflows" || !strings.HasPrefix(cleaned, "workflows/") || !strings.HasSuffix(cleaned, ".yaml") {
 		return ""
 	}
