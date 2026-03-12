@@ -10,6 +10,8 @@ func executeStep(ctx context.Context, kind string, spec map[string]any, bundleRo
 	case "DownloadFile":
 		_, err := runDownloadFile(ctx, bundleRoot, spec)
 		return err
+	case "InstallArtifacts":
+		return runInstallArtifacts(ctx, spec)
 	case "InstallPackages":
 		return runInstallPackages(ctx, spec)
 	case "WriteFile":
@@ -26,12 +28,18 @@ func executeStep(ctx context.Context, kind string, spec map[string]any, bundleRo
 		return runService(spec)
 	case "EnsureDir":
 		return runEnsureDir(spec)
+	case "Symlink":
+		return runSymlink(spec)
 	case "InstallFile":
 		return runInstallFile(spec)
 	case "TemplateFile":
 		return runTemplateFile(spec)
+	case "SystemdUnit":
+		return runSystemdUnit(spec)
 	case "RepoConfig":
 		return runRepoConfig(spec)
+	case "PackageCache":
+		return runPackageCache(spec)
 	case "ContainerdConfig":
 		return runContainerdConfig(ctx, spec)
 	case "Swap":
@@ -48,6 +56,10 @@ func executeStep(ctx context.Context, kind string, spec map[string]any, bundleRo
 		return runKubeadmInit(ctx, spec)
 	case "KubeadmJoin":
 		return runKubeadmJoin(ctx, spec)
+	case "KubeadmReset":
+		return runKubeadmReset(ctx, spec)
+	case "WaitPath":
+		return runWaitPath(ctx, spec)
 	default:
 		return fmt.Errorf("%s: unsupported step kind %s", errCodeInstallKindUnsupported, kind)
 	}

@@ -4,11 +4,26 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/taedi90/deck/internal/workflowexec"
 )
+
+type kubeadmResetSpec struct {
+	Force                 bool     `json:"force"`
+	IgnoreErrors          bool     `json:"ignoreErrors"`
+	StopKubelet           *bool    `json:"stopKubelet"`
+	CriSocket             string   `json:"criSocket"`
+	RemovePaths           []string `json:"removePaths"`
+	RemoveFiles           []string `json:"removeFiles"`
+	CleanupContainers     []string `json:"cleanupContainers"`
+	RestartRuntimeService string   `json:"restartRuntimeService"`
+	Timeout               string   `json:"timeout"`
+}
 
 func runKubeadmInit(ctx context.Context, spec map[string]any) error {
 	mode := stringValue(spec, "mode")
@@ -66,19 +81,72 @@ func runKubeadmInitReal(parent context.Context, spec map[string]any) error {
 	if joinFile == "" {
 		return fmt.Errorf("%s: KubeadmInit requires outputJoinFile", errCodeInstallInitJoinMissing)
 	}
+	timeout := commandTimeoutWithDefault(spec, 10*time.Minute)
+	criSocket := stringValue(spec, "criSocket")
+	kubernetesVersion := stringValue(spec, "kubernetesVersion")
+	configFile := stringValue(spec, "configFile")
+	configTemplate := stringValue(spec, "configTemplate")
+
+	advertiseAddress, err := resolveKubeadmAdvertiseAddress(parent, spec, configTemplate, timeout)
+	if err != nil {
+		return fmt.Errorf("%s: %w", errCodeInstallInitFailed, err)
+	}
+
+	if configTemplate != "" {
+		if configFile == "" {
+			return fmt.Errorf("%s: configTemplate requires configFile", errCodeInstallInitFailed)
+		}
+		configBody := configTemplate
+		if strings.EqualFold(configTemplate, "default") {
+			configBody = renderDefaultKubeadmInitConfig(
+				advertiseAddress,
+				kubernetesVersion,
+				stringValue(spec, "podNetworkCIDR"),
+				criSocket,
+			)
+		}
+		if !strings.HasSuffix(configBody, "\n") {
+			configBody += "\n"
+		}
+		if err := os.MkdirAll(filepath.Dir(configFile), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(configFile, []byte(configBody), 0o644); err != nil {
+			return err
+		}
+	}
+
+	if boolValue(spec, "pullImages") {
+		pullArgs := []string{"config", "images", "pull"}
+		if kubernetesVersion != "" {
+			pullArgs = append(pullArgs, "--kubernetes-version", kubernetesVersion)
+		}
+		if criSocket != "" {
+			pullArgs = append(pullArgs, "--cri-socket", criSocket)
+		}
+		if err := runTimedCommandWithContext(parent, "kubeadm", pullArgs, timeout); err != nil {
+			if errors.Is(err, errStepCommandTimeout) {
+				return fmt.Errorf("%s: kubeadm config images pull timed out: %w", errCodeInstallInitFailed, err)
+			}
+			return fmt.Errorf("%s: kubeadm config images pull failed: %w", errCodeInstallInitFailed, err)
+		}
+	}
 
 	args := []string{"init"}
-	if configFile := stringValue(spec, "configFile"); configFile != "" {
+	if configFile != "" {
 		args = append(args, "--config", configFile)
 	}
-	if advertiseAddress := stringValue(spec, "advertiseAddress"); advertiseAddress != "" {
+	if advertiseAddress != "" {
 		args = append(args, "--apiserver-advertise-address", advertiseAddress)
 	}
 	if podCIDR := stringValue(spec, "podNetworkCIDR"); podCIDR != "" {
 		args = append(args, "--pod-network-cidr", podCIDR)
 	}
-	if criSocket := stringValue(spec, "criSocket"); criSocket != "" {
+	if criSocket != "" {
 		args = append(args, "--cri-socket", criSocket)
+	}
+	if kubernetesVersion != "" {
+		args = append(args, "--kubernetes-version", kubernetesVersion)
 	}
 	if ignore := stringSlice(spec["ignorePreflightErrors"]); len(ignore) > 0 {
 		args = append(args, "--ignore-preflight-errors", strings.Join(ignore, ","))
@@ -87,7 +155,7 @@ func runKubeadmInitReal(parent context.Context, spec map[string]any) error {
 		args = append(args, extra...)
 	}
 
-	if err := runTimedCommandWithContext(parent, "kubeadm", args, commandTimeoutWithDefault(spec, 10*time.Minute)); err != nil {
+	if err := runTimedCommandWithContext(parent, "kubeadm", args, timeout); err != nil {
 		if errors.Is(err, errStepCommandTimeout) {
 			return fmt.Errorf("%s: kubeadm init timed out: %w", errCodeInstallInitFailed, err)
 		}
@@ -95,7 +163,7 @@ func runKubeadmInitReal(parent context.Context, spec map[string]any) error {
 	}
 
 	joinArgs := []string{"token", "create", "--print-join-command"}
-	joinOut, err := runCommandOutputWithContext(parent, append([]string{"kubeadm"}, joinArgs...), commandTimeoutWithDefault(spec, 10*time.Minute))
+	joinOut, err := runCommandOutputWithContext(parent, append([]string{"kubeadm"}, joinArgs...), timeout)
 	if err != nil {
 		if errors.Is(err, errStepCommandTimeout) {
 			return fmt.Errorf("%s: kubeadm token create timed out", errCodeInstallInitFailed)
@@ -111,6 +179,94 @@ func runKubeadmInitReal(parent context.Context, spec map[string]any) error {
 		return err
 	}
 	return os.WriteFile(joinFile, []byte(joinCmd+"\n"), 0o644)
+}
+
+func resolveKubeadmAdvertiseAddress(ctx context.Context, spec map[string]any, configTemplate string, timeout time.Duration) (string, error) {
+	advertiseAddress := stringValue(spec, "advertiseAddress")
+	if strings.EqualFold(advertiseAddress, "auto") || (advertiseAddress == "" && strings.EqualFold(configTemplate, "default")) {
+		resolved, err := detectKubeadmAdvertiseAddress(ctx, timeout)
+		if err != nil {
+			return "", fmt.Errorf("failed to detect node IPv4 for kubeadm init: %w", err)
+		}
+		return resolved, nil
+	}
+	return advertiseAddress, nil
+}
+
+func detectKubeadmAdvertiseAddress(ctx context.Context, timeout time.Duration) (string, error) {
+	routeOut, routeErr := runCommandOutputWithContext(ctx, []string{"ip", "-4", "route", "get", "1.1.1.1"}, timeout)
+	if routeErr == nil {
+		if routeSrc := parseRouteSourceIPv4(routeOut); routeSrc != "" {
+			return routeSrc, nil
+		}
+	}
+	if routeErr != nil && (errors.Is(routeErr, context.Canceled) || errors.Is(routeErr, context.DeadlineExceeded)) {
+		return "", routeErr
+	}
+
+	addrOut, addrErr := runCommandOutputWithContext(ctx, []string{"ip", "-4", "-o", "addr", "show", "scope", "global"}, timeout)
+	if addrErr == nil {
+		if globalIP := parseFirstGlobalIPv4(addrOut); globalIP != "" {
+			return globalIP, nil
+		}
+	}
+	if addrErr != nil && (errors.Is(addrErr, context.Canceled) || errors.Is(addrErr, context.DeadlineExceeded)) {
+		return "", addrErr
+	}
+
+	return "", errors.New("no default-route source IPv4 and no global IPv4 found")
+}
+
+func parseRouteSourceIPv4(routeOut string) string {
+	fields := strings.Fields(routeOut)
+	for i := 0; i < len(fields)-1; i++ {
+		if fields[i] != "src" {
+			continue
+		}
+		if parsed := net.ParseIP(fields[i+1]); parsed != nil && parsed.To4() != nil {
+			return fields[i+1]
+		}
+	}
+	return ""
+}
+
+func parseFirstGlobalIPv4(addrOut string) string {
+	for _, line := range strings.Split(addrOut, "\n") {
+		for _, token := range strings.Fields(line) {
+			if !strings.Contains(token, "/") {
+				continue
+			}
+			ip := strings.SplitN(token, "/", 2)[0]
+			if parsed := net.ParseIP(ip); parsed != nil && parsed.To4() != nil {
+				return ip
+			}
+		}
+	}
+	return ""
+}
+
+func renderDefaultKubeadmInitConfig(advertiseAddress, kubernetesVersion, podSubnet, criSocket string) string {
+	b := strings.Builder{}
+	b.WriteString("apiVersion: kubeadm.k8s.io/v1beta3\n")
+	b.WriteString("kind: InitConfiguration\n")
+	b.WriteString("localAPIEndpoint:\n")
+	_, _ = fmt.Fprintf(&b, "  advertiseAddress: %s\n", advertiseAddress)
+	b.WriteString("  bindPort: 6443\n")
+	if criSocket != "" {
+		b.WriteString("nodeRegistration:\n")
+		_, _ = fmt.Fprintf(&b, "  criSocket: %s\n", criSocket)
+	}
+	b.WriteString("---\n")
+	b.WriteString("apiVersion: kubeadm.k8s.io/v1beta3\n")
+	b.WriteString("kind: ClusterConfiguration\n")
+	if kubernetesVersion != "" {
+		_, _ = fmt.Fprintf(&b, "kubernetesVersion: %s\n", kubernetesVersion)
+	}
+	if podSubnet != "" {
+		b.WriteString("networking:\n")
+		_, _ = fmt.Fprintf(&b, "  podSubnet: %s\n", podSubnet)
+	}
+	return b.String()
 }
 
 func runKubeadmJoinReal(ctx context.Context, spec map[string]any) error {
@@ -141,4 +297,120 @@ func runKubeadmJoinReal(ctx context.Context, spec map[string]any) error {
 		return fmt.Errorf("%s: kubeadm join failed: %w", errCodeInstallJoinFailed, err)
 	}
 	return nil
+}
+
+func runKubeadmReset(ctx context.Context, spec map[string]any) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	decoded, err := workflowexec.DecodeSpec[kubeadmResetSpec](spec)
+	if err != nil {
+		return fmt.Errorf("decode KubeadmReset spec: %w", err)
+	}
+
+	stopKubelet := true
+	if decoded.StopKubelet != nil {
+		stopKubelet = *decoded.StopKubelet
+	}
+	if stopKubelet {
+		_ = runTimedCommandWithContext(ctx, "systemctl", []string{"stop", "kubelet"}, commandTimeoutWithDefault(spec, 2*time.Minute))
+	}
+
+	kubeadmArgs := []string{"reset"}
+	if decoded.Force {
+		kubeadmArgs = append(kubeadmArgs, "--force")
+	}
+	if strings.TrimSpace(decoded.CriSocket) != "" {
+		kubeadmArgs = append(kubeadmArgs, "--cri-socket", strings.TrimSpace(decoded.CriSocket))
+	}
+
+	resetErr := runTimedCommandWithContext(ctx, "kubeadm", kubeadmArgs, commandTimeoutWithDefault(spec, 10*time.Minute))
+	if resetErr != nil && !decoded.IgnoreErrors {
+		if errors.Is(resetErr, errStepCommandTimeout) {
+			return fmt.Errorf("%s: kubeadm reset timed out: %w", errCodeInstallResetFailed, resetErr)
+		}
+		return fmt.Errorf("%s: kubeadm reset failed: %w", errCodeInstallResetFailed, resetErr)
+	}
+
+	if err := removeResetPaths(decoded.RemovePaths); err != nil {
+		return fmt.Errorf("%s: remove reset paths: %w", errCodeInstallResetFailed, err)
+	}
+	if err := removeResetFiles(decoded.RemoveFiles); err != nil {
+		return fmt.Errorf("%s: remove reset files: %w", errCodeInstallResetFailed, err)
+	}
+
+	cleanupContainers := trimmedStringSlice(decoded.CleanupContainers)
+	for _, name := range cleanupContainers {
+		if err := cleanupContainerByName(ctx, name, strings.TrimSpace(decoded.CriSocket), commandTimeoutWithDefault(spec, 2*time.Minute)); err != nil {
+			return fmt.Errorf("%s: cleanup stale container %s: %w", errCodeInstallResetFailed, name, err)
+		}
+	}
+
+	restartRuntime := strings.TrimSpace(decoded.RestartRuntimeService)
+	if restartRuntime != "" {
+		if err := runTimedCommandWithContext(ctx, "systemctl", []string{"restart", restartRuntime}, commandTimeoutWithDefault(spec, 2*time.Minute)); err != nil {
+			if errors.Is(err, errStepCommandTimeout) {
+				return fmt.Errorf("%s: restart runtime service %s timed out: %w", errCodeInstallResetFailed, restartRuntime, err)
+			}
+			return fmt.Errorf("%s: restart runtime service %s failed: %w", errCodeInstallResetFailed, restartRuntime, err)
+		}
+	}
+
+	return nil
+}
+
+func removeResetPaths(paths []string) error {
+	for _, path := range trimmedStringSlice(paths) {
+		if err := os.RemoveAll(path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func removeResetFiles(paths []string) error {
+	for _, path := range trimmedStringSlice(paths) {
+		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	return nil
+}
+
+func cleanupContainerByName(ctx context.Context, name, criSocket string, timeout time.Duration) error {
+	listArgs := []string{}
+	if criSocket != "" {
+		listArgs = append(listArgs, "--runtime-endpoint", criSocket)
+	}
+	listArgs = append(listArgs, "ps", "-a", "--name", name, "-q")
+
+	out, err := runCommandOutputWithContext(ctx, append([]string{"crictl"}, listArgs...), timeout)
+	if err != nil {
+		return err
+	}
+
+	ids := strings.Fields(strings.TrimSpace(out))
+	if len(ids) == 0 {
+		return nil
+	}
+
+	rmArgs := []string{}
+	if criSocket != "" {
+		rmArgs = append(rmArgs, "--runtime-endpoint", criSocket)
+	}
+	rmArgs = append(rmArgs, "rm", "-f")
+	rmArgs = append(rmArgs, ids...)
+	return runTimedCommandWithContext(ctx, "crictl", rmArgs, timeout)
+}
+
+func trimmedStringSlice(items []string) []string {
+	trimmed := make([]string, 0, len(items))
+	for _, item := range items {
+		v := strings.TrimSpace(item)
+		if v != "" {
+			trimmed = append(trimmed, v)
+		}
+	}
+	return trimmed
 }

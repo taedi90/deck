@@ -52,58 +52,108 @@ func runModprobe(spec map[string]any) error {
 
 func runService(spec map[string]any) error {
 	name := stringValue(spec, "name")
-	if name == "" {
-		return fmt.Errorf("%s: Service requires name", errCodeInstallServiceNameMiss)
+	names := stringSlice(spec["names"])
+	if name == "" && len(names) == 0 {
+		return fmt.Errorf("%s: Service requires name or names", errCodeInstallServiceNameMiss)
+	}
+	if name != "" && len(names) > 0 {
+		return fmt.Errorf("%s: Service accepts either name or names", errCodeInstallServiceNameMiss)
+	}
+	if name != "" {
+		names = []string{name}
 	}
 
 	timeout := commandTimeoutWithDefault(spec, 30*time.Second)
-	if enabled, ok := spec["enabled"].(bool); ok {
-		isEnabled, err := isServiceEnabled(name, timeout)
-		if err != nil {
+	if boolValue(spec, "daemonReload") {
+		if err := runTimedCommand("systemctl", []string{"daemon-reload"}, timeout); err != nil {
 			return err
 		}
-		if enabled != isEnabled {
-			if enabled {
-				if err := runTimedCommand("systemctl", []string{"enable", name}, timeout); err != nil {
-					return err
+	}
+	ifExists := boolValue(spec, "ifExists")
+	ignoreMissing := boolValue(spec, "ignoreMissing")
+
+	for _, serviceName := range names {
+		if ifExists {
+			exists, err := serviceUnitExists(serviceName, timeout)
+			if err != nil {
+				return err
+			}
+			if !exists {
+				continue
+			}
+		}
+
+		if enabled, ok := spec["enabled"].(bool); ok {
+			isEnabled, err := isServiceEnabled(serviceName, timeout)
+			if err != nil {
+				return err
+			}
+			if enabled != isEnabled {
+				action := "disable"
+				if enabled {
+					action = "enable"
 				}
-			} else {
-				if err := runTimedCommand("systemctl", []string{"disable", name}, timeout); err != nil {
+				if err := runServiceCommand(serviceName, []string{action, serviceName}, timeout, ignoreMissing); err != nil {
 					return err
 				}
 			}
 		}
+
+		state := strings.ToLower(stringValue(spec, "state"))
+		switch state {
+		case "", "unchanged":
+			continue
+		case "started":
+			active, err := isServiceActive(serviceName, timeout)
+			if err != nil {
+				return err
+			}
+			if active {
+				continue
+			}
+			if err := runServiceCommand(serviceName, []string{"start", serviceName}, timeout, ignoreMissing); err != nil {
+				return err
+			}
+		case "stopped":
+			active, err := isServiceActive(serviceName, timeout)
+			if err != nil {
+				return err
+			}
+			if !active {
+				continue
+			}
+			if err := runServiceCommand(serviceName, []string{"stop", serviceName}, timeout, ignoreMissing); err != nil {
+				return err
+			}
+		case "restarted":
+			if err := runServiceCommand(serviceName, []string{"restart", serviceName}, timeout, ignoreMissing); err != nil {
+				return err
+			}
+		case "reloaded":
+			if err := runServiceCommand(serviceName, []string{"reload", serviceName}, timeout, ignoreMissing); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("invalid service state %q", state)
+		}
 	}
 
-	state := strings.ToLower(stringValue(spec, "state"))
-	switch state {
-	case "", "unchanged":
-		return nil
-	case "started":
-		active, err := isServiceActive(name, timeout)
-		if err != nil {
-			return err
-		}
-		if active {
-			return nil
-		}
-		return runTimedCommand("systemctl", []string{"start", name}, timeout)
-	case "stopped":
-		active, err := isServiceActive(name, timeout)
-		if err != nil {
-			return err
-		}
-		if !active {
-			return nil
-		}
-		return runTimedCommand("systemctl", []string{"stop", name}, timeout)
-	case "restarted":
-		return runTimedCommand("systemctl", []string{"restart", name}, timeout)
-	case "reloaded":
-		return runTimedCommand("systemctl", []string{"reload", name}, timeout)
-	default:
-		return fmt.Errorf("invalid service state %q", state)
+	return nil
+}
+
+func runServiceCommand(name string, args []string, timeout time.Duration, ignoreMissing bool) error {
+	err := runTimedCommand("systemctl", args, timeout)
+	if err == nil || !ignoreMissing {
+		return err
 	}
+	exists, existsErr := serviceUnitExists(name, timeout)
+	if existsErr != nil {
+		return err
+	}
+	if !exists {
+		return nil
+	}
+	return err
 }
 
 func runSwap(spec map[string]any) error {

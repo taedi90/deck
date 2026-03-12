@@ -20,7 +20,7 @@ func stepOutputs(kind string, rendered map[string]any) map[string]any {
 		if dest := stringValue(rendered, "dest"); dest != "" {
 			outputs["dest"] = dest
 		}
-	case "EnsureDir", "InstallFile", "TemplateFile", "RepoConfig", "ContainerdConfig":
+	case "EnsureDir", "Symlink", "InstallFile", "TemplateFile", "SystemdUnit", "RepoConfig", "ContainerdConfig":
 		if path := stringValue(rendered, "path"); path != "" {
 			outputs["path"] = path
 		}

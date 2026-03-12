@@ -69,5 +69,98 @@ func runContainerdConfig(ctx context.Context, spec map[string]any) error {
 	if err := writeFileIfChanged(path, []byte(updated), 0o644); err != nil {
 		return err
 	}
+
+	if err := writeContainerdRegistryHosts(path, spec); err != nil {
+		return err
+	}
 	return nil
+}
+
+func writeContainerdRegistryHosts(configTomlPath string, spec map[string]any) error {
+	rawHosts, ok := spec["registryHosts"]
+	if !ok {
+		return nil
+	}
+
+	hostItems, ok := rawHosts.([]any)
+	if !ok {
+		return fmt.Errorf("registryHosts must be an array")
+	}
+
+	configPath := stringValue(spec, "configPath")
+	if configPath == "" {
+		configPath = filepath.Join(filepath.Dir(configTomlPath), "certs.d")
+	}
+
+	for idx, raw := range hostItems {
+		entry, ok := raw.(map[string]any)
+		if !ok {
+			return fmt.Errorf("registryHosts[%d] must be an object", idx)
+		}
+
+		registry := stringValue(entry, "registry")
+		server := stringValue(entry, "server")
+		host := stringValue(entry, "host")
+		if registry == "" {
+			return fmt.Errorf("registryHosts[%d].registry is required", idx)
+		}
+		if server == "" {
+			return fmt.Errorf("registryHosts[%d].server is required", idx)
+		}
+		if host == "" {
+			return fmt.Errorf("registryHosts[%d].host is required", idx)
+		}
+
+		caps, err := parseContainerdHostCapabilities(entry["capabilities"], idx)
+		if err != nil {
+			return err
+		}
+
+		skipVerify, ok := entry["skipVerify"].(bool)
+		if !ok {
+			return fmt.Errorf("registryHosts[%d].skipVerify must be a boolean", idx)
+		}
+
+		hostsPath := filepath.Join(configPath, registry, "hosts.toml")
+		if err := os.MkdirAll(filepath.Dir(hostsPath), 0o755); err != nil {
+			return err
+		}
+
+		content := renderContainerdHostsTOML(server, host, caps, skipVerify)
+		if err := writeFileIfChanged(hostsPath, []byte(content), 0o644); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func parseContainerdHostCapabilities(raw any, idx int) ([]string, error) {
+	items, ok := raw.([]any)
+	if !ok {
+		return nil, fmt.Errorf("registryHosts[%d].capabilities must be an array", idx)
+	}
+	if len(items) == 0 {
+		return nil, fmt.Errorf("registryHosts[%d].capabilities must not be empty", idx)
+	}
+
+	capabilities := make([]string, 0, len(items))
+	for i, item := range items {
+		capability, ok := item.(string)
+		if !ok || strings.TrimSpace(capability) == "" {
+			return nil, fmt.Errorf("registryHosts[%d].capabilities[%d] must be a non-empty string", idx, i)
+		}
+		capabilities = append(capabilities, strings.TrimSpace(capability))
+	}
+
+	return capabilities, nil
+}
+
+func renderContainerdHostsTOML(server string, host string, capabilities []string, skipVerify bool) string {
+	tomlCaps := make([]string, 0, len(capabilities))
+	for _, capability := range capabilities {
+		tomlCaps = append(tomlCaps, fmt.Sprintf("%q", capability))
+	}
+
+	return fmt.Sprintf("server = %q\n\n[host.%q]\n  capabilities = [%s]\n  skip_verify = %t\n", server, host, strings.Join(tomlCaps, ", "), skipVerify)
 }

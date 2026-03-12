@@ -3,76 +3,52 @@ version: v1alpha1
 vars:
   serverURL: 192.168.56.1:8080
   release: ubuntu2204
+  osFamily: debian
 phases:
   - name: install
     steps:
-      - id: write-apt-offline-config-template
+      - id: write-apt-offline-config
+        when: vars.osFamily == "debian"
         apiVersion: deck/v1alpha1
         kind: WriteFile
         spec:
-          path: /tmp/deck-offline-99offline
+          path: /etc/apt/apt.conf.d/99offline
           mode: "0644"
           contentFromTemplate: |
             APT::Get::AllowUnauthenticated "true";
             Acquire::AllowInsecureRepositories "true";
             Acquire::AllowDowngradeToInsecureRepositories "true";
-      - id: write-apt-offline-repo-template
+      - id: apply-offline-repo-config-apt
+        when: vars.osFamily == "debian"
         apiVersion: deck/v1alpha1
-        kind: WriteFile
+        kind: RepoConfig
         spec:
-          path: /tmp/deck-offline-apt.list
-          mode: "0644"
-          contentFromTemplate: |
-            deb [trusted=yes] http://{{ .vars.serverURL }}/packages/apt/{{ .vars.release }} ./
-      - id: write-yum-offline-repo-template
+          format: apt
+          replaceExisting: true
+          repositories:
+            - id: offline-repo
+              baseurl: http://{{ .vars.serverURL }}/packages/apt/{{ .vars.release }}
+              trusted: true
+      - id: apply-offline-repo-config-yum
+        when: vars.osFamily == "rhel"
         apiVersion: deck/v1alpha1
-        kind: WriteFile
+        kind: RepoConfig
         spec:
-          path: /tmp/deck-offline-yum.repo
-          mode: "0644"
-          contentFromTemplate: |
-            [offline-repo]
-            name=Offline repo for kubespray
-            baseurl=http://{{ .vars.serverURL }}/packages/yum/{{ .vars.release }}
-            enabled=1
-            gpgcheck=0
-            module_hotfixes=1
-      - id: apply-offline-repo-config
-        apiVersion: deck/v1alpha1
-        kind: RunCommand
-        spec:
-          command:
-            - bash
-            - -lc
-            - |
-              set -euo pipefail
-              if [[ -d /etc/apt ]]; then
-                mkdir -p /etc/apt/apt.conf.d /etc/apt/sources.list.d
-                cp -f /tmp/deck-offline-99offline /etc/apt/apt.conf.d/99offline
-                if [[ -e /etc/apt/sources.list.d/ubuntu.sources && ! -e /etc/apt/sources.list.d/ubuntu.sources.original ]]; then
-                  mv /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list.d/ubuntu.sources.original
-                fi
-                rm -f /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources
-                cp -f /tmp/deck-offline-apt.list /etc/apt/sources.list.d/offline.list
-              fi
-              if [[ -d /etc/yum.repos.d ]]; then
-                for repo in /etc/yum.repos.d/*.repo; do
-                  [[ -e "${repo}" ]] || continue
-                  sed -i -E 's/^([[:space:]]*)enabled[[:space:]]*=[[:space:]]*(1|yes|true)[[:space:]]*$/\1enabled=0/I' "${repo}" || true
-                done
-                cp -f /tmp/deck-offline-yum.repo /etc/yum.repos.d/offline.repo
-              fi
+          format: yum
+          replaceExisting: true
+          repositories:
+            - id: offline-repo
+              name: Offline repo for kubespray
+              baseurl: http://{{ .vars.serverURL }}/packages/yum/{{ .vars.release }}
+              enabled: true
+              gpgcheck: false
+              module_hotfixes: true
       - id: disable-firewalld-and-ufw
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: Service
         spec:
-          command:
-            - bash
-            - -lc
-            - |
-              set -euo pipefail
-              for svc in firewalld ufw; do
-                if systemctl list-unit-files "${svc}.service" >/dev/null 2>&1; then
-                  systemctl disable --now "${svc}" || true
-                fi
-              done
+          names: [firewalld, ufw]
+          enabled: false
+          state: stopped
+          ifExists: true
+          ignoreMissing: true

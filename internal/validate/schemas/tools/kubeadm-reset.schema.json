@@ -1,14 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://deck.local/schemas/tools/service.schema.json",
-  "title": "ServiceStep",
+  "$id": "https://deck.local/schemas/tools/kubeadm-reset.schema.json",
+  "title": "KubeadmResetStep",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "apiVersion", "kind", "spec"],
   "properties": {
     "id": { "type": "string" },
     "apiVersion": { "const": "deck/v1alpha1" },
-    "kind": { "const": "Service" },
+    "kind": { "const": "KubeadmReset" },
     "metadata": { "type": "object", "additionalProperties": true },
     "when": { "type": "string" },
     "retry": { "type": "integer", "minimum": 0 },
@@ -21,28 +21,25 @@
     "spec": {
       "type": "object",
       "additionalProperties": false,
-      "oneOf": [
-        {
-          "required": ["name"],
-          "not": { "required": ["names"] }
-        },
-        {
-          "required": ["names"],
-          "not": { "required": ["name"] }
-        }
-      ],
       "properties": {
-        "name": { "type": "string", "minLength": 1 },
-        "names": {
+        "force": { "type": "boolean", "default": false },
+        "ignoreErrors": { "type": "boolean", "default": false },
+        "stopKubelet": { "type": "boolean", "default": true },
+        "criSocket": { "type": "string" },
+        "removePaths": {
           "type": "array",
-          "minItems": 1,
-          "items": { "type": "string", "minLength": 1 }
+          "items": { "type": "string" }
         },
-        "daemonReload": { "type": "boolean" },
-        "ifExists": { "type": "boolean" },
-        "ignoreMissing": { "type": "boolean" },
-        "enabled": { "type": "boolean" },
-        "state": { "type": "string", "enum": ["unchanged", "started", "stopped", "restarted", "reloaded"] }
+        "removeFiles": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "cleanupContainers": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "restartRuntimeService": { "type": "string" },
+        "timeout": { "type": "string", "pattern": "^[0-9]+(ms|s|m|h)$" }
       }
     }
   }

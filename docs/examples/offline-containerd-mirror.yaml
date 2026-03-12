@@ -2,7 +2,6 @@ role: apply
 version: v1alpha1
 vars:
   serverRegistryHost: 127.0.0.1:5000
-  seedRegistries: "registry.k8s.io docker.io quay.io ghcr.io gcr.io k8s.gcr.io"
 phases:
   - name: install
     steps:
@@ -17,24 +16,37 @@ phases:
         spec:
           path: /etc/containerd/config.toml
           configPath: /etc/containerd/certs.d
-      - id: write-containerd-mirror-hosts
-        apiVersion: deck/v1alpha1
-        kind: RunCommand
-        spec:
-          command:
-            - bash
-            - -lc
-            - |
-              for registry in {{ .vars.seedRegistries }}; do
-                install -d "/etc/containerd/certs.d/$registry"
-                cat > "/etc/containerd/certs.d/$registry/hosts.toml" <<EOF
-              server = "http://{{ .vars.serverRegistryHost }}"
-
-              [host."http://{{ .vars.serverRegistryHost }}"]
-                capabilities = ["pull", "resolve"]
-                skip_verify = true
-              EOF
-              done
+          registryHosts:
+            - registry: registry.k8s.io
+              server: http://{{ .vars.serverRegistryHost }}
+              host: http://{{ .vars.serverRegistryHost }}
+              capabilities: [pull, resolve]
+              skipVerify: true
+            - registry: docker.io
+              server: http://{{ .vars.serverRegistryHost }}
+              host: http://{{ .vars.serverRegistryHost }}
+              capabilities: [pull, resolve]
+              skipVerify: true
+            - registry: quay.io
+              server: http://{{ .vars.serverRegistryHost }}
+              host: http://{{ .vars.serverRegistryHost }}
+              capabilities: [pull, resolve]
+              skipVerify: true
+            - registry: ghcr.io
+              server: http://{{ .vars.serverRegistryHost }}
+              host: http://{{ .vars.serverRegistryHost }}
+              capabilities: [pull, resolve]
+              skipVerify: true
+            - registry: gcr.io
+              server: http://{{ .vars.serverRegistryHost }}
+              host: http://{{ .vars.serverRegistryHost }}
+              capabilities: [pull, resolve]
+              skipVerify: true
+            - registry: k8s.gcr.io
+              server: http://{{ .vars.serverRegistryHost }}
+              host: http://{{ .vars.serverRegistryHost }}
+              capabilities: [pull, resolve]
+              skipVerify: true
       - id: restart-containerd
         apiVersion: deck/v1alpha1
         kind: Service

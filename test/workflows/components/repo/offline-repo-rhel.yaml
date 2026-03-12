@@ -3,28 +3,23 @@ version: v1alpha1
 phases:
   - name: install
     steps:
-      - id: write-yum-offline-repo
-        apiVersion: deck/v1alpha1
-        kind: WriteFile
-        spec:
-          path: /tmp/deck-offline.repo
-          mode: "0644"
-          contentFromTemplate: |
-            [deck-os]
-            name=deck-os
-            baseurl=http://{{ .vars.serverURL  }}/packages/yum/{{ .vars.release  }}
-            enabled=1
-            gpgcheck=0
       - id: apply-offline-repo-config-rhel
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: RepoConfig
         spec:
-          timeout: 120s
-          command:
-            - bash
-            - -lc
-            - |
-              set -euo pipefail
-              cp -f /tmp/deck-offline.repo /etc/yum.repos.d/deck-offline.repo
-              dnf clean all
-              dnf makecache --disablerepo='*' --enablerepo=deck-os -y || true
+          format: yum
+          path: /etc/yum.repos.d/deck-offline.repo
+          replaceExisting: true
+          repositories:
+            - id: deck-os
+              name: deck-os
+              baseurl: http://{{ .vars.serverURL  }}/packages/yum/{{ .vars.release  }}
+              enabled: true
+              gpgcheck: false
+      - id: refresh-dnf-package-cache
+        apiVersion: deck/v1alpha1
+        kind: PackageCache
+        spec:
+          manager: dnf
+          clean: true
+          update: true

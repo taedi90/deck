@@ -119,6 +119,7 @@
             "DownloadK8sPackages",
             "DownloadImages",
             "DownloadFile",
+            "InstallArtifacts",
             "InstallPackages",
             "WriteFile",
             "EditFile",
@@ -127,17 +128,22 @@
             "Modprobe",
             "Service",
             "EnsureDir",
+            "Symlink",
             "InstallFile",
             "TemplateFile",
+            "SystemdUnit",
             "RepoConfig",
+            "PackageCache",
             "ContainerdConfig",
             "Swap",
             "KernelModule",
             "SysctlApply",
             "RunCommand",
+            "WaitPath",
             "VerifyImages",
             "KubeadmInit",
-            "KubeadmJoin"
+            "KubeadmJoin",
+            "KubeadmReset"
           ]
         },
         "metadata": {

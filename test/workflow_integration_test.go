@@ -35,18 +35,18 @@ func TestWorkflowIntegrationBootstrap(t *testing.T) {
 	init := stepIndexByID(steps, "bootstrap-init")
 	publish := stepIndexByID(steps, "bootstrap-publish-join")
 	report := stepIndexByID(steps, "bootstrap-report")
-	summary := stepIndexByID(steps, "bootstrap-summary")
-	if prereq == -1 || reset == -1 || init == -1 || publish == -1 || report == -1 || summary == -1 {
-		t.Fatalf("missing expected merged steps: prereq=%d reset=%d init=%d publish=%d report=%d summary=%d", prereq, reset, init, publish, report, summary)
+	if prereq == -1 || reset == -1 || init == -1 || publish == -1 || report == -1 {
+		t.Fatalf("missing expected merged steps: prereq=%d reset=%d init=%d publish=%d report=%d", prereq, reset, init, publish, report)
 	}
-	if prereq >= reset || reset >= init || init >= publish || publish >= report || report >= summary {
-		t.Fatalf("unexpected merged step order: prereq=%d reset=%d init=%d publish=%d report=%d summary=%d", prereq, reset, init, publish, report, summary)
+	if prereq >= reset || reset >= init || init >= publish || publish >= report {
+		t.Fatalf("unexpected merged step order: prereq=%d reset=%d init=%d publish=%d report=%d", prereq, reset, init, publish, report)
 	}
 
 	out := runWorkflowApplyDryRun(t, root, workflowPath)
 	requireDryRunOutput(t, out,
 		"PHASE=install",
 		"prep-disable-swap Swap PLAN",
+		"bootstrap-reset-preflight KubeadmReset PLAN",
 		"bootstrap-init KubeadmInit PLAN",
 		"bootstrap-report RunCommand PLAN",
 	)
@@ -74,7 +74,6 @@ func TestWorkflowIntegrationWorkerJoin(t *testing.T) {
 		"prep-disable-swap Swap PLAN",
 		"fetch-join-file DownloadFile PLAN",
 		"join-worker KubeadmJoin PLAN",
-		"worker-summary RunCommand PLAN",
 	)
 }
 
@@ -95,7 +94,7 @@ func TestWorkflowIntegrationNodeReset(t *testing.T) {
 	requireDryRunOutput(t, out,
 		"PHASE=install",
 		"prep-disable-swap Swap PLAN",
-		"reset-node RunCommand SKIP",
+		"reset-node KubeadmReset SKIP",
 		"reset-runtime-ready RunCommand PLAN",
 		"reset-state-report RunCommand PLAN",
 		"reset-summary RunCommand PLAN",

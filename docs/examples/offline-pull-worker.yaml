@@ -3,6 +3,7 @@ version: v1alpha1
 vars:
   serverURL: 192.168.56.1:8080
   release: ubuntu2204
+  osFamily: debian
   registryHost: 192.168.56.1:5000
   joinFile: /tmp/deck/join.txt
 phases:
@@ -14,73 +15,49 @@ phases:
         spec:
           disable: true
           persist: false
-      - id: write-apt-offline-repo
+      - id: configure-offline-repo-apt
+        when: vars.osFamily == "debian"
         apiVersion: deck/v1alpha1
-        kind: WriteFile
+        kind: RepoConfig
         spec:
-          path: /tmp/deck-offline-apt.list
-          mode: "0644"
-          contentFromTemplate: |
-            deb [trusted=yes] http://{{ .vars.serverURL }}/packages/apt/{{ .vars.release }} ./
-            deb [trusted=yes] http://{{ .vars.serverURL }}/packages/apt-k8s/{{ .vars.release }} ./
-      - id: write-yum-offline-repo
+          format: apt
+          replaceExisting: true
+          refreshCache:
+            enabled: true
+            clean: true
+          repositories:
+            - id: deck-os
+              baseurl: http://{{ .vars.serverURL }}/packages/apt/{{ .vars.release }}
+              trusted: true
+            - id: deck-k8s
+              baseurl: http://{{ .vars.serverURL }}/packages/apt-k8s/{{ .vars.release }}
+              trusted: true
+      - id: configure-offline-repo-yum
+        when: vars.osFamily == "rhel"
         apiVersion: deck/v1alpha1
-        kind: WriteFile
+        kind: RepoConfig
         spec:
-          path: /tmp/deck-offline.repo
-          mode: "0644"
-          contentFromTemplate: |
-            [deck-os]
-            name=deck-os
-            baseurl=http://{{ .vars.serverURL }}/packages/yum/{{ .vars.release }}
-            enabled=1
-            gpgcheck=0
-
-            [deck-k8s]
-            name=deck-k8s
-            baseurl=http://{{ .vars.serverURL }}/packages/yum-k8s/{{ .vars.release }}
-            enabled=1
-            gpgcheck=0
-      - id: apply-offline-repo-config
-        apiVersion: deck/v1alpha1
-        kind: RunCommand
-        spec:
-          command:
-            - bash
-            - -lc
-            - |
-              set -euo pipefail
-              if [[ -d /etc/apt ]]; then
-                mkdir -p /etc/apt/sources.list.d
-                rm -f /etc/apt/sources.list.d/*.list
-                cp -f /tmp/deck-offline-apt.list /etc/apt/sources.list.d/offline.list
-                apt-get clean
-                apt-get update
-              elif [[ -d /etc/yum.repos.d ]]; then
-                cp -f /tmp/deck-offline.repo /etc/yum.repos.d/deck-offline.repo
-                dnf clean all
-                dnf makecache
-              else
-                echo "unsupported distro" >&2
-                exit 1
-              fi
+          format: yum
+          replaceExisting: true
+          refreshCache:
+            enabled: true
+            clean: true
+          repositories:
+            - id: deck-os
+              name: deck-os
+              baseurl: http://{{ .vars.serverURL }}/packages/yum/{{ .vars.release }}
+              enabled: true
+              gpgcheck: false
+            - id: deck-k8s
+              name: deck-k8s
+              baseurl: http://{{ .vars.serverURL }}/packages/yum-k8s/{{ .vars.release }}
+              enabled: true
+              gpgcheck: false
       - id: install-k8s-deps
         apiVersion: deck/v1alpha1
         kind: InstallPackages
         spec:
           packages: [containerd, kubelet, kubeadm, kubectl]
-      - id: write-containerd-mirror-registry-k8s
-        apiVersion: deck/v1alpha1
-        kind: WriteFile
-        spec:
-          path: /etc/containerd/certs.d/registry.k8s.io/hosts.toml
-          mode: "0644"
-          contentFromTemplate: |
-            server = "https://registry.k8s.io"
-
-            [host."http://{{ .vars.registryHost }}"]
-              capabilities = ["pull", "resolve"]
-              skip_verify = true
       - id: configure-containerd-runtime
         apiVersion: deck/v1alpha1
         kind: ContainerdConfig
@@ -88,6 +65,12 @@ phases:
           path: /etc/containerd/config.toml
           configPath: /etc/containerd/certs.d
           systemdCgroup: true
+          registryHosts:
+            - registry: registry.k8s.io
+              server: https://registry.k8s.io
+              host: http://{{ .vars.registryHost }}
+              capabilities: [pull, resolve]
+              skipVerify: true
       - id: restart-containerd
         apiVersion: deck/v1alpha1
         kind: Service

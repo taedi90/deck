@@ -22,9 +22,3 @@ phases:
       - path: ../components/k8s/containerd-kubelet.yaml
       - path: ../components/worker-join.yaml
       - path: ../components/k8s/cni.yaml
-    steps:
-      - id: worker-summary
-        apiVersion: deck/v1alpha1
-        kind: RunCommand
-        spec:
-          command: ["true"]

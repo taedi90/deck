@@ -3,24 +3,29 @@ version: v1alpha1
 steps:
   - id: reset-node
     apiVersion: deck/v1alpha1
-    kind: RunCommand
+    kind: KubeadmReset
     when: vars.allowDestructive == "true"
     spec:
-      command:
-        - bash
-        - -lc
-        - |
-          set -euo pipefail
-          systemctl stop kubelet || true
-          kubeadm reset -f
-          rm -rf /etc/cni/net.d /var/lib/kubelet/pki /var/lib/kubelet/plugins /var/lib/kubelet/plugins_registry
-          rm -rf /etc/kubernetes/manifests
-          rm -f /etc/kubernetes/kubelet.conf /etc/kubernetes/bootstrap-kubelet.conf /etc/kubernetes/admin.conf /etc/kubernetes/controller-manager.conf /etc/kubernetes/scheduler.conf
-          crictl --runtime-endpoint unix:///run/containerd/containerd.sock rm -f $(crictl --runtime-endpoint unix:///run/containerd/containerd.sock ps -a --name kube-apiserver -q) >/dev/null 2>&1 || true
-          crictl --runtime-endpoint unix:///run/containerd/containerd.sock rm -f $(crictl --runtime-endpoint unix:///run/containerd/containerd.sock ps -a --name kube-controller-manager -q) >/dev/null 2>&1 || true
-          crictl --runtime-endpoint unix:///run/containerd/containerd.sock rm -f $(crictl --runtime-endpoint unix:///run/containerd/containerd.sock ps -a --name kube-scheduler -q) >/dev/null 2>&1 || true
-          crictl --runtime-endpoint unix:///run/containerd/containerd.sock rm -f $(crictl --runtime-endpoint unix:///run/containerd/containerd.sock ps -a --name etcd -q) >/dev/null 2>&1 || true
-          systemctl restart containerd
+      force: true
+      criSocket: unix:///run/containerd/containerd.sock
+      removePaths:
+        - /etc/cni/net.d
+        - /var/lib/kubelet/pki
+        - /var/lib/kubelet/plugins
+        - /var/lib/kubelet/plugins_registry
+        - /etc/kubernetes/manifests
+      removeFiles:
+        - /etc/kubernetes/kubelet.conf
+        - /etc/kubernetes/bootstrap-kubelet.conf
+        - /etc/kubernetes/admin.conf
+        - /etc/kubernetes/controller-manager.conf
+        - /etc/kubernetes/scheduler.conf
+      cleanupContainers:
+        - kube-apiserver
+        - kube-controller-manager
+        - kube-scheduler
+        - etcd
+      restartRuntimeService: containerd
   - id: reset-runtime-ready
     apiVersion: deck/v1alpha1
     kind: RunCommand
