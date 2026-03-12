@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -401,6 +402,32 @@ func TestRun_DownloadFileFallbackSourceMissing(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "E_PREPARE_SOURCE_NOT_FOUND") {
 		t.Fatalf("expected E_PREPARE_SOURCE_NOT_FOUND, got %v", err)
+	}
+}
+
+func TestResolveSourceBytes_PreservesContextCancellation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(250 * time.Millisecond)
+		_, _ = w.Write([]byte("should-not-complete"))
+	}))
+	defer server.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := resolveSourceBytes(ctx, map[string]any{
+		"fetch": map[string]any{
+			"sources": []any{map[string]any{"type": "online", "url": server.URL}},
+		},
+	}, "files/remote.bin")
+	if err == nil {
+		t.Fatalf("expected context cancellation error")
+	}
+	if strings.Contains(err.Error(), "E_PREPARE_SOURCE_NOT_FOUND") {
+		t.Fatalf("expected cancellation to not be mapped to source-not-found, got %v", err)
+	}
+	if !strings.Contains(err.Error(), context.Canceled.Error()) {
+		t.Fatalf("expected canceled context in error, got %v", err)
 	}
 }
 
