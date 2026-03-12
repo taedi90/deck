@@ -43,8 +43,3 @@ phases:
               cat /tmp/deck/bootstrap-nodes.txt >&2 || true
               echo "expected exactly one Ready control-plane node" >&2
               exit 1
-      - id: bootstrap-summary
-        apiVersion: deck/v1alpha1
-        kind: RunCommand
-        spec:
-          command: ["true"]
