@@ -7,13 +7,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/taedi90/deck/internal/bundle"
-	"github.com/taedi90/deck/internal/config"
-	"github.com/taedi90/deck/internal/prepare"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/taedi90/deck/internal/bundle"
+	"github.com/taedi90/deck/internal/config"
+	"github.com/taedi90/deck/internal/prepare"
 )
 
 func runPack(args []string) error {
@@ -53,18 +54,26 @@ func runPack(args []string) error {
 	}
 
 	if *dryRun {
-		fmt.Fprintf(os.Stdout, "PACK_WORKFLOW=%s\n", filepath.ToSlash(packWorkflowPath))
-		fmt.Fprintf(os.Stdout, "WORKFLOW_INCLUDE=%s\n", filepath.ToSlash(packWorkflowPath))
-		fmt.Fprintf(os.Stdout, "WORKFLOW_INCLUDE=%s\n", filepath.ToSlash(applyWorkflowPath))
-		fmt.Fprintf(os.Stdout, "WORKFLOW_INCLUDE=%s\n", filepath.ToSlash(varsWorkflowPath))
-		fmt.Fprintln(os.Stdout, "ARTIFACT_DEFAULT_DEST=packages->bundle/packages")
-		fmt.Fprintln(os.Stdout, "ARTIFACT_DEFAULT_DEST=images->bundle/images")
-		fmt.Fprintln(os.Stdout, "ARTIFACT_DEFAULT_DEST=files->bundle/files")
-		fmt.Fprintln(os.Stdout, "WRITE=bundle/deck")
-		fmt.Fprintln(os.Stdout, "WRITE=bundle/files/deck")
-		fmt.Fprintln(os.Stdout, "WRITE=bundle/.deck/manifest.json")
+		for _, line := range []string{
+			fmt.Sprintf("PACK_WORKFLOW=%s", filepath.ToSlash(packWorkflowPath)),
+			fmt.Sprintf("WORKFLOW_INCLUDE=%s", filepath.ToSlash(packWorkflowPath)),
+			fmt.Sprintf("WORKFLOW_INCLUDE=%s", filepath.ToSlash(applyWorkflowPath)),
+			fmt.Sprintf("WORKFLOW_INCLUDE=%s", filepath.ToSlash(varsWorkflowPath)),
+			"ARTIFACT_DEFAULT_DEST=packages->bundle/packages",
+			"ARTIFACT_DEFAULT_DEST=images->bundle/images",
+			"ARTIFACT_DEFAULT_DEST=files->bundle/files",
+			"WRITE=bundle/deck",
+			"WRITE=bundle/files/deck",
+			"WRITE=bundle/.deck/manifest.json",
+		} {
+			if err := stdoutPrintln(line); err != nil {
+				return err
+			}
+		}
 		if resolvedOut != "" {
-			fmt.Fprintf(os.Stdout, "WRITE_TAR=%s\n", resolvedOut)
+			if err := stdoutPrintf("WRITE_TAR=%s\n", resolvedOut); err != nil {
+				return err
+			}
 		}
 		return nil
 	}
@@ -81,7 +90,7 @@ func runPack(args []string) error {
 	if err != nil {
 		return fmt.Errorf("create staging root: %w", err)
 	}
-	defer os.RemoveAll(stagingRoot)
+	defer func() { _ = os.RemoveAll(stagingRoot) }()
 	bundleRoot := filepath.Join(stagingRoot, "bundle")
 
 	packWorkflow, err := config.LoadWithOptions(ctx, packWorkflowPath, config.LoadOptions{VarOverrides: varsAsAnyMap(vars.AsMap())})
@@ -149,8 +158,7 @@ func runPack(args []string) error {
 		return err
 	}
 
-	fmt.Fprintf(os.Stdout, "pack: ok (%s)\n", resolvedOutAbs)
-	return nil
+	return stdoutPrintf("pack: ok (%s)\n", resolvedOutAbs)
 }
 
 func discoverPackWorkflow(ctx context.Context) (string, error) {
