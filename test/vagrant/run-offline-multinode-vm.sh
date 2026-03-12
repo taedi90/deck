@@ -107,13 +107,3 @@ if [[ -n "${STAGE}" ]]; then
 else
   DECK_E2E_SCENARIO="${SCENARIO}" bash "${DISPATCHER}" "${ROLE}" "${NEW_ACTION}"
 fi
-
-if [[ "${ACTION}" == "verify-install" || "${ACTION}" == "assert-cluster" || "${ACTION}" == "orchestrate" ]]; then
-  cat > "/workspace/${ART_DIR_REL}/offline-multinode-result.txt" <<EOF
-scenario=offline-multinode
-result=PASS
-jobs=offline-cp-install,offline-worker-join,offline-worker-2-join
-server=${SERVER_URL}
-EOF
-  cp "/workspace/${ART_DIR_REL}/pass.txt" "/workspace/${ART_DIR_REL}/offline-multinode-pass.txt"
-fi

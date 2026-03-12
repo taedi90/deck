@@ -582,7 +582,7 @@ should_fetch_vm_artifacts() {
   if [[ "${DECK_VAGRANT_SKIP_COLLECT}" == "1" ]]; then
     return 1
   fi
-  if [[ -f "${ART_DIR_ABS}/pass.txt" && -f "${ART_DIR_ABS}/cluster-nodes.txt" && "${DECK_VAGRANT_SYNC_TYPE}" != "rsync" ]]; then
+  if [[ -f "${ART_DIR_ABS}/pass.txt" && -f "${ART_DIR_ABS}/reports/cluster-nodes.txt" && "${DECK_VAGRANT_SYNC_TYPE}" != "rsync" ]]; then
     echo "[deck] artifacts already visible on host via shared workspace; skipping VM fetch"
     return 1
   fi
@@ -800,9 +800,9 @@ step_collect() {
     if [[ "${DECK_VAGRANT_COLLECT_PARALLEL}" -gt 1 ]]; then
       fetch_vm_artifacts_parallel || true
     fi
-    if [[ ! -f "${ART_DIR_ABS}/pass.txt" || ! -f "${ART_DIR_ABS}/cluster-nodes.txt" ]]; then
-      fetch_vm_artifacts_serial
-    fi
+  if [[ ! -f "${ART_DIR_ABS}/pass.txt" || ! -f "${ART_DIR_ABS}/reports/cluster-nodes.txt" ]]; then
+    fetch_vm_artifacts_serial
+  fi
     popd >/dev/null
     IN_VAGRANT_DIR=0
   else
@@ -813,8 +813,8 @@ step_collect() {
     echo "[deck] PASS marker missing: ${ART_DIR_ABS}/pass.txt"
     exit 1
   fi
-  if [[ ! -f "${ART_DIR_ABS}/cluster-nodes.txt" ]]; then
-    echo "[deck] missing nodes report: ${ART_DIR_ABS}/cluster-nodes.txt"
+  if [[ ! -f "${ART_DIR_ABS}/reports/cluster-nodes.txt" ]]; then
+    echo "[deck] missing nodes report: ${ART_DIR_ABS}/reports/cluster-nodes.txt"
     exit 1
   fi
 }
