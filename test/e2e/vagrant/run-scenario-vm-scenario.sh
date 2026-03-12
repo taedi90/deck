@@ -142,13 +142,13 @@ write_result_contract() {
   if scenario_contract_enabled "requires_reset_proof"; then
     requires_reset_proof="1"
   fi
-  finished_at="${finished_at}" SCENARIO_USES_WORKERS="${uses_workers}" SCENARIO_REQUIRES_RESET_PROOF="${requires_reset_proof}" python3 - <<'PY' > "${ART_DIR}/result.json"
+  finished_at="${finished_at}" E2E_SCENARIO="${E2E_SCENARIO}" E2E_RUN_ID="${E2E_RUN_ID}" E2E_PROVIDER="${E2E_PROVIDER}" E2E_CACHE_KEY="${E2E_CACHE_KEY}" E2E_STARTED_AT="${E2E_STARTED_AT}" SERVER_URL="${SERVER_URL}" SCENARIO_USES_WORKERS="${uses_workers}" SCENARIO_REQUIRES_RESET_PROOF="${requires_reset_proof}" python3 - <<'PY' > "${ART_DIR}/result.json"
 import json
 import os
 
 evidence = {
-    "clusterNodes": "cluster-nodes.txt",
-    "pods": "kube-system-pods.txt",
+    "clusterNodes": "reports/cluster-nodes.txt",
+    "pods": "reports/kube-system-pods.txt",
     "server": os.environ["SERVER_URL"],
 }
 
@@ -571,61 +571,43 @@ PY
   return 0
 }
 
+source_scenario_vm_helper() {
+  local helper="/workspace/test/workflows/${E2E_SCENARIO}/vm-scenario.sh"
+  if [[ ! -f "${helper}" ]]; then
+    echo "[deck] missing scenario VM helper: ${helper}"
+    exit 1
+  fi
+  source "${helper}"
+}
+
 scenario_action_prepare() {
   require_supported_scenario
-  apply_offline_guard
+  source_scenario_vm_helper
+  case "${E2E_SCENARIO}" in
+    k8s-control-plane-bootstrap) bootstrap_prepare ;;
+    k8s-worker-join) worker_join_prepare ;;
+    k8s-node-reset) node_reset_prepare ;;
+  esac
 }
 
 scenario_action_apply() {
   require_supported_scenario
-  case "${ROLE}" in
-    control-plane)
-      apply_control_plane_workflow
-      ;;
-    worker|worker-2)
-      apply_worker_workflow
-      printf '%s\n' "ok" > "${ART_DIR}/${ROLE}-apply-done.txt"
-      echo "[deck] ${ROLE} apply completed"
-      ;;
-    *)
-      echo "[deck] unsupported role/action: role=${ROLE} action=${ACTION}"
-      exit 1
-      ;;
+  source_scenario_vm_helper
+  case "${E2E_SCENARIO}" in
+    k8s-control-plane-bootstrap) bootstrap_apply ;;
+    k8s-worker-join) worker_join_apply ;;
+    k8s-node-reset) node_reset_apply ;;
   esac
 }
 
 scenario_action_verify() {
   require_supported_scenario
+  source_scenario_vm_helper
   local stage
   stage="$(resolve_verify_stage "${1:-}")"
-  case "${stage}" in
-    bootstrap|install)
-      if ! wait_for_join_file; then
-        echo "[deck] control-plane join file was not published" | tee "${CASE_DIR}/06-assertions.log"
-        exit 1
-      fi
-      if ! wait_for_single_ready_control_plane; then
-        exit 1
-      fi
-      finalize_result_contract
-      ;;
-    cluster|join)
-      verify_cluster_contract
-      finalize_result_contract
-      echo "[deck] scenario workflow-driven run passed"
-      ;;
-    all)
-      if ! wait_for_join_file; then
-        echo "[deck] control-plane join file was not published" | tee "${CASE_DIR}/06-assertions.log"
-        exit 1
-      fi
-      verify_cluster_contract
-      finalize_result_contract
-      echo "[deck] scenario workflow-driven run passed"
-      ;;
-    *)
-      echo "[deck] unsupported verify stage: ${stage}"
-      exit 1
-      ;;
+  case "${E2E_SCENARIO}" in
+    k8s-control-plane-bootstrap) bootstrap_verify "${stage}" ;;
+    k8s-worker-join) worker_join_verify "${stage}" ;;
+    k8s-node-reset) node_reset_verify "${stage}" ;;
   esac
 }
