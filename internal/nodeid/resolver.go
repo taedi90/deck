@@ -97,12 +97,12 @@ func Resolve(paths Paths) (Result, error) {
 func Init(paths Paths) (Result, error) {
 	resolvedPaths := normalizePaths(paths)
 
-	generatedID, generatedExists, err := readNodeID(resolvedPaths.GeneratedPath)
+	_, generatedExists, err := readNodeID(resolvedPaths.GeneratedPath)
 	if err != nil {
 		return Result{}, fmt.Errorf("resolve generated node-id: %w", err)
 	}
 	if !generatedExists {
-		generatedID, err = generateNodeID()
+		generatedID, err := generateNodeID()
 		if err != nil {
 			return Result{}, fmt.Errorf("generate node-id: %w", err)
 		}

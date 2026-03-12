@@ -69,7 +69,6 @@ func (s *Store) ListExecutionReports(sessionID, nodeID string) ([]ExecutionRepor
 		return nil, err
 	}
 
-	out := make([]ExecutionReport, 0, len(files))
 	byIdentity := map[string]ExecutionReport{}
 	for _, name := range files {
 		report, found, err := readJSON[ExecutionReport](filepath.Join(reportsDir, name))
@@ -89,7 +88,7 @@ func (s *Store) ListExecutionReports(sessionID, nodeID string) ([]ExecutionRepor
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
-	out = make([]ExecutionReport, 0, len(keys))
+	out := make([]ExecutionReport, 0, len(keys))
 	for _, key := range keys {
 		out = append(out, byIdentity[key])
 	}
