@@ -18,7 +18,7 @@ import (
 
 func runPack(args []string) error {
 	if wantsHelp(args) {
-		return errors.New(packHelpText())
+		return helpRequest{text: packHelpText()}
 	}
 
 	fs := newHelpFlagSet("pack")

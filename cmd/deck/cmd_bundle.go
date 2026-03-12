@@ -18,7 +18,7 @@ func runWorkflowInit(args []string) error {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New(initHelpText())
+		return helpRequest{text: initHelpText()}
 	}
 	resolvedOutput := strings.TrimSpace(*output)
 	if resolvedOutput == "" {
@@ -89,10 +89,14 @@ func initTemplateFiles() map[string]string {
 }
 func runWorkflowBundle(args []string) error {
 	if len(args) == 0 {
-		return errors.New(bundleHelpText())
+		return helpRequest{text: bundleHelpText()}
 	}
 	if wantsHelp(args) {
-		return errors.New(bundleHelpText())
+		text, err := renderBundleHelp(args[1:])
+		if err != nil {
+			return err
+		}
+		return helpRequest{text: text}
 	}
 
 	switch args[0] {

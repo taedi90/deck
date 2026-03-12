@@ -36,12 +36,15 @@ func TestRunUsageShowsTopLevelAxes(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := run(tc.args)
-			if err == nil {
-				t.Fatalf("expected usage error")
+			res := execute(tc.args)
+			if res.err != nil {
+				t.Fatalf("expected help result, got %v", res.err)
+			}
+			if res.exitCode != 0 {
+				t.Fatalf("expected exit code 0, got %d", res.exitCode)
 			}
 
-			msg := err.Error()
+			msg := res.stdout
 			for _, cmd := range []string{"pack", "apply", "serve", "bundle", "list", "validate", "diff", "init", "doctor", "health", "logs", "cache", "node", "site"} {
 				if !strings.Contains(msg, cmd) {
 					t.Fatalf("usage must include %q, got %q", cmd, msg)
@@ -68,14 +71,35 @@ func TestRunTopLevelStubUsage(t *testing.T) {
 	})
 
 	t.Run("cache usage", func(t *testing.T) {
-		err := run([]string{"cache"})
-		if err == nil {
-			t.Fatalf("expected usage error")
+		out, err := runWithCapturedStdout([]string{"cache"})
+		if err != nil {
+			t.Fatalf("expected help output, got %v", err)
 		}
-		if !strings.Contains(err.Error(), "deck cache <list|clean>") {
-			t.Fatalf("unexpected error: %v", err)
+		if !strings.Contains(out, "deck cache <list|clean>") {
+			t.Fatalf("unexpected output: %q", out)
 		}
 	})
+}
+
+func TestNestedHelpRoutesToStdout(t *testing.T) {
+	tests := []struct {
+		args []string
+		want string
+	}{
+		{args: []string{"help", "pack"}, want: "deck pack --out <bundle.tar>"},
+		{args: []string{"site", "help", "release"}, want: "deck site release <import|list>"},
+		{args: []string{"node", "id", "help"}, want: "deck node id <show|set|init>"},
+	}
+
+	for _, tc := range tests {
+		out, err := runWithCapturedStdout(tc.args)
+		if err != nil {
+			t.Fatalf("expected help success for %v, got %v", tc.args, err)
+		}
+		if !strings.Contains(out, tc.want) {
+			t.Fatalf("expected %q in output for %v, got %q", tc.want, tc.args, out)
+		}
+	}
 }
 
 func TestNodeIDCLIShowSetInit(t *testing.T) {

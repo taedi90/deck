@@ -11,10 +11,14 @@ import (
 
 func runNode(args []string) error {
 	if len(args) == 0 {
-		return errors.New(nodeHelpText())
+		return helpRequest{text: nodeHelpText()}
 	}
 	if wantsHelp(args) {
-		return errors.New(nodeHelpText())
+		text, err := renderNodeHelp(args[1:])
+		if err != nil {
+			return err
+		}
+		return helpRequest{text: text}
 	}
 	switch args[0] {
 	case "id":
@@ -28,10 +32,14 @@ func runNode(args []string) error {
 
 func runNodeID(args []string) error {
 	if len(args) == 0 {
-		return errors.New(nodeIDHelpText())
+		return helpRequest{text: nodeIDHelpText()}
 	}
 	if wantsHelp(args) {
-		return errors.New(nodeIDHelpText())
+		text, err := renderNodeIDHelp(args[1:])
+		if err != nil {
+			return err
+		}
+		return helpRequest{text: text}
 	}
 	switch args[0] {
 	case "show":
@@ -51,7 +59,7 @@ func runNodeIDShow(args []string) error {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New(nodeIDShowHelpText())
+		return helpRequest{text: nodeIDShowHelpText()}
 	}
 
 	result, err := nodeid.Resolve(resolveNodeIDPathsFromEnv())
@@ -68,7 +76,7 @@ func runNodeIDSet(args []string) error {
 		return err
 	}
 	if fs.NArg() != 1 {
-		return errors.New(nodeIDSetHelpText())
+		return helpRequest{text: nodeIDSetHelpText()}
 	}
 
 	result, err := nodeid.SetOperator(resolveNodeIDPathsFromEnv(), strings.TrimSpace(fs.Arg(0)))
@@ -86,7 +94,7 @@ func runNodeIDInit(args []string) error {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New(nodeIDInitHelpText())
+		return helpRequest{text: nodeIDInitHelpText()}
 	}
 
 	result, err := nodeid.Init(resolveNodeIDPathsFromEnv())
@@ -126,10 +134,14 @@ func printNodeIDResult(result nodeid.Result) {
 
 func runNodeAssignment(args []string) error {
 	if len(args) == 0 {
-		return errors.New(nodeAssignmentHelpText())
+		return helpRequest{text: nodeAssignmentHelpText()}
 	}
 	if wantsHelp(args) {
-		return errors.New(nodeAssignmentHelpText())
+		text, err := renderNodeAssignmentHelp(args[1:])
+		if err != nil {
+			return err
+		}
+		return helpRequest{text: text}
 	}
 	switch args[0] {
 	case "show":
@@ -150,7 +162,7 @@ func runNodeAssignmentShow(args []string) error {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New(nodeAssignmentHelpText())
+		return helpRequest{text: nodeAssignmentHelpText()}
 	}
 	resolvedSessionID := strings.TrimSpace(*sessionID)
 	if resolvedSessionID == "" {

@@ -14,10 +14,14 @@ import (
 
 func runCache(args []string) error {
 	if len(args) == 0 {
-		return errors.New(cacheHelpText())
+		return helpRequest{text: cacheHelpText()}
 	}
 	if wantsHelp(args) {
-		return errors.New(cacheHelpText())
+		text, err := renderCacheHelp(args[1:])
+		if err != nil {
+			return err
+		}
+		return helpRequest{text: text}
 	}
 
 	switch args[0] {

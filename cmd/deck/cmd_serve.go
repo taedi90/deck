@@ -23,7 +23,7 @@ import (
 
 func runServe(args []string) error {
 	if wantsHelp(args) {
-		return errors.New(serveHelpText())
+		return helpRequest{text: serveHelpText()}
 	}
 	return runServer(append([]string{"start"}, args...))
 }
@@ -334,7 +334,7 @@ func isPermissionError(msg string) bool {
 }
 func runServer(args []string) error {
 	if len(args) == 0 || args[0] != "start" {
-		return errors.New(serveHelpText())
+		return helpRequest{text: serveHelpText()}
 	}
 
 	fs := newHelpFlagSet("server start")

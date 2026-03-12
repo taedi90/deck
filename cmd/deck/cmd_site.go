@@ -382,10 +382,14 @@ func assistedReleaseBundleRoot(releaseID string) string {
 }
 func runSite(args []string) error {
 	if len(args) == 0 {
-		return errors.New(siteHelpText())
+		return helpRequest{text: siteHelpText()}
 	}
 	if wantsHelp(args) {
-		return errors.New(siteHelpText())
+		text, err := renderSiteHelp(args[1:])
+		if err != nil {
+			return err
+		}
+		return helpRequest{text: text}
 	}
 
 	switch args[0] {
@@ -404,10 +408,14 @@ func runSite(args []string) error {
 
 func runSiteRelease(args []string) error {
 	if len(args) == 0 {
-		return errors.New(siteReleaseHelpText())
+		return helpRequest{text: siteReleaseHelpText()}
 	}
 	if wantsHelp(args) {
-		return errors.New(siteReleaseHelpText())
+		text, err := renderSiteReleaseHelp(args[1:])
+		if err != nil {
+			return err
+		}
+		return helpRequest{text: text}
 	}
 	switch args[0] {
 	case "import":
@@ -429,7 +437,7 @@ func runSiteReleaseImport(args []string) error {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New(siteReleaseImportHelpText())
+		return helpRequest{text: siteReleaseImportHelpText()}
 	}
 
 	resolvedReleaseID := strings.TrimSpace(*releaseID)
@@ -490,7 +498,7 @@ func runSiteReleaseList(args []string) error {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New(siteReleaseListHelpText())
+		return helpRequest{text: siteReleaseListHelpText()}
 	}
 	if output != "text" && output != "json" {
 		return errors.New("--output must be text or json")
@@ -518,10 +526,14 @@ func runSiteReleaseList(args []string) error {
 
 func runSiteSession(args []string) error {
 	if len(args) == 0 {
-		return errors.New(siteSessionHelpText())
+		return helpRequest{text: siteSessionHelpText()}
 	}
 	if wantsHelp(args) {
-		return errors.New(siteSessionHelpText())
+		text, err := renderSiteSessionHelp(args[1:])
+		if err != nil {
+			return err
+		}
+		return helpRequest{text: text}
 	}
 	switch args[0] {
 	case "create":
@@ -543,7 +555,7 @@ func runSiteSessionCreate(args []string) error {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New(siteSessionCreateHelpText())
+		return helpRequest{text: siteSessionCreateHelpText()}
 	}
 
 	resolvedSessionID := strings.TrimSpace(*sessionID)
@@ -588,7 +600,7 @@ func runSiteSessionClose(args []string) error {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New(siteSessionCloseHelpText())
+		return helpRequest{text: siteSessionCloseHelpText()}
 	}
 
 	resolvedSessionID := strings.TrimSpace(*sessionID)
@@ -615,10 +627,14 @@ func runSiteSessionClose(args []string) error {
 
 func runSiteAssign(args []string) error {
 	if len(args) == 0 {
-		return errors.New(siteAssignHelpText())
+		return helpRequest{text: siteAssignHelpText()}
 	}
 	if wantsHelp(args) {
-		return errors.New(siteAssignHelpText())
+		text, err := renderSiteAssignHelp(args[1:])
+		if err != nil {
+			return err
+		}
+		return helpRequest{text: text}
 	}
 	switch args[0] {
 	case "role":
@@ -641,7 +657,7 @@ func runSiteAssignRole(args []string) error {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New(siteAssignRoleHelpText())
+		return helpRequest{text: siteAssignRoleHelpText()}
 	}
 
 	resolvedSessionID := strings.TrimSpace(*sessionID)
@@ -695,7 +711,7 @@ func runSiteAssignNode(args []string) error {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New(siteAssignNodeHelpText())
+		return helpRequest{text: siteAssignNodeHelpText()}
 	}
 
 	resolvedSessionID := strings.TrimSpace(*sessionID)
@@ -766,7 +782,7 @@ func runSiteStatus(args []string) error {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New(siteStatusHelpText())
+		return helpRequest{text: siteStatusHelpText()}
 	}
 	if output != "text" && output != "json" {
 		return errors.New("--output must be text or json")
