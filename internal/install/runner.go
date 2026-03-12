@@ -1,14 +1,9 @@
 package install
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
-	"text/template"
 
 	"github.com/taedi90/deck/internal/bundle"
 	"github.com/taedi90/deck/internal/config"
@@ -18,15 +13,6 @@ import (
 type RunOptions struct {
 	BundleRoot string
 	StatePath  string
-}
-
-type State struct {
-	Phase          string         `json:"phase"`
-	CompletedSteps []string       `json:"completedSteps"`
-	SkippedSteps   []string       `json:"skippedSteps,omitempty"`
-	RuntimeVars    map[string]any `json:"runtimeVars,omitempty"`
-	FailedStep     string         `json:"failedStep,omitempty"`
-	Error          string         `json:"error,omitempty"`
 }
 
 const (
@@ -80,7 +66,7 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 		ctx = context.Background()
 	}
 
-	installPhase, found := findPhase(wf, "install")
+	installPhase, found := workflowexec.FindPhase(wf, "install")
 	if !found {
 		return fmt.Errorf("install phase not found")
 	}
@@ -94,14 +80,14 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 
 	statePath := strings.TrimSpace(opts.StatePath)
 	if statePath == "" {
-		resolvedStatePath, err := defaultStatePath(wf)
+		resolvedStatePath, err := DefaultStatePath(wf)
 		if err != nil {
 			return err
 		}
 		statePath = resolvedStatePath
 	}
 
-	st, err := loadState(statePath)
+	st, err := LoadState(statePath)
 	if err != nil {
 		return err
 	}
@@ -134,14 +120,14 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 			st.Error = err.Error()
 			st.RuntimeVars = runtimeVars
 			st.SkippedSteps = sortedStepIDs(skipped)
-			_ = saveState(statePath, st)
+			_ = SaveState(statePath, st)
 			return fmt.Errorf("step %s (%s): %w", step.ID, step.Kind, err)
 		}
 		if !ok {
 			skipped[step.ID] = true
 			st.RuntimeVars = runtimeVars
 			st.SkippedSteps = sortedStepIDs(skipped)
-			if err := saveState(statePath, st); err != nil {
+			if err := SaveState(statePath, st); err != nil {
 				return err
 			}
 			continue
@@ -153,7 +139,7 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 			attempts = 1
 		}
 		for i := 0; i < attempts; i++ {
-			rendered, renderErr := renderSpecWithContext(step.Spec, wf, runtimeVars, ctxData)
+			rendered, renderErr := workflowexec.RenderSpec(step.Spec, wf, runtimeVars, ctxData)
 			if renderErr != nil {
 				execErr = fmt.Errorf("render spec template: %w", renderErr)
 				break
@@ -179,7 +165,7 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 			st.Error = execErr.Error()
 			st.RuntimeVars = runtimeVars
 			st.SkippedSteps = sortedStepIDs(skipped)
-			_ = saveState(statePath, st)
+			_ = SaveState(statePath, st)
 			return fmt.Errorf("step %s (%s): %w", step.ID, step.Kind, execErr)
 		}
 
@@ -190,7 +176,7 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 		st.Error = ""
 		st.RuntimeVars = runtimeVars
 		st.SkippedSteps = sortedStepIDs(skipped)
-		if err := saveState(statePath, st); err != nil {
+		if err := SaveState(statePath, st); err != nil {
 			return err
 		}
 	}
@@ -199,15 +185,11 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 	st.Error = ""
 	st.RuntimeVars = runtimeVars
 	st.SkippedSteps = sortedStepIDs(skipped)
-	if err := saveState(statePath, st); err != nil {
+	if err := SaveState(statePath, st); err != nil {
 		return err
 	}
 
 	return nil
-}
-
-func findPhase(wf *config.Workflow, name string) (config.Phase, bool) {
-	return workflowexec.FindPhase(wf, name)
 }
 
 func verifyBundleManifest(bundleRoot string) error {
@@ -232,146 +214,8 @@ func sortedStepIDs(m map[string]bool) []string {
 	return items
 }
 
-func loadState(path string) (*State, error) {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return &State{Phase: "install", CompletedSteps: []string{}}, nil
-		}
-		return nil, fmt.Errorf("read state file: %w", err)
-	}
-
-	var st State
-	if err := json.Unmarshal(content, &st); err != nil {
-		return nil, fmt.Errorf("parse state file: %w", err)
-	}
-	if st.CompletedSteps == nil {
-		st.CompletedSteps = []string{}
-	}
-	if st.RuntimeVars == nil {
-		st.RuntimeVars = map[string]any{}
-	}
-	if st.SkippedSteps == nil {
-		st.SkippedSteps = []string{}
-	}
-	return &st, nil
-}
-
-func saveState(path string, st *State) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("create state directory: %w", err)
-	}
-
-	raw, err := json.MarshalIndent(st, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode state file: %w", err)
-	}
-
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, raw, 0o644); err != nil {
-		return fmt.Errorf("write temp state file: %w", err)
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		return fmt.Errorf("replace state file: %w", err)
-	}
-	return nil
-}
-
-func defaultStatePath(wf *config.Workflow) (string, error) {
-	if wf == nil {
-		return "", fmt.Errorf("workflow is nil")
-	}
-	stateKey := strings.TrimSpace(wf.StateKey)
-	if stateKey == "" {
-		return "", fmt.Errorf("workflow state key is empty")
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve user home directory: %w", err)
-	}
-	return filepath.Join(home, ".deck", "state", stateKey+".json"), nil
-}
-
 func renderSpec(spec map[string]any, wf *config.Workflow, runtimeVars map[string]any) (map[string]any, error) {
-	return renderSpecWithContext(spec, wf, runtimeVars, map[string]any{"bundleRoot": "", "stateFile": ""})
-}
-
-func renderSpecWithContext(spec map[string]any, wf *config.Workflow, runtimeVars map[string]any, ctxData map[string]any) (map[string]any, error) {
-	return workflowexec.RenderSpec(spec, wf, runtimeVars, ctxData)
-}
-
-func renderMap(input map[string]any, ctx map[string]any) (map[string]any, error) {
-	out := make(map[string]any, len(input))
-	for k, v := range input {
-		rendered, err := renderAny(v, ctx)
-		if err != nil {
-			return nil, fmt.Errorf("spec.%s: %w", k, err)
-		}
-		out[k] = rendered
-	}
-	return out, nil
-}
-
-func renderAny(v any, ctx map[string]any) (any, error) {
-	switch tv := v.(type) {
-	case string:
-		return renderString(tv, ctx)
-	case map[string]any:
-		return renderMap(tv, ctx)
-	case []any:
-		out := make([]any, 0, len(tv))
-		for idx, item := range tv {
-			rendered, err := renderAny(item, ctx)
-			if err != nil {
-				return nil, fmt.Errorf("[%d]: %w", idx, err)
-			}
-			out = append(out, rendered)
-		}
-		return out, nil
-	default:
-		return v, nil
-	}
-}
-
-func renderString(input string, ctx map[string]any) (string, error) {
-	tmpl, err := template.New("spec").Option("missingkey=error").Parse(input)
-	if err != nil {
-		return "", err
-	}
-	var out bytes.Buffer
-	if err := tmpl.Execute(&out, ctx); err != nil {
-		return "", err
-	}
-	return out.String(), nil
-}
-
-func resolvePath(path string, ctx map[string]any) (any, bool) {
-	parts := strings.Split(path, ".")
-	if len(parts) == 0 {
-		return nil, false
-	}
-
-	cur := any(ctx)
-	for i, p := range parts {
-		m, ok := cur.(map[string]any)
-		if !ok {
-			return nil, false
-		}
-
-		next, exists := m[p]
-		if !exists {
-			if i == 0 {
-				if vars, vok := ctx["vars"].(map[string]any); vok {
-					next, exists = vars[p]
-				}
-			}
-			if !exists {
-				return nil, false
-			}
-		}
-		cur = next
-	}
-	return cur, true
+	return workflowexec.RenderSpec(spec, wf, runtimeVars, map[string]any{"bundleRoot": "", "stateFile": ""})
 }
 
 func stringValue(v map[string]any, key string) string {

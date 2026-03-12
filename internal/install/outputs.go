@@ -43,7 +43,3 @@ func stepOutputs(kind string, rendered map[string]any) map[string]any {
 func applyRegister(step config.Step, rendered map[string]any, runtimeVars map[string]any) error {
 	return workflowexec.ApplyRegister(step, stepOutputs(step.Kind, rendered), runtimeVars, errCodeRegisterOutputMissing)
 }
-
-func isReservedRuntimeVar(runtimeKey string) bool {
-	return workflowexec.IsReservedRuntimeVar(runtimeKey)
-}

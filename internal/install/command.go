@@ -77,10 +77,6 @@ func runTimedCommandWithContext(parent context.Context, name string, args []stri
 	return err
 }
 
-func runCommandOutput(cmdArgs []string, timeout time.Duration) (string, error) {
-	return runCommandOutputWithContext(context.Background(), cmdArgs, timeout)
-}
-
 func runCommandOutputWithContext(parent context.Context, cmdArgs []string, timeout time.Duration) (string, error) {
 	if len(cmdArgs) == 0 {
 		return "", fmt.Errorf("empty command")
