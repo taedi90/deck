@@ -54,8 +54,8 @@ SCENARIO_USES_WORKERS=""
 SCENARIO_REQUIRES_RESET_PROOF=""
 
 load_scenario_contract() {
-  local metadata_path="/workspace/test/workflows/${E2E_SCENARIO}/scenario.env"
-  local fallback_metadata_path="${ROOT_DIR:-}/test/workflows/${E2E_SCENARIO}/scenario.env"
+  local metadata_path="/workspace/test/e2e/scenario-meta/${E2E_SCENARIO}.env"
+  local fallback_metadata_path="${ROOT_DIR:-}/test/e2e/scenario-meta/${E2E_SCENARIO}.env"
   if [[ -f "${metadata_path}" ]]; then
     source "${metadata_path}"
   elif [[ -n "${ROOT_DIR:-}" && -f "${fallback_metadata_path}" ]]; then
@@ -295,7 +295,7 @@ PY
 }
 
 apply_control_plane_workflow() {
-  CONTROL_PLANE_WORKFLOW_URL="${SERVER_URL}/files/workflows/k8s-control-plane-bootstrap/profile/control-plane.yaml"
+  CONTROL_PLANE_WORKFLOW_URL="${SERVER_URL}/files/workflows/scenarios/control-plane-bootstrap.yaml"
   local server_no_scheme="${SERVER_URL#http://}"
   server_no_scheme="${server_no_scheme#https://}"
   sudo -n "${DECK_BIN}" apply --file "${CONTROL_PLANE_WORKFLOW_URL}" --phase install \
@@ -502,8 +502,8 @@ apply_node_reset_worker_lifecycle() {
 }
 
 apply_worker_workflow() {
-  local workflow_url="${SERVER_URL}/files/workflows/k8s-worker-join/profile/worker.yaml"
-  local node_reset_url="${SERVER_URL}/files/workflows/k8s-node-reset/profile/node-reset.yaml"
+  local workflow_url="${SERVER_URL}/files/workflows/scenarios/worker-join.yaml"
+  local node_reset_url="${SERVER_URL}/files/workflows/scenarios/node-reset.yaml"
   local release="${OFFLINE_RELEASE_WORKER}"
   local os_family="debian"
   local server_no_scheme="${SERVER_URL#http://}"
@@ -572,7 +572,7 @@ PY
 }
 
 source_scenario_vm_helper() {
-  local helper="/workspace/test/workflows/${E2E_SCENARIO}/vm-scenario.sh"
+  local helper="/workspace/test/e2e/scenario-hooks/${E2E_SCENARIO}.sh"
   if [[ ! -f "${helper}" ]]; then
     echo "[deck] missing scenario VM helper: ${helper}"
     exit 1

@@ -1,13 +1,16 @@
 role: apply
 version: v1alpha1
 varImports:
-  - ../../_shared/k8s/vars/common.yaml
-  - ../vars/node-reset.yaml
+  - ../vars.yaml
+vars:
+  clusterName: node-reset
+  resetReason: node-reset-acceptance
+  resetStatePath: /tmp/deck/reports/reset-state.txt
 phases:
   - name: install
     imports:
-      - path: ../../_shared/k8s/apply/common/prereq.yaml
-      - path: ../apply/node-reset.yaml
+      - path: ../components/k8s/prereq.yaml
+      - path: ../components/node-reset.yaml
     steps:
       - id: reset-summary
         apiVersion: deck/v1alpha1

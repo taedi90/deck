@@ -1,6 +1,0 @@
-joinSource: cluster-file
-joinFile: /tmp/deck/join.txt
-serverURL: 127.0.0.1:18080
-release: ubuntu2404
-osFamily: debian
-registryHost: 127.0.0.1:18080

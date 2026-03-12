@@ -1,0 +1,38 @@
+role: pack
+version: v1alpha1
+steps:
+  - id: image-kube-apiserver
+    apiVersion: deck/v1alpha1
+    kind: DownloadImages
+    spec:
+      images: ["registry.k8s.io/kube-apiserver:{{ .vars.kubernetesVersion }}"]
+  - id: image-kube-controller-manager
+    apiVersion: deck/v1alpha1
+    kind: DownloadImages
+    spec:
+      images: ["registry.k8s.io/kube-controller-manager:{{ .vars.kubernetesVersion }}"]
+  - id: image-kube-scheduler
+    apiVersion: deck/v1alpha1
+    kind: DownloadImages
+    spec:
+      images: ["registry.k8s.io/kube-scheduler:{{ .vars.kubernetesVersion }}"]
+  - id: image-kube-proxy
+    apiVersion: deck/v1alpha1
+    kind: DownloadImages
+    spec:
+      images: ["registry.k8s.io/kube-proxy:{{ .vars.kubernetesVersion }}"]
+  - id: image-pause
+    apiVersion: deck/v1alpha1
+    kind: DownloadImages
+    spec:
+      images: ["registry.k8s.io/pause:3.9"]
+  - id: image-etcd
+    apiVersion: deck/v1alpha1
+    kind: DownloadImages
+    spec:
+      images: ["registry.k8s.io/etcd:3.5.12-0"]
+  - id: image-coredns
+    apiVersion: deck/v1alpha1
+    kind: DownloadImages
+    spec:
+      images: ["registry.k8s.io/coredns/coredns:v1.11.1"]

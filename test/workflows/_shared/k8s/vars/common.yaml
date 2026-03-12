@@ -1,4 +1,0 @@
-clusterName: shared-cluster
-sharedFlavor: k8s-shared
-enableJoin: "true"
-allowDestructive: "false"

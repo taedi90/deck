@@ -72,8 +72,9 @@ bash test/e2e/vagrant/run-scenario.sh --scenario k8s-node-reset
 이 문서는 Vagrant 회귀 테스트 유지보수용이다. 제품의 권장 사용자 흐름은 문서 본편의 로컬 세션 경로인 `diff -> doctor -> apply`다.
 
 - 내부 회귀 흐름은 호스트 준비, VM 기동, 시나리오 실행, 검증 수집, 정리 순서로 이해하면 된다.
-- 시나리오별 워크플로는 `test/workflows/k8s-control-plane-bootstrap`, `test/workflows/k8s-worker-join`, `test/workflows/k8s-node-reset`에서 관리한다.
-- bootstrap, join, node-reset 공통 조각은 `test/workflows/_shared/k8s/`에서 관리한다.
+- 시나리오별 진입 워크플로는 `test/workflows/scenarios/*.yaml`에서 관리한다.
+- 공통 조각은 `test/workflows/components/`에서 관리하고 공통 기본값은 `test/workflows/vars.yaml`에서 정의한다.
+- E2E 하네스 메타데이터와 guest helper는 각각 `test/e2e/scenario-meta/`, `test/e2e/scenario-hooks/`에서 관리한다.
 - 반복 로컬 실행은 기본적으로 같은 artifact 경로와 같은 VM prefix를 재사용한다.
 - 재실행이 필요하면 `--from-step`, `--to-step`, `--resume`, `--art-dir`로 범위를 좁힌다.
 - `--art-dir`를 바꿔도 prepared bundle은 공유 cache 경로를 재사용한다.

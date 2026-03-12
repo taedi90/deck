@@ -156,14 +156,14 @@ node_reset_prepare() {
 }
 
 node_reset_apply() {
-  local workflow_url="${SERVER_URL}/files/workflows/k8s-worker-join/profile/worker.yaml"
-  local node_reset_url="${SERVER_URL}/files/workflows/k8s-node-reset/profile/node-reset.yaml"
+  local workflow_url="${SERVER_URL}/files/workflows/scenarios/worker-join.yaml"
+  local node_reset_url="${SERVER_URL}/files/workflows/scenarios/node-reset.yaml"
   local release="${OFFLINE_RELEASE_WORKER}"
   local os_family="debian"
   local server_no_scheme="${SERVER_URL#http://}"
   server_no_scheme="${server_no_scheme#https://}"
   if [[ "${ROLE}" == "control-plane" ]]; then
-    source "/workspace/test/workflows/k8s-control-plane-bootstrap/vm-scenario.sh"
+    source "/workspace/test/e2e/scenario-hooks/control-plane-bootstrap.sh"
     bootstrap_apply_control_plane_workflow
     return 0
   fi
@@ -184,8 +184,8 @@ node_reset_verify() {
   local stage="$1"
   case "${stage}" in
     all)
-      source "/workspace/test/workflows/k8s-control-plane-bootstrap/vm-scenario.sh"
-      source "/workspace/test/workflows/k8s-worker-join/vm-scenario.sh"
+      source "/workspace/test/e2e/scenario-hooks/control-plane-bootstrap.sh"
+      source "/workspace/test/e2e/scenario-hooks/worker-join.sh"
       bootstrap_wait_for_join_file || { echo "[deck] control-plane join file was not published" | tee "${CASE_DIR}/06-assertions.log"; exit 1; }
       worker_join_wait_for_three_ready_nodes || exit 1
       local ctr_pull_log="${ART_DIR}/ctr-pull-pause.log"
