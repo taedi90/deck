@@ -2,11 +2,9 @@ package test
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 	"testing"
 
@@ -41,7 +39,7 @@ func TestWorkflowIntegrationBootstrap(t *testing.T) {
 	if prereq == -1 || reset == -1 || init == -1 || publish == -1 || report == -1 || summary == -1 {
 		t.Fatalf("missing expected merged steps: prereq=%d reset=%d init=%d publish=%d report=%d summary=%d", prereq, reset, init, publish, report, summary)
 	}
-	if !(prereq < reset && reset < init && init < publish && publish < report && report < summary) {
+	if prereq >= reset || reset >= init || init >= publish || publish >= report || report >= summary {
 		t.Fatalf("unexpected merged step order: prereq=%d reset=%d init=%d publish=%d report=%d summary=%d", prereq, reset, init, publish, report, summary)
 	}
 
@@ -105,7 +103,6 @@ func TestWorkflowIntegrationNodeReset(t *testing.T) {
 }
 
 func TestWorkflowIntegrationRejectsBrokenImports(t *testing.T) {
-	root := projectRoot(t)
 	dir := t.TempDir()
 	workflowPath := filepath.Join(dir, "broken.yaml")
 	content := "role: apply\nversion: v1alpha1\nimports:\n  - missing/import.yaml\nphases:\n  - name: install\n    steps: []\n"
@@ -119,7 +116,6 @@ func TestWorkflowIntegrationRejectsBrokenImports(t *testing.T) {
 	if !strings.Contains(err.Error(), "missing") && !strings.Contains(err.Error(), "not found") {
 		t.Fatalf("expected missing import error, got %v", err)
 	}
-	_ = root
 }
 
 func TestWorkflowIntegrationRejectsMissingJoinPublish(t *testing.T) {
@@ -245,70 +241,11 @@ func runWorkflowApplyExpectError(t *testing.T, repoRoot, workflowPath string, va
 	return string(out)
 }
 
-func installPhaseSteps(t *testing.T, wf *config.Workflow) []config.Step {
-	t.Helper()
-	if len(wf.Phases) != 1 {
-		t.Fatalf("expected exactly one install phase, got %d", len(wf.Phases))
-	}
-	if wf.Phases[0].Name != "install" {
-		t.Fatalf("expected install phase, got %q", wf.Phases[0].Name)
-	}
-	return wf.Phases[0].Steps
-}
-
-func missingStepIDs(steps []config.Step, required ...string) []string {
-	present := make(map[string]struct{}, len(steps))
-	for i := range steps {
-		present[steps[i].ID] = struct{}{}
-	}
-	missing := make([]string, 0)
-	for _, id := range required {
-		if _, ok := present[id]; !ok {
-			missing = append(missing, id)
-		}
-	}
-	sort.Strings(missing)
-	return missing
-}
-
-func verifyStepIDOrder(steps []config.Step) error {
-	seen := make(map[string]int, len(steps))
-	for i := range steps {
-		id := steps[i].ID
-		if id == "" {
-			return fmt.Errorf("step at index %d has empty id", i)
-		}
-		if first, ok := seen[id]; ok {
-			return fmt.Errorf("duplicate step id %q at indexes %d and %d", id, first, i)
-		}
-		seen[id] = i
-	}
-	return nil
-}
-
-func containsString(items []string, needle string) bool {
-	for _, item := range items {
-		if item == needle {
-			return true
-		}
-	}
-	return false
-}
-
 func requireDryRunOutput(t *testing.T, output string, expected ...string) {
 	t.Helper()
 	for _, item := range expected {
 		if !strings.Contains(output, item) {
 			t.Fatalf("expected dry-run output to include %q", item)
-		}
-	}
-}
-
-func requireDryRunOutputMissing(t *testing.T, output string, unexpected ...string) {
-	t.Helper()
-	for _, item := range unexpected {
-		if strings.Contains(output, item) {
-			t.Fatalf("expected dry-run output to exclude %q", item)
 		}
 	}
 }
