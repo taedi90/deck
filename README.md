@@ -74,7 +74,7 @@ steps:
 
 Requirements:
 
-- Go 1.22+
+- Go 1.23+
 - Linux target environment
 
 ```bash

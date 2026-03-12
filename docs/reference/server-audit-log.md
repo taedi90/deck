@@ -34,9 +34,14 @@ Non-standard details are nested under `extra`.
 
 ## Typical examples
 
-- HTTP request records carry request fields under `extra`
-- Registry seeding records describe archive and target details under `extra`
-- Lifecycle-style records keep decision metadata under `extra.decision`
+- HTTP request records carry request fields such as `method`, `path`, `status`, `remote_addr`, and `duration_ms` under `extra`
+- Records are written for all routed server responses, including site API, registry, static file, and health checks
+
+## Rotation
+
+- `deck serve` rotates the audit log when it exceeds the configured size limit
+- defaults: `50` MB max size and `10` retained files
+- related flags: `--audit-max-size-mb`, `--audit-max-files`
 
 ## Viewing logs
 

@@ -21,26 +21,35 @@ The workflow schema currently enforces:
 ## Supported step schemas
 
 - `check-host.schema.json`
+- `containerd-config.schema.json`
+- `copy-file.schema.json`
 - `download-packages.schema.json`
 - `download-k8s-packages.schema.json`
 - `download-images.schema.json`
 - `download-file.schema.json`
+- `ensure-dir.schema.json`
+- `install-file.schema.json`
 - `install-packages.schema.json`
-- `write-file.schema.json`
 - `edit-file.schema.json`
-- `copy-file.schema.json`
-- `sysctl.schema.json`
+- `kernel-module.schema.json`
 - `modprobe.schema.json`
-- `run-command.schema.json`
-- `verify-images.schema.json`
 - `kubeadm-init.schema.json`
 - `kubeadm-join.schema.json`
+- `repo-config.schema.json`
+- `run-command.schema.json`
+- `service.schema.json`
+- `swap.schema.json`
+- `sysctl.schema.json`
+- `sysctl-apply.schema.json`
+- `template-file.schema.json`
+- `verify-images.schema.json`
+- `write-file.schema.json`
 
 ## Validation flow
 
 1. Validate the workflow structure.
 2. Validate each step against its matching tool schema.
-3. Fix schema drift before packaging or applying.
+3. Keep documentation and workflow examples aligned with the shipped schemas before packaging or applying.
 
 ## Command
 
