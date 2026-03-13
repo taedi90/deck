@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 )
 
@@ -28,7 +30,6 @@ func newValidateCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringP("file", "f", "", "path or URL to workflow file")
-	cmd.Flags().Var(&varFlag{}, "var", "set variable override (key=value), repeatable")
 	return cmd
 }
 
@@ -200,7 +201,7 @@ func newNodeAssignmentShowCommand() *cobra.Command {
 func cmdFlagValue(cmd *cobra.Command, name string) string {
 	value, err := cmd.Flags().GetString(name)
 	if err != nil {
-		return ""
+		panic(fmt.Sprintf("internal CLI wiring error: string flag %q not registered on %q: %v", name, cmd.CommandPath(), err))
 	}
 	return value
 }
@@ -208,7 +209,7 @@ func cmdFlagValue(cmd *cobra.Command, name string) string {
 func cmdFlagIntValue(cmd *cobra.Command, name string) int {
 	value, err := cmd.Flags().GetInt(name)
 	if err != nil {
-		return 0
+		panic(fmt.Sprintf("internal CLI wiring error: int flag %q not registered on %q: %v", name, cmd.CommandPath(), err))
 	}
 	return value
 }
@@ -216,7 +217,7 @@ func cmdFlagIntValue(cmd *cobra.Command, name string) int {
 func cmdFlagBoolValue(cmd *cobra.Command, name string) bool {
 	value, err := cmd.Flags().GetBool(name)
 	if err != nil {
-		return false
+		panic(fmt.Sprintf("internal CLI wiring error: bool flag %q not registered on %q: %v", name, cmd.CommandPath(), err))
 	}
 	return value
 }
