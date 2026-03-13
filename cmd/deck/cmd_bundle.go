@@ -12,16 +12,8 @@ import (
 	"github.com/taedi90/deck/internal/bundle"
 )
 
-func runWorkflowInit(args []string) error {
-	fs := newHelpFlagSet("workflow init")
-	output := fs.String("out", ".", "output directory")
-	if err := parseFlags(fs, args, initHelpText()); err != nil {
-		return err
-	}
-	if fs.NArg() != 0 {
-		return helpRequest{text: initHelpText()}
-	}
-	resolvedOutput := strings.TrimSpace(*output)
+func executeInit(output string) error {
+	resolvedOutput := strings.TrimSpace(output)
 	if resolvedOutput == "" {
 		resolvedOutput = "."
 	}
@@ -88,171 +80,116 @@ func initTemplateFiles() map[string]string {
 	}
 }
 
-func runWorkflowBundle(args []string) error {
-	if len(args) == 0 {
-		return helpRequest{text: bundleHelpText()}
-	}
-	if wantsHelp(args) {
-		text, err := renderBundleHelp(args[1:])
-		if err != nil {
-			return err
-		}
-		return helpRequest{text: text}
+func executeBundleVerify(filePath string, positionalArgs []string) error {
+	resolvedPath, err := resolveBundlePathArg(filePath, positionalArgs, "bundle verify accepts a single <path>")
+	if err != nil {
+		return err
 	}
 
-	switch args[0] {
-	case "verify":
-		fs := newHelpFlagSet("workflow bundle verify")
-		bundlePath := fs.String("file", "", "bundle path (directory or bundle.tar)")
-		parseArgs := append([]string{}, args[1:]...)
-		positionalPath := ""
-		if len(parseArgs) > 0 && !strings.HasPrefix(parseArgs[0], "-") {
-			positionalPath = strings.TrimSpace(parseArgs[0])
-			parseArgs = parseArgs[1:]
+	if err := bundle.VerifyManifest(resolvedPath); err != nil {
+		return err
+	}
+
+	return stdoutPrintf("bundle verify: ok (%s)\n", resolvedPath)
+}
+
+func executeBundleInspect(filePath string, output string, positionalArgs []string) error {
+	resolvedPath, err := resolveBundlePathArg(filePath, positionalArgs, "bundle inspect accepts a single <path>")
+	if err != nil {
+		return err
+	}
+	if output != "text" && output != "json" {
+		return errors.New("--output must be text or json")
+	}
+
+	entries, err := bundle.InspectManifest(resolvedPath)
+	if err != nil {
+		return err
+	}
+
+	if output == "json" {
+		return json.NewEncoder(os.Stdout).Encode(map[string]any{"entries": entries})
+	}
+	for _, entry := range entries {
+		if _, err := fmt.Fprintln(os.Stdout, entry.Path); err != nil {
+			return fmt.Errorf("bundle inspect: write output: %w", err)
 		}
-		if err := parseFlags(fs, parseArgs, bundleVerifyHelpText()); err != nil {
+	}
+	return nil
+}
+
+func executeBundleImport(filePath string, destDir string) error {
+	if strings.TrimSpace(filePath) == "" {
+		return errors.New("--file is required")
+	}
+	if strings.TrimSpace(destDir) == "" {
+		return errors.New("--dest is required")
+	}
+
+	if err := bundle.ImportArchive(filePath, destDir); err != nil {
+		return err
+	}
+
+	return stdoutPrintf("bundle import: ok (%s -> %s)\n", filePath, destDir)
+}
+
+func executeBundleCollect(root string, out string) error {
+	if strings.TrimSpace(root) == "" {
+		return errors.New("--root is required")
+	}
+	if strings.TrimSpace(out) == "" {
+		return errors.New("--out is required")
+	}
+
+	if err := bundle.CollectArchive(root, out); err != nil {
+		return err
+	}
+
+	return stdoutPrintf("bundle collect: ok (%s -> %s)\n", root, out)
+}
+
+func executeBundleMerge(to string, dryRun bool, positionalArgs []string) error {
+	if len(positionalArgs) == 0 {
+		return errors.New("bundle merge requires <bundle.tar>")
+	}
+	archivePath := strings.TrimSpace(positionalArgs[0])
+	if archivePath == "" {
+		return errors.New("bundle merge requires <bundle.tar>")
+	}
+	if strings.TrimSpace(to) == "" {
+		return errors.New("--to is required")
+	}
+
+	report, err := bundle.MergeArchive(archivePath, strings.TrimSpace(to), dryRun)
+	if err != nil {
+		return err
+	}
+
+	if dryRun {
+		if err := stdoutPrintf("bundle merge: dry-run (%s -> %s)\n", archivePath, report.Destination); err != nil {
 			return err
 		}
-		if fs.NArg() > 0 {
-			return errors.New("bundle verify accepts a single <path>")
-		}
-		resolvedPath := strings.TrimSpace(*bundlePath)
-		if resolvedPath == "" {
-			resolvedPath = positionalPath
-		}
-		if resolvedPath == "" {
-			return errors.New("bundle path is required")
-		}
-
-		if err := bundle.VerifyManifest(resolvedPath); err != nil {
-			return err
-		}
-
-		return stdoutPrintf("bundle verify: ok (%s)\n", resolvedPath)
-
-	case "inspect":
-		fs := newHelpFlagSet("workflow bundle inspect")
-		bundlePath := fs.String("file", "", "bundle path (directory or bundle.tar)")
-		output := ""
-		registerOutputFormatFlags(fs, &output, "text")
-		parseArgs := append([]string{}, args[1:]...)
-		positionalPath := ""
-		if len(parseArgs) > 0 && !strings.HasPrefix(parseArgs[0], "-") {
-			positionalPath = strings.TrimSpace(parseArgs[0])
-			parseArgs = parseArgs[1:]
-		}
-		if err := parseFlags(fs, parseArgs, bundleInspectHelpText()); err != nil {
-			return err
-		}
-		if fs.NArg() > 0 {
-			return errors.New("bundle inspect accepts a single <path>")
-		}
-		resolvedPath := strings.TrimSpace(*bundlePath)
-		if resolvedPath == "" {
-			resolvedPath = positionalPath
-		}
-		if resolvedPath == "" {
-			return errors.New("bundle path is required")
-		}
-		if output != "text" && output != "json" {
-			return errors.New("--output must be text or json")
-		}
-
-		entries, err := bundle.InspectManifest(resolvedPath)
-		if err != nil {
-			return err
-		}
-
-		if output == "json" {
-			return json.NewEncoder(os.Stdout).Encode(map[string]any{"entries": entries})
-		}
-		for _, entry := range entries {
-			if _, err := fmt.Fprintln(os.Stdout, entry.Path); err != nil {
-				return fmt.Errorf("bundle inspect: write output: %w", err)
+		for _, action := range report.Actions {
+			if err := stdoutPrintf("PLAN %s %s (%s)\n", action.Action, action.Path, action.Reason); err != nil {
+				return err
 			}
 		}
 		return nil
-
-	case "import":
-		fs := newHelpFlagSet("workflow bundle import")
-		archiveFile := fs.String("file", "", "bundle archive file path")
-		destDir := fs.String("dest", "", "destination directory")
-		if err := parseFlags(fs, args[1:], bundleImportHelpText()); err != nil {
-			return err
-		}
-		if *archiveFile == "" {
-			return errors.New("--file is required")
-		}
-		if *destDir == "" {
-			return errors.New("--dest is required")
-		}
-
-		if err := bundle.ImportArchive(*archiveFile, *destDir); err != nil {
-			return err
-		}
-
-		return stdoutPrintf("bundle import: ok (%s -> %s)\n", *archiveFile, *destDir)
-
-	case "collect":
-		fs := newHelpFlagSet("workflow bundle collect")
-		bundleDir := fs.String("root", "", "bundle directory")
-		outputFile := fs.String("out", "", "output tar archive path")
-		if err := parseFlags(fs, args[1:], bundleCollectHelpText()); err != nil {
-			return err
-		}
-		if *bundleDir == "" {
-			return errors.New("--root is required")
-		}
-		if *outputFile == "" {
-			return errors.New("--out is required")
-		}
-
-		if err := bundle.CollectArchive(*bundleDir, *outputFile); err != nil {
-			return err
-		}
-
-		return stdoutPrintf("bundle collect: ok (%s -> %s)\n", *bundleDir, *outputFile)
-
-	case "merge":
-		fs := newHelpFlagSet("workflow bundle merge")
-		to := fs.String("to", "", "merge destination (local directory)")
-		dryRun := fs.Bool("dry-run", false, "print merge plan without writing")
-		parseArgs := append([]string{}, args[1:]...)
-		archivePath := ""
-		if len(parseArgs) > 0 && !strings.HasPrefix(parseArgs[0], "-") {
-			archivePath = strings.TrimSpace(parseArgs[0])
-			parseArgs = parseArgs[1:]
-		}
-		if err := parseFlags(fs, parseArgs, bundleMergeHelpText()); err != nil {
-			return err
-		}
-		if archivePath == "" {
-			return errors.New("bundle merge requires <bundle.tar>")
-		}
-		if strings.TrimSpace(*to) == "" {
-			return errors.New("--to is required")
-		}
-
-		report, err := bundle.MergeArchive(archivePath, strings.TrimSpace(*to), *dryRun)
-		if err != nil {
-			return err
-		}
-
-		if *dryRun {
-			if err := stdoutPrintf("bundle merge: dry-run (%s -> %s)\n", archivePath, report.Destination); err != nil {
-				return err
-			}
-			for _, action := range report.Actions {
-				if err := stdoutPrintf("PLAN %s %s (%s)\n", action.Action, action.Path, action.Reason); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-
-		return stdoutPrintf("bundle merge: ok (%s -> %s)\n", archivePath, report.Destination)
-
-	default:
-		return fmt.Errorf("unknown bundle command %q", args[0])
 	}
+
+	return stdoutPrintf("bundle merge: ok (%s -> %s)\n", archivePath, report.Destination)
+}
+
+func resolveBundlePathArg(filePath string, positionalArgs []string, tooManyArgsErr string) (string, error) {
+	if len(positionalArgs) > 1 {
+		return "", errors.New(tooManyArgsErr)
+	}
+	resolvedPath := strings.TrimSpace(filePath)
+	if resolvedPath == "" && len(positionalArgs) == 1 {
+		resolvedPath = strings.TrimSpace(positionalArgs[0])
+	}
+	if resolvedPath == "" {
+		return "", errors.New("bundle path is required")
+	}
+	return resolvedPath, nil
 }

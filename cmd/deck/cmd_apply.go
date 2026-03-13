@@ -17,43 +17,68 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/taedi90/deck/internal/bundle"
 	"github.com/taedi90/deck/internal/config"
 	"github.com/taedi90/deck/internal/install"
 	"github.com/taedi90/deck/internal/validate"
 )
 
-func runDiff(args []string) error {
-	fs := newHelpFlagSet("diff")
-	var file string
-	registerFileFlags(fs, &file, "path to workflow file")
-	server := ""
-	session := ""
-	apiToken := ""
-	registerAssistedFlags(fs, &server, &session, &apiToken)
-	phase := fs.String("phase", "install", "phase name to diff")
-	output := ""
-	registerOutputFormatFlags(fs, &output, "text")
-	vars := &varFlag{}
-	fs.Var(vars, "var", "set variable override (key=value), repeatable")
-	if err := parseFlags(fs, args, diffHelpText()); err != nil {
-		return err
-	}
+type diffOptions struct {
+	workflowPath  string
+	server        string
+	session       string
+	apiToken      string
+	selectedPhase string
+	output        string
+	varOverrides  map[string]string
+}
 
-	assistedConfig, assistedMode, err := resolveAssistedExecutionConfig(server, session, apiToken)
+func newDiffCommand() *cobra.Command {
+	vars := &varFlag{}
+	cmd := &cobra.Command{
+		Use:   "diff",
+		Short: "Show the planned install step execution",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runDiffWithOptions(diffOptions{
+				workflowPath:  cmdFlagValue(cmd, "file"),
+				server:        cmdFlagValue(cmd, "server"),
+				session:       cmdFlagValue(cmd, "session"),
+				apiToken:      cmdFlagValue(cmd, "api-token"),
+				selectedPhase: cmdFlagValue(cmd, "phase"),
+				output:        cmdFlagValue(cmd, "output"),
+				varOverrides:  vars.AsMap(),
+			})
+		},
+	}
+	cmd.Flags().SetInterspersed(false)
+	cmd.Flags().StringP("file", "f", "", "path to workflow file")
+	cmd.Flags().String("server", "", "site server URL (assisted mode requires --server and --session)")
+	cmd.Flags().String("session", "", "site session id for assisted mode")
+	cmd.Flags().String("api-token", "deck-site-v1", "bearer token for assisted site APIs")
+	cmd.Flags().String("phase", "install", "phase name to diff")
+	cmd.Flags().StringP("output", "o", "text", "output format (text|json)")
+	cmd.Flags().Var(vars, "var", "set variable override (key=value), repeatable")
+	return cmd
+}
+
+func runDiffWithOptions(opts diffOptions) error {
+	assistedConfig, assistedMode, err := resolveAssistedExecutionConfig(opts.server, opts.session, opts.apiToken)
 	if err != nil {
 		return err
 	}
-	workflowPath := strings.TrimSpace(file)
+	workflowPath := strings.TrimSpace(opts.workflowPath)
+	selectedPhase := strings.TrimSpace(opts.selectedPhase)
 	if assistedMode {
 		return runAssistedAction(assistedConfig, "diff", func(ctx assistedExecutionContext) error {
-			return executeDiff(ctx.WorkflowPath, strings.TrimSpace(*phase), output, varsAsAnyMap(vars.AsMap()))
+			return executeDiff(ctx.WorkflowPath, selectedPhase, opts.output, varsAsAnyMap(opts.varOverrides))
 		})
 	}
 	if workflowPath == "" {
 		return errors.New("--file (or -f) is required")
 	}
-	return executeDiff(workflowPath, strings.TrimSpace(*phase), output, varsAsAnyMap(vars.AsMap()))
+	return executeDiff(workflowPath, selectedPhase, opts.output, varsAsAnyMap(opts.varOverrides))
 }
 
 func executeDiff(workflowPath, selectedPhase, output string, varOverrides map[string]any) error {
@@ -161,23 +186,44 @@ type doctorCheck struct {
 	UsedBy  []string `json:"used_by,omitempty"`
 }
 
-func runDoctor(args []string) error {
-	fs := newHelpFlagSet("doctor")
-	var file string
-	registerFileFlags(fs, &file, "path or URL to workflow file")
-	server := ""
-	session := ""
-	apiToken := ""
-	registerAssistedFlags(fs, &server, &session, &apiToken)
-	out := fs.String("out", "", "output report path (required)")
-	vars := &varFlag{}
-	fs.Var(vars, "var", "set variable override (key=value), repeatable")
-	if err := parseFlags(fs, args, doctorHelpText()); err != nil {
-		return err
-	}
+type doctorOptions struct {
+	workflowPath string
+	server       string
+	session      string
+	apiToken     string
+	outPath      string
+	varOverrides map[string]string
+}
 
-	resolvedOut := strings.TrimSpace(*out)
-	assistedConfig, assistedMode, err := resolveAssistedExecutionConfig(server, session, apiToken)
+func newDoctorCommand() *cobra.Command {
+	vars := &varFlag{}
+	cmd := &cobra.Command{
+		Use:   "doctor",
+		Short: "Check referenced artifact inputs before apply",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runDoctorWithOptions(doctorOptions{
+				workflowPath: cmdFlagValue(cmd, "file"),
+				server:       cmdFlagValue(cmd, "server"),
+				session:      cmdFlagValue(cmd, "session"),
+				apiToken:     cmdFlagValue(cmd, "api-token"),
+				outPath:      cmdFlagValue(cmd, "out"),
+				varOverrides: vars.AsMap(),
+			})
+		},
+	}
+	cmd.Flags().SetInterspersed(false)
+	cmd.Flags().StringP("file", "f", "", "path or URL to workflow file")
+	cmd.Flags().String("server", "", "site server URL (assisted mode requires --server and --session)")
+	cmd.Flags().String("session", "", "site session id for assisted mode")
+	cmd.Flags().String("api-token", "deck-site-v1", "bearer token for assisted site APIs")
+	cmd.Flags().String("out", "", "output report path (required)")
+	cmd.Flags().Var(vars, "var", "set variable override (key=value), repeatable")
+	return cmd
+}
+
+func runDoctorWithOptions(opts doctorOptions) error {
+	resolvedOut := strings.TrimSpace(opts.outPath)
+	assistedConfig, assistedMode, err := resolveAssistedExecutionConfig(opts.server, opts.session, opts.apiToken)
 	if err != nil {
 		return err
 	}
@@ -185,16 +231,16 @@ func runDoctor(args []string) error {
 		return errors.New("--out is required")
 	}
 	if resolvedOut == "" && assistedMode {
-		resolvedOut = filepath.Join(assistedDataRoot(), "reports", strings.TrimSpace(session), "doctor-local.json")
+		resolvedOut = filepath.Join(assistedDataRoot(), "reports", strings.TrimSpace(opts.session), "doctor-local.json")
 	}
 
 	if assistedMode {
 		return runAssistedAction(assistedConfig, "doctor", func(ctx assistedExecutionContext) error {
-			return executeDoctor(ctx.WorkflowPath, varsAsAnyMap(vars.AsMap()), resolvedOut)
+			return executeDoctor(ctx.WorkflowPath, varsAsAnyMap(opts.varOverrides), resolvedOut)
 		})
 	}
 
-	return executeDoctor(strings.TrimSpace(file), varsAsAnyMap(vars.AsMap()), resolvedOut)
+	return executeDoctor(strings.TrimSpace(opts.workflowPath), varsAsAnyMap(opts.varOverrides), resolvedOut)
 }
 
 func executeDoctor(workflowPath string, varOverrides map[string]any, resolvedOut string) error {
@@ -489,45 +535,79 @@ func findWorkflowPhaseByName(wf *config.Workflow, name string) (config.Phase, bo
 	return config.Phase{}, false
 }
 
-func runApply(args []string) error {
-	fs := newHelpFlagSet("apply")
-	var file string
-	registerFileFlags(fs, &file, "path or URL to workflow file")
-	server := ""
-	session := ""
-	apiToken := ""
-	registerAssistedFlags(fs, &server, &session, &apiToken)
-	phase := fs.String("phase", "install", "phase name to execute")
-	prefetch := fs.Bool("prefetch", false, "execute DownloadFile steps before other steps")
-	dryRun := fs.Bool("dry-run", false, "print apply plan without executing steps")
+type applyOptions struct {
+	workflowPath  string
+	server        string
+	session       string
+	apiToken      string
+	selectedPhase string
+	prefetch      bool
+	dryRun        bool
+	varOverrides  map[string]string
+	positional    []string
+}
+
+func newApplyCommand() *cobra.Command {
 	vars := &varFlag{}
-	fs.Var(vars, "var", "set variable override (key=value), repeatable")
-	if err := parseFlags(fs, args, applyHelpText()); err != nil {
-		return err
+	cmd := &cobra.Command{
+		Use:   "apply [workflow] [bundle]",
+		Short: "Execute an apply file against a bundle",
+		Args: func(_ *cobra.Command, args []string) error {
+			if len(args) > 2 {
+				return errors.New("apply accepts at most two positional arguments: [workflow] [bundle]")
+			}
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runApplyWithOptions(applyOptions{
+				workflowPath:  cmdFlagValue(cmd, "file"),
+				server:        cmdFlagValue(cmd, "server"),
+				session:       cmdFlagValue(cmd, "session"),
+				apiToken:      cmdFlagValue(cmd, "api-token"),
+				selectedPhase: cmdFlagValue(cmd, "phase"),
+				prefetch:      cmdFlagBoolValue(cmd, "prefetch"),
+				dryRun:        cmdFlagBoolValue(cmd, "dry-run"),
+				varOverrides:  vars.AsMap(),
+				positional:    args,
+			})
+		},
 	}
-	if fs.NArg() > 2 {
+	cmd.Flags().SetInterspersed(false)
+	cmd.Flags().StringP("file", "f", "", "path or URL to workflow file")
+	cmd.Flags().String("server", "", "site server URL (assisted mode requires --server and --session)")
+	cmd.Flags().String("session", "", "site session id for assisted mode")
+	cmd.Flags().String("api-token", "deck-site-v1", "bearer token for assisted site APIs")
+	cmd.Flags().String("phase", "install", "phase name to execute")
+	cmd.Flags().Bool("prefetch", false, "execute DownloadFile steps before other steps")
+	cmd.Flags().Bool("dry-run", false, "print apply plan without executing steps")
+	cmd.Flags().Var(vars, "var", "set variable override (key=value), repeatable")
+	return cmd
+}
+
+func runApplyWithOptions(opts applyOptions) error {
+	if len(opts.positional) > 2 {
 		return errors.New("apply accepts at most two positional arguments: [workflow] [bundle]")
 	}
-	positionalArgs := make([]string, 0, fs.NArg())
-	for i := 0; i < fs.NArg(); i++ {
-		positionalArgs = append(positionalArgs, strings.TrimSpace(fs.Arg(i)))
+	positionalArgs := make([]string, 0, len(opts.positional))
+	for _, arg := range opts.positional {
+		positionalArgs = append(positionalArgs, strings.TrimSpace(arg))
 	}
 
-	assistedConfig, assistedMode, err := resolveAssistedExecutionConfig(server, session, apiToken)
+	assistedConfig, assistedMode, err := resolveAssistedExecutionConfig(opts.server, opts.session, opts.apiToken)
 	if err != nil {
 		return err
 	}
 	if assistedMode {
 		return runAssistedAction(assistedConfig, "apply", func(ctx assistedExecutionContext) error {
-			return executeApply(ctx.WorkflowPath, ctx.BundleRoot, strings.TrimSpace(*phase), *prefetch, *dryRun, varsAsAnyMap(vars.AsMap()))
+			return executeApply(ctx.WorkflowPath, ctx.BundleRoot, strings.TrimSpace(opts.selectedPhase), opts.prefetch, opts.dryRun, varsAsAnyMap(opts.varOverrides))
 		})
 	}
 
-	workflowPath, bundleRoot, err := resolveApplyWorkflowAndBundle(strings.TrimSpace(file), positionalArgs)
+	workflowPath, bundleRoot, err := resolveApplyWorkflowAndBundle(strings.TrimSpace(opts.workflowPath), positionalArgs)
 	if err != nil {
 		return err
 	}
-	return executeApply(workflowPath, bundleRoot, strings.TrimSpace(*phase), *prefetch, *dryRun, varsAsAnyMap(vars.AsMap()))
+	return executeApply(workflowPath, bundleRoot, strings.TrimSpace(opts.selectedPhase), opts.prefetch, opts.dryRun, varsAsAnyMap(opts.varOverrides))
 }
 
 func executeApply(workflowPath, bundleRoot, selectedPhase string, prefetch, dryRun bool, varOverrides map[string]any) error {
@@ -985,17 +1065,7 @@ func discoverApplyWorkflow(bundleRoot string) (string, error) {
 	return matches[0], nil
 }
 
-func runValidate(args []string) error {
-	fs := newHelpFlagSet("validate")
-
-	var file string
-	registerFileFlags(fs, &file, "path or URL to workflow file")
-	vars := &varFlag{}
-	fs.Var(vars, "var", "set variable override (key=value), repeatable")
-	if err := parseFlags(fs, args, validateHelpText()); err != nil {
-		return err
-	}
-
+func executeValidate(file string) error {
 	if file == "" {
 		return errors.New("--file (or -f) is required")
 	}

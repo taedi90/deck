@@ -12,41 +12,13 @@ import (
 	"time"
 )
 
-func runCache(args []string) error {
-	if len(args) == 0 {
-		return helpRequest{text: cacheHelpText()}
-	}
-	if wantsHelp(args) {
-		text, err := renderCacheHelp(args[1:])
-		if err != nil {
-			return err
-		}
-		return helpRequest{text: text}
-	}
-
-	switch args[0] {
-	case "list":
-		return runCacheList(args[1:])
-	case "clean":
-		return runCacheClean(args[1:])
-	default:
-		return fmt.Errorf("unknown cache command %q", args[0])
-	}
-}
-
 type cacheEntry struct {
 	Path      string `json:"path"`
 	SizeBytes int64  `json:"size_bytes"`
 	ModTime   string `json:"mod_time"`
 }
 
-func runCacheList(args []string) error {
-	fs := newHelpFlagSet("cache list")
-	output := ""
-	registerOutputFormatFlags(fs, &output, "text")
-	if err := parseFlags(fs, args, cacheListHelpText()); err != nil {
-		return err
-	}
+func executeCacheList(output string) error {
 	if output != "text" && output != "json" {
 		return errors.New("--output must be text or json")
 	}
@@ -71,19 +43,12 @@ func runCacheList(args []string) error {
 	return nil
 }
 
-func runCacheClean(args []string) error {
-	fs := newHelpFlagSet("cache clean")
-	olderThan := fs.String("older-than", "", "delete entries not modified within this duration (e.g. 30d, 24h)")
-	dryRun := fs.Bool("dry-run", false, "print deletion plan without deleting")
-	if err := parseFlags(fs, args, cacheCleanHelpText()); err != nil {
-		return err
-	}
-
+func executeCacheClean(olderThan string, dryRun bool) error {
 	root, err := defaultDeckCacheRoot()
 	if err != nil {
 		return err
 	}
-	cutoff, hasCutoff, err := parseOlderThan(*olderThan)
+	cutoff, hasCutoff, err := parseOlderThan(olderThan)
 	if err != nil {
 		return err
 	}
@@ -96,7 +61,7 @@ func runCacheClean(args []string) error {
 			return err
 		}
 	}
-	if *dryRun {
+	if dryRun {
 		return nil
 	}
 	for _, p := range plan {

@@ -81,6 +81,9 @@ Requirements:
 # run from source
 go run ./cmd/deck --help
 
+# generate shell completion
+go run ./cmd/deck completion bash
+
 # install the binary
 go install ./cmd/deck
 
@@ -110,6 +113,19 @@ Start with `docs/tutorials/quick-start.md` for the guided path.
 - CLI reference: `docs/reference/cli.md`
 - Example workflows: `docs/examples/README.md`
 
+## Shell completion
+
+`deck` keeps completion generation behind a dedicated command so normal command output stays unchanged.
+
+Requested help is written to stdout. Command and flag errors are written to stderr without automatic usage output.
+
+```bash
+deck completion bash
+deck completion zsh
+deck completion fish
+deck completion powershell
+```
+
 ## Scope and non-goals
 
 - `deck` focuses on simple, local, bundle-first execution in disconnected environments.
@@ -122,11 +138,18 @@ Start with `docs/tutorials/quick-start.md` for the guided path.
 Before sending changes, run the checks that match your work:
 
 ```bash
+go build -o ./deck ./cmd/deck
+./deck --help
+./deck completion bash
+./deck completion zsh
+./deck completion fish
+./deck completion powershell
 go test ./...
-go run ./cmd/deck validate --file <workflow.yaml>
-go run ./cmd/deck validate --file test/workflows/scenarios/control-plane-bootstrap.yaml
-go run ./cmd/deck validate --file test/workflows/scenarios/worker-join.yaml
-go run ./cmd/deck validate --file test/workflows/scenarios/node-reset.yaml
+./deck validate --file <workflow.yaml>
+./deck validate --file docs/examples/vagrant-smoke-install.yaml
+./deck validate --file test/workflows/scenarios/control-plane-bootstrap.yaml
+./deck validate --file test/workflows/scenarios/worker-join.yaml
+./deck validate --file test/workflows/scenarios/node-reset.yaml
 
 # linux host with libvirt-backed vagrant
 bash test/e2e/vagrant/run-scenario.sh --scenario k8s-control-plane-bootstrap

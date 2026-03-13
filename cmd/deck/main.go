@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -12,7 +14,6 @@ func main() {
 		os.Exit(1)
 	}
 	if res.err != nil {
-		fmt.Fprintf(os.Stderr, "deck: %v\n", res.err)
 		os.Exit(res.exitCode)
 	}
 }
@@ -26,53 +27,29 @@ func run(args []string) error {
 }
 
 func execute(args []string) cliResult {
-	if len(args) == 0 {
-		return helpResult(mainHelpText())
+	root := newRootCommand()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+	root.SetArgs(args)
+	if _, err := root.ExecuteC(); err != nil {
+		res := errorResult(err)
+		res.stdout = stdout.String() + res.stdout
+		res.stderr = formatCLIError(stderr.String(), err)
+		return res
 	}
+	return cliResult{stdout: stdout.String(), stderr: stderr.String()}
+}
 
-	if args[0] == "-h" || args[0] == "--help" {
-		return helpResult(mainHelpText())
+func formatCLIError(existing string, err error) string {
+	formatted := strings.TrimRight(existing, "\n")
+	message := fmt.Sprintf("Error: %v", err)
+	if formatted == "" {
+		return message + "\n"
 	}
-	if args[0] == "help" {
-		text, err := renderHelp(args[1:])
-		if err != nil {
-			return errorResult(err)
-		}
-		return helpResult(text)
+	if !strings.Contains(formatted, message) {
+		formatted += "\n" + message
 	}
-
-	var err error
-	switch args[0] {
-	case "pack":
-		err = runPack(args[1:])
-	case "apply":
-		err = runApply(args[1:])
-	case "serve":
-		err = runServe(args[1:])
-	case "bundle":
-		err = runWorkflowBundle(args[1:])
-	case "list":
-		err = runList(args[1:])
-	case "validate":
-		err = runValidate(args[1:])
-	case "diff":
-		err = runDiff(args[1:])
-	case "init":
-		err = runWorkflowInit(args[1:])
-	case "doctor":
-		err = runDoctor(args[1:])
-	case "health":
-		err = runHealth(args[1:])
-	case "logs":
-		err = runLogs(args[1:])
-	case "cache":
-		err = runCache(args[1:])
-	case "node":
-		err = runNode(args[1:])
-	case "site":
-		err = runSite(args[1:])
-	default:
-		err = fmt.Errorf("unknown command %q", args[0])
-	}
-	return errorResult(err)
+	return formatted + "\n"
 }

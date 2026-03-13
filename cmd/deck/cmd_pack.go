@@ -12,28 +12,48 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/taedi90/deck/internal/bundle"
 	"github.com/taedi90/deck/internal/config"
 	"github.com/taedi90/deck/internal/prepare"
 )
 
-func runPack(args []string) error {
-	if wantsHelp(args) {
-		return helpRequest{text: packHelpText()}
-	}
+type packOptions struct {
+	outPath      string
+	dryRun       bool
+	cacheDir     string
+	noCache      bool
+	varOverrides map[string]string
+}
 
-	fs := newHelpFlagSet("pack")
-	outPath := fs.String("out", "", "output tar archive path")
-	dryRun := fs.Bool("dry-run", false, "print pack plan without writing files")
-	cacheDir := fs.String("cache-dir", "", "artifact cache directory")
-	noCache := fs.Bool("no-cache", false, "disable artifact cache reuse")
+func newPackCommand() *cobra.Command {
 	vars := &varFlag{}
-	fs.Var(vars, "var", "set variable override (key=value), repeatable")
-	if err := parseFlags(fs, args, packHelpText()); err != nil {
-		return err
+	cmd := &cobra.Command{
+		Use:   "pack",
+		Short: "Build an offline bundle from local deck files",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runPackWithOptions(packOptions{
+				outPath:      cmdFlagValue(cmd, "out"),
+				dryRun:       cmdFlagBoolValue(cmd, "dry-run"),
+				cacheDir:     cmdFlagValue(cmd, "cache-dir"),
+				noCache:      cmdFlagBoolValue(cmd, "no-cache"),
+				varOverrides: vars.AsMap(),
+			})
+		},
 	}
-	resolvedOut := strings.TrimSpace(*outPath)
-	if !*dryRun && resolvedOut == "" {
+	cmd.Flags().SetInterspersed(false)
+	cmd.Flags().String("out", "", "output tar archive path")
+	cmd.Flags().Bool("dry-run", false, "print pack plan without writing files")
+	cmd.Flags().String("cache-dir", "", "artifact cache directory")
+	cmd.Flags().Bool("no-cache", false, "disable artifact cache reuse")
+	cmd.Flags().Var(vars, "var", "set variable override (key=value), repeatable")
+	return cmd
+}
+
+func runPackWithOptions(opts packOptions) error {
+	resolvedOut := strings.TrimSpace(opts.outPath)
+	if !opts.dryRun && resolvedOut == "" {
 		return errors.New("--out is required")
 	}
 
@@ -53,7 +73,7 @@ func runPack(args []string) error {
 		}
 	}
 
-	if *dryRun {
+	if opts.dryRun {
 		for _, line := range []string{
 			fmt.Sprintf("PACK_WORKFLOW=%s", filepath.ToSlash(packWorkflowPath)),
 			fmt.Sprintf("WORKFLOW_INCLUDE=%s", filepath.ToSlash(packWorkflowPath)),
@@ -93,7 +113,7 @@ func runPack(args []string) error {
 	defer func() { _ = os.RemoveAll(stagingRoot) }()
 	bundleRoot := filepath.Join(stagingRoot, "bundle")
 
-	packWorkflow, err := config.LoadWithOptions(ctx, packWorkflowPath, config.LoadOptions{VarOverrides: varsAsAnyMap(vars.AsMap())})
+	packWorkflow, err := config.LoadWithOptions(ctx, packWorkflowPath, config.LoadOptions{VarOverrides: varsAsAnyMap(opts.varOverrides)})
 	if err != nil {
 		return err
 	}
@@ -102,16 +122,16 @@ func runPack(args []string) error {
 	}
 
 	artifactRoot := bundleRoot
-	if !*noCache {
-		if strings.TrimSpace(*cacheDir) != "" {
-			artifactRoot, err = filepath.Abs(strings.TrimSpace(*cacheDir))
+	if !opts.noCache {
+		if strings.TrimSpace(opts.cacheDir) != "" {
+			artifactRoot, err = filepath.Abs(strings.TrimSpace(opts.cacheDir))
 			if err != nil {
 				return fmt.Errorf("resolve --cache-dir: %w", err)
 			}
 		}
 	}
 
-	if err := prepare.Run(ctx, packWorkflow, prepare.RunOptions{BundleRoot: artifactRoot, ForceRedownload: *noCache}); err != nil {
+	if err := prepare.Run(ctx, packWorkflow, prepare.RunOptions{BundleRoot: artifactRoot, ForceRedownload: opts.noCache}); err != nil {
 		return err
 	}
 

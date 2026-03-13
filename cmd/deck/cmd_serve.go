@@ -21,22 +21,100 @@ import (
 	"github.com/taedi90/deck/internal/server"
 )
 
-func runServe(args []string) error {
-	if wantsHelp(args) {
-		return helpRequest{text: serveHelpText()}
+func executeServe(root string, addr string, apiToken string, reportMax int, auditMaxSizeMB int, auditMaxFiles int, tlsCert string, tlsKey string, tlsSelfSigned bool) error {
+	resolvedRoot := strings.TrimSpace(root)
+	if resolvedRoot == "" {
+		resolvedRoot = "./bundle"
 	}
-	return runServer(append([]string{"start"}, args...))
-}
+	resolvedAddr := strings.TrimSpace(addr)
+	if resolvedAddr == "" {
+		resolvedAddr = ":8080"
+	}
+	resolvedToken := strings.TrimSpace(apiToken)
+	if resolvedToken == "" {
+		resolvedToken = "deck-site-v1"
+	}
+	resolvedTLSCert := strings.TrimSpace(tlsCert)
+	resolvedTLSKey := strings.TrimSpace(tlsKey)
 
-func runList(args []string) error {
-	fs := newHelpFlagSet("list")
-	var server string
-	var output string
-	fs.StringVar(&server, "server", "", "server URL for index (optional; defaults to local workflows/)")
-	registerOutputFormatFlags(fs, &output, "text")
-	if err := parseFlags(fs, args, listHelpText()); err != nil {
+	if (resolvedTLSCert == "") != (resolvedTLSKey == "") {
+		return errors.New("--tls-cert and --tls-key must be provided together")
+	}
+	if tlsSelfSigned && (resolvedTLSCert != "" || resolvedTLSKey != "") {
+		return errors.New("--tls-self-signed cannot be combined with --tls-cert/--tls-key")
+	}
+	if reportMax <= 0 {
+		return errors.New("--report-max must be > 0")
+	}
+	if auditMaxSizeMB <= 0 {
+		return errors.New("--audit-max-size-mb must be > 0")
+	}
+	if auditMaxFiles <= 0 {
+		return errors.New("--audit-max-files must be > 0")
+	}
+
+	certPath := resolvedTLSCert
+	keyPath := resolvedTLSKey
+	if tlsSelfSigned {
+		var err error
+		certPath, keyPath, err = server.EnsureSelfSignedTLS(resolvedRoot, resolvedAddr)
+		if err != nil {
+			return err
+		}
+	}
+
+	h, err := server.NewHandler(resolvedRoot, server.HandlerOptions{ReportMax: reportMax, AuditMaxSizeMB: auditMaxSizeMB, AuditMaxFiles: auditMaxFiles, APIToken: resolvedToken})
+	if err != nil {
 		return err
 	}
+	httpServer := &http.Server{
+		Addr:              resolvedAddr,
+		Handler:           h,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	errCh := make(chan error, 1)
+	go func() {
+		if certPath != "" {
+			errCh <- httpServer.ListenAndServeTLS(certPath, keyPath)
+			return
+		}
+		errCh <- httpServer.ListenAndServe()
+	}()
+	if certPath != "" {
+		if err := stdoutPrintf("server start: listening on https://%s (root=%s)\n", resolvedAddr, resolvedRoot); err != nil {
+			return err
+		}
+	} else {
+		if err := stdoutPrintf("server start: listening on http://%s (root=%s)\n", resolvedAddr, resolvedRoot); err != nil {
+			return err
+		}
+	}
+	select {
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := httpServer.Shutdown(shutdownCtx); err != nil {
+			return fmt.Errorf("server shutdown: %w", err)
+		}
+		err := <-errCh
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return err
+		}
+		return nil
+	case err := <-errCh:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return err
+		}
+		return nil
+	}
+}
+
+func executeList(server string, output string) error {
 	if output != "text" && output != "json" {
 		return errors.New("--output must be text or json")
 	}
@@ -142,13 +220,8 @@ func discoverLocalWorkflowList(root string) ([]string, error) {
 	return items, nil
 }
 
-func runHealth(args []string) error {
-	fs := newHelpFlagSet("health")
-	server := fs.String("server", "", "server base URL (required)")
-	if err := parseFlags(fs, args, healthHelpText()); err != nil {
-		return err
-	}
-	resolvedServer := strings.TrimSpace(*server)
+func executeHealth(server string) error {
+	resolvedServer := strings.TrimSpace(server)
 	if resolvedServer == "" {
 		return errors.New("--server is required (assisted mode is explicit: deck health --server <url>)")
 	}
@@ -171,18 +244,8 @@ func runHealth(args []string) error {
 	return stdoutPrintf("health: ok (%s)\n", resolvedServer)
 }
 
-func runLogs(args []string) error {
-	fs := newHelpFlagSet("logs")
-	root := fs.String("root", ".", "serve root directory")
-	source := fs.String("source", "file", "log source (file|journal|both)")
-	path := fs.String("path", "", "explicit audit log file path")
-	unit := fs.String("unit", "", "systemd unit for journal logs")
-	output := ""
-	registerOutputFormatFlags(fs, &output, "text")
-	if err := parseFlags(fs, args, logsHelpText()); err != nil {
-		return err
-	}
-	resolvedSource := strings.ToLower(strings.TrimSpace(*source))
+func executeLogs(root string, source string, path string, unit string, output string) error {
+	resolvedSource := strings.ToLower(strings.TrimSpace(source))
 	if resolvedSource != "file" && resolvedSource != "journal" && resolvedSource != "both" {
 		return errors.New("--source must be file, journal, or both")
 	}
@@ -192,7 +255,7 @@ func runLogs(args []string) error {
 
 	records := []ctrllogs.LogRecord{}
 	if resolvedSource == "file" || resolvedSource == "both" {
-		logPath, err := resolveLogsFilePath(strings.TrimSpace(*root), strings.TrimSpace(*path))
+		logPath, err := resolveLogsFilePath(strings.TrimSpace(root), strings.TrimSpace(path))
 		if err != nil {
 			return err
 		}
@@ -203,7 +266,7 @@ func runLogs(args []string) error {
 		records = append(records, fileRecords...)
 	}
 	if resolvedSource == "journal" || resolvedSource == "both" {
-		resolvedUnit := strings.TrimSpace(*unit)
+		resolvedUnit := strings.TrimSpace(unit)
 		if resolvedUnit == "" {
 			return errors.New("--unit is required when --source includes journal")
 		}
@@ -334,100 +397,4 @@ func isPermissionError(msg string) bool {
 	return strings.Contains(lower, "permission denied") ||
 		strings.Contains(lower, "access denied") ||
 		strings.Contains(lower, "interactive authentication required")
-}
-
-func runServer(args []string) error {
-	if len(args) == 0 || args[0] != "start" {
-		return helpRequest{text: serveHelpText()}
-	}
-
-	fs := newHelpFlagSet("server start")
-	root := fs.String("root", "./bundle", "server content root")
-	addr := fs.String("addr", ":8080", "server listen address")
-	apiToken := fs.String("api-token", "deck-site-v1", "bearer token required for /api/site/v1 endpoints")
-	reportMax := fs.Int("report-max", 200, "max retained in-memory reports")
-	auditMaxSizeMB := fs.Int("audit-max-size-mb", 50, "max audit log size in MB before rotation")
-	auditMaxFiles := fs.Int("audit-max-files", 10, "max retained rotated audit files")
-	tlsCert := fs.String("tls-cert", "", "TLS certificate path")
-	tlsKey := fs.String("tls-key", "", "TLS private key path")
-	tlsSelfSigned := fs.Bool("tls-self-signed", false, "auto-generate and use self-signed TLS cert")
-	if err := parseFlags(fs, args[1:], serveHelpText()); err != nil {
-		return err
-	}
-
-	if (*tlsCert == "") != (*tlsKey == "") {
-		return errors.New("--tls-cert and --tls-key must be provided together")
-	}
-	if *tlsSelfSigned && (*tlsCert != "" || *tlsKey != "") {
-		return errors.New("--tls-self-signed cannot be combined with --tls-cert/--tls-key")
-	}
-	if *reportMax <= 0 {
-		return errors.New("--report-max must be > 0")
-	}
-	if *auditMaxSizeMB <= 0 {
-		return errors.New("--audit-max-size-mb must be > 0")
-	}
-	if *auditMaxFiles <= 0 {
-		return errors.New("--audit-max-files must be > 0")
-	}
-
-	certPath := *tlsCert
-	keyPath := *tlsKey
-	if *tlsSelfSigned {
-		var err error
-		certPath, keyPath, err = server.EnsureSelfSignedTLS(*root, *addr)
-		if err != nil {
-			return err
-		}
-	}
-
-	h, err := server.NewHandler(*root, server.HandlerOptions{ReportMax: *reportMax, AuditMaxSizeMB: *auditMaxSizeMB, AuditMaxFiles: *auditMaxFiles, APIToken: *apiToken})
-	if err != nil {
-		return err
-	}
-	httpServer := &http.Server{
-		Addr:              *addr,
-		Handler:           h,
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       60 * time.Second,
-	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	errCh := make(chan error, 1)
-	go func() {
-		if certPath != "" {
-			errCh <- httpServer.ListenAndServeTLS(certPath, keyPath)
-			return
-		}
-		errCh <- httpServer.ListenAndServe()
-	}()
-	if certPath != "" {
-		if err := stdoutPrintf("server start: listening on https://%s (root=%s)\n", *addr, *root); err != nil {
-			return err
-		}
-	} else {
-		if err := stdoutPrintf("server start: listening on http://%s (root=%s)\n", *addr, *root); err != nil {
-			return err
-		}
-	}
-	select {
-	case <-ctx.Done():
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if err := httpServer.Shutdown(shutdownCtx); err != nil {
-			return fmt.Errorf("server shutdown: %w", err)
-		}
-		err := <-errCh
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			return err
-		}
-		return nil
-	case err := <-errCh:
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			return err
-		}
-		return nil
-	}
 }

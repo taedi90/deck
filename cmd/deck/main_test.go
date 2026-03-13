@@ -2,12 +2,14 @@ package main
 
 import (
 	"archive/tar"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -45,7 +47,7 @@ func TestRunUsageShowsTopLevelAxes(t *testing.T) {
 			}
 
 			msg := res.stdout
-			for _, cmd := range []string{"pack", "apply", "serve", "bundle", "list", "validate", "diff", "init", "doctor", "health", "logs", "cache", "node", "site"} {
+			for _, cmd := range []string{"pack", "apply", "completion", "serve", "bundle", "list", "validate", "diff", "init", "doctor", "health", "logs", "cache", "node", "site"} {
 				if !strings.Contains(msg, cmd) {
 					t.Fatalf("usage must include %q, got %q", cmd, msg)
 				}
@@ -54,6 +56,44 @@ func TestRunUsageShowsTopLevelAxes(t *testing.T) {
 				if strings.Contains(msg, legacy) {
 					t.Fatalf("usage must not include legacy namespace %q, got %q", legacy, msg)
 				}
+			}
+		})
+	}
+}
+
+func TestCompletionHelp(t *testing.T) {
+	out, err := runWithCapturedStdout([]string{"help", "completion"})
+	if err != nil {
+		t.Fatalf("expected help success, got %v", err)
+	}
+	if !strings.Contains(out, "deck completion <bash|zsh|fish|powershell>") {
+		t.Fatalf("unexpected output: %q", out)
+	}
+}
+
+func TestCompletionCommands(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{name: "bash", args: []string{"completion", "bash"}, want: "__start_deck"},
+		{name: "zsh", args: []string{"completion", "zsh"}, want: "#compdef deck"},
+		{name: "fish", args: []string{"completion", "fish"}, want: "complete -c deck"},
+		{name: "powershell", args: []string{"completion", "powershell"}, want: "Register-ArgumentCompleter -CommandName 'deck'"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := runWithCapturedStdout(tc.args)
+			if err != nil {
+				t.Fatalf("expected success, got %v", err)
+			}
+			if !strings.Contains(out, tc.want) {
+				t.Fatalf("expected %q in output, got %q", tc.want, out)
+			}
+			if strings.Contains(out, "unknown command") || strings.Contains(out, "Error:") {
+				t.Fatalf("unexpected non-completion output: %q", out)
 			}
 		})
 	}
@@ -75,7 +115,7 @@ func TestRunTopLevelStubUsage(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected help output, got %v", err)
 		}
-		if !strings.Contains(out, "deck cache <list|clean>") {
+		if !strings.Contains(out, "Inspect or clean deck cache data") || !strings.Contains(out, "deck cache [command]") {
 			t.Fatalf("unexpected output: %q", out)
 		}
 	})
@@ -86,9 +126,9 @@ func TestNestedHelpRoutesToStdout(t *testing.T) {
 		args []string
 		want string
 	}{
-		{args: []string{"help", "pack"}, want: "deck pack --out <bundle.tar>"},
-		{args: []string{"site", "help", "release"}, want: "deck site release <import|list>"},
-		{args: []string{"node", "id", "help"}, want: "deck node id <show|set|init>"},
+		{args: []string{"help", "pack"}, want: "deck pack [flags]"},
+		{args: []string{"site", "release", "--help"}, want: "deck site release [command]"},
+		{args: []string{"node", "id", "--help"}, want: "deck node id [command]"},
 	}
 
 	for _, tc := range tests {
@@ -246,6 +286,37 @@ func TestHealth(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
+
+	t.Run("rejects positional args", func(t *testing.T) {
+		_, err := runWithCapturedStdout([]string{"health", "extra", "--server", "http://127.0.0.1:8080"})
+		if err == nil {
+			t.Fatalf("expected arg validation error")
+		}
+		if !strings.Contains(err.Error(), "accepts 0 arg(s), received 1") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+}
+
+func TestMigratedLeafHelpContracts(t *testing.T) {
+	tests := []struct {
+		args []string
+		want string
+	}{
+		{args: []string{"help", "list"}, want: "deck list [flags]"},
+		{args: []string{"help", "validate"}, want: "deck validate [flags]"},
+		{args: []string{"help", "health"}, want: "deck health [flags]"},
+	}
+
+	for _, tc := range tests {
+		out, err := runWithCapturedStdout(tc.args)
+		if err != nil {
+			t.Fatalf("expected help success for %v, got %v", tc.args, err)
+		}
+		if !strings.Contains(out, tc.want) {
+			t.Fatalf("expected %q in output for %v, got %q", tc.want, tc.args, out)
+		}
+	}
 }
 
 func TestDoctor(t *testing.T) {
@@ -412,12 +483,12 @@ func TestCache(t *testing.T) {
 }
 
 func TestRunServerAuditRotationFlagValidation(t *testing.T) {
-	err := runServer([]string{"start", "--audit-max-size-mb", "0"})
+	err := executeServe("./bundle", ":8080", "deck-site-v1", 200, 0, 10, "", "", false)
 	if err == nil || !strings.Contains(err.Error(), "--audit-max-size-mb must be > 0") {
 		t.Fatalf("expected audit max size validation error, got %v", err)
 	}
 
-	err = runServer([]string{"start", "--audit-max-files", "0"})
+	err = executeServe("./bundle", ":8080", "deck-site-v1", 200, 50, 0, "", "", false)
 	if err == nil || !strings.Contains(err.Error(), "--audit-max-files must be > 0") {
 		t.Fatalf("expected audit max files validation error, got %v", err)
 	}
@@ -431,8 +502,8 @@ func TestRunLegacyTopLevelCommandsAreRemoved(t *testing.T) {
 				t.Fatalf("expected unknown command error")
 			}
 			msg := err.Error()
-			want := fmt.Sprintf("unknown command %q", cmd)
-			if msg != want {
+			want := fmt.Sprintf("unknown command %q for %q", cmd, "deck")
+			if !strings.Contains(msg, want) {
 				t.Fatalf("unexpected error\nwant: %q\ngot : %q", want, msg)
 			}
 		})
@@ -444,7 +515,7 @@ func TestLegacyServiceSurfaceRemoved(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected unknown command error")
 	}
-	if err.Error() != `unknown command "service"` {
+	if !strings.Contains(err.Error(), `unknown command "service" for "deck"`) {
 		t.Fatalf("unexpected error: %q", err.Error())
 	}
 }
@@ -454,7 +525,7 @@ func TestLegacySourceSurfaceRemoved(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected unknown command error")
 	}
-	if err.Error() != `unknown command "source"` {
+	if !strings.Contains(err.Error(), `unknown command "source" for "deck"`) {
 		t.Fatalf("unexpected error: %q", err.Error())
 	}
 }
@@ -482,15 +553,93 @@ func TestRunWorkflowValidateAndLegacyValidateMigration(t *testing.T) {
 		}
 	})
 
+	t.Run("validate requires file flag", func(t *testing.T) {
+		_, err := runWithCapturedStdout([]string{"validate"})
+		if err == nil {
+			t.Fatalf("expected missing file error")
+		}
+		if err.Error() != "--file (or -f) is required" {
+			t.Fatalf("unexpected error: %q", err.Error())
+		}
+	})
+
+	t.Run("validate rejects positional args", func(t *testing.T) {
+		_, err := runWithCapturedStdout([]string{"validate", wf})
+		if err == nil {
+			t.Fatalf("expected arg validation error")
+		}
+		if !strings.Contains(err.Error(), "accepts 0 arg(s), received 1") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
 	t.Run("legacy workflow namespace is removed", func(t *testing.T) {
 		err := run([]string{"workflow", "validate", "-f", wf})
 		if err == nil {
 			t.Fatalf("expected unknown command error")
 		}
-		if err.Error() != `unknown command "workflow"` {
+		if !strings.Contains(err.Error(), `unknown command "workflow" for "deck"`) {
 			t.Fatalf("unexpected error: %q", err.Error())
 		}
 	})
+}
+
+func TestListIgnoresLegacyPositionalArgShape(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "workflows"), 0o755); err != nil {
+		t.Fatalf("mkdir workflows: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "workflows", "apply.yaml"), []byte("role: apply\n"), 0o644); err != nil {
+		t.Fatalf("write apply workflow: %v", err)
+	}
+
+	originalCWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(originalCWD)
+	})
+
+	out, err := runWithCapturedStdout([]string{"list", "extra"})
+	if err != nil {
+		t.Fatalf("expected positional arg to be ignored, got %v", err)
+	}
+	if !strings.Contains(out, "workflows/apply.yaml") {
+		t.Fatalf("expected list output, got %q", out)
+	}
+}
+
+func TestListExtraPositionalStopsFlagParsingLikeLegacy(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "workflows"), 0o755); err != nil {
+		t.Fatalf("mkdir workflows: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "workflows", "apply.yaml"), []byte("role: apply\n"), 0o644); err != nil {
+		t.Fatalf("write apply workflow: %v", err)
+	}
+
+	originalCWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(originalCWD)
+	})
+
+	out, err := runWithCapturedStdout([]string{"list", "extra", "--output", "invalid"})
+	if err != nil {
+		t.Fatalf("expected trailing flags after extra positional to be ignored, got %v", err)
+	}
+	if !strings.Contains(out, "workflows/apply.yaml") {
+		t.Fatalf("expected list output, got %q", out)
+	}
 }
 
 func TestRunWorkflowBundleVerifySuccess(t *testing.T) {
@@ -559,6 +708,132 @@ func TestRunWorkflowBundleInspectTar(t *testing.T) {
 	}
 	if !strings.Contains(out, `"entries"`) || !strings.Contains(out, `"files/dummy.txt"`) {
 		t.Fatalf("unexpected inspect output: %q", out)
+	}
+}
+
+func TestRunWorkflowBundleVerifyRejectsExtraPositionalArgs(t *testing.T) {
+	_, err := runWithCapturedStdout([]string{"bundle", "verify", "./one", "./two"})
+	if err == nil {
+		t.Fatalf("expected positional argument validation error")
+	}
+	if err.Error() != "bundle verify accepts a single <path>" {
+		t.Fatalf("unexpected error: %q", err.Error())
+	}
+}
+
+func TestRunWorkflowBundleInspectRejectsExtraPositionalArgs(t *testing.T) {
+	_, err := runWithCapturedStdout([]string{"bundle", "inspect", "./one", "./two"})
+	if err == nil {
+		t.Fatalf("expected positional argument validation error")
+	}
+	if err.Error() != "bundle inspect accepts a single <path>" {
+		t.Fatalf("unexpected error: %q", err.Error())
+	}
+}
+
+func TestRunWorkflowBundleMergeRequiresSingleArchiveArgument(t *testing.T) {
+	_, err := runWithCapturedStdout([]string{"bundle", "merge", "./one.tar", "./two.tar", "--to", "./dest"})
+	if err == nil {
+		t.Fatalf("expected validation error")
+	}
+	if err.Error() != "--to is required" {
+		t.Fatalf("unexpected error: %q", err.Error())
+	}
+}
+
+func TestRunWorkflowBundleMergeRejectsTrailingPositionalAfterFlags(t *testing.T) {
+	root := t.TempDir()
+	archivePath := filepath.Join(root, "bundle.tar")
+	writeBundleTarFixture(t, archivePath)
+	dest := filepath.Join(root, "dest")
+
+	_, err := runWithCapturedStdout([]string{"bundle", "merge", archivePath, "--dry-run", "--to", dest, "./ignored.tar"})
+	if err == nil {
+		t.Fatalf("expected validation error")
+	}
+	if err.Error() != "--to is required" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestNodeIDSetArgShapeRejectsMissingArg(t *testing.T) {
+	_, err := runWithCapturedStdout([]string{"node", "id", "set"})
+	if err == nil {
+		t.Fatalf("expected arg validation error")
+	}
+	if err.Error() != "accepts 1 arg(s), received 0" {
+		t.Fatalf("unexpected error: %q", err.Error())
+	}
+}
+
+func TestCacheCleanIgnoresLegacyPositionalArgShape(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	cacheRoot := filepath.Join(home, ".deck", "cache")
+	if err := os.MkdirAll(filepath.Join(cacheRoot, "packages"), 0o755); err != nil {
+		t.Fatalf("mkdir packages dir: %v", err)
+	}
+
+	_, err := runWithCapturedStdout([]string{"cache", "clean", "extra", "--dry-run"})
+	if err != nil {
+		t.Fatalf("expected positional arg to be ignored, got %v", err)
+	}
+}
+
+func TestCacheCleanExtraPositionalStopsFlagParsingLikeLegacy(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	_, err := runWithCapturedStdout([]string{"cache", "clean", "extra", "--older-than", "invalid", "--dry-run"})
+	if err != nil {
+		t.Fatalf("expected trailing flags after extra positional to be ignored, got %v", err)
+	}
+}
+
+func TestServeExtraPositionalStopsFlagParsingLikeLegacy(t *testing.T) {
+	listener, err := net.Listen("tcp", ":8080")
+	if err == nil {
+		t.Cleanup(func() {
+			_ = listener.Close()
+		})
+	}
+
+	_, err = runWithCapturedStdout([]string{"serve", "extra", "--audit-max-size-mb", "0"})
+	if err == nil {
+		t.Fatalf("expected bind failure")
+	}
+	if !strings.Contains(err.Error(), "address already in use") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPackExtraPositionalStopsFlagParsingLikeLegacy(t *testing.T) {
+	_, err := runWithCapturedStdout([]string{"pack", "extra", "--out", filepath.Join(t.TempDir(), "bundle.tar")})
+	if err == nil {
+		t.Fatalf("expected missing out error")
+	}
+	if err.Error() != "--out is required" {
+		t.Fatalf("unexpected error: %q", err.Error())
+	}
+}
+
+func TestDiffExtraPositionalStopsFlagParsingLikeLegacy(t *testing.T) {
+	_, err := runWithCapturedStdout([]string{"diff", "extra", "--file", "/no/such.yaml"})
+	if err == nil {
+		t.Fatalf("expected missing file error")
+	}
+	if err.Error() != "--file (or -f) is required" {
+		t.Fatalf("unexpected error: %q", err.Error())
+	}
+}
+
+func TestDoctorExtraPositionalStopsFlagParsingLikeLegacy(t *testing.T) {
+	_, err := runWithCapturedStdout([]string{"doctor", "extra", "--out", filepath.Join(t.TempDir(), "doctor.json")})
+	if err == nil {
+		t.Fatalf("expected missing out error")
+	}
+	if err.Error() != "--out is required" {
+		t.Fatalf("unexpected error: %q", err.Error())
 	}
 }
 
@@ -636,7 +911,7 @@ func TestInit(t *testing.T) {
 
 	t.Run("template flag is no longer supported", func(t *testing.T) {
 		_, err := runWithCapturedStdout([]string{"init", "--template", "multinode"})
-		if err == nil || !strings.Contains(err.Error(), "flag provided but not defined") {
+		if err == nil || !strings.Contains(err.Error(), "unknown flag") {
 			t.Fatalf("expected unknown flag error, got %v", err)
 		}
 	})
@@ -1771,6 +2046,220 @@ func TestApplyDryRunExitCodeViaBinary(t *testing.T) {
 	}
 }
 
+func TestCLIContractRoutesErrorsToStderrWithNonZeroExit(t *testing.T) {
+	binaryPath := buildDeckBinary(t, "deck-contract-bin")
+
+	tests := []struct {
+		name       string
+		args       []string
+		wantStderr string
+	}{
+		{
+			name:       "unknown flag",
+			args:       []string{"init", "--template", "multinode"},
+			wantStderr: "Error: unknown flag: --template",
+		},
+		{
+			name:       "unknown top level command",
+			args:       []string{"unknown"},
+			wantStderr: "Error: unknown command \"unknown\" for \"deck\"",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			res := runDeckBinary(t, binaryPath, tc.args...)
+			if res.exitCode == 0 {
+				t.Fatalf("expected non-zero exit for %v", tc.args)
+			}
+			if !strings.Contains(res.stderr, tc.wantStderr) {
+				t.Fatalf("expected stderr to include %q, got %q", tc.wantStderr, res.stderr)
+			}
+		})
+	}
+}
+
+func TestCLIContractUsesSingleErrorLineWithoutAutoUsage(t *testing.T) {
+	binaryPath := buildDeckBinary(t, "deck-contract-cobra-errors-bin")
+
+	tests := []struct {
+		name        string
+		args        []string
+		wantStderr  string
+		forbidden   []string
+		exactlyOnce []string
+	}{
+		{
+			name:        "unknown command",
+			args:        []string{"unknown"},
+			wantStderr:  "Error: unknown command \"unknown\" for \"deck\"",
+			forbidden:   []string{},
+			exactlyOnce: []string{"unknown command \"unknown\" for \"deck\""},
+		},
+		{
+			name:        "unknown flag",
+			args:        []string{"init", "--template", "multinode"},
+			wantStderr:  "Error: unknown flag: --template",
+			forbidden:   []string{},
+			exactlyOnce: []string{"unknown flag: --template"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			res := runDeckBinary(t, binaryPath, tc.args...)
+			if res.exitCode == 0 {
+				t.Fatalf("expected non-zero exit for %v", tc.args)
+			}
+			if res.stdout != "" {
+				t.Fatalf("expected empty stdout for %v, got %q", tc.args, res.stdout)
+			}
+			if !strings.Contains(res.stderr, tc.wantStderr) {
+				t.Fatalf("expected stderr to include %q, got %q", tc.wantStderr, res.stderr)
+			}
+			if strings.Contains(res.stderr, "Usage:") {
+				t.Fatalf("stderr must not include automatic usage for %v, got %q", tc.args, res.stderr)
+			}
+			for _, token := range tc.forbidden {
+				if strings.Contains(res.stderr, token) {
+					t.Fatalf("stderr must not include %q, got %q", token, res.stderr)
+				}
+			}
+			for _, token := range tc.exactlyOnce {
+				if strings.Count(res.stderr, token) != 1 {
+					t.Fatalf("stderr must include %q exactly once, got %q", token, res.stderr)
+				}
+			}
+		})
+	}
+}
+
+func TestCLIContractHelpTokenIsNotHijackedFromFlagValues(t *testing.T) {
+	root := t.TempDir()
+	bundlePath := filepath.Join(t.TempDir(), "site-release.tar")
+	writeSiteReleaseBundleTarFixture(t, bundlePath)
+
+	if _, err := runWithCapturedStdout([]string{"site", "release", "import", "--root", root, "--id", "release-1", "--bundle", bundlePath}); err != nil {
+		t.Fatalf("site release import failed: %v", err)
+	}
+
+	out, err := runWithCapturedStdout([]string{"site", "session", "create", "--root", root, "--id", "help", "--release", "release-1"})
+	if err != nil {
+		t.Fatalf("expected session create success, got %v", err)
+	}
+	if !strings.Contains(out, "site session create: ok (session=help release=release-1)") {
+		t.Fatalf("unexpected output: %q", out)
+	}
+}
+
+func TestCLIContractAllowsCobraCompleteInternalPath(t *testing.T) {
+	binaryPath := buildDeckBinary(t, "deck-complete-bin")
+	res := runDeckBinary(t, binaryPath, "__complete", "completion", "b")
+	if res.exitCode != 0 {
+		t.Fatalf("expected zero exit, got %d stderr=%q", res.exitCode, res.stderr)
+	}
+	if !strings.Contains(res.stdout, "bash") {
+		t.Fatalf("expected completion candidate output, got %q", res.stdout)
+	}
+	if !strings.Contains(res.stdout, ":") {
+		t.Fatalf("expected completion directive output, got %q", res.stdout)
+	}
+	if strings.Contains(res.stderr, "unknown command") {
+		t.Fatalf("completion path must not be rejected, stderr=%q", res.stderr)
+	}
+}
+
+func TestCLIContractUnknownFlagUsesCobraWording(t *testing.T) {
+	binaryPath := buildDeckBinary(t, "deck-cobra-flag-bin")
+	res := runDeckBinary(t, binaryPath, "serve", "--bogus")
+	if res.exitCode == 0 {
+		t.Fatalf("expected non-zero exit")
+	}
+	if !strings.Contains(res.stderr, "Error: unknown flag: --bogus") {
+		t.Fatalf("unexpected stderr: %q", res.stderr)
+	}
+}
+
+func TestCLIContractHelpRoutesViaBinary(t *testing.T) {
+	binaryPath := buildDeckBinary(t, "deck-help-contract-bin")
+
+	tests := []struct {
+		name       string
+		args       []string
+		wantStdout string
+	}{
+		{name: "root help flag", args: []string{"--help"}, wantStdout: "deck [command]"},
+		{name: "help bundle", args: []string{"help", "bundle"}, wantStdout: "deck bundle [command]"},
+		{name: "nested site help", args: []string{"site", "release", "--help"}, wantStdout: "deck site release [command]"},
+		{name: "nested node help", args: []string{"node", "id", "--help"}, wantStdout: "deck node id [command]"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			res := runDeckBinary(t, binaryPath, tc.args...)
+			if res.exitCode != 0 {
+				t.Fatalf("expected zero exit for %v, got %d stderr=%q", tc.args, res.exitCode, res.stderr)
+			}
+			if !strings.Contains(res.stdout, tc.wantStdout) {
+				t.Fatalf("expected stdout to include %q, got %q", tc.wantStdout, res.stdout)
+			}
+			if res.stderr != "" {
+				t.Fatalf("expected empty stderr for %v, got %q", tc.args, res.stderr)
+			}
+		})
+	}
+}
+
+func TestCLIContractGroupedParentsRejectUnknownSubcommandsViaBinary(t *testing.T) {
+	binaryPath := buildDeckBinary(t, "deck-subcmd-bin")
+
+	tests := []struct {
+		name       string
+		args       []string
+		wantStderr string
+	}{
+		{name: "bundle", args: []string{"bundle", "wat"}, wantStderr: "Error: unknown command \"wat\" for \"deck bundle\""},
+		{name: "cache", args: []string{"cache", "wat"}, wantStderr: "Error: unknown command \"wat\" for \"deck cache\""},
+		{name: "node", args: []string{"node", "id", "wat"}, wantStderr: "Error: unknown command \"wat\" for \"deck node id\""},
+		{name: "site", args: []string{"site", "release", "wat"}, wantStderr: "Error: unknown command \"wat\" for \"deck site release\""},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			res := runDeckBinary(t, binaryPath, tc.args...)
+			if res.exitCode == 0 {
+				t.Fatalf("expected non-zero exit for %v", tc.args)
+			}
+			if res.stdout != "" {
+				t.Fatalf("expected empty stdout for %v, got %q", tc.args, res.stdout)
+			}
+			if !strings.Contains(res.stderr, tc.wantStderr) {
+				t.Fatalf("expected stderr to include %q, got %q", tc.wantStderr, res.stderr)
+			}
+			if strings.Contains(res.stderr, "Usage:") {
+				t.Fatalf("stderr must not include automatic usage for %v, got %q", tc.args, res.stderr)
+			}
+		})
+	}
+}
+
+func TestCLIContractBundleInspectAllowsPositionalBeforeFlagViaBinary(t *testing.T) {
+	binaryPath := buildDeckBinary(t, "deck-positional-bin")
+	archivePath := filepath.Join(t.TempDir(), "bundle.tar")
+	writeBundleTarFixture(t, archivePath)
+
+	res := runDeckBinary(t, binaryPath, "bundle", "inspect", archivePath, "-o", "json")
+	if res.exitCode != 0 {
+		t.Fatalf("expected zero exit, got %d stderr=%q", res.exitCode, res.stderr)
+	}
+	if res.stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", res.stderr)
+	}
+	if !strings.Contains(res.stdout, `"entries"`) || !strings.Contains(res.stdout, `"files/dummy.txt"`) {
+		t.Fatalf("unexpected stdout: %q", res.stdout)
+	}
+}
+
 func TestBundledApplyWorksFromBundleDir(t *testing.T) {
 	binaryPath := filepath.Join(t.TempDir(), "deck-pack-bin")
 	buildCmd := exec.Command("go", "build", "-o", binaryPath, "./cmd/deck")
@@ -2020,6 +2509,45 @@ func runWithCapturedStdout(args []string) (string, error) {
 	return string(raw), runErr
 }
 
+type deckBinaryResult struct {
+	stdout   string
+	stderr   string
+	exitCode int
+}
+
+func buildDeckBinary(t *testing.T, name string) string {
+	t.Helper()
+	binaryPath := filepath.Join(t.TempDir(), name)
+	buildCmd := exec.Command("go", "build", "-o", binaryPath, "./cmd/deck")
+	buildCmd.Dir = filepath.Join("..", "..")
+	if raw, err := buildCmd.CombinedOutput(); err != nil {
+		t.Fatalf("build deck binary: %v, output=%s", err, string(raw))
+	}
+	return binaryPath
+}
+
+func runDeckBinary(t *testing.T, binaryPath string, args ...string) deckBinaryResult {
+	t.Helper()
+	cmd := exec.Command(binaryPath, args...)
+	cmd.Dir = filepath.Join("..", "..")
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	result := deckBinaryResult{stdout: stdout.String(), stderr: stderr.String()}
+	if err == nil {
+		return result
+	}
+	exitErr, ok := err.(*exec.ExitError)
+	if !ok {
+		t.Fatalf("run deck binary: %v", err)
+	}
+	result.exitCode = exitErr.ExitCode()
+	return result
+}
+
 func writeWorkflowYAML(t *testing.T, path string, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
@@ -2097,9 +2625,19 @@ func sliceContains(values []string, target string) bool {
 
 func writeBundleTarFixture(t *testing.T, archivePath string) {
 	t.Helper()
-	content := []byte("ok\n")
-	sum := sha256.Sum256(content)
-	manifest := fmt.Sprintf("{\n  \"entries\": [\n    {\"path\": %q, \"sha256\": %q, \"size\": %d}\n  ]\n}\n", "files/dummy.txt", hex.EncodeToString(sum[:]), len(content))
+	entries := []struct {
+		path string
+		body []byte
+	}{
+		{path: "files/dummy.txt", body: []byte("ok\n")},
+		{path: "files/deck", body: []byte("deck-binary\n")},
+	}
+	manifestEntries := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		sum := sha256.Sum256(entry.body)
+		manifestEntries = append(manifestEntries, fmt.Sprintf("    {\"path\": %q, \"sha256\": %q, \"size\": %d}", entry.path, hex.EncodeToString(sum[:]), len(entry.body)))
+	}
+	manifest := fmt.Sprintf("{\n  \"entries\": [\n%s\n  ]\n}\n", strings.Join(manifestEntries, ",\n"))
 
 	f, err := os.Create(archivePath)
 	if err != nil {
@@ -2115,7 +2653,8 @@ func writeBundleTarFixture(t *testing.T, archivePath string) {
 		body []byte
 	}{
 		{name: "bundle/.deck/manifest.json", body: []byte(manifest)},
-		{name: "bundle/files/dummy.txt", body: content},
+		{name: "bundle/files/dummy.txt", body: entries[0].body},
+		{name: "bundle/files/deck", body: entries[1].body},
 	} {
 		h := &tar.Header{Name: entry.name, Mode: 0o644, Size: int64(len(entry.body)), Typeflag: tar.TypeReg}
 		if err := tw.WriteHeader(h); err != nil {

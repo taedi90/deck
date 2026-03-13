@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +10,10 @@ import (
 
 type varFlag struct {
 	values map[string]string
+}
+
+func (v *varFlag) Type() string {
+	return "stringToString"
 }
 
 func (v *varFlag) String() string {
@@ -49,16 +52,6 @@ func (v *varFlag) AsMap() map[string]string {
 		cloned[key] = value
 	}
 	return cloned
-}
-
-func registerFileFlags(fs *flag.FlagSet, target *string, usage string) {
-	fs.StringVar(target, "file", "", usage)
-	fs.StringVar(target, "f", "", usage)
-}
-
-func registerOutputFormatFlags(fs *flag.FlagSet, target *string, defaultValue string) {
-	fs.StringVar(target, "output", defaultValue, "output format (text|json)")
-	fs.StringVar(target, "o", defaultValue, "output format (text|json)")
 }
 
 func varsAsAnyMap(vars map[string]string) map[string]any {

@@ -2,6 +2,8 @@ package main
 
 import "errors"
 
+const defaultExitCode = 1
+
 type exitCodeError struct {
 	code int
 	err  error
@@ -21,7 +23,14 @@ func extractExitCode(err error) (int, bool) {
 		return 0, false
 	}
 	if coded.code <= 0 {
-		return 1, true
+		return defaultExitCode, true
 	}
 	return coded.code, true
+}
+
+func resolveExitCode(err error) int {
+	if code, ok := extractExitCode(err); ok {
+		return code
+	}
+	return defaultExitCode
 }
