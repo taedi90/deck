@@ -10,7 +10,7 @@ It supports a simple operator flow: author the workflow, validate it, build the 
 - `completion`: generate shell completion for bash, zsh, fish, and PowerShell
 - `validate`: validate a workflow file against the workflow and step schemas
 - `pack`: gather artifacts, copy workflows, embed the `deck` binary, and write `bundle.tar`
-- `diff`: inspect which apply steps would run or skip before execution
+- `plan`: inspect which apply steps would run or skip before execution
 - `doctor`: generate a report for preflight-style checks and diagnostics
 - `apply`: execute the `apply` workflow locally
 
@@ -52,7 +52,7 @@ deck validate --file ./demo/workflows/pack.yaml
 
 cd ./demo
 deck pack --out ./bundle.tar
-deck diff --file ./workflows/apply.yaml
+deck plan --file ./workflows/apply.yaml
 deck doctor --file ./workflows/apply.yaml --out ./reports/doctor.json
 deck apply --file ./workflows/apply.yaml
 ```

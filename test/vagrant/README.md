@@ -69,7 +69,7 @@ bash test/e2e/vagrant/run-scenario.sh --scenario k8s-node-reset
 
 ## 단계 실행
 
-이 문서는 Vagrant 회귀 테스트 유지보수용이다. 제품의 권장 사용자 흐름은 문서 본편의 로컬 세션 경로인 `diff -> doctor -> apply`다.
+이 문서는 Vagrant 회귀 테스트 유지보수용이다. 제품의 권장 사용자 흐름은 문서 본편의 로컬 세션 경로인 `plan -> doctor -> apply`다.
 
 - 내부 회귀 흐름은 호스트 준비, VM 기동, 시나리오 실행, 검증 수집, 정리 순서로 이해하면 된다.
 - 시나리오별 진입 워크플로는 `test/workflows/scenarios/*.yaml`에서 관리한다.

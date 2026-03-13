@@ -47,12 +47,29 @@ func TestRunUsageShowsTopLevelAxes(t *testing.T) {
 			}
 
 			msg := res.stdout
-			for _, cmd := range []string{"pack", "apply", "completion", "serve", "bundle", "list", "validate", "diff", "init", "doctor", "health", "logs", "cache", "node", "site"} {
+			for _, cmd := range []string{"init", "validate", "pack", "plan", "apply", "doctor", "completion", "serve", "bundle", "list", "health", "logs", "cache", "node", "site"} {
 				if !strings.Contains(msg, cmd) {
 					t.Fatalf("usage must include %q, got %q", cmd, msg)
 				}
 			}
-			for _, legacy := range []string{"strategy", "control", "workflow"} {
+			for _, section := range []string{"Core Commands\n", "Additional Commands\n"} {
+				if !strings.Contains(msg, section) {
+					t.Fatalf("usage must include %q, got %q", section, msg)
+				}
+			}
+			if strings.Index(msg, "Core Commands\n") > strings.Index(msg, "Additional Commands\n") {
+				t.Fatalf("core commands section must appear before additional commands: %q", msg)
+			}
+			coreCommands := []string{"init", "validate", "pack", "plan", "apply"}
+			for i := 0; i < len(coreCommands)-1; i++ {
+				if strings.Index(msg, coreCommands[i]) > strings.Index(msg, coreCommands[i+1]) {
+					t.Fatalf("core commands must keep registration order: %q appeared after %q in %q", coreCommands[i], coreCommands[i+1], msg)
+				}
+			}
+			if strings.Index(msg, "doctor") > strings.Index(msg, "site") {
+				t.Fatalf("additional commands must keep registration order: %q", msg)
+			}
+			for _, legacy := range []string{"strategy", "control"} {
 				if strings.Contains(msg, legacy) {
 					t.Fatalf("usage must not include legacy namespace %q, got %q", legacy, msg)
 				}
@@ -817,8 +834,8 @@ func TestPackExtraPositionalStopsFlagParsingLikeLegacy(t *testing.T) {
 	}
 }
 
-func TestDiffExtraPositionalStopsFlagParsingLikeLegacy(t *testing.T) {
-	_, err := runWithCapturedStdout([]string{"diff", "extra", "--file", "/no/such.yaml"})
+func TestPlanExtraPositionalStopsFlagParsingLikeLegacy(t *testing.T) {
+	_, err := runWithCapturedStdout([]string{"plan", "extra", "--file", "/no/such.yaml"})
 	if err == nil {
 		t.Fatalf("expected missing file error")
 	}
@@ -1610,17 +1627,17 @@ phases:
 	})
 }
 
-func TestDiff(t *testing.T) {
+func TestPlan(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	wfPath := filepath.Join(t.TempDir(), "apply.yaml")
 	writeWorkflowYAML(t, wfPath, "role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: step-1\n        apiVersion: deck/v1alpha1\n        kind: RunCommand\n        spec:\n          command: [\"true\"]\n")
 
-	before, err := runWithCapturedStdout([]string{"diff", "--file", wfPath})
+	before, err := runWithCapturedStdout([]string{"plan", "--file", wfPath})
 	if err != nil {
 		t.Fatalf("expected success, got %v", err)
 	}
 	if !strings.Contains(before, "RUN") {
-		t.Fatalf("expected RUN in diff output, got %q", before)
+		t.Fatalf("expected RUN in plan output, got %q", before)
 	}
 
 	wf, err := config.Load(context.Background(), wfPath)
@@ -1635,15 +1652,15 @@ func TestDiff(t *testing.T) {
 		t.Fatalf("install run: %v", err)
 	}
 
-	after, err := runWithCapturedStdout([]string{"diff", "--file", wfPath})
+	after, err := runWithCapturedStdout([]string{"plan", "--file", wfPath})
 	if err != nil {
 		t.Fatalf("expected success, got %v", err)
 	}
 	if before == after {
-		t.Fatalf("expected diff output to change after apply run")
+		t.Fatalf("expected plan output to change after apply run")
 	}
 	if !strings.Contains(after, "SKIP") {
-		t.Fatalf("expected SKIP in diff output after apply run, got %q", after)
+		t.Fatalf("expected SKIP in plan output after apply run, got %q", after)
 	}
 }
 
@@ -1752,15 +1769,15 @@ func TestAssistedDiffUsesLocalEngine(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	out, err := runWithCapturedStdout([]string{"diff", "--server", srv.URL, "--session", "session-1", "--api-token", "deck-site-v1"})
+	out, err := runWithCapturedStdout([]string{"plan", "--server", srv.URL, "--session", "session-1", "--api-token", "deck-site-v1"})
 	if err != nil {
-		t.Fatalf("assisted diff failed: %v", err)
+		t.Fatalf("assisted plan failed: %v", err)
 	}
 	if !strings.Contains(out, "RUN") {
-		t.Fatalf("expected RUN diff output, got %q", out)
+		t.Fatalf("expected RUN plan output, got %q", out)
 	}
 	if !uploaded {
-		t.Fatalf("expected assisted diff report upload")
+		t.Fatalf("expected assisted plan report upload")
 	}
 }
 

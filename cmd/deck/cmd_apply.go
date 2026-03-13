@@ -35,11 +35,12 @@ type diffOptions struct {
 	varOverrides  map[string]string
 }
 
-func newDiffCommand() *cobra.Command {
+func newPlanCommand() *cobra.Command {
 	vars := &varFlag{}
 	cmd := &cobra.Command{
-		Use:   "diff",
-		Short: "Show the planned install step execution",
+		Use:     "plan",
+		Aliases: []string{"diff"},
+		Short:   "Show the planned install step execution",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runDiffWithOptions(diffOptions{
 				workflowPath:  cmdFlagValue(cmd, "file"),
@@ -57,7 +58,7 @@ func newDiffCommand() *cobra.Command {
 	cmd.Flags().String("server", "", "site server URL (assisted mode requires --server and --session)")
 	cmd.Flags().String("session", "", "site session id for assisted mode")
 	cmd.Flags().String("api-token", "deck-site-v1", "bearer token for assisted site APIs")
-	cmd.Flags().String("phase", "install", "phase name to diff")
+	cmd.Flags().String("phase", "install", "phase name to plan")
 	cmd.Flags().StringP("output", "o", "text", "output format (text|json)")
 	cmd.Flags().Var(vars, "var", "set variable override (key=value), repeatable")
 	return cmd
