@@ -7,6 +7,7 @@ It supports a simple operator flow: author the workflow, validate it, build the 
 ## Default local flow
 
 - `init`: create starter workflow files under `workflows/`
+- `completion`: generate shell completion for bash, zsh, fish, and PowerShell
 - `validate`: validate a workflow file against the workflow and step schemas
 - `pack`: gather artifacts, copy workflows, embed the `deck` binary, and write `bundle.tar`
 - `diff`: inspect which apply steps would run or skip before execution
@@ -22,6 +23,18 @@ It supports a simple operator flow: author the workflow, validate it, build the 
 
 These commands are additive. They do not replace the default local execution path.
 
+## Shell completion
+
+- `completion` is the only completion entrypoint, so normal command stdout stays reserved for command results.
+- Supported shells: `bash`, `zsh`, `fish`, `powershell`
+
+```bash
+deck completion bash
+deck completion zsh
+deck completion fish
+deck completion powershell
+```
+
 ## Other lifecycle commands
 
 - `bundle`: bundle lifecycle operations
@@ -33,6 +46,7 @@ These commands are additive. They do not replace the default local execution pat
 
 ```bash
 deck init --out ./demo
+deck completion bash > ./deck.bash
 deck validate --file ./demo/workflows/apply.yaml
 deck validate --file ./demo/workflows/pack.yaml
 
@@ -55,5 +69,7 @@ deck health --server http://127.0.0.1:8080
 
 - `pack` expects a workflow directory containing `pack.yaml`, `apply.yaml`, and `vars.yaml`.
 - `apply` defaults to the `install` phase when phases are used.
+- Help text is shown on stdout only when you request it with `--help` or `help`.
+- Command and flag errors are written to stderr without automatic usage output.
 - Prefer typed step kinds for common host changes.
 - Keep `RunCommand` for cases where the clearer typed form does not exist yet.

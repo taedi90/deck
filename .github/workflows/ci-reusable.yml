@@ -26,6 +26,19 @@ jobs:
       - name: Run golangci-lint
         run: make lint
 
+      - name: Run help and completion smoke
+        run: |
+          ./deck --help
+          ./deck help completion
+          ./deck completion bash >/tmp/deck.bash
+          test -s /tmp/deck.bash
+          ./deck completion zsh >/tmp/_deck
+          test -s /tmp/_deck
+          ./deck completion fish >/tmp/deck.fish
+          test -s /tmp/deck.fish
+          ./deck completion powershell >/tmp/deck.ps1
+          test -s /tmp/deck.ps1
+
       - name: Validate JSON schema files are parseable
         run: |
           python3 - <<'PY'
@@ -47,6 +60,7 @@ jobs:
       - name: Run core test set
         run: |
           go test ./...
+          ./deck validate --file docs/examples/vagrant-smoke-install.yaml
           ./deck validate --file test/workflows/scenarios/control-plane-bootstrap.yaml
           ./deck validate --file test/workflows/scenarios/worker-join.yaml
           ./deck validate --file test/workflows/scenarios/node-reset.yaml

@@ -102,6 +102,8 @@ deck apply
 
 단계별 가이드는 `docs/tutorials/quick-start.md`부터 시작하시면 됩니다.
 
+요청한 help 출력은 stdout으로 나가고, 명령/플래그 오류는 자동 usage 없이 stderr로만 출력됩니다.
+
 ## Learn more
 
 - Docs home: `docs/README.md`
