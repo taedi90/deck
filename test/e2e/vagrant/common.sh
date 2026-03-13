@@ -74,13 +74,30 @@ SCENARIO_METADATA_LOADED=0
 SCENARIO_METADATA_NODES=""
 SCENARIO_METADATA_USES_WORKERS=""
 
+scenario_basename() {
+  local scenario_id="${1:-}"
+  case "${scenario_id}" in
+    k8s-*)
+      printf '%s\n' "${scenario_id#k8s-}"
+      ;;
+    *)
+      printf '%s\n' "${scenario_id}"
+      ;;
+  esac
+}
+
 load_scenario_metadata() {
   local metadata_path="${ROOT_DIR}/test/e2e/scenario-meta/${SCENARIO_ID}.env"
+  local normalized_metadata_path="${ROOT_DIR}/test/e2e/scenario-meta/$(scenario_basename "${SCENARIO_ID}").env"
   SCENARIO_METADATA_LOADED=0
   SCENARIO_METADATA_NODES=""
   SCENARIO_METADATA_USES_WORKERS=""
   if [[ -f "${metadata_path}" ]]; then
     source "${metadata_path}"
+  elif [[ "${normalized_metadata_path}" != "${metadata_path}" && -f "${normalized_metadata_path}" ]]; then
+    source "${normalized_metadata_path}"
+  fi
+  if [[ -n "${NODES:-}" || -n "${USES_WORKERS:-}" ]]; then
     SCENARIO_METADATA_NODES="${NODES:-}"
     SCENARIO_METADATA_USES_WORKERS="${USES_WORKERS:-}"
     if [[ -n "${SCENARIO_METADATA_NODES}" && -n "${SCENARIO_METADATA_USES_WORKERS}" ]]; then
@@ -496,7 +513,7 @@ if dispatcher_script:
     paths.append(dispatcher_script)
 if dispatcher_scenario_helper and dispatcher_scenario_helper.is_file():
     paths.append(dispatcher_scenario_helper)
-for base in (root / "test/workflows",):
+for base in (root / "test/workflows", root / "test/e2e/scenario-meta", root / "test/e2e/scenario-hooks"):
     if base.exists():
         paths.extend(sorted(p for p in base.rglob("*") if p.is_file()))
 if include_legacy_workflows:
@@ -542,6 +559,9 @@ PY
     cp -a "${ROOT_DIR}/test/vagrant/workflows" "${RSYNC_STAGE_STAGE_ABS}/test/vagrant/"
   fi
   cp -a "${ROOT_DIR}/test/workflows" "${RSYNC_STAGE_STAGE_ABS}/test/"
+  mkdir -p "${RSYNC_STAGE_STAGE_ABS}/test/e2e"
+  cp -a "${ROOT_DIR}/test/e2e/scenario-meta" "${RSYNC_STAGE_STAGE_ABS}/test/e2e/"
+  cp -a "${ROOT_DIR}/test/e2e/scenario-hooks" "${RSYNC_STAGE_STAGE_ABS}/test/e2e/"
   cp "${deck_bin_source}" "${RSYNC_STAGE_STAGE_ABS}/test/artifacts/bin/deck-linux-${HOST_ARCH}"
   if [[ -f "${ROOT_DIR}/test/artifacts/bin/deck-linux-amd64" && "${HOST_ARCH}" != "amd64" ]]; then
     cp "${ROOT_DIR}/test/artifacts/bin/deck-linux-amd64" "${RSYNC_STAGE_STAGE_ABS}/test/artifacts/bin/deck-linux-amd64"

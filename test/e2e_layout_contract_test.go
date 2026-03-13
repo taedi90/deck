@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -51,6 +52,37 @@ func TestE2ELayoutContracts(t *testing.T) {
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("node-reset result contract check failed: %v\n%s", err, string(out))
+	}
+
+	hostMetadataCmd := "ROOT_DIR='" + root + "'; DECK_VAGRANT_SCENARIO=k8s-control-plane-bootstrap; source '" + filepath.Join(root, "test", "e2e", "vagrant", "common.sh") + "'; load_scenario_metadata; test \"${SCENARIO_METADATA_LOADED}\" = 1; test \"${SCENARIO_METADATA_NODES}\" = control-plane; test \"${SCENARIO_METADATA_USES_WORKERS}\" = 0"
+	cmd = exec.Command("bash", "-lc", hostMetadataCmd)
+	cmd.Dir = root
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("host metadata normalization contract check failed: %v\n%s", err, string(out))
+	}
+
+	guestHelperCmd := "ROOT_DIR='" + root + "'; E2E_SCENARIO=k8s-control-plane-bootstrap; source '" + scenarioHelperPath + "'; source_scenario_vm_helper >/dev/null 2>&1; declare -F bootstrap_prepare >/dev/null"
+	cmd = exec.Command("bash", "-lc", guestHelperCmd)
+	cmd.Dir = root
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("guest helper normalization contract check failed: %v\n%s", err, string(out))
+	}
+
+	renderDir := filepath.Join(tmp, "rendered")
+	cmd = exec.Command("bash", filepath.Join(root, "test", "vagrant", "render-prepared-bundle-workflows.sh"), root, renderDir, "k8s-control-plane-bootstrap")
+	cmd.Dir = root
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("render prepared bundle workflows contract check failed: %v\n%s", err, string(out))
+	}
+	applyContent, err := os.ReadFile(filepath.Join(renderDir, "apply.yaml"))
+	if err != nil {
+		t.Fatalf("read rendered apply workflow: %v", err)
+	}
+	if !strings.Contains(string(applyContent), "scenarios/control-plane-bootstrap.yaml") {
+		t.Fatalf("expected rendered apply workflow to use normalized scenario name, got:\n%s", string(applyContent))
 	}
 }
 

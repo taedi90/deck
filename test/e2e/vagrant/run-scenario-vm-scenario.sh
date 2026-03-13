@@ -53,13 +53,32 @@ SCENARIO_VERIFY_STAGE_DEFAULT=""
 SCENARIO_USES_WORKERS=""
 SCENARIO_REQUIRES_RESET_PROOF=""
 
+scenario_basename() {
+  local scenario_id="${1:-}"
+  case "${scenario_id}" in
+    k8s-*)
+      printf '%s\n' "${scenario_id#k8s-}"
+      ;;
+    *)
+      printf '%s\n' "${scenario_id}"
+      ;;
+  esac
+}
+
 load_scenario_contract() {
   local metadata_path="/workspace/test/e2e/scenario-meta/${E2E_SCENARIO}.env"
   local fallback_metadata_path="${ROOT_DIR:-}/test/e2e/scenario-meta/${E2E_SCENARIO}.env"
+  local normalized_scenario="$(scenario_basename "${E2E_SCENARIO}")"
+  local normalized_metadata_path="/workspace/test/e2e/scenario-meta/${normalized_scenario}.env"
+  local normalized_fallback_metadata_path="${ROOT_DIR:-}/test/e2e/scenario-meta/${normalized_scenario}.env"
   if [[ -f "${metadata_path}" ]]; then
     source "${metadata_path}"
   elif [[ -n "${ROOT_DIR:-}" && -f "${fallback_metadata_path}" ]]; then
     source "${fallback_metadata_path}"
+  elif [[ "${normalized_metadata_path}" != "${metadata_path}" && -f "${normalized_metadata_path}" ]]; then
+    source "${normalized_metadata_path}"
+  elif [[ -n "${ROOT_DIR:-}" && "${normalized_fallback_metadata_path}" != "${fallback_metadata_path}" && -f "${normalized_fallback_metadata_path}" ]]; then
+    source "${normalized_fallback_metadata_path}"
   fi
   if [[ -n "${VERIFY_STAGE_DEFAULT:-}" || -n "${USES_WORKERS:-}" || -n "${REQUIRES_RESET_PROOF:-}" ]]; then
     SCENARIO_VERIFY_STAGE_DEFAULT="${VERIFY_STAGE_DEFAULT:-}"
@@ -573,6 +592,18 @@ PY
 
 source_scenario_vm_helper() {
   local helper="/workspace/test/e2e/scenario-hooks/${E2E_SCENARIO}.sh"
+  local normalized_helper="/workspace/test/e2e/scenario-hooks/$(scenario_basename "${E2E_SCENARIO}").sh"
+  local fallback_helper="${ROOT_DIR:-}/test/e2e/scenario-hooks/${E2E_SCENARIO}.sh"
+  local normalized_fallback_helper="${ROOT_DIR:-}/test/e2e/scenario-hooks/$(scenario_basename "${E2E_SCENARIO}").sh"
+  if [[ ! -f "${helper}" ]]; then
+    helper="${normalized_helper}"
+  fi
+  if [[ ! -f "${helper}" && -n "${ROOT_DIR:-}" && -f "${fallback_helper}" ]]; then
+    helper="${fallback_helper}"
+  fi
+  if [[ ! -f "${helper}" && -n "${ROOT_DIR:-}" && -f "${normalized_fallback_helper}" ]]; then
+    helper="${normalized_fallback_helper}"
+  fi
   if [[ ! -f "${helper}" ]]; then
     echo "[deck] missing scenario VM helper: ${helper}"
     exit 1
