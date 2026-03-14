@@ -33,7 +33,7 @@ prepare artifacts -> pack bundle -> transfer bundle -> run locally on each node
 
 ## 3. Model the procedure clearly
 
-Use steps and phases to show the operator what the procedure is doing.
+Use declarative `prepare` inventory for `pack`, and use steps and phases to show the operator what `apply` is doing.
 
 Typical boundaries in Kubernetes workflows:
 
@@ -47,7 +47,7 @@ Prefer typed steps where possible. Keep `RunCommand` for the edges that are not 
 
 ## 4. Prepare the bundle in the connected environment
 
-Author a `pack` workflow that gathers the packages, container images, files, and templates your site needs.
+Author a `pack` workflow that declares the packages, container images, files, and templates your site needs. Keep file output paths relative to the `files/` bundle root.
 
 Then build the bundle:
 
