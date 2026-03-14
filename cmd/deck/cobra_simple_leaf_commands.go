@@ -6,20 +6,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newListCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List available deck files from a local bundle or server",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			return executeList(cmdFlagValue(cmd, "server"), cmdFlagValue(cmd, "output"))
-		},
-	}
-	cmd.Flags().SetInterspersed(false)
-	cmd.Flags().String("server", "", "server URL for index (optional; defaults to local workflows/)")
-	cmd.Flags().StringP("output", "o", "text", "output format (text|json)")
-	return cmd
-}
-
 func newValidateCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "validate",
@@ -30,73 +16,6 @@ func newValidateCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringP("file", "f", "", "path or URL to workflow file")
-	return cmd
-}
-
-func newHealthCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "health",
-		Short: "Probe a running deck server",
-		Args:  cobra.ExactArgs(0),
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			return executeHealth(cmdFlagValue(cmd, "server"))
-		},
-	}
-	cmd.Flags().String("server", "", "server base URL (required)")
-	return cmd
-}
-
-func newServeCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "serve",
-		Short: "Start the bundle server",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			return executeServe(
-				cmdFlagValue(cmd, "root"),
-				cmdFlagValue(cmd, "addr"),
-				cmdFlagValue(cmd, "api-token"),
-				cmdFlagIntValue(cmd, "report-max"),
-				cmdFlagIntValue(cmd, "audit-max-size-mb"),
-				cmdFlagIntValue(cmd, "audit-max-files"),
-				cmdFlagValue(cmd, "tls-cert"),
-				cmdFlagValue(cmd, "tls-key"),
-				cmdFlagBoolValue(cmd, "tls-self-signed"),
-			)
-		},
-	}
-	cmd.Flags().SetInterspersed(false)
-	cmd.Flags().String("root", "./bundle", "server content root")
-	cmd.Flags().String("addr", ":8080", "server listen address")
-	cmd.Flags().String("api-token", "deck-site-v1", "bearer token required for /api/site/v1 endpoints")
-	cmd.Flags().Int("report-max", 200, "max retained in-memory reports")
-	cmd.Flags().Int("audit-max-size-mb", 50, "max audit log size in MB before rotation")
-	cmd.Flags().Int("audit-max-files", 10, "max retained rotated audit files")
-	cmd.Flags().String("tls-cert", "", "TLS certificate path")
-	cmd.Flags().String("tls-key", "", "TLS private key path")
-	cmd.Flags().Bool("tls-self-signed", false, "auto-generate and use self-signed TLS cert")
-	return cmd
-}
-
-func newLogsCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "logs",
-		Short: "Read server audit logs from file or journal",
-		Args:  cobra.ExactArgs(0),
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			return executeLogs(
-				cmdFlagValue(cmd, "root"),
-				cmdFlagValue(cmd, "source"),
-				cmdFlagValue(cmd, "path"),
-				cmdFlagValue(cmd, "unit"),
-				cmdFlagValue(cmd, "output"),
-			)
-		},
-	}
-	cmd.Flags().String("root", ".", "serve root directory")
-	cmd.Flags().String("source", "file", "log source (file|journal|both)")
-	cmd.Flags().String("path", "", "explicit audit log file path")
-	cmd.Flags().String("unit", "", "systemd unit for journal logs")
-	cmd.Flags().StringP("output", "o", "text", "output format (text|json)")
 	return cmd
 }
 

@@ -55,9 +55,9 @@ func newPlanCommand() *cobra.Command {
 	}
 	cmd.Flags().SetInterspersed(false)
 	cmd.Flags().StringP("file", "f", "", "path to workflow file")
-	cmd.Flags().String("server", "", "site server URL (assisted mode requires --server and --session)")
+	cmd.Flags().String("server", "", "site server URL (defaults to saved server when --session is set)")
 	cmd.Flags().String("session", "", "site session id for assisted mode")
-	cmd.Flags().String("api-token", "deck-site-v1", "bearer token for assisted site APIs")
+	cmd.Flags().String("api-token", "", "bearer token for assisted site APIs (defaults to saved token)")
 	cmd.Flags().String("phase", "install", "phase name to plan")
 	cmd.Flags().StringP("output", "o", "text", "output format (text|json)")
 	cmd.Flags().Var(vars, "var", "set variable override (key=value), repeatable")
@@ -214,9 +214,9 @@ func newDoctorCommand() *cobra.Command {
 	}
 	cmd.Flags().SetInterspersed(false)
 	cmd.Flags().StringP("file", "f", "", "path or URL to workflow file")
-	cmd.Flags().String("server", "", "site server URL (assisted mode requires --server and --session)")
+	cmd.Flags().String("server", "", "site server URL (defaults to saved server when --session is set)")
 	cmd.Flags().String("session", "", "site session id for assisted mode")
-	cmd.Flags().String("api-token", "deck-site-v1", "bearer token for assisted site APIs")
+	cmd.Flags().String("api-token", "", "bearer token for assisted site APIs (defaults to saved token)")
 	cmd.Flags().String("out", "", "output report path (required)")
 	cmd.Flags().Var(vars, "var", "set variable override (key=value), repeatable")
 	return cmd
@@ -575,9 +575,9 @@ func newApplyCommand() *cobra.Command {
 	}
 	cmd.Flags().SetInterspersed(false)
 	cmd.Flags().StringP("file", "f", "", "path or URL to workflow file")
-	cmd.Flags().String("server", "", "site server URL (assisted mode requires --server and --session)")
+	cmd.Flags().String("server", "", "site server URL (defaults to saved server when --session is set)")
 	cmd.Flags().String("session", "", "site session id for assisted mode")
-	cmd.Flags().String("api-token", "deck-site-v1", "bearer token for assisted site APIs")
+	cmd.Flags().String("api-token", "", "bearer token for assisted site APIs (defaults to saved token)")
 	cmd.Flags().String("phase", "install", "phase name to execute")
 	cmd.Flags().Bool("prefetch", false, "execute DownloadFile steps before other steps")
 	cmd.Flags().Bool("dry-run", false, "print apply plan without executing steps")

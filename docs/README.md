@@ -33,7 +33,7 @@
 - `reference/cli.md`: command surface and default usage pattern
 - `reference/bundle-layout.md`: bundle contract and why it matters offline
 - `reference/schema-reference.md`: schema files and supported step kinds
-- `reference/server-audit-log.md`: audit log format for `deck serve`
+- `reference/server-audit-log.md`: audit log format for `deck server up`
 
 ## Examples and schemas
 

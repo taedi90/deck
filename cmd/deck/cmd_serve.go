@@ -11,7 +11,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -119,28 +118,19 @@ func executeList(server string, output string) error {
 		return errors.New("--output must be text or json")
 	}
 
-	resolvedServer := strings.TrimSpace(server)
-	localRoot := "."
-
-	var items []string
-	if resolvedServer == "" {
-		localItems, err := discoverLocalWorkflowList(localRoot)
-		if err != nil {
-			return err
-		}
-		items = localItems
-	} else {
-		remoteItems, err := fetchWorkflowIndexFromServer(resolvedServer)
-		if err != nil {
-			return err
-		}
-		items = remoteItems
+	resolvedServer, _, err := resolveRequiredServerURL(server)
+	if err != nil {
+		return err
+	}
+	items, err := fetchWorkflowIndexFromServer(resolvedServer)
+	if err != nil {
+		return err
 	}
 
 	if output == "json" {
 		enc := json.NewEncoder(os.Stdout)
 		if err := enc.Encode(items); err != nil {
-			return fmt.Errorf("list: encode output: %w", err)
+			return fmt.Errorf("server workflows: encode output: %w", err)
 		}
 		return nil
 	}
@@ -159,71 +149,31 @@ func fetchWorkflowIndexFromServer(server string) ([]string, error) {
 	indexURL := trimmed + "/workflows/index.json"
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, indexURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("list: build request: %w", err)
+		return nil, fmt.Errorf("server workflows: build request: %w", err)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("list: request failed: %w", err)
+		return nil, fmt.Errorf("server workflows: request failed: %w", err)
 	}
 	defer closeSilently(resp.Body)
 	if resp.StatusCode == http.StatusNotFound {
 		return []string{}, nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("list: unexpected status %d", resp.StatusCode)
+		return nil, fmt.Errorf("server workflows: unexpected status %d", resp.StatusCode)
 	}
 
 	var items []string
 	if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
-		return nil, fmt.Errorf("list: decode response: %w", err)
+		return nil, fmt.Errorf("server workflows: decode response: %w", err)
 	}
-	return items, nil
-}
-
-func discoverLocalWorkflowList(root string) ([]string, error) {
-	workflowDir := filepath.Join(root, "workflows")
-	info, err := os.Stat(workflowDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("list: local workflows directory not found: %s", workflowDir)
-		}
-		return nil, fmt.Errorf("list: stat local workflows directory: %w", err)
-	}
-	if !info.IsDir() {
-		return nil, fmt.Errorf("list: local workflows path is not a directory: %s", workflowDir)
-	}
-
-	items := make([]string, 0)
-	err = filepath.WalkDir(workflowDir, func(path string, d os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if d.IsDir() {
-			return nil
-		}
-		name := strings.ToLower(d.Name())
-		if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".yml") {
-			return nil
-		}
-		relPath, err := filepath.Rel(workflowDir, path)
-		if err != nil {
-			return err
-		}
-		items = append(items, filepath.ToSlash(filepath.Join("workflows", relPath)))
-		return nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("list: read local workflows directory: %w", err)
-	}
-
-	sort.Strings(items)
 	return items, nil
 }
 
 func executeHealth(server string) error {
-	resolvedServer := strings.TrimSpace(server)
-	if resolvedServer == "" {
-		return errors.New("--server is required (assisted mode is explicit: deck health --server <url>)")
+	resolvedServer, _, err := resolveRequiredServerURL(server)
+	if err != nil {
+		return err
 	}
 
 	client := &http.Client{Timeout: 5 * time.Second}

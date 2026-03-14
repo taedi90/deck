@@ -16,10 +16,12 @@ It supports a simple operator flow: author the workflow, validate it, build the 
 
 ## Optional site-local helpers
 
-- `serve`: expose a prepared bundle root over HTTP inside the air gap when a shared local source is useful
-- `list`: inspect available workflows from a local bundle root or an explicitly chosen server
-- `health`: check `/healthz` on an explicitly chosen server
-- `logs`: read server audit logs when you are using `deck serve`
+- `server set`: save a default server URL and optional API token for commands that accept `--server` and `--api-token`
+- `server up`: expose a prepared bundle root over HTTP inside the air gap when a shared local source is useful
+- `server down`: stop a daemonized local server started with `deck server up -d`
+- `server workflows`: inspect available workflows from a saved or explicitly chosen server
+- `server health`: check `/healthz` on an explicit or saved server
+- `server logs`: read local server audit logs from file or journal
 
 These commands are additive. They do not replace the default local execution path.
 
@@ -60,9 +62,11 @@ deck apply --file ./workflows/apply.yaml
 Optional site-local inspection example:
 
 ```bash
-deck serve --root ./bundle --addr :8080
-deck list --server http://127.0.0.1:8080
-deck health --server http://127.0.0.1:8080
+deck server set http://127.0.0.1:8080 --api-token deck-site-v1
+deck server up --root ./bundle --addr :8080
+deck server workflows --server http://127.0.0.1:8080
+deck server health
+deck apply --session session-1
 ```
 
 ## Notes

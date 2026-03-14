@@ -1,0 +1,151 @@
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+type serverDefaults struct {
+	URL      string `json:"url"`
+	APIToken string `json:"apiToken,omitempty"`
+}
+
+func serverDefaultsPath() (string, error) {
+	if raw := strings.TrimSpace(os.Getenv("DECK_SERVER_CONFIG_PATH")); raw != "" {
+		return raw, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve user home directory: %w", err)
+	}
+	return filepath.Join(home, ".deck", "server.json"), nil
+}
+
+func resolveServerURL(explicit string) (string, string, error) {
+	if trimmed := strings.TrimRight(strings.TrimSpace(explicit), "/"); trimmed != "" {
+		if err := validateServerURL(trimmed); err != nil {
+			return "", "", err
+		}
+		return trimmed, "flag", nil
+	}
+	if raw := strings.TrimRight(strings.TrimSpace(os.Getenv("DECK_SERVER")), "/"); raw != "" {
+		if err := validateServerURL(raw); err != nil {
+			return "", "", fmt.Errorf("invalid DECK_SERVER: %w", err)
+		}
+		return raw, "env", nil
+	}
+	defaults, err := loadServerDefaults()
+	if err != nil {
+		return "", "", err
+	}
+	if strings.TrimSpace(defaults.URL) == "" {
+		return "", "", nil
+	}
+	if err := validateServerURL(defaults.URL); err != nil {
+		return "", "", fmt.Errorf("invalid saved default server: %w", err)
+	}
+	return defaults.URL, "config", nil
+}
+
+func resolveServerAPIToken(explicit string) (string, string, error) {
+	if trimmed := strings.TrimSpace(explicit); trimmed != "" {
+		return trimmed, "flag", nil
+	}
+	if raw := strings.TrimSpace(os.Getenv("DECK_API_TOKEN")); raw != "" {
+		return raw, "env", nil
+	}
+	defaults, err := loadServerDefaults()
+	if err != nil {
+		return "", "", err
+	}
+	if strings.TrimSpace(defaults.APIToken) == "" {
+		return "", "", nil
+	}
+	return defaults.APIToken, "config", nil
+}
+
+func resolveRequiredServerURL(explicit string) (string, string, error) {
+	resolved, source, err := resolveServerURL(explicit)
+	if err != nil {
+		return "", "", err
+	}
+	if resolved == "" {
+		return "", "", errors.New("--server is required or set a default with \"deck server set <url>\"")
+	}
+	return resolved, source, nil
+}
+
+func loadServerDefaults() (serverDefaults, error) {
+	path, err := serverDefaultsPath()
+	if err != nil {
+		return serverDefaults{}, err
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return serverDefaults{}, nil
+		}
+		return serverDefaults{}, fmt.Errorf("read server defaults: %w", err)
+	}
+	defaults := serverDefaults{}
+	if err := json.Unmarshal(raw, &defaults); err != nil {
+		return serverDefaults{}, fmt.Errorf("decode server defaults: %w", err)
+	}
+	defaults.URL = strings.TrimRight(strings.TrimSpace(defaults.URL), "/")
+	defaults.APIToken = strings.TrimSpace(defaults.APIToken)
+	return defaults, nil
+}
+
+func saveServerDefaults(defaults serverDefaults) error {
+	path, err := serverDefaultsPath()
+	if err != nil {
+		return err
+	}
+	defaults.URL = strings.TrimRight(strings.TrimSpace(defaults.URL), "/")
+	defaults.APIToken = strings.TrimSpace(defaults.APIToken)
+	raw, err := json.MarshalIndent(defaults, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode server defaults: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create server defaults dir: %w", err)
+	}
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		return fmt.Errorf("write server defaults: %w", err)
+	}
+	return nil
+}
+
+func clearServerDefaults() error {
+	path, err := serverDefaultsPath()
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove server defaults: %w", err)
+	}
+	return nil
+}
+
+func validateServerURL(raw string) error {
+	trimmed := strings.TrimRight(strings.TrimSpace(raw), "/")
+	if trimmed == "" {
+		return errors.New("server URL must not be empty")
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return fmt.Errorf("parse server URL: %w", err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return errors.New("server URL must use http or https")
+	}
+	if strings.TrimSpace(parsed.Host) == "" {
+		return errors.New("server URL host must not be empty")
+	}
+	return nil
+}

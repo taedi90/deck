@@ -42,17 +42,25 @@ type assistedManifest struct {
 }
 
 func resolveAssistedExecutionConfig(server, session, apiToken string) (assistedExecutionConfig, bool, error) {
+	resolvedServer, _, err := resolveServerURL(server)
+	if err != nil {
+		return assistedExecutionConfig{}, false, err
+	}
+	resolvedToken, _, err := resolveServerAPIToken(apiToken)
+	if err != nil {
+		return assistedExecutionConfig{}, false, err
+	}
 	resolved := assistedExecutionConfig{
-		Server:   strings.TrimRight(strings.TrimSpace(server), "/"),
+		Server:   resolvedServer,
 		Session:  strings.TrimSpace(session),
-		APIToken: strings.TrimSpace(apiToken),
+		APIToken: resolvedToken,
 	}
 	assistedEnabled := resolved.Server != "" || resolved.Session != ""
 	if !assistedEnabled {
 		return resolved, false, nil
 	}
 	if resolved.Server == "" || resolved.Session == "" {
-		return assistedExecutionConfig{}, false, errors.New("assisted mode requires both --server and --session")
+		return assistedExecutionConfig{}, false, errors.New("assisted mode requires both --session and a server from --server or \"deck server set <url>\"")
 	}
 	if resolved.APIToken == "" {
 		return assistedExecutionConfig{}, false, errors.New("--api-token is required in assisted mode")

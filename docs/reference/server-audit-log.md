@@ -1,6 +1,6 @@
 # Server Audit Log
 
-`deck serve` writes audit records to a JSONL log file under the bundle root.
+`deck server up` writes audit records to a JSONL log file under the bundle root.
 
 ## Location
 
@@ -39,12 +39,12 @@ Non-standard details are nested under `extra`.
 
 ## Rotation
 
-- `deck serve` rotates the audit log when it exceeds the configured size limit
+- `deck server up` rotates the audit log when it exceeds the configured size limit
 - defaults: `50` MB max size and `10` retained files
 - related flags: `--audit-max-size-mb`, `--audit-max-files`
 
 ## Viewing logs
 
 ```bash
-deck logs --source file --path <root>/.deck/logs/server-audit.log
+deck server logs --source file --path <root>/.deck/logs/server-audit.log
 ```
