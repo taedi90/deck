@@ -51,6 +51,7 @@ deck init --out ./demo
 deck completion bash > ./deck.bash
 deck validate --file ./demo/workflows/apply.yaml
 deck validate --file ./demo/workflows/prepare.yaml
+deck validate control-plane-bootstrap
 
 cd ./demo
 deck prepare --out ./bundle.tar
@@ -74,6 +75,7 @@ deck apply --session session-1
 - `prepare` expects a workflow directory containing `prepare.yaml`, `apply.yaml`, and `vars.yaml`.
 - scenario entrypoints live under `workflows/scenarios/`
 - workflow imports resolve from `workflows/components/` using component-relative paths
+- `validate` also accepts a bare scenario name and resolves it under `workflows/scenarios/`
 - `apply` defaults to the `install` phase when phases are used.
 - Help text is shown on stdout only when you request it with `--help` or `help`.
 - Command and flag errors are written to stderr without automatic usage output.

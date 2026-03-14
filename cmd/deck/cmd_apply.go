@@ -1066,14 +1066,44 @@ func discoverApplyWorkflow(bundleRoot string) (string, error) {
 	return matches[0], nil
 }
 
-func executeValidate(file string) error {
-	if file == "" {
-		return errors.New("--file (or -f) is required")
+func executeValidate(file string, scenario string) error {
+	resolved, err := resolveValidateTarget(strings.TrimSpace(file), strings.TrimSpace(scenario))
+	if err != nil {
+		return err
 	}
 
-	if err := validate.File(file); err != nil {
+	if err := validate.File(resolved); err != nil {
 		return err
 	}
 
 	return stdoutPrintln("validate: ok")
+}
+
+func resolveValidateTarget(file string, scenario string) (string, error) {
+	if file != "" {
+		return file, nil
+	}
+	if scenario == "" {
+		return "", errors.New("--file (or -f) is required or provide a scenario name")
+	}
+	if candidate, ok := resolveScenarioPath(scenario); ok {
+		return candidate, nil
+	}
+	return "", fmt.Errorf("scenario not found under workflows/scenarios: %s", scenario)
+}
+
+func resolveScenarioPath(name string) (string, bool) {
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" || strings.Contains(trimmed, "..") || strings.Contains(trimmed, "\\") {
+		return "", false
+	}
+	workflowDir := filepath.Join(".", "workflows", "scenarios")
+	for _, suffix := range []string{".yaml", ".yml"} {
+		candidate := filepath.Join(workflowDir, trimmed+suffix)
+		info, err := os.Stat(candidate)
+		if err == nil && !info.IsDir() {
+			return candidate, true
+		}
+	}
+	return "", false
 }

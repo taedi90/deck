@@ -8,11 +8,15 @@ import (
 
 func newValidateCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "validate",
+		Use:   "validate [scenario]",
 		Short: "Validate a deck file",
-		Args:  cobra.ExactArgs(0),
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			return executeValidate(cmdFlagValue(cmd, "file"))
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			scenario := ""
+			if len(args) == 1 {
+				scenario = args[0]
+			}
+			return executeValidate(cmdFlagValue(cmd, "file"), scenario)
 		},
 	}
 	cmd.Flags().StringP("file", "f", "", "path or URL to workflow file")

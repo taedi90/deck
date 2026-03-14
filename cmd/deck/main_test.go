@@ -485,7 +485,7 @@ func TestMigratedLeafHelpContracts(t *testing.T) {
 		want string
 	}{
 		{args: []string{"help", "server", "scenarios"}, want: "deck server scenarios [flags]"},
-		{args: []string{"help", "validate"}, want: "deck validate [flags]"},
+		{args: []string{"help", "validate"}, want: "deck validate [scenario] [flags]"},
 		{args: []string{"help", "server", "health"}, want: "deck server health [flags]"},
 	}
 
@@ -739,17 +739,55 @@ func TestRunWorkflowValidateAndLegacyValidateMigration(t *testing.T) {
 		if err == nil {
 			t.Fatalf("expected missing file error")
 		}
-		if err.Error() != "--file (or -f) is required" {
+		if err.Error() != "--file (or -f) is required or provide a scenario name" {
 			t.Fatalf("unexpected error: %q", err.Error())
 		}
 	})
 
-	t.Run("validate rejects positional args", func(t *testing.T) {
-		_, err := runWithCapturedStdout([]string{"validate", wf})
-		if err == nil {
-			t.Fatalf("expected arg validation error")
+	t.Run("validate accepts bare scenario name", func(t *testing.T) {
+		root := t.TempDir()
+		scenariosDir := filepath.Join(root, "workflows", "scenarios")
+		if err := os.MkdirAll(scenariosDir, 0o755); err != nil {
+			t.Fatalf("mkdir scenarios: %v", err)
 		}
-		if !strings.Contains(err.Error(), "accepts 0 arg(s), received 1") {
+		if err := os.WriteFile(filepath.Join(scenariosDir, "demo.yaml"), []byte("role: apply\nversion: v1alpha1\nsteps:\n  - id: demo\n    kind: RunCommand\n    spec:\n      command: [\"true\"]\n"), 0o644); err != nil {
+			t.Fatalf("write scenario: %v", err)
+		}
+		cwd, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("getwd: %v", err)
+		}
+		if err := os.Chdir(root); err != nil {
+			t.Fatalf("chdir: %v", err)
+		}
+		defer func() { _ = os.Chdir(cwd) }()
+		out, err := runWithCapturedStdout([]string{"validate", "demo"})
+		if err != nil {
+			t.Fatalf("expected bare scenario validate success, got %v", err)
+		}
+		if out != "validate: ok\n" {
+			t.Fatalf("unexpected output: %q", out)
+		}
+	})
+
+	t.Run("validate reports missing bare scenario", func(t *testing.T) {
+		root := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(root, "workflows", "scenarios"), 0o755); err != nil {
+			t.Fatalf("mkdir scenarios: %v", err)
+		}
+		cwd, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("getwd: %v", err)
+		}
+		if err := os.Chdir(root); err != nil {
+			t.Fatalf("chdir: %v", err)
+		}
+		defer func() { _ = os.Chdir(cwd) }()
+		_, err = runWithCapturedStdout([]string{"validate", "missing-scenario"})
+		if err == nil {
+			t.Fatalf("expected missing scenario error")
+		}
+		if !strings.Contains(err.Error(), "scenario not found under workflows/scenarios") {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
