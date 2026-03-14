@@ -32,7 +32,7 @@ The bigger problem is that Bash-based procedures often collapse as they grow:
 - **Local-first**: the default path is local execution on the machine that needs the change
 - **Bundle-first**: bring the workflow and its required artifacts together
 - **Readable**: operators should be able to review intent quickly
-- **Pragmatic**: shell stays available through `RunCommand`, but it should not be the main authoring style
+- **Pragmatic**: shell stays available through `Command`, but it should not be the main authoring style
 
 ## What deck is not trying to be
 

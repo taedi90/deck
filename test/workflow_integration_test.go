@@ -46,9 +46,9 @@ func TestWorkflowIntegrationBootstrap(t *testing.T) {
 	requireDryRunOutput(t, out,
 		"PHASE=install",
 		"prep-disable-swap Swap PLAN",
-		"bootstrap-reset-preflight KubeadmReset PLAN",
-		"bootstrap-init KubeadmInit PLAN",
-		"bootstrap-report RunCommand PLAN",
+		"bootstrap-reset-preflight Kubeadm PLAN",
+		"bootstrap-init Kubeadm PLAN",
+		"bootstrap-report Command PLAN",
 	)
 }
 
@@ -72,8 +72,8 @@ func TestWorkflowIntegrationWorkerJoin(t *testing.T) {
 	requireDryRunOutput(t, out,
 		"PHASE=install",
 		"prep-disable-swap Swap PLAN",
-		"fetch-join-file DownloadFile PLAN",
-		"join-worker KubeadmJoin PLAN",
+		"fetch-join-file FileFetch PLAN",
+		"join-worker Kubeadm PLAN",
 	)
 }
 
@@ -94,10 +94,10 @@ func TestWorkflowIntegrationNodeReset(t *testing.T) {
 	requireDryRunOutput(t, out,
 		"PHASE=install",
 		"prep-disable-swap Swap PLAN",
-		"reset-node KubeadmReset SKIP",
-		"reset-runtime-ready RunCommand PLAN",
-		"reset-state-report RunCommand PLAN",
-		"reset-summary RunCommand PLAN",
+		"reset-node Kubeadm SKIP",
+		"reset-runtime-ready Command PLAN",
+		"reset-state-report Command PLAN",
+		"reset-summary Command PLAN",
 	)
 }
 
@@ -130,23 +130,24 @@ phases:
     steps:
       - id: bootstrap-init
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: Command
         spec:
           command: ["bash", "-lc", "true"]
       - id: bootstrap-publish-join
         apiVersion: deck/v1alpha1
-        kind: CopyFile
+        kind: File
         spec:
+          action: copy
           sourcePath: /tmp/nonexistent-join.txt
           destinationPath: /tmp/published-join.txt
       - id: bootstrap-report
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: Command
         spec:
           command: ["bash", "-lc", "test -f /tmp/published-join.txt"]
 `)
 	err := runWorkflowApplyExpectError(t, root, workflowPath)
-	if !strings.Contains(err, "bootstrap-publish-join") && !strings.Contains(err, "CopyFile") {
+	if !strings.Contains(err, "bootstrap-publish-join") && !strings.Contains(err, "File") {
 		t.Fatalf("expected join publish failure, got %s", err)
 	}
 }
@@ -160,7 +161,7 @@ phases:
     steps:
       - id: fetch-join-file
         apiVersion: deck/v1alpha1
-        kind: DownloadFile
+        kind: FileFetch
         spec:
           source:
             url: http://127.0.0.1:9/join.txt
@@ -168,12 +169,12 @@ phases:
             path: /tmp/deck/join.txt
       - id: join-worker
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: Command
         spec:
           command: ["bash", "-lc", "test -s /tmp/deck/join.txt"]
 `)
 	err := runWorkflowApplyExpectError(t, root, workflowPath)
-	if !strings.Contains(err, "fetch-join-file") && !strings.Contains(err, "DownloadFile") {
+	if !strings.Contains(err, "fetch-join-file") && !strings.Contains(err, "FileFetch") {
 		t.Fatalf("expected join fetch failure, got %s", err)
 	}
 }
@@ -187,12 +188,12 @@ phases:
     steps:
       - id: reset-runtime-ready
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: Command
         spec:
           command: ["bash", "-lc", "echo runtime unhealthy >&2; exit 1"]
       - id: reset-state-report
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: Command
         spec:
           command: ["bash", "-lc", "echo should-not-run"]
 `)

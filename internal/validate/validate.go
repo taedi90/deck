@@ -221,13 +221,28 @@ func validateSemantics(wf *config.Workflow) error {
 			if strings.TrimSpace(outputKey) == "" {
 				return fmt.Errorf("E_REGISTER_OUTPUT_NOT_FOUND: empty output key in step %s", step.ID)
 			}
-			if !isValidOutputKey(step.Kind, outputKey) {
+			if !isValidOutputKey(step.Kind, step.Spec, outputKey) {
 				return fmt.Errorf("E_REGISTER_OUTPUT_NOT_FOUND: step %s (%s) has no output key %s", step.ID, step.Kind, outputKey)
 			}
 			if previous, exists := assignedRuntime[runtimeVar]; exists {
 				return fmt.Errorf("E_RUNTIME_VAR_REDEFINED: %s (previous step: %s)", runtimeVar, previous)
 			}
 			assignedRuntime[runtimeVar] = step.ID
+		}
+
+		if step.Kind == "Wait" {
+			action, _ := step.Spec["action"].(string)
+			if action == "" {
+				if state, _ := step.Spec["state"].(string); state == "absent" {
+					action = "fileAbsent"
+				} else {
+					action = "fileExists"
+				}
+			}
+			nonEmpty, _ := step.Spec["nonEmpty"].(bool)
+			if action == "fileAbsent" && nonEmpty {
+				return fmt.Errorf("E_SCHEMA_INVALID: step %s (Wait): nonEmpty is only valid for fileExists", step.ID)
+			}
 		}
 	}
 
@@ -279,8 +294,8 @@ func isReservedRuntimeVar(runtimeVar string) bool {
 	return trimmed == "host" || strings.HasPrefix(trimmed, "host.")
 }
 
-func isValidOutputKey(kind, outputKey string) bool {
-	return workflowexec.StepHasOutput(kind, outputKey)
+func isValidOutputKey(kind string, spec map[string]any, outputKey string) bool {
+	return workflowexec.StepHasOutput(kind, spec, outputKey)
 }
 
 func workflowSteps(wf *config.Workflow) []config.Step {

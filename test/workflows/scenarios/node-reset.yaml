@@ -12,7 +12,7 @@ phases:
     steps:
       - id: reset-summary
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: Command
         spec:
           command:
             - bash

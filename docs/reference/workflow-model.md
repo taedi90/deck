@@ -38,7 +38,7 @@ version: v1alpha1
 steps:
   - id: prepare-state-dir
     apiVersion: deck/v1alpha1
-    kind: EnsureDir
+    kind: Directory
     spec:
       path: /var/lib/deck
       mode: "0755"
@@ -99,25 +99,27 @@ They make the workflow easier to scan, easier to validate, and easier to evolve 
 
 Supported step kinds include:
 
-- `CheckHost`
-- `DownloadPackages`
-- `DownloadImages`
-- `DownloadFile`
-- `InstallPackages`
-- `EditFile`
-- `CopyFile`
+- `Inspection`
+- `PackageFetch`
+- `ImageFetch`
+- `FileFetch`
+- `Artifacts`
+- `Packages`
 - `Sysctl`
 - `Service`
-- `EnsureDir`
-- `InstallFile`
-- `RepoConfig`
-- `ContainerdConfig`
+- `Directory`
+- `Symlink`
+- `SystemdUnit`
+- `File`
+- `Repository`
+- `PackageCache`
+- `Containerd`
 - `Swap`
 - `KernelModule`
-- `RunCommand`
-- `VerifyImages`
-- `KubeadmInit`
-- `KubeadmJoin`
+- `Command`
+- `Wait`
+- `Image`
+- `Kubeadm`
 
 ## Prepare semantics
 
@@ -128,11 +130,11 @@ Supported step kinds include:
 - `artifacts.packages` declares package groups per target OS family, release, and arch
 - internally, `deck` still plans typed actions, but the authoring model stays inventory-driven
 
-## When to use RunCommand
+## When to use Command
 
-Use `RunCommand` when no supported step kind fits yet.
+Use `Command` when no supported step kind fits yet.
 
-That is the escape hatch, not the ideal authoring path. If a workflow leans heavily on `RunCommand`, the procedure may still be too close to raw shell.
+That is the escape hatch, not the ideal authoring path. If a workflow leans heavily on `Command`, the procedure may still be too close to raw shell.
 
 ## Validation model
 

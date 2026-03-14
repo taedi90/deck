@@ -3,7 +3,7 @@ version: v1alpha1
 steps:
   - id: fetch-join-file
     apiVersion: deck/v1alpha1
-    kind: DownloadFile
+    kind: FileFetch
     spec:
       source:
         bundle:
@@ -17,8 +17,9 @@ steps:
         path: "{{ .vars.joinFile }}"
   - id: join-worker
     apiVersion: deck/v1alpha1
-    kind: KubeadmJoin
+    kind: Kubeadm
     spec:
+      action: join
       mode: real
       joinFile: "{{ .vars.joinFile }}"
       extraArgs: ["--cri-socket", "unix:///run/containerd/containerd.sock", "--ignore-preflight-errors=Swap,FileExisting-crictl,FileExisting-conntrack,FileExisting-socat"]

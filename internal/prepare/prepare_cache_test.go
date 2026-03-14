@@ -29,14 +29,14 @@ func TestPrepareCacheInvalidation(t *testing.T) {
 			Steps: []config.Step{
 				{
 					ID:   "artifact-a",
-					Kind: "DownloadPackages",
+					Kind: "PackageFetch",
 					Spec: map[string]any{
 						"packages": []any{"containerd-{{ .vars.pkgA }}"},
 					},
 				},
 				{
 					ID:   "artifact-b",
-					Kind: "DownloadPackages",
+					Kind: "PackageFetch",
 					Spec: map[string]any{
 						"packages": []any{"iptables-{{ .vars.pkgB }}"},
 					},
@@ -98,7 +98,7 @@ func TestRun_PrepareCacheRoleGate(t *testing.T) {
 				Name: "prepare",
 				Steps: []config.Step{{
 					ID:   "artifact-a",
-					Kind: "DownloadPackages",
+					Kind: "PackageFetch",
 					Spec: map[string]any{
 						"packages": []any{"containerd"},
 					},
@@ -130,7 +130,7 @@ func TestRun_PrepareCacheRoleGate(t *testing.T) {
 				Name: "prepare",
 				Steps: []config.Step{{
 					ID:   "artifact-a",
-					Kind: "DownloadPackages",
+					Kind: "PackageFetch",
 					Spec: map[string]any{
 						"packages": []any{"containerd"},
 					},

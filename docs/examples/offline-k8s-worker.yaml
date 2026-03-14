@@ -39,7 +39,7 @@ phases:
             net.ipv4.ip_forward: 1
       - id: prep-containerd-config
         apiVersion: deck/v1alpha1
-        kind: ContainerdConfig
+        kind: Containerd
         spec:
           path: /etc/containerd/config.toml
           systemdCgroup: true
@@ -59,8 +59,9 @@ phases:
           state: started
       - id: kubeadm-join
         apiVersion: deck/v1alpha1
-        kind: KubeadmJoin
+        kind: Kubeadm
         spec:
+          action: join
           mode: real
           joinFile: /tmp/deck/join-real.txt
           extraArgs: ["--cri-socket", "unix:///run/containerd/containerd.sock", "--ignore-preflight-errors=Swap"]

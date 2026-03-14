@@ -10,8 +10,9 @@ phases:
       - id: write-apt-offline-config
         when: vars.osFamily == "debian"
         apiVersion: deck/v1alpha1
-        kind: InstallFile
+        kind: File
         spec:
+          action: install
           path: /etc/apt/apt.conf.d/99offline
           mode: "0644"
           contentFromTemplate: |
@@ -21,8 +22,9 @@ phases:
       - id: apply-offline-repo-config-apt
         when: vars.osFamily == "debian"
         apiVersion: deck/v1alpha1
-        kind: RepoConfig
+        kind: Repository
         spec:
+          action: configure
           format: apt
           replaceExisting: true
           repositories:
@@ -42,8 +44,9 @@ phases:
       - id: apply-offline-repo-config-yum
         when: vars.osFamily == "rhel"
         apiVersion: deck/v1alpha1
-        kind: RepoConfig
+        kind: Repository
         spec:
+          action: configure
           format: yum
           replaceExisting: true
           repositories:

@@ -5,7 +5,7 @@ phases:
     steps:
       - id: configure-containerd-runtime
         apiVersion: deck/v1alpha1
-        kind: ContainerdConfig
+        kind: Containerd
         spec:
           path: /etc/containerd/config.toml
           configPath: /etc/containerd/certs.d
@@ -18,8 +18,9 @@ phases:
               skipVerify: true
       - id: update-containerd-pause-image
         apiVersion: deck/v1alpha1
-        kind: EditFile
+        kind: File
         spec:
+          action: edit
           path: /etc/containerd/config.toml
           backup: false
           edits:
@@ -35,12 +36,12 @@ phases:
           state: restarted
       - id: ensure-kubelet-state-dir
         apiVersion: deck/v1alpha1
-        kind: EnsureDir
+        kind: Directory
         spec:
           path: /var/lib/kubelet
       - id: ensure-kubelet-defaults-dir
         apiVersion: deck/v1alpha1
-        kind: EnsureDir
+        kind: Directory
         spec:
           path: /etc/default
       - id: setup-kubelet-systemd

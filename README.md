@@ -39,7 +39,7 @@ It exists for the cases where larger automation platforms are a bad fit and grow
 - Review quality drops when a procedure becomes one long shell file.
 - Reuse, validation, and step-level reasoning get weak quickly.
 
-`deck` does not try to eliminate shell completely. It gives the procedure a clearer structure and keeps `RunCommand` as the escape hatch, not the default authoring model.
+`deck` does not try to eliminate shell completely. It gives the procedure a clearer structure and keeps `Command` as the escape hatch, not the default authoring model.
 
 ## Core flow
 
@@ -51,7 +51,7 @@ It exists for the cases where larger automation platforms are a bad fit and grow
 
 ## Minimal workflow
 
-Prefer typed steps for common host changes. Keep `RunCommand` for the cases where no supported step kind fits yet.
+Prefer typed steps for common host changes. Keep `Command` for the cases where no supported step kind fits yet.
 
 ```yaml
 role: apply
@@ -59,8 +59,9 @@ version: v1alpha1
 steps:
   - id: write-repo-config
     apiVersion: deck/v1alpha1
-    kind: InstallFile
+    kind: File
     spec:
+      action: install
       path: /etc/example.repo
       content: |
         [offline-base]

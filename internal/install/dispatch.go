@@ -13,51 +13,45 @@ func executeStep(ctx context.Context, kind string, spec map[string]any, bundleRo
 	}
 
 	switch kind {
-	case "DownloadFile":
+	case "FileFetch":
 		_, err := runDownloadFile(ctx, bundleRoot, spec)
 		return err
-	case "InstallArtifacts":
+	case "Artifacts":
 		return runInstallArtifacts(ctx, spec, bundleRoot)
-	case "InstallPackages":
+	case "Packages":
 		return runInstallPackages(ctx, spec)
-	case "EditFile":
-		return runEditFile(spec)
-	case "CopyFile":
-		return runCopyFile(spec)
+	case "File":
+		return runFile(spec)
 	case "Sysctl":
 		return runSysctl(spec)
 	case "Service":
 		return runService(spec)
-	case "EnsureDir":
+	case "Directory":
 		return runEnsureDir(spec)
 	case "Symlink":
 		return runSymlink(spec)
-	case "InstallFile":
-		return runInstallFile(spec)
 	case "SystemdUnit":
 		return runSystemdUnit(spec)
-	case "RepoConfig":
-		return runRepoConfig(spec)
+	case "Repository":
+		return runRepository(spec)
 	case "PackageCache":
 		return runPackageCache(spec)
-	case "ContainerdConfig":
+	case "Containerd":
 		return runContainerdConfig(ctx, spec)
 	case "Swap":
 		return runSwap(spec)
 	case "KernelModule":
 		return runKernelModule(spec)
-	case "RunCommand":
+	case "Command":
 		return runCommand(ctx, spec)
-	case "VerifyImages":
-		return runVerifyImages(ctx, spec)
-	case "KubeadmInit":
-		return runKubeadmInit(ctx, spec)
-	case "KubeadmJoin":
-		return runKubeadmJoin(ctx, spec)
-	case "KubeadmReset":
-		return runKubeadmReset(ctx, spec)
-	case "WaitPath":
-		return runWaitPath(ctx, spec)
+	case "Image":
+		return runImage(ctx, spec)
+	case "Kubeadm":
+		return runKubeadm(ctx, spec)
+	case "Wait":
+		return runWait(ctx, spec)
+	case "Inspection":
+		return fmt.Errorf("%s: unsupported step kind %s for apply", errCodeInstallKindUnsupported, kind)
 	default:
 		return fmt.Errorf("%s: unsupported step kind %s", errCodeInstallKindUnsupported, kind)
 	}

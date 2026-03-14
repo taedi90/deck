@@ -7,12 +7,12 @@ phases:
     steps:
       - id: prep-containerd-certs-dir
         apiVersion: deck/v1alpha1
-        kind: EnsureDir
+        kind: Directory
         spec:
           path: /etc/containerd/certs.d
       - id: prep-containerd-certsd-config
         apiVersion: deck/v1alpha1
-        kind: ContainerdConfig
+        kind: Containerd
         spec:
           path: /etc/containerd/config.toml
           configPath: /etc/containerd/certs.d

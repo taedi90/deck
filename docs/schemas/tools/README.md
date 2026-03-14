@@ -6,39 +6,35 @@ The files are not all equal from a user-authoring point of view.
 
 ## Public apply steps
 
-- `public/check-host.schema.json`
-- `public/containerd-config.schema.json`
-- `public/copy-file.schema.json`
-- `public/edit-file.schema.json`
-- `public/ensure-dir.schema.json`
-- `public/install-artifacts.schema.json`
-- `public/install-file.schema.json`
-- `public/install-packages.schema.json`
+- `public/inspection.schema.json`
+- `public/containerd.schema.json`
+- `public/directory.schema.json`
+- `public/artifacts.schema.json`
+- `public/packages.schema.json`
+- `public/file.schema.json`
+- `public/image.schema.json`
 - `public/kernel-module.schema.json`
-- `public/kubeadm-init.schema.json`
-- `public/kubeadm-join.schema.json`
-- `public/kubeadm-reset.schema.json`
+- `public/kubeadm.schema.json`
 - `public/package-cache.schema.json`
-- `public/repo-config.schema.json`
+- `public/repository.schema.json`
 - `public/service.schema.json`
 - `public/swap.schema.json`
 - `public/symlink.schema.json`
 - `public/systemd-unit.schema.json`
 - `public/sysctl.schema.json`
-- `public/verify-images.schema.json`
-- `public/wait-path.schema.json`
+- `public/wait.schema.json`
 
 ## Advanced steps
 
-- `advanced/download-file.schema.json`
-- `advanced/run-command.schema.json`
+- `advanced/file-fetch.schema.json`
+- `advanced/command.schema.json`
 
 These remain user-visible, but they are not the preferred starting point when a higher-level typed step or declarative prepare model already exists.
 
 ## Legacy/internal prepare steps
 
-- `legacy-prepare/download-images.schema.json`
-- `legacy-prepare/download-packages.schema.json`
+- `legacy-prepare/image-fetch.schema.json`
+- `legacy-prepare/package-fetch.schema.json`
 
 These schemas are still used for validation of legacy or internal prepare planning paths.
 New `role: prepare` workflows should prefer top-level `artifacts` instead.

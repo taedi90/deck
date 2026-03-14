@@ -61,7 +61,7 @@ func declaredPrepareFileSteps(wf *config.Workflow) ([]config.Step, error) {
 				steps = append(steps, config.Step{
 					ID:         prepareSyntheticStepID("file", group.Group, item.ID, target),
 					APIVersion: "deck/v1alpha1",
-					Kind:       "DownloadFile",
+					Kind:       "FileFetch",
 					Spec:       rendered,
 				})
 			}
@@ -100,7 +100,7 @@ func declaredPrepareImageSteps(wf *config.Workflow) ([]config.Step, error) {
 			steps = append(steps, config.Step{
 				ID:         prepareSyntheticStepID("image", group.Group, "batch", target),
 				APIVersion: "deck/v1alpha1",
-				Kind:       "DownloadImages",
+				Kind:       "ImageFetch",
 				Spec:       spec,
 			})
 		}
@@ -141,7 +141,7 @@ func declaredPreparePackageSteps(wf *config.Workflow) ([]config.Step, error) {
 			steps = append(steps, config.Step{
 				ID:         prepareSyntheticStepID("package", group.Group, target.Release, target),
 				APIVersion: "deck/v1alpha1",
-				Kind:       "DownloadPackages",
+				Kind:       "PackageFetch",
 				Spec:       spec,
 			})
 		}

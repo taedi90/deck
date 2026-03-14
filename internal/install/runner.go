@@ -60,6 +60,7 @@ const (
 	errCodeInstallWaitPathType     = "E_INSTALL_WAITPATH_TYPE_INVALID"
 	errCodeInstallWaitPathPoll     = "E_INSTALL_WAITPATH_POLL_INTERVAL_INVALID"
 	errCodeInstallWaitPathTimeout  = "E_INSTALL_WAITPATH_TIMEOUT"
+	errCodeInstallWaitTimeout      = errCodeInstallWaitPathTimeout
 	errCodeInstallSourceNotFound   = "E_INSTALL_SOURCE_NOT_FOUND"
 	errCodeInstallChecksumMismatch = "E_INSTALL_CHECKSUM_MISMATCH"
 	errCodeInstallOfflineBlocked   = "E_INSTALL_OFFLINE_POLICY_BLOCK"

@@ -62,15 +62,15 @@ func TestRun_InstallTools(t *testing.T) {
 		Phases: []config.Phase{{
 			Name: "install",
 			Steps: []config.Step{
-				{ID: "install-packages", Kind: "InstallPackages", Spec: map[string]any{"packages": []any{"containerd"}}},
-				{ID: "install-file", Kind: "InstallFile", Spec: map[string]any{"path": fileA, "content": "hello world"}},
-				{ID: "edit-file", Kind: "EditFile", Spec: map[string]any{"path": fileA, "edits": []any{map[string]any{"op": "replace", "match": "world", "with": "deck"}}}},
-				{ID: "copy-file", Kind: "CopyFile", Spec: map[string]any{"src": fileA, "dest": fileB}},
+				{ID: "install-packages", Kind: "Packages", Spec: map[string]any{"packages": []any{"containerd"}}},
+				{ID: "install-file", Kind: "File", Spec: map[string]any{"path": fileA, "content": "hello world"}},
+				{ID: "edit-file", Kind: "File", Spec: map[string]any{"path": fileA, "edits": []any{map[string]any{"op": "replace", "match": "world", "with": "deck"}}}},
+				{ID: "copy-file", Kind: "File", Spec: map[string]any{"src": fileA, "dest": fileB}},
 				{ID: "sysctl", Kind: "Sysctl", Spec: map[string]any{"writeFile": sysctlPath, "values": map[string]any{"net.ipv4.ip_forward": "1"}}},
 				{ID: "kernel-modules", Kind: "KernelModule", Spec: map[string]any{"names": []any{"overlay", "br_netfilter"}, "load": false, "persist": true, "persistFile": modprobePath}},
-				{ID: "run-cmd", Kind: "RunCommand", Spec: map[string]any{"command": []any{"true"}}},
-				{ID: "kubeadm-init", Kind: "KubeadmInit", Spec: map[string]any{"outputJoinFile": joinPath}},
-				{ID: "kubeadm-join", Kind: "KubeadmJoin", Spec: map[string]any{"joinFile": joinPath}},
+				{ID: "run-cmd", Kind: "Command", Spec: map[string]any{"command": []any{"true"}}},
+				{ID: "kubeadm-init", Kind: "Kubeadm", Spec: map[string]any{"outputJoinFile": joinPath}},
+				{ID: "kubeadm-join", Kind: "Kubeadm", Spec: map[string]any{"joinFile": joinPath}},
 			},
 		}},
 	}
@@ -139,7 +139,7 @@ func TestRun_DefaultStatePathUsesHomeStateKey(t *testing.T) {
 		StateKey: "state-key-default-path-test",
 		Phases: []config.Phase{{
 			Name:  "install",
-			Steps: []config.Step{{ID: "s1", Kind: "RunCommand", Spec: map[string]any{"command": []any{"true"}}}},
+			Steps: []config.Step{{ID: "s1", Kind: "Command", Spec: map[string]any{"command": []any{"true"}}}},
 		}},
 	}
 
@@ -178,7 +178,7 @@ func TestRun_ManifestIntegrityVerified(t *testing.T) {
 		Version: "v1",
 		Phases: []config.Phase{{
 			Name:  "install",
-			Steps: []config.Step{{ID: "s1", Kind: "RunCommand", Spec: map[string]any{"command": []any{"true"}}}},
+			Steps: []config.Step{{ID: "s1", Kind: "Command", Spec: map[string]any{"command": []any{"true"}}}},
 		}},
 	}
 
@@ -209,7 +209,7 @@ func TestRun_ManifestIntegrityMismatch(t *testing.T) {
 		Version: "v1",
 		Phases: []config.Phase{{
 			Name:  "install",
-			Steps: []config.Step{{ID: "s1", Kind: "RunCommand", Spec: map[string]any{"command": []any{"true"}}}},
+			Steps: []config.Step{{ID: "s1", Kind: "Command", Spec: map[string]any{"command": []any{"true"}}}},
 		}},
 	}
 
@@ -248,9 +248,9 @@ func TestRun_ResumeFromFailedStep(t *testing.T) {
 		Phases: []config.Phase{{
 			Name: "install",
 			Steps: []config.Step{
-				{ID: "s1", Kind: "InstallFile", Spec: map[string]any{"path": first, "content": "ok"}},
-				{ID: "s2", Kind: "RunCommand", Spec: map[string]any{"command": []any{"false"}}},
-				{ID: "s3", Kind: "InstallFile", Spec: map[string]any{"path": second, "content": "done"}},
+				{ID: "s1", Kind: "File", Spec: map[string]any{"path": first, "content": "ok"}},
+				{ID: "s2", Kind: "Command", Spec: map[string]any{"command": []any{"false"}}},
+				{ID: "s3", Kind: "File", Spec: map[string]any{"path": second, "content": "done"}},
 			},
 		}},
 	}
@@ -334,7 +334,7 @@ func TestRun_UnsupportedInstallKindFails(t *testing.T) {
 	}
 }
 
-func TestRun_RunCommandErrorCodes(t *testing.T) {
+func TestRun_CommandErrorCodes(t *testing.T) {
 	t.Run("non-zero exit", func(t *testing.T) {
 		dir := t.TempDir()
 		bundle := filepath.Join(dir, "bundle")
@@ -357,7 +357,7 @@ func TestRun_RunCommandErrorCodes(t *testing.T) {
 			Version: "v1",
 			Phases: []config.Phase{{
 				Name:  "install",
-				Steps: []config.Step{{ID: "cmd", Kind: "RunCommand", Spec: map[string]any{"command": []any{"false"}}}},
+				Steps: []config.Step{{ID: "cmd", Kind: "Command", Spec: map[string]any{"command": []any{"false"}}}},
 			}},
 		}
 
@@ -394,7 +394,7 @@ func TestRun_RunCommandErrorCodes(t *testing.T) {
 				Name: "install",
 				Steps: []config.Step{{
 					ID:   "cmd",
-					Kind: "RunCommand",
+					Kind: "Command",
 					Spec: map[string]any{"command": []any{"sleep", "1"}, "timeout": "10ms"},
 				}},
 			}},
@@ -439,7 +439,7 @@ func TestRun_RunCommandErrorCodes(t *testing.T) {
 				Name: "install",
 				Steps: []config.Step{{
 					ID:   "verify-images",
-					Kind: "VerifyImages",
+					Kind: "Image",
 					Spec: map[string]any{
 						"images":  []any{"registry.k8s.io/pause:3.10.1"},
 						"command": []any{fakeList},
@@ -462,7 +462,7 @@ func TestRun_RunCommandErrorCodes(t *testing.T) {
 	})
 }
 
-func TestRun_WaitPath(t *testing.T) {
+func TestRun_Wait(t *testing.T) {
 	t.Run("waits for file to appear", func(t *testing.T) {
 		dir := t.TempDir()
 		statePath := filepath.Join(dir, "state", "state.json")
@@ -474,7 +474,7 @@ func TestRun_WaitPath(t *testing.T) {
 				Name: "install",
 				Steps: []config.Step{{
 					ID:   "wait-file",
-					Kind: "WaitPath",
+					Kind: "Wait",
 					Spec: map[string]any{"path": target, "state": "exists", "type": "file", "pollInterval": "10ms", "timeout": "1s"},
 				}},
 			}},
@@ -486,7 +486,7 @@ func TestRun_WaitPath(t *testing.T) {
 		}()
 
 		if err := Run(context.Background(), wf, RunOptions{StatePath: statePath}); err != nil {
-			t.Fatalf("expected WaitPath success, got %v", err)
+			t.Fatalf("expected Wait success, got %v", err)
 		}
 	})
 
@@ -504,7 +504,7 @@ func TestRun_WaitPath(t *testing.T) {
 				Name: "install",
 				Steps: []config.Step{{
 					ID:   "wait-absent",
-					Kind: "WaitPath",
+					Kind: "Wait",
 					Spec: map[string]any{"path": target, "state": "absent", "pollInterval": "10ms", "timeout": "1s"},
 				}},
 			}},
@@ -516,7 +516,7 @@ func TestRun_WaitPath(t *testing.T) {
 		}()
 
 		if err := Run(context.Background(), wf, RunOptions{StatePath: statePath}); err != nil {
-			t.Fatalf("expected WaitPath absent success, got %v", err)
+			t.Fatalf("expected Wait absent success, got %v", err)
 		}
 	})
 
@@ -534,7 +534,7 @@ func TestRun_WaitPath(t *testing.T) {
 				Name: "install",
 				Steps: []config.Step{{
 					ID:   "wait-non-empty",
-					Kind: "WaitPath",
+					Kind: "Wait",
 					Spec: map[string]any{"path": target, "state": "exists", "type": "file", "nonEmpty": true, "pollInterval": "10ms", "timeout": "1s"},
 				}},
 			}},
@@ -546,7 +546,7 @@ func TestRun_WaitPath(t *testing.T) {
 		}()
 
 		if err := Run(context.Background(), wf, RunOptions{StatePath: statePath}); err != nil {
-			t.Fatalf("expected WaitPath non-empty success, got %v", err)
+			t.Fatalf("expected Wait non-empty success, got %v", err)
 		}
 	})
 
@@ -564,7 +564,7 @@ func TestRun_WaitPath(t *testing.T) {
 				Name: "install",
 				Steps: []config.Step{{
 					ID:      "wait-type",
-					Kind:    "WaitPath",
+					Kind:    "Wait",
 					Timeout: "80ms",
 					Spec:    map[string]any{"path": target, "state": "exists", "type": "file", "pollInterval": "10ms"},
 				}},
@@ -573,10 +573,10 @@ func TestRun_WaitPath(t *testing.T) {
 
 		err := Run(context.Background(), wf, RunOptions{StatePath: statePath})
 		if err == nil {
-			t.Fatalf("expected WaitPath timeout error")
+			t.Fatalf("expected Wait timeout error")
 		}
-		if !strings.Contains(err.Error(), errCodeInstallWaitPathTimeout) {
-			t.Fatalf("expected %s, got %v", errCodeInstallWaitPathTimeout, err)
+		if !strings.Contains(err.Error(), errCodeInstallWaitTimeout) {
+			t.Fatalf("expected %s, got %v", errCodeInstallWaitTimeout, err)
 		}
 		if !strings.Contains(err.Error(), target) {
 			t.Fatalf("expected timeout error to include path, got %v", err)
@@ -811,7 +811,7 @@ func TestRun_Symlink(t *testing.T) {
 	})
 }
 
-func TestRun_KubeadmJoinMissingFileErrorCode(t *testing.T) {
+func TestRun_KubeadmMissingFileErrorCode(t *testing.T) {
 	dir := t.TempDir()
 	bundle := filepath.Join(dir, "bundle")
 	statePath := filepath.Join(dir, "state", "state.json")
@@ -835,7 +835,7 @@ func TestRun_KubeadmJoinMissingFileErrorCode(t *testing.T) {
 			Name: "install",
 			Steps: []config.Step{{
 				ID:   "join",
-				Kind: "KubeadmJoin",
+				Kind: "Kubeadm",
 				Spec: map[string]any{"joinFile": filepath.Join(dir, "missing-join.txt")},
 			}},
 		}},
@@ -850,7 +850,7 @@ func TestRun_KubeadmJoinMissingFileErrorCode(t *testing.T) {
 	}
 }
 
-func TestRun_VerifyImages(t *testing.T) {
+func TestRun_Image(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		dir := t.TempDir()
 		bundle := filepath.Join(dir, "bundle")
@@ -881,7 +881,7 @@ func TestRun_VerifyImages(t *testing.T) {
 				Name: "install",
 				Steps: []config.Step{{
 					ID:   "verify-images",
-					Kind: "VerifyImages",
+					Kind: "Image",
 					Spec: map[string]any{
 						"images":  []any{"registry.k8s.io/pause:3.10.1"},
 						"command": []any{fakeList},
@@ -925,7 +925,7 @@ func TestRun_VerifyImages(t *testing.T) {
 				Name: "install",
 				Steps: []config.Step{{
 					ID:   "verify-images",
-					Kind: "VerifyImages",
+					Kind: "Image",
 					Spec: map[string]any{
 						"images":  []any{"registry.k8s.io/pause:3.10.1"},
 						"command": []any{fakeList},
@@ -981,8 +981,8 @@ func TestRun_KubeadmRealMode(t *testing.T) {
 		Phases: []config.Phase{{
 			Name: "install",
 			Steps: []config.Step{
-				{ID: "kubeadm-init", Kind: "KubeadmInit", Spec: map[string]any{"mode": "real", "outputJoinFile": joinPath}},
-				{ID: "kubeadm-join", Kind: "KubeadmJoin", Spec: map[string]any{"mode": "real", "joinFile": joinPath}},
+				{ID: "kubeadm-init", Kind: "Kubeadm", Spec: map[string]any{"mode": "real", "outputJoinFile": joinPath}},
+				{ID: "kubeadm-join", Kind: "Kubeadm", Spec: map[string]any{"mode": "real", "joinFile": joinPath}},
 			},
 		}},
 	}
@@ -1000,7 +1000,7 @@ func TestRun_KubeadmRealMode(t *testing.T) {
 	}
 }
 
-func TestRun_KubeadmJoinRealModeRejectsInvalidCommand(t *testing.T) {
+func TestRun_KubeadmRealModeRejectsInvalidCommand(t *testing.T) {
 	dir := t.TempDir()
 	bundle := filepath.Join(dir, "bundle")
 	statePath := filepath.Join(dir, "state", "state.json")
@@ -1029,7 +1029,7 @@ func TestRun_KubeadmJoinRealModeRejectsInvalidCommand(t *testing.T) {
 			Name: "install",
 			Steps: []config.Step{{
 				ID:   "kubeadm-join",
-				Kind: "KubeadmJoin",
+				Kind: "Kubeadm",
 				Spec: map[string]any{"mode": "real", "joinFile": joinPath},
 			}},
 		}},
@@ -1044,7 +1044,7 @@ func TestRun_KubeadmJoinRealModeRejectsInvalidCommand(t *testing.T) {
 	}
 }
 
-func TestRun_KubeadmInitRealModeSupportsImagePullAndConfigWrite(t *testing.T) {
+func TestRun_KubeadmRealModeSupportsImagePullAndConfigWrite(t *testing.T) {
 	dir := t.TempDir()
 	bundle := filepath.Join(dir, "bundle")
 	statePath := filepath.Join(dir, "state", "state.json")
@@ -1088,7 +1088,7 @@ func TestRun_KubeadmInitRealModeSupportsImagePullAndConfigWrite(t *testing.T) {
 			Name: "install",
 			Steps: []config.Step{{
 				ID:   "kubeadm-init",
-				Kind: "KubeadmInit",
+				Kind: "Kubeadm",
 				Spec: map[string]any{
 					"mode":                  "real",
 					"outputJoinFile":        joinPath,
@@ -1140,7 +1140,7 @@ func TestRun_KubeadmInitRealModeSupportsImagePullAndConfigWrite(t *testing.T) {
 	}
 }
 
-func TestRun_KubeadmInitAdvertiseAddressDetectionFallback(t *testing.T) {
+func TestRun_KubeadmAdvertiseAddressDetectionFallback(t *testing.T) {
 	dir := t.TempDir()
 	bundle := filepath.Join(dir, "bundle")
 	statePath := filepath.Join(dir, "state", "state.json")
@@ -1183,7 +1183,7 @@ func TestRun_KubeadmInitAdvertiseAddressDetectionFallback(t *testing.T) {
 			Name: "install",
 			Steps: []config.Step{{
 				ID:   "kubeadm-init",
-				Kind: "KubeadmInit",
+				Kind: "Kubeadm",
 				Spec: map[string]any{
 					"mode":              "real",
 					"outputJoinFile":    joinPath,
@@ -1236,9 +1236,9 @@ func TestRun_WhenAndRegisterSemantics(t *testing.T) {
 		Phases: []config.Phase{{
 			Name: "install",
 			Steps: []config.Step{
-				{ID: "init", Kind: "KubeadmInit", Spec: map[string]any{"outputJoinFile": joinPath}, Register: map[string]string{"workerJoinFile": "joinFile"}},
-				{ID: "use-register", Kind: "InstallFile", When: "vars.role == \"control-plane\"", Spec: map[string]any{"path": registeredOutputPath, "content": "{{ .runtime.workerJoinFile }}"}},
-				{ID: "skip-worker", Kind: "InstallFile", When: "vars.role == \"worker\"", Spec: map[string]any{"path": skippedOutputPath, "content": "worker"}},
+				{ID: "init", Kind: "Kubeadm", Spec: map[string]any{"outputJoinFile": joinPath}, Register: map[string]string{"workerJoinFile": "joinFile"}},
+				{ID: "use-register", Kind: "File", When: "vars.role == \"control-plane\"", Spec: map[string]any{"path": registeredOutputPath, "content": "{{ .runtime.workerJoinFile }}"}},
+				{ID: "skip-worker", Kind: "File", When: "vars.role == \"worker\"", Spec: map[string]any{"path": skippedOutputPath, "content": "worker"}},
 			},
 		}},
 	}
@@ -1305,7 +1305,7 @@ func TestRun_RetrySemantics(t *testing.T) {
 			Version: "v1",
 			Phases: []config.Phase{{
 				Name:  "install",
-				Steps: []config.Step{{ID: "retry-cmd", Kind: "RunCommand", Retry: 1, Spec: map[string]any{"command": []any{scriptPath}}}},
+				Steps: []config.Step{{ID: "retry-cmd", Kind: "Command", Retry: 1, Spec: map[string]any{"command": []any{scriptPath}}}},
 			}},
 		}
 
@@ -1343,7 +1343,7 @@ func TestRun_RetrySemantics(t *testing.T) {
 			Version: "v1",
 			Phases: []config.Phase{{
 				Name:  "install",
-				Steps: []config.Step{{ID: "retry-cmd", Kind: "RunCommand", Retry: 1, Spec: map[string]any{"command": []any{scriptPath}}}},
+				Steps: []config.Step{{ID: "retry-cmd", Kind: "Command", Retry: 1, Spec: map[string]any{"command": []any{scriptPath}}}},
 			}},
 		}
 
@@ -1391,7 +1391,7 @@ func TestRun_RetryStopsWhenParentContextDone(t *testing.T) {
 		Version: "v1",
 		Phases: []config.Phase{{
 			Name:  "install",
-			Steps: []config.Step{{ID: "retry-cmd", Kind: "RunCommand", Retry: 4, Spec: map[string]any{"command": []any{scriptPath}, "timeout": "5s"}}},
+			Steps: []config.Step{{ID: "retry-cmd", Kind: "Command", Retry: 4, Spec: map[string]any{"command": []any{scriptPath}, "timeout": "5s"}}},
 		}},
 	}
 
@@ -1411,7 +1411,7 @@ func TestRun_RetryStopsWhenParentContextDone(t *testing.T) {
 	}
 }
 
-func TestRun_RunCommandParentCancelNotRelabeledAsTimeout(t *testing.T) {
+func TestRun_CommandParentCancelNotRelabeledAsTimeout(t *testing.T) {
 	dir := t.TempDir()
 	bundle := filepath.Join(dir, "bundle")
 	statePath := filepath.Join(dir, "state", "state.json")
@@ -1433,7 +1433,7 @@ func TestRun_RunCommandParentCancelNotRelabeledAsTimeout(t *testing.T) {
 		Version: "v1",
 		Phases: []config.Phase{{
 			Name:  "install",
-			Steps: []config.Step{{ID: "cmd", Kind: "RunCommand", Spec: map[string]any{"command": []any{"true"}, "timeout": "3s"}}},
+			Steps: []config.Step{{ID: "cmd", Kind: "Command", Spec: map[string]any{"command": []any{"true"}, "timeout": "3s"}}},
 		}},
 	}
 
@@ -1451,7 +1451,7 @@ func TestRun_RunCommandParentCancelNotRelabeledAsTimeout(t *testing.T) {
 	}
 }
 
-func TestRun_DownloadFileRespectsParentContext(t *testing.T) {
+func TestRun_FileFetchRespectsParentContext(t *testing.T) {
 	dir := t.TempDir()
 	bundle := filepath.Join(dir, "bundle")
 	statePath := filepath.Join(dir, "state", "state.json")
@@ -1481,7 +1481,7 @@ func TestRun_DownloadFileRespectsParentContext(t *testing.T) {
 			Name: "install",
 			Steps: []config.Step{{
 				ID:   "download",
-				Kind: "DownloadFile",
+				Kind: "FileFetch",
 				Spec: map[string]any{"source": map[string]any{"url": srv.URL + "/files/payload.txt"}, "output": map[string]any{"path": "files/payload.txt"}},
 			}},
 		}},
@@ -1524,7 +1524,7 @@ func TestResolveSourceBytes_PreservesContextCancellation(t *testing.T) {
 	}
 }
 
-func TestRunCommandOutputWithContext_TimeoutReturnsSentinel(t *testing.T) {
+func TestCommandOutputWithContext_TimeoutReturnsSentinel(t *testing.T) {
 	_, err := runCommandOutputWithContext(context.Background(), []string{"sleep", "1"}, 10*time.Millisecond)
 	if err == nil {
 		t.Fatalf("expected timeout error")
@@ -1534,7 +1534,7 @@ func TestRunCommandOutputWithContext_TimeoutReturnsSentinel(t *testing.T) {
 	}
 }
 
-func TestRun_ContainerdConfigDefaultGenerationRespectsParentContext(t *testing.T) {
+func TestRun_ContainerdDefaultGenerationRespectsParentContext(t *testing.T) {
 	dir := t.TempDir()
 	bundle := filepath.Join(dir, "bundle")
 	statePath := filepath.Join(dir, "state", "state.json")
@@ -1568,7 +1568,7 @@ func TestRun_ContainerdConfigDefaultGenerationRespectsParentContext(t *testing.T
 		Version: "v1",
 		Phases: []config.Phase{{
 			Name:  "install",
-			Steps: []config.Step{{ID: "containerd-config", Kind: "ContainerdConfig", Spec: map[string]any{"path": target, "timeout": "5s"}}},
+			Steps: []config.Step{{ID: "containerd-config", Kind: "Containerd", Spec: map[string]any{"path": target, "timeout": "5s"}}},
 		}},
 	}
 
@@ -1583,7 +1583,7 @@ func TestRun_ContainerdConfigDefaultGenerationRespectsParentContext(t *testing.T
 	}
 }
 
-func TestRun_ContainerdConfigDefaultGenerationTimeoutUsesTimeoutClassification(t *testing.T) {
+func TestRun_ContainerdDefaultGenerationTimeoutUsesTimeoutClassification(t *testing.T) {
 	dir := t.TempDir()
 	bundle := filepath.Join(dir, "bundle")
 	statePath := filepath.Join(dir, "state", "state.json")
@@ -1617,7 +1617,7 @@ func TestRun_ContainerdConfigDefaultGenerationTimeoutUsesTimeoutClassification(t
 		Version: "v1",
 		Phases: []config.Phase{{
 			Name:  "install",
-			Steps: []config.Step{{ID: "containerd-config", Kind: "ContainerdConfig", Spec: map[string]any{"path": target, "timeout": "20ms"}}},
+			Steps: []config.Step{{ID: "containerd-config", Kind: "Containerd", Spec: map[string]any{"path": target, "timeout": "20ms"}}},
 		}},
 	}
 
@@ -1655,7 +1655,7 @@ func TestRun_WhenInvalidExpression(t *testing.T) {
 			Name: "install",
 			Steps: []config.Step{{
 				ID:   "bad-when",
-				Kind: "RunCommand",
+				Kind: "Command",
 				When: "vars.role = \"worker\"",
 				Spec: map[string]any{"command": []any{"true"}},
 			}},
@@ -1709,7 +1709,7 @@ func TestWhen_NamespaceEnforced(t *testing.T) {
 	}
 }
 
-func TestRun_InstallPackagesExecutesPackageManager(t *testing.T) {
+func TestRun_PackagesExecutesPackageManager(t *testing.T) {
 	dir := t.TempDir()
 	bundle := filepath.Join(dir, "bundle")
 	statePath := filepath.Join(dir, "state", "state.json")
@@ -1747,7 +1747,7 @@ func TestRun_InstallPackagesExecutesPackageManager(t *testing.T) {
 			Name: "install",
 			Steps: []config.Step{{
 				ID:   "install-pkgs",
-				Kind: "InstallPackages",
+				Kind: "Packages",
 				Spec: map[string]any{"packages": []any{"containerd", "kubelet"}},
 			}},
 		}},
@@ -1767,7 +1767,7 @@ func TestRun_InstallPackagesExecutesPackageManager(t *testing.T) {
 	}
 }
 
-func TestRun_InstallPackagesSourcePathValidation(t *testing.T) {
+func TestRun_PackagesSourcePathValidation(t *testing.T) {
 	dir := t.TempDir()
 	bundle := filepath.Join(dir, "bundle")
 	statePath := filepath.Join(dir, "state", "state.json")
@@ -1791,7 +1791,7 @@ func TestRun_InstallPackagesSourcePathValidation(t *testing.T) {
 			Name: "install",
 			Steps: []config.Step{{
 				ID:   "install-pkgs",
-				Kind: "InstallPackages",
+				Kind: "Packages",
 				Spec: map[string]any{
 					"packages": []any{"containerd"},
 					"source":   map[string]any{"type": "local-repo", "path": filepath.Join(dir, "missing")},
@@ -1809,7 +1809,7 @@ func TestRun_InstallPackagesSourcePathValidation(t *testing.T) {
 	}
 }
 
-func TestRun_InstallPackagesInstallsFromLocalRepo(t *testing.T) {
+func TestRun_PackagesInstallsFromLocalRepo(t *testing.T) {
 	dir := t.TempDir()
 	bundle := filepath.Join(dir, "bundle")
 	statePath := filepath.Join(dir, "state", "state.json")
@@ -1860,7 +1860,7 @@ func TestRun_InstallPackagesInstallsFromLocalRepo(t *testing.T) {
 			Name: "install",
 			Steps: []config.Step{{
 				ID:   "install-pkgs",
-				Kind: "InstallPackages",
+				Kind: "Packages",
 				Spec: map[string]any{
 					"packages": []any{"containerd", "kubelet"},
 					"source":   map[string]any{"type": "local-repo", "path": repoDir},
@@ -1886,7 +1886,7 @@ func TestRun_InstallPackagesInstallsFromLocalRepo(t *testing.T) {
 	}
 }
 
-func TestRun_InstallPackagesTimeoutUsesTimeoutClassification(t *testing.T) {
+func TestRun_PackagesTimeoutUsesTimeoutClassification(t *testing.T) {
 	dir := t.TempDir()
 	bundle := filepath.Join(dir, "bundle")
 	statePath := filepath.Join(dir, "state", "state.json")
@@ -1922,7 +1922,7 @@ func TestRun_InstallPackagesTimeoutUsesTimeoutClassification(t *testing.T) {
 			Name: "install",
 			Steps: []config.Step{{
 				ID:      "install-pkgs",
-				Kind:    "InstallPackages",
+				Kind:    "Packages",
 				Timeout: "20ms",
 				Spec:    map[string]any{"packages": []any{"containerd"}},
 			}},
@@ -2347,7 +2347,7 @@ func TestInstallFileStep(t *testing.T) {
 	}
 }
 
-func TestInstallArtifactsStep_InstallsSingleFileWithMode(t *testing.T) {
+func TestArtifactsStep_InstallsSingleFileWithMode(t *testing.T) {
 	dir := t.TempDir()
 	source := filepath.Join(dir, "kubelet")
 	if err := os.WriteFile(source, []byte("kubelet-binary"), 0o644); err != nil {
@@ -2371,8 +2371,8 @@ func TestInstallArtifactsStep_InstallsSingleFileWithMode(t *testing.T) {
 		}},
 	}
 
-	if err := runInstallArtifacts(context.Background(), spec, ""); err != nil {
-		t.Fatalf("runInstallArtifacts failed: %v", err)
+	if err := runArtifacts(context.Background(), spec, ""); err != nil {
+		t.Fatalf("runArtifacts failed: %v", err)
 	}
 
 	raw, err := os.ReadFile(target)
@@ -2391,7 +2391,7 @@ func TestInstallArtifactsStep_InstallsSingleFileWithMode(t *testing.T) {
 	}
 }
 
-func TestInstallArtifactsStep_ExtractsTarGzArtifact(t *testing.T) {
+func TestArtifactsStep_ExtractsTarGzArtifact(t *testing.T) {
 	dir := t.TempDir()
 	archivePath := filepath.Join(dir, "crictl.tar.gz")
 	if err := writeTarGzArchiveForTest(archivePath, map[string]string{"crictl": "binary"}); err != nil {
@@ -2415,8 +2415,8 @@ func TestInstallArtifactsStep_ExtractsTarGzArtifact(t *testing.T) {
 		}},
 	}
 
-	if err := runInstallArtifacts(context.Background(), spec, ""); err != nil {
-		t.Fatalf("runInstallArtifacts failed: %v", err)
+	if err := runArtifacts(context.Background(), spec, ""); err != nil {
+		t.Fatalf("runArtifacts failed: %v", err)
 	}
 
 	target := filepath.Join(destination, "crictl")
@@ -2436,7 +2436,7 @@ func TestInstallArtifactsStep_ExtractsTarGzArtifact(t *testing.T) {
 	}
 }
 
-func TestInstallArtifactsStep_SelectsSourceByArchitecture(t *testing.T) {
+func TestArtifactsStep_SelectsSourceByArchitecture(t *testing.T) {
 	dir := t.TempDir()
 	amd64Source := filepath.Join(dir, "kubeadm-amd64")
 	arm64Source := filepath.Join(dir, "kubeadm-arm64")
@@ -2463,8 +2463,8 @@ func TestInstallArtifactsStep_SelectsSourceByArchitecture(t *testing.T) {
 			"install": map[string]any{"path": target, "mode": "0755"},
 		}},
 	}
-	if err := runInstallArtifacts(context.Background(), spec, ""); err != nil {
-		t.Fatalf("runInstallArtifacts amd64 failed: %v", err)
+	if err := runArtifacts(context.Background(), spec, ""); err != nil {
+		t.Fatalf("runArtifacts amd64 failed: %v", err)
 	}
 	raw, err := os.ReadFile(target)
 	if err != nil {
@@ -2477,8 +2477,8 @@ func TestInstallArtifactsStep_SelectsSourceByArchitecture(t *testing.T) {
 	installArtifactsDetectHostFacts = func() map[string]any {
 		return map[string]any{"arch": "arm64"}
 	}
-	if err := runInstallArtifacts(context.Background(), spec, ""); err != nil {
-		t.Fatalf("runInstallArtifacts arm64 failed: %v", err)
+	if err := runArtifacts(context.Background(), spec, ""); err != nil {
+		t.Fatalf("runArtifacts arm64 failed: %v", err)
 	}
 	raw, err = os.ReadFile(target)
 	if err != nil {
@@ -2489,7 +2489,7 @@ func TestInstallArtifactsStep_SelectsSourceByArchitecture(t *testing.T) {
 	}
 }
 
-func TestInstallArtifactsStep_SkipIfPresentExecutable(t *testing.T) {
+func TestArtifactsStep_SkipIfPresentExecutable(t *testing.T) {
 	dir := t.TempDir()
 	source := filepath.Join(dir, "kubectl-source")
 	if err := os.WriteFile(source, []byte("new-content"), 0o644); err != nil {
@@ -2520,8 +2520,8 @@ func TestInstallArtifactsStep_SkipIfPresentExecutable(t *testing.T) {
 		}},
 	}
 
-	if err := runInstallArtifacts(context.Background(), spec, ""); err != nil {
-		t.Fatalf("runInstallArtifacts failed: %v", err)
+	if err := runArtifacts(context.Background(), spec, ""); err != nil {
+		t.Fatalf("runArtifacts failed: %v", err)
 	}
 	raw, err := os.ReadFile(target)
 	if err != nil {
@@ -2532,7 +2532,7 @@ func TestInstallArtifactsStep_SkipIfPresentExecutable(t *testing.T) {
 	}
 }
 
-func TestInstallArtifactsStep_InstallsFromBundleReference(t *testing.T) {
+func TestArtifactsStep_InstallsFromBundleReference(t *testing.T) {
 	bundle := t.TempDir()
 	source := filepath.Join(bundle, "files", "bin", "linux", "amd64", "kubelet")
 	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
@@ -2557,8 +2557,8 @@ func TestInstallArtifactsStep_InstallsFromBundleReference(t *testing.T) {
 		}},
 	}
 
-	if err := runInstallArtifacts(context.Background(), spec, bundle); err != nil {
-		t.Fatalf("runInstallArtifacts failed: %v", err)
+	if err := runArtifacts(context.Background(), spec, bundle); err != nil {
+		t.Fatalf("runArtifacts failed: %v", err)
 	}
 	raw, err := os.ReadFile(target)
 	if err != nil {
@@ -2569,7 +2569,7 @@ func TestInstallArtifactsStep_InstallsFromBundleReference(t *testing.T) {
 	}
 }
 
-func TestDownloadFileStep_DownloadsFromBundleReference(t *testing.T) {
+func TestFileFetchStep_DownloadsFromBundleReference(t *testing.T) {
 	bundle := t.TempDir()
 	source := filepath.Join(bundle, "files", "cluster", "join.txt")
 	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
@@ -2582,8 +2582,8 @@ func TestDownloadFileStep_DownloadsFromBundleReference(t *testing.T) {
 		"source": map[string]any{"bundle": map[string]any{"root": "files", "path": "cluster/join.txt"}},
 		"output": map[string]any{"path": "downloaded/join.txt"},
 	}
-	if _, err := runDownloadFile(context.Background(), bundle, spec); err != nil {
-		t.Fatalf("runDownloadFile failed: %v", err)
+	if _, err := runFileFetch(context.Background(), bundle, spec); err != nil {
+		t.Fatalf("runFileFetch failed: %v", err)
 	}
 	raw, err := os.ReadFile(filepath.Join(bundle, "downloaded", "join.txt"))
 	if err != nil {
@@ -2735,7 +2735,7 @@ func TestSystemdUnitStep(t *testing.T) {
 	})
 }
 
-func TestRepoConfigStep(t *testing.T) {
+func TestRepositoryStep(t *testing.T) {
 	t.Run("yum with explicit path", func(t *testing.T) {
 		dir := t.TempDir()
 		target := filepath.Join(dir, "repo", "offline.repo")
@@ -2750,8 +2750,8 @@ func TestRepoConfigStep(t *testing.T) {
 				"gpgcheck": false,
 			}},
 		}
-		if err := runRepoConfig(spec); err != nil {
-			t.Fatalf("runRepoConfig failed: %v", err)
+		if err := runRepository(spec); err != nil {
+			t.Fatalf("runRepository failed: %v", err)
 		}
 		raw, err := os.ReadFile(target)
 		if err != nil {
@@ -2776,8 +2776,8 @@ func TestRepoConfigStep(t *testing.T) {
 				"component": "main",
 			}},
 		}
-		if err := runRepoConfig(spec); err != nil {
-			t.Fatalf("runRepoConfig failed: %v", err)
+		if err := runRepository(spec); err != nil {
+			t.Fatalf("runRepository failed: %v", err)
 		}
 		raw, err := os.ReadFile(target)
 		if err != nil {
@@ -2813,8 +2813,8 @@ func TestRepoConfigStep(t *testing.T) {
 				"baseurl": "http://repo.local/apt/bookworm",
 			}},
 		}
-		if err := runRepoConfig(spec); err != nil {
-			t.Fatalf("runRepoConfig failed: %v", err)
+		if err := runRepository(spec); err != nil {
+			t.Fatalf("runRepository failed: %v", err)
 		}
 		raw, err := os.ReadFile(target)
 		if err != nil {
@@ -2847,8 +2847,8 @@ func TestRepoConfigStep(t *testing.T) {
 				"baseurl": "file:///srv/repo",
 			}},
 		}
-		if err := runRepoConfig(spec); err != nil {
-			t.Fatalf("runRepoConfig failed: %v", err)
+		if err := runRepository(spec); err != nil {
+			t.Fatalf("runRepository failed: %v", err)
 		}
 		if _, err := os.Stat(legacyA + ".deck.bak"); err != nil {
 			t.Fatalf("missing backup for legacyA: %v", err)
@@ -2882,8 +2882,8 @@ func TestRepoConfigStep(t *testing.T) {
 				"baseurl": "file:///srv/repo",
 			}},
 		}
-		if err := runRepoConfig(spec); err != nil {
-			t.Fatalf("runRepoConfig failed: %v", err)
+		if err := runRepository(spec); err != nil {
+			t.Fatalf("runRepository failed: %v", err)
 		}
 
 		raw, err := os.ReadFile(existing)
@@ -2912,8 +2912,8 @@ func TestRepoConfigStep(t *testing.T) {
 				"baseurl": "http://repo.local/apt/bookworm",
 			}},
 		}
-		if err := runRepoConfig(spec); err != nil {
-			t.Fatalf("runRepoConfig failed: %v", err)
+		if err := runRepository(spec); err != nil {
+			t.Fatalf("runRepository failed: %v", err)
 		}
 
 		if _, err := os.Stat(existing + ".deck.bak"); err != nil {
@@ -2957,8 +2957,8 @@ func TestRepoConfigStep(t *testing.T) {
 				"baseurl": "http://repo.local/apt/bookworm",
 			}},
 		}
-		if err := runRepoConfig(spec); err != nil {
-			t.Fatalf("runRepoConfig failed: %v", err)
+		if err := runRepository(spec); err != nil {
+			t.Fatalf("runRepository failed: %v", err)
 		}
 		if len(calls) != 2 || calls[0] != "apt-get clean" || calls[1] != "apt-get update" {
 			t.Fatalf("unexpected refresh command sequence: %#v", calls)
@@ -3124,7 +3124,7 @@ func TestPackageCacheStep(t *testing.T) {
 	})
 }
 
-func TestInstallPackagesStep_RestrictsToDNFRepos(t *testing.T) {
+func TestPackagesStep_RestrictsToDNFRepos(t *testing.T) {
 	origRun := installPackagesRunTimedCommandWithContext
 	origLookPath := installPackagesLookPath
 	t.Cleanup(func() {
@@ -3150,12 +3150,12 @@ func TestInstallPackagesStep_RestrictsToDNFRepos(t *testing.T) {
 	}
 
 	spec := map[string]any{"packages": []any{"kubelet"}, "restrictToRepos": []any{"deck-os"}}
-	if err := runInstallPackages(context.Background(), spec); err != nil {
-		t.Fatalf("runInstallPackages failed: %v", err)
+	if err := runPackages(context.Background(), spec); err != nil {
+		t.Fatalf("runPackages failed: %v", err)
 	}
 }
 
-func TestContainerdConfigStep(t *testing.T) {
+func TestContainerdStep(t *testing.T) {
 	t.Run("updates existing config.toml fields", func(t *testing.T) {
 		dir := t.TempDir()
 		target := filepath.Join(dir, "config.toml")
@@ -3165,8 +3165,8 @@ func TestContainerdConfigStep(t *testing.T) {
 		}
 
 		spec := map[string]any{"path": target, "configPath": "/etc/containerd/certs.d", "systemdCgroup": true}
-		if err := runContainerdConfig(context.Background(), spec); err != nil {
-			t.Fatalf("runContainerdConfig failed: %v", err)
+		if err := runContainerd(context.Background(), spec); err != nil {
+			t.Fatalf("runContainerd failed: %v", err)
 		}
 
 		raw, err := os.ReadFile(target)
@@ -3201,8 +3201,8 @@ func TestContainerdConfigStep(t *testing.T) {
 			},
 		}
 
-		if err := runContainerdConfig(context.Background(), spec); err != nil {
-			t.Fatalf("runContainerdConfig failed: %v", err)
+		if err := runContainerd(context.Background(), spec); err != nil {
+			t.Fatalf("runContainerd failed: %v", err)
 		}
 
 		hostsPath := filepath.Join(configPath, "registry.k8s.io", "hosts.toml")
@@ -3215,8 +3215,8 @@ func TestContainerdConfigStep(t *testing.T) {
 			t.Fatalf("unexpected hosts.toml content: %q", string(hostsRaw))
 		}
 
-		if err := runContainerdConfig(context.Background(), spec); err != nil {
-			t.Fatalf("runContainerdConfig second pass failed: %v", err)
+		if err := runContainerd(context.Background(), spec); err != nil {
+			t.Fatalf("runContainerd second pass failed: %v", err)
 		}
 		hostsRawAgain, err := os.ReadFile(hostsPath)
 		if err != nil {
@@ -3261,8 +3261,8 @@ func TestContainerdConfigStep(t *testing.T) {
 			},
 		}
 
-		if err := runContainerdConfig(context.Background(), spec); err != nil {
-			t.Fatalf("runContainerdConfig failed: %v", err)
+		if err := runContainerd(context.Background(), spec); err != nil {
+			t.Fatalf("runContainerd failed: %v", err)
 		}
 
 		firstRaw, err := os.ReadFile(firstHostsPath)
@@ -3381,7 +3381,7 @@ func TestSysctlStepWithApply(t *testing.T) {
 	}
 }
 
-func TestRun_KubeadmReset(t *testing.T) {
+func TestRun_Kubeadm(t *testing.T) {
 	t.Run("runs reset command and cleanup actions", func(t *testing.T) {
 		dir := t.TempDir()
 		statePath := filepath.Join(dir, "state", "state.json")
@@ -3423,7 +3423,7 @@ func TestRun_KubeadmReset(t *testing.T) {
 				Name: "install",
 				Steps: []config.Step{{
 					ID:   "reset",
-					Kind: "KubeadmReset",
+					Kind: "Kubeadm",
 					Spec: map[string]any{
 						"force":                 true,
 						"criSocket":             "unix:///run/containerd/containerd.sock",
@@ -3519,7 +3519,7 @@ func TestRun_KubeadmReset(t *testing.T) {
 				Name: "install",
 				Steps: []config.Step{{
 					ID:   "reset",
-					Kind: "KubeadmReset",
+					Kind: "Kubeadm",
 					Spec: map[string]any{
 						"ignoreErrors":          true,
 						"removePaths":           []any{removeDir},

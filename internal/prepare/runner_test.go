@@ -44,7 +44,7 @@ func TestRun_PrepareArtifactsAndManifest(t *testing.T) {
 				Steps: []config.Step{
 					{
 						ID:   "download-file",
-						Kind: "DownloadFile",
+						Kind: "FileFetch",
 						Spec: map[string]any{
 							"source": map[string]any{"url": server.URL + "/artifact"},
 							"output": map[string]any{"path": "files/artifact.bin"},
@@ -52,14 +52,14 @@ func TestRun_PrepareArtifactsAndManifest(t *testing.T) {
 					},
 					{
 						ID:   "download-os-packages",
-						Kind: "DownloadPackages",
+						Kind: "PackageFetch",
 						Spec: map[string]any{
 							"packages": []any{"containerd", "iptables"},
 						},
 					},
 					{
 						ID:   "download-images",
-						Kind: "DownloadImages",
+						Kind: "ImageFetch",
 						Spec: map[string]any{
 							"images": []any{"registry.k8s.io/kube-apiserver:{{ .vars.kubernetesVersion }}"},
 						},
@@ -193,7 +193,7 @@ func TestRun_UnsupportedPrepareKind(t *testing.T) {
 		Version: "v1",
 		Phases: []config.Phase{{
 			Name:  "prepare",
-			Steps: []config.Step{{ID: "x", Kind: "InstallFile", Spec: map[string]any{"path": "/tmp/x", "content": "x"}}},
+			Steps: []config.Step{{ID: "x", Kind: "File", Spec: map[string]any{"path": "/tmp/x", "content": "x"}}},
 		}},
 	}
 	err := Run(context.Background(), wf, RunOptions{BundleRoot: t.TempDir()})
@@ -218,7 +218,7 @@ func TestRun_ContainerBackendsWithFakeRunner(t *testing.T) {
 			Steps: []config.Step{
 				{
 					ID:   "pkg",
-					Kind: "DownloadPackages",
+					Kind: "PackageFetch",
 					Spec: map[string]any{
 						"packages": []any{"containerd"},
 						"backend": map[string]any{
@@ -230,7 +230,7 @@ func TestRun_ContainerBackendsWithFakeRunner(t *testing.T) {
 				},
 				{
 					ID:   "img",
-					Kind: "DownloadImages",
+					Kind: "ImageFetch",
 					Spec: map[string]any{
 						"images": []any{"registry.k8s.io/kube-apiserver:v1.30.1"},
 						"backend": map[string]any{
@@ -278,7 +278,7 @@ func stubImageDownload(t *testing.T) {
 	})
 }
 
-func TestRun_DownloadPackagesContainerRuntimeMissing(t *testing.T) {
+func TestRun_PackageFetchContainerRuntimeMissing(t *testing.T) {
 	bundle := t.TempDir()
 
 	wf := &config.Workflow{
@@ -288,7 +288,7 @@ func TestRun_DownloadPackagesContainerRuntimeMissing(t *testing.T) {
 			Steps: []config.Step{
 				{
 					ID:   "pkg",
-					Kind: "DownloadPackages",
+					Kind: "PackageFetch",
 					Spec: map[string]any{
 						"packages": []any{"containerd"},
 						"backend": map[string]any{
@@ -311,7 +311,7 @@ func TestRun_DownloadPackagesContainerRuntimeMissing(t *testing.T) {
 	}
 }
 
-func TestRun_DownloadPackagesContainerNoArtifacts(t *testing.T) {
+func TestRun_PackageFetchContainerNoArtifacts(t *testing.T) {
 	bundle := t.TempDir()
 
 	wf := &config.Workflow{
@@ -321,7 +321,7 @@ func TestRun_DownloadPackagesContainerNoArtifacts(t *testing.T) {
 			Steps: []config.Step{
 				{
 					ID:   "pkg",
-					Kind: "DownloadPackages",
+					Kind: "PackageFetch",
 					Spec: map[string]any{
 						"packages": []any{"containerd"},
 						"backend": map[string]any{
@@ -344,7 +344,7 @@ func TestRun_DownloadPackagesContainerNoArtifacts(t *testing.T) {
 	}
 }
 
-func TestRun_DownloadFileFallbackLocalThenBundle(t *testing.T) {
+func TestRun_FileFetchFallbackLocalThenBundle(t *testing.T) {
 	bundleOut := t.TempDir()
 	localCache := t.TempDir()
 	bundleCache := t.TempDir()
@@ -365,7 +365,7 @@ func TestRun_DownloadFileFallbackLocalThenBundle(t *testing.T) {
 			Name: "prepare",
 			Steps: []config.Step{{
 				ID:   "download-file",
-				Kind: "DownloadFile",
+				Kind: "FileFetch",
 				Spec: map[string]any{
 					"source": map[string]any{
 						"path":   relSource,
@@ -397,7 +397,7 @@ func TestRun_DownloadFileFallbackLocalThenBundle(t *testing.T) {
 	}
 }
 
-func TestRun_DownloadFileFallbackSourceMissing(t *testing.T) {
+func TestRun_FileFetchFallbackSourceMissing(t *testing.T) {
 	bundleOut := t.TempDir()
 
 	wf := &config.Workflow{
@@ -406,7 +406,7 @@ func TestRun_DownloadFileFallbackSourceMissing(t *testing.T) {
 			Name: "prepare",
 			Steps: []config.Step{{
 				ID:   "download-file",
-				Kind: "DownloadFile",
+				Kind: "FileFetch",
 				Spec: map[string]any{
 					"source": map[string]any{
 						"path": "files/missing.bin",
@@ -456,7 +456,7 @@ func TestResolveSourceBytes_PreservesContextCancellation(t *testing.T) {
 	}
 }
 
-func TestRun_DownloadFileFallbackRepoThenOnline(t *testing.T) {
+func TestRun_FileFetchFallbackRepoThenOnline(t *testing.T) {
 	bundleOut := t.TempDir()
 
 	repo := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -479,7 +479,7 @@ func TestRun_DownloadFileFallbackRepoThenOnline(t *testing.T) {
 			Name: "prepare",
 			Steps: []config.Step{{
 				ID:   "download-file",
-				Kind: "DownloadFile",
+				Kind: "FileFetch",
 				Spec: map[string]any{
 					"source": map[string]any{
 						"path": "files/remote.bin",
@@ -510,7 +510,7 @@ func TestRun_DownloadFileFallbackRepoThenOnline(t *testing.T) {
 	}
 }
 
-func TestRun_DownloadFileOfflinePolicyBlocksOnlineFallback(t *testing.T) {
+func TestRun_FileFetchOfflinePolicyBlocksOnlineFallback(t *testing.T) {
 	bundleOut := t.TempDir()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -524,7 +524,7 @@ func TestRun_DownloadFileOfflinePolicyBlocksOnlineFallback(t *testing.T) {
 			Name: "prepare",
 			Steps: []config.Step{{
 				ID:   "download-file",
-				Kind: "DownloadFile",
+				Kind: "FileFetch",
 				Spec: map[string]any{
 					"source": map[string]any{
 						"path": "files/not-found.bin",
@@ -550,7 +550,7 @@ func TestRun_DownloadFileOfflinePolicyBlocksOnlineFallback(t *testing.T) {
 	}
 }
 
-func TestRun_DownloadFileOfflinePolicyBlocksDirectURL(t *testing.T) {
+func TestRun_FileFetchOfflinePolicyBlocksDirectURL(t *testing.T) {
 	bundleOut := t.TempDir()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -564,7 +564,7 @@ func TestRun_DownloadFileOfflinePolicyBlocksDirectURL(t *testing.T) {
 			Name: "prepare",
 			Steps: []config.Step{{
 				ID:   "download-file",
-				Kind: "DownloadFile",
+				Kind: "FileFetch",
 				Spec: map[string]any{
 					"source": map[string]any{"url": server.URL + "/files/a.bin"},
 					"fetch":  map[string]any{"offlineOnly": true},
@@ -604,7 +604,7 @@ func TestRun_WhenAndRegisterSemantics(t *testing.T) {
 			Steps: []config.Step{
 				{
 					ID:   "download-a",
-					Kind: "DownloadFile",
+					Kind: "FileFetch",
 					Spec: map[string]any{
 						"source": map[string]any{"path": sourceRel},
 						"fetch":  map[string]any{"sources": []any{map[string]any{"type": "local", "path": localCache}}},
@@ -614,7 +614,7 @@ func TestRun_WhenAndRegisterSemantics(t *testing.T) {
 				},
 				{
 					ID:   "download-b",
-					Kind: "DownloadFile",
+					Kind: "FileFetch",
 					When: "vars.role == \"control-plane\"",
 					Spec: map[string]any{
 						"source": map[string]any{"path": "{{ .runtime.downloaded }}"},
@@ -624,7 +624,7 @@ func TestRun_WhenAndRegisterSemantics(t *testing.T) {
 				},
 				{
 					ID:   "skip-worker-only",
-					Kind: "DownloadFile",
+					Kind: "FileFetch",
 					When: "vars.role == \"worker\"",
 					Spec: map[string]any{
 						"source": map[string]any{"path": sourceRel},
@@ -661,7 +661,7 @@ func TestRun_RetrySemantics(t *testing.T) {
 				Name: "prepare",
 				Steps: []config.Step{{
 					ID:    "retry-packages",
-					Kind:  "DownloadPackages",
+					Kind:  "PackageFetch",
 					Retry: 1,
 					Spec: map[string]any{
 						"packages": []any{"containerd"},
@@ -692,7 +692,7 @@ func TestRun_RetrySemantics(t *testing.T) {
 				Name: "prepare",
 				Steps: []config.Step{{
 					ID:    "retry-fail",
-					Kind:  "DownloadFile",
+					Kind:  "FileFetch",
 					Retry: 1,
 					Spec: map[string]any{
 						"source": map[string]any{"path": "files/missing.bin"},
@@ -722,7 +722,7 @@ func TestRun_WhenInvalidExpression(t *testing.T) {
 			Name: "prepare",
 			Steps: []config.Step{{
 				ID:   "bad-when",
-				Kind: "DownloadPackages",
+				Kind: "PackageFetch",
 				When: "vars.role = \"worker\"",
 				Spec: map[string]any{"packages": []any{"containerd"}},
 			}},
@@ -776,7 +776,7 @@ func TestWhen_NamespaceEnforced(t *testing.T) {
 	}
 }
 
-func TestRun_CheckHostStep(t *testing.T) {
+func TestRun_InspectionStep(t *testing.T) {
 	t.Run("pass and register", func(t *testing.T) {
 		bundle := t.TempDir()
 		wf := &config.Workflow{
@@ -787,7 +787,7 @@ func TestRun_CheckHostStep(t *testing.T) {
 				Steps: []config.Step{
 					{
 						ID:       "host-check",
-						Kind:     "CheckHost",
+						Kind:     "Inspection",
 						Register: map[string]string{"hostPassed": "passed"},
 						Spec: map[string]any{
 							"checks":   []any{"os", "arch", "binaries"},
@@ -796,7 +796,7 @@ func TestRun_CheckHostStep(t *testing.T) {
 					},
 					{
 						ID:   "runtime-branch",
-						Kind: "DownloadPackages",
+						Kind: "PackageFetch",
 						When: "runtime.hostPassed == true and vars.want == \"ok\" and runtime.host.os.family == \"debian\" and runtime.host.arch == \"arm64\"",
 						Spec: map[string]any{
 							"packages": []any{"containerd"},
@@ -845,7 +845,7 @@ func TestRun_CheckHostStep(t *testing.T) {
 				Name: "prepare",
 				Steps: []config.Step{{
 					ID:   "host-check",
-					Kind: "CheckHost",
+					Kind: "Inspection",
 					Spec: map[string]any{
 						"checks":   []any{"os", "arch", "binaries", "swap", "kernelModules"},
 						"binaries": []any{"missing-bin"},
@@ -889,7 +889,7 @@ func TestRun_CheckHostStep(t *testing.T) {
 	})
 }
 
-func TestRun_DownloadPackagesRepoModeAptFlatGeneratesMetadata(t *testing.T) {
+func TestRun_PackageFetchRepoModeAptFlatGeneratesMetadata(t *testing.T) {
 	bundle := t.TempDir()
 	r := &fakeRunner{}
 
@@ -899,7 +899,7 @@ func TestRun_DownloadPackagesRepoModeAptFlatGeneratesMetadata(t *testing.T) {
 			Name: "prepare",
 			Steps: []config.Step{{
 				ID:   "pkgs",
-				Kind: "DownloadPackages",
+				Kind: "PackageFetch",
 				Spec: map[string]any{
 					"packages": []any{"containerd"},
 					"distro": map[string]any{
@@ -934,7 +934,7 @@ func TestRun_DownloadPackagesRepoModeAptFlatGeneratesMetadata(t *testing.T) {
 	}
 }
 
-func TestRun_DownloadPackagesRepoModeYumGeneratesRepodata(t *testing.T) {
+func TestRun_PackageFetchRepoModeYumGeneratesRepodata(t *testing.T) {
 	bundle := t.TempDir()
 	r := &fakeRunner{}
 
@@ -944,7 +944,7 @@ func TestRun_DownloadPackagesRepoModeYumGeneratesRepodata(t *testing.T) {
 			Name: "prepare",
 			Steps: []config.Step{{
 				ID:   "pkgs",
-				Kind: "DownloadPackages",
+				Kind: "PackageFetch",
 				Spec: map[string]any{
 					"packages": []any{"containerd"},
 					"distro": map[string]any{

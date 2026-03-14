@@ -5,8 +5,9 @@ phases:
     steps:
       - id: verify-required-images
         apiVersion: deck/v1alpha1
-        kind: VerifyImages
+        kind: Image
         spec:
+          action: present
           images:
             - registry.k8s.io/pause:3.10.1
             - registry.k8s.io/kube-apiserver:v1.30.14

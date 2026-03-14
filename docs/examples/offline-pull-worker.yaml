@@ -18,8 +18,9 @@ phases:
       - id: configure-offline-repo-apt
         when: vars.osFamily == "debian"
         apiVersion: deck/v1alpha1
-        kind: RepoConfig
+        kind: Repository
         spec:
+          action: configure
           format: apt
           replaceExisting: true
           refreshCache:
@@ -35,8 +36,9 @@ phases:
       - id: configure-offline-repo-yum
         when: vars.osFamily == "rhel"
         apiVersion: deck/v1alpha1
-        kind: RepoConfig
+        kind: Repository
         spec:
+          action: configure
           format: yum
           replaceExisting: true
           refreshCache:
@@ -55,12 +57,12 @@ phases:
               gpgcheck: false
       - id: install-k8s-deps
         apiVersion: deck/v1alpha1
-        kind: InstallPackages
+        kind: Packages
         spec:
           packages: [containerd, kubelet, kubeadm, kubectl]
       - id: configure-containerd-runtime
         apiVersion: deck/v1alpha1
-        kind: ContainerdConfig
+        kind: Containerd
         spec:
           path: /etc/containerd/config.toml
           configPath: /etc/containerd/certs.d
@@ -87,8 +89,9 @@ phases:
           state: started
       - id: kubeadm-join
         apiVersion: deck/v1alpha1
-        kind: KubeadmJoin
+        kind: Kubeadm
         spec:
+          action: join
           mode: real
           joinFile: "{{ .vars.joinFile }}"
           extraArgs: ["--cri-socket", "unix:///run/containerd/containerd.sock", "--ignore-preflight-errors=Swap"]

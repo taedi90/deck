@@ -8,16 +8,12 @@ import (
 func stepOutputs(kind string, rendered map[string]any) map[string]any {
 	outputs := map[string]any{}
 	switch kind {
-	case "DownloadFile":
+	case "FileFetch":
 		if path := stringValue(mapValue(rendered, "output"), "path"); path != "" {
 			outputs["path"] = path
 			outputs["artifacts"] = []string{path}
 		}
-	case "CopyFile":
-		if dest := stringValue(rendered, "dest"); dest != "" {
-			outputs["dest"] = dest
-		}
-	case "EnsureDir", "Symlink", "InstallFile", "SystemdUnit", "RepoConfig", "ContainerdConfig":
+	case "Directory", "Symlink", "SystemdUnit", "Containerd":
 		if path := stringValue(rendered, "path"); path != "" {
 			outputs["path"] = path
 		}
@@ -32,7 +28,32 @@ func stepOutputs(kind string, rendered map[string]any) map[string]any {
 		if names := stringSlice(rendered["names"]); len(names) > 0 {
 			outputs["names"] = names
 		}
-	case "KubeadmInit":
+	case "File":
+		switch fileAction(rendered) {
+		case "install", "edit":
+			if path := stringValue(rendered, "path"); path != "" {
+				outputs["path"] = path
+			}
+		case "copy":
+			if dest := stringValue(rendered, "dest"); dest != "" {
+				outputs["dest"] = dest
+			}
+		}
+	case "Repository":
+		if repositoryAction(rendered) == "configure" {
+			if path := stringValue(rendered, "path"); path != "" {
+				outputs["path"] = path
+			}
+		}
+	case "Kubeadm":
+		if kubeadmAction(rendered) == "init" {
+			if joinFile := stringValue(rendered, "outputJoinFile"); joinFile != "" {
+				outputs["joinFile"] = joinFile
+			}
+		}
+	case "Artifacts", "Packages", "Image", "Wait", "PackageCache", "Sysctl", "Swap", "Command", "Inspection":
+		// no register outputs
+	default:
 		if joinFile := stringValue(rendered, "outputJoinFile"); joinFile != "" {
 			outputs["joinFile"] = joinFile
 		}

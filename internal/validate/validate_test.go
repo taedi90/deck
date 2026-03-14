@@ -19,7 +19,7 @@ phases:
     steps:
       - id: prepare-images
         apiVersion: deck/v1alpha1
-        kind: DownloadImages
+        kind: ImageFetch
         spec:
           images: [registry.k8s.io/kube-apiserver:v1.30.1]
           backend:
@@ -38,7 +38,7 @@ phases:
 		}
 	})
 
-	t.Run("tool schema valid InstallPackages without source", func(t *testing.T) {
+	t.Run("tool schema valid Packages without source", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
 		content := []byte(`role: apply
@@ -48,7 +48,7 @@ phases:
     steps:
       - id: install-packages
         apiVersion: deck/v1alpha1
-        kind: InstallPackages
+        kind: Packages
         spec:
           packages: [containerd]
 `)
@@ -86,7 +86,7 @@ phases:
 		}
 	})
 
-	t.Run("tool schema valid InstallArtifacts", func(t *testing.T) {
+	t.Run("tool schema valid Artifacts", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
 		content := []byte(`role: apply
@@ -96,7 +96,7 @@ phases:
     steps:
       - id: install-artifacts
         apiVersion: deck/v1alpha1
-        kind: InstallArtifacts
+        kind: Artifacts
         spec:
           artifacts:
             - source:
@@ -129,7 +129,7 @@ phases:
 		}
 	})
 
-	t.Run("tool schema rejects invalid InstallArtifacts", func(t *testing.T) {
+	t.Run("tool schema rejects invalid Artifacts", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
 		content := []byte(`role: apply
@@ -139,7 +139,7 @@ phases:
     steps:
       - id: bad-install-artifacts
         apiVersion: deck/v1alpha1
-        kind: InstallArtifacts
+        kind: Artifacts
         spec:
           artifacts:
             - source:
@@ -190,7 +190,7 @@ phases:
 		}
 	})
 
-	t.Run("install phase accepts InstallPackages with only spec.packages", func(t *testing.T) {
+	t.Run("install phase accepts Packages with only spec.packages", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
 		content := []byte(`role: apply
@@ -200,7 +200,7 @@ phases:
     steps:
       - id: install-packages-curl
         apiVersion: deck/v1alpha1
-        kind: InstallPackages
+        kind: Packages
         spec:
           packages: [curl]
 `)
@@ -213,7 +213,7 @@ phases:
 		}
 	})
 
-	t.Run("tool schema valid RepoConfig apt without path", func(t *testing.T) {
+	t.Run("tool schema valid Repository apt without path", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
 		content := []byte(`role: apply
@@ -223,8 +223,9 @@ phases:
     steps:
       - id: repo-apt
         apiVersion: deck/v1alpha1
-        kind: RepoConfig
+        kind: Repository
         spec:
+          action: configure
           format: apt
           replaceExisting: true
           refreshCache:
@@ -307,7 +308,7 @@ phases:
     steps:
       - id: dup-id
         apiVersion: deck/v1alpha1
-        kind: DownloadFile
+        kind: FileFetch
         spec:
           source:
             url: https://example.local/a
@@ -317,7 +318,7 @@ phases:
     steps:
       - id: dup-id
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: Command
         spec:
           command: ["true"]
 `)
@@ -340,7 +341,7 @@ phases:
     steps:
       - id: s1
         apiVersion: deck/v1alpha1
-        kind: DownloadFile
+        kind: FileFetch
         register:
           token: outputA
         spec:
@@ -350,7 +351,7 @@ phases:
             path: files/a
       - id: s2
         apiVersion: deck/v1alpha1
-        kind: DownloadFile
+        kind: FileFetch
         register:
           token: outputB
         spec:
@@ -378,7 +379,7 @@ phases:
     steps:
       - id: bad-run-command
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: Command
         spec:
           command: []
 `)
@@ -395,7 +396,7 @@ phases:
 		}
 	})
 
-	t.Run("tool schema valid WaitPath", func(t *testing.T) {
+	t.Run("tool schema valid Wait", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
 		content := []byte(`role: apply
@@ -405,8 +406,9 @@ phases:
     steps:
       - id: wait-admin-conf
         apiVersion: deck/v1alpha1
-        kind: WaitPath
+        kind: Wait
         spec:
+          action: fileExists
           path: /etc/kubernetes/admin.conf
           state: exists
           type: file
@@ -423,7 +425,7 @@ phases:
 		}
 	})
 
-	t.Run("tool schema rejects WaitPath nonEmpty with absent state", func(t *testing.T) {
+	t.Run("tool schema rejects Wait nonEmpty with absent state", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
 		content := []byte(`role: apply
@@ -433,8 +435,9 @@ phases:
     steps:
       - id: bad-wait
         apiVersion: deck/v1alpha1
-        kind: WaitPath
+        kind: Wait
         spec:
+          action: fileAbsent
           path: /tmp/old-file
           state: absent
           nonEmpty: true
@@ -452,7 +455,7 @@ phases:
 		}
 	})
 
-	t.Run("tool schema rejects WaitPath invalid type", func(t *testing.T) {
+	t.Run("tool schema rejects Wait invalid type", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
 		content := []byte(`role: apply
@@ -462,8 +465,9 @@ phases:
     steps:
       - id: bad-wait-type
         apiVersion: deck/v1alpha1
-        kind: WaitPath
+        kind: Wait
         spec:
+          action: fileExists
           path: /tmp/target
           state: exists
           type: socket
@@ -602,7 +606,7 @@ phases:
 		}
 	})
 
-	t.Run("tool schema valid KubeadmReset", func(t *testing.T) {
+	t.Run("tool schema valid Kubeadm", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
 		content := []byte(`role: apply
@@ -612,8 +616,9 @@ phases:
     steps:
       - id: reset-node
         apiVersion: deck/v1alpha1
-        kind: KubeadmReset
+        kind: Kubeadm
         spec:
+          action: reset
           force: true
           ignoreErrors: true
           stopKubelet: true
@@ -632,7 +637,7 @@ phases:
 		}
 	})
 
-	t.Run("tool schema valid expanded KubeadmInit", func(t *testing.T) {
+	t.Run("tool schema valid expanded Kubeadm", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
 		content := []byte(`role: apply
@@ -642,8 +647,9 @@ phases:
     steps:
       - id: kubeadm-init
         apiVersion: deck/v1alpha1
-        kind: KubeadmInit
+        kind: Kubeadm
         spec:
+          action: init
           mode: real
           outputJoinFile: /tmp/deck/join.txt
           configFile: /tmp/deck/kubeadm-init.yaml
@@ -664,7 +670,7 @@ phases:
 		}
 	})
 
-	t.Run("tool schema rejects invalid expanded KubeadmInit shape", func(t *testing.T) {
+	t.Run("tool schema rejects invalid expanded Kubeadm shape", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
 		content := []byte(`role: apply
@@ -674,8 +680,9 @@ phases:
     steps:
       - id: kubeadm-init
         apiVersion: deck/v1alpha1
-        kind: KubeadmInit
+        kind: Kubeadm
         spec:
+          action: init
           mode: real
           outputJoinFile: /tmp/deck/join.txt
           pullImages: "yes"
@@ -693,7 +700,7 @@ phases:
 		}
 	})
 
-	t.Run("tool schema rejects invalid KubeadmReset", func(t *testing.T) {
+	t.Run("tool schema rejects invalid Kubeadm", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
 		content := []byte(`role: apply
@@ -703,8 +710,9 @@ phases:
     steps:
       - id: reset-node
         apiVersion: deck/v1alpha1
-        kind: KubeadmReset
+        kind: Kubeadm
         spec:
+          action: reset
           cleanupContainers: kube-apiserver
 `)
 		if err := os.WriteFile(path, content, 0o644); err != nil {
@@ -730,10 +738,11 @@ phases:
     steps:
       - id: w1
         apiVersion: deck/v1alpha1
-        kind: InstallFile
+        kind: File
         register:
           x: notARealOutput
         spec:
+          action: install
           path: /tmp/a.txt
           content: hello
 `)
@@ -760,7 +769,7 @@ phases:
     steps:
       - id: d1
         apiVersion: deck/v1alpha1
-        kind: DownloadFile
+        kind: FileFetch
         register:
           fetched: path
         spec:
@@ -788,8 +797,9 @@ phases:
     steps:
       - id: install-file
         apiVersion: deck/v1alpha1
-        kind: InstallFile
+        kind: File
         spec:
+          action: install
           path: /tmp/a.txt
           content: hello
 `)
@@ -878,7 +888,7 @@ phases:
     steps:
       - id: c1
         apiVersion: deck/v1alpha1
-        kind: CheckHost
+        kind: Inspection
         register:
           hostOk: passed
         spec:
@@ -929,7 +939,7 @@ phases:
     steps:
       - id: c1
         apiVersion: deck/v1alpha1
-        kind: CheckHost
+        kind: Inspection
         register:
           host: passed
         spec:
@@ -956,7 +966,7 @@ func TestSchema_ApiVersionOptional(t *testing.T) {
 version: v1alpha1
 steps:
   - id: run-without-api-version
-    kind: RunCommand
+    kind: Command
     spec:
       command: ["true"]
 `)
@@ -976,7 +986,7 @@ func TestValidate_SingleBraceTemplateShowsLine(t *testing.T) {
 version: v1alpha1
 steps:
   - id: bad-template
-    kind: RunCommand
+    kind: Command
     spec:
       command:
         - "echo"
@@ -1008,7 +1018,7 @@ imports:
   - ./legacy.yaml
 steps:
   - id: ok-step
-    kind: RunCommand
+    kind: Command
     spec:
       command: ["true"]
 `)
@@ -1050,7 +1060,7 @@ context:
   bundleRoot: /tmp/bundle
 steps:
   - id: ok-step
-    kind: RunCommand
+    kind: Command
     spec:
       command: ["true"]
 `)
@@ -1088,25 +1098,28 @@ steps:
       ignoreMissing: true
       state: stopped
   - id: ensure-dir
-    kind: EnsureDir
+    kind: Directory
     spec:
       path: /etc/containerd/certs.d
       mode: "0755"
   - id: install-file
-    kind: InstallFile
+    kind: File
     spec:
+      action: install
       path: /etc/modules-load.d/k8s.conf
       content: |
         overlay
   - id: hosts-file
-    kind: InstallFile
+    kind: File
     spec:
+      action: install
       path: /etc/containerd/certs.d/registry.k8s.io/hosts.toml
       contentFromTemplate: |
         server = "http://registry.local"
   - id: repo-config
-    kind: RepoConfig
+    kind: Repository
     spec:
+      action: configure
       path: /etc/yum.repos.d/offline.repo
       repositories:
         - id: offline-base
@@ -1114,7 +1127,7 @@ steps:
           enabled: true
           gpgcheck: false
   - id: containerd-config
-    kind: ContainerdConfig
+    kind: Containerd
     spec:
       path: /etc/containerd/config.toml
       configPath: /etc/containerd/certs.d
@@ -1144,7 +1157,7 @@ steps:
       values:
         net.ipv4.ip_forward: 1
   - id: run-cmd
-    kind: RunCommand
+    kind: Command
     spec:
       command: ["true"]
 `)

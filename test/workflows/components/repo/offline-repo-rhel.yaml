@@ -5,8 +5,9 @@ phases:
     steps:
       - id: apply-offline-repo-config-rhel
         apiVersion: deck/v1alpha1
-        kind: RepoConfig
+        kind: Repository
         spec:
+          action: configure
           format: yum
           path: /etc/yum.repos.d/deck-offline.repo
           replaceExisting: true

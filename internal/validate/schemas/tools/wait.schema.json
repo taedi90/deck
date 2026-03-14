@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deck.local/schemas/tools/wait.schema.json",
+  "title": "WaitStep",
+  "description": "Waits for healthcheck-style conditions through action-specific polling.",
+  "x-deck-visibility": "public",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "apiVersion",
+    "kind",
+    "spec"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "apiVersion": {
+      "const": "deck/v1alpha1"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "when": {
+      "type": "string"
+    },
+    "retry": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "timeout": {
+      "type": "string",
+      "pattern": "^[0-9]+(ms|s|m|h)$"
+    },
+    "register": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "kind": {
+      "const": "Wait"
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action"
+      ],
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "serviceActive",
+            "commandSuccess",
+            "fileExists",
+            "fileAbsent",
+            "tcpPortClosed",
+            "tcpPortOpen"
+          ]
+        },
+        "interval": {
+          "type": "string",
+          "pattern": "^[0-9]+(ms|s|m|h)$"
+        },
+        "initialDelay": {
+          "type": "string",
+          "pattern": "^[0-9]+(ms|s|m|h)$"
+        },
+        "name": {
+          "type": "string"
+        },
+        "command": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "path": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "any",
+            "file",
+            "dir"
+          ]
+        },
+        "nonEmpty": {
+          "type": "boolean"
+        },
+        "address": {
+          "type": "string"
+        },
+        "port": {
+          "type": "string"
+        },
+        "timeout": {
+          "type": "string",
+          "pattern": "^[0-9]+(ms|s|m|h)$"
+        },
+        "pollInterval": {
+          "type": "string",
+          "pattern": "^[0-9]+(ms|s|m|h)$"
+        },
+        "state": {
+          "type": "string"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "serviceActive"
+                ]
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          "then": {
+            "required": [
+              "name"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "commandSuccess"
+                ]
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          "then": {
+            "required": [
+              "command"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "fileExists",
+                  "fileAbsent"
+                ]
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          "then": {
+            "required": [
+              "path"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "tcpPortClosed",
+                  "tcpPortOpen"
+                ]
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          "then": {
+            "required": [
+              "port"
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

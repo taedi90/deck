@@ -13,25 +13,25 @@ func runPrepareStep(ctx context.Context, runner CommandRunner, bundleRoot, kind 
 	}
 
 	switch kind {
-	case "DownloadFile":
+	case "FileFetch":
 		f, err := runDownloadFile(ctx, bundleRoot, rendered, opts)
 		if err != nil {
 			return nil, nil, err
 		}
 		return []string{f}, map[string]any{"path": f, "artifacts": []string{f}}, nil
-	case "DownloadPackages":
+	case "PackageFetch":
 		files, err := runDownloadPackages(ctx, runner, bundleRoot, rendered, "packages", opts)
 		if err != nil {
 			return nil, nil, err
 		}
 		return files, map[string]any{"artifacts": files}, nil
-	case "DownloadImages":
+	case "ImageFetch":
 		files, err := runDownloadImages(ctx, runner, bundleRoot, rendered, opts)
 		if err != nil {
 			return nil, nil, err
 		}
 		return files, map[string]any{"artifacts": files}, nil
-	case "CheckHost":
+	case "Inspection":
 		outputs, err := runCheckHost(runner, rendered)
 		if err != nil {
 			return nil, nil, err
