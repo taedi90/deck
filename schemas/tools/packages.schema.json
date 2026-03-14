@@ -100,6 +100,29 @@
         },
         "repo": {
           "additionalProperties": true,
+          "properties": {
+            "modules": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "stream": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "stream"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
           "type": "object"
         },
         "restrictToRepos": {

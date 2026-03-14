@@ -59,12 +59,30 @@ spec:
 | `spec.excludeRepos` | `array<string>` | no | `` | `` | Exclude the listed repositories while resolving packages. | `[updates]` |
 | `spec.packages` | `array<string>` | yes | `` | `` | Package names to gather or install. | `[kubelet,kubeadm,kubectl]` |
 | `spec.repo` | `object` | no | `` | `` |  | `{...}` |
+| `spec.repo.modules` | `array<object>` | no | `` | `` |  | `[{...}]` |
+| `spec.repo.modules[].name` | `string` | yes | `` | `` |  | `example` |
+| `spec.repo.modules[].stream` | `string` | yes | `` | `` |  | `example` |
 | `spec.restrictToRepos` | `array<string>` | no | `` | `` | Limit package manager visibility to the listed repositories during the operation. | `[offline-kubernetes]` |
 | `spec.source` | `object` | no | `` | `` | Optional local repository source used when installs should come from a prepared repo path. | `{type:local-repo,path:/opt/deck/repos/kubernetes}` |
 | `spec.source.path` | `string` | yes | `` | `` |  | `example` |
 | `spec.source.type` | `string` | yes | `` | `` |  | `local-repo` |
 
 ## Nested Objects
+
+### `spec.repo`
+
+| Key | Type | Required | Default | Enum | Description | Example |
+|---|---|---:|---|---|---|---|
+| `spec.repo.modules` | `array<object>` | no | `` | `` |  | `[{...}]` |
+| `spec.repo.modules[].name` | `string` | yes | `` | `` |  | `example` |
+| `spec.repo.modules[].stream` | `string` | yes | `` | `` |  | `example` |
+
+### `spec.repo.modules`
+
+| Key | Type | Required | Default | Enum | Description | Example |
+|---|---|---:|---|---|---|---|
+| `spec.repo.modules[].name` | `string` | yes | `` | `` |  | `example` |
+| `spec.repo.modules[].stream` | `string` | yes | `` | `` |  | `example` |
 
 ### `spec.source`
 
@@ -109,9 +127,19 @@ spec:
 kind: Packages
 spec:
   action: download
-  packages: [kubelet, kubeadm, kubectl]
+  packages: [podman]
+  distro:
+    family: rhel
+    release: rocky9
   repo:
-    mirror: http://repo.local/kubernetes
+    type: yum
+    modules:
+      - name: container-tools
+        stream: "4.0"
+  backend:
+    mode: container
+    runtime: docker
+    image: rockylinux:9
 ```
 ### `install`
 

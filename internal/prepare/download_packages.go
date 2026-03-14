@@ -23,6 +23,11 @@ type packageCacheMount struct {
 	container string
 }
 
+type rpmModuleSpec struct {
+	Name   string
+	Stream string
+}
+
 func runPackagesDownload(ctx context.Context, runner CommandRunner, bundleRoot string, spec map[string]any, defaultDir string, opts RunOptions) ([]string, error) {
 	output := mapValue(spec, "output")
 	dir := stringValue(output, "dir")
@@ -72,7 +77,7 @@ func runPackagesDownload(ctx context.Context, runner CommandRunner, bundleRoot s
 				return files, nil
 			}
 
-			files, err := runContainerPackageRepoBuild(ctx, runner, bundleRoot, repoRoot, family, repoType, generate, pkgsDir, spec, packages, opts)
+			files, err := runContainerPackageRepoBuild(ctx, runner, bundleRoot, repoRoot, family, repoType, generate, pkgsDir, spec, repo, packages, opts)
 			if err != nil {
 				return nil, err
 			}
@@ -88,7 +93,7 @@ func runPackagesDownload(ctx context.Context, runner CommandRunner, bundleRoot s
 			return files, nil
 		}
 
-		files, err := runContainerPackageDownloadAll(ctx, runner, bundleRoot, dir, spec, packages, opts)
+		files, err := runContainerPackageDownloadAll(ctx, runner, bundleRoot, dir, spec, repo, packages, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -111,6 +116,7 @@ func runContainerPackageRepoBuild(
 	generate bool,
 	pkgsDir string,
 	spec map[string]any,
+	repo map[string]any,
 	packages []string,
 	opts RunOptions,
 ) ([]string, error) {
@@ -134,7 +140,14 @@ func runContainerPackageRepoBuild(
 		return nil, err
 	}
 
-	cmdScript := buildPackageRepoBuildScript(family, packages, repoType, generate, pkgsDir)
+	modules, err := parseRPMModules(repo)
+	if err != nil {
+		return nil, err
+	}
+	cmdScript, err := buildPackageRepoBuildScript(family, packages, modules, repoType, generate, pkgsDir)
+	if err != nil {
+		return nil, err
+	}
 	cacheKey, err := packageDownloadCacheKey(spec, family, repoRoot)
 	if err != nil {
 		return nil, err
@@ -155,7 +168,7 @@ func runContainerPackageRepoBuild(
 	return files, nil
 }
 
-func runContainerPackageDownloadAll(ctx context.Context, runner CommandRunner, bundleRoot, dir string, spec map[string]any, packages []string, opts RunOptions) ([]string, error) {
+func runContainerPackageDownloadAll(ctx context.Context, runner CommandRunner, bundleRoot, dir string, spec map[string]any, repo map[string]any, packages []string, opts RunOptions) ([]string, error) {
 	backend := mapValue(spec, "backend")
 	runtimeSel, err := detectRuntime(runner, stringValue(backend, "runtime"))
 	if err != nil {
@@ -183,7 +196,14 @@ func runContainerPackageDownloadAll(ctx context.Context, runner CommandRunner, b
 		return nil, err
 	}
 
-	cmdScript := buildPackageDownloadAllScript(family, packages)
+	modules, err := parseRPMModules(repo)
+	if err != nil {
+		return nil, err
+	}
+	cmdScript, err := buildPackageDownloadAllScript(family, packages, modules)
+	if err != nil {
+		return nil, err
+	}
 	cacheKey, err := packageDownloadCacheKey(spec, family, dir)
 	if err != nil {
 		return nil, err
@@ -204,7 +224,7 @@ func runContainerPackageDownloadAll(ctx context.Context, runner CommandRunner, b
 	return files, nil
 }
 
-func buildPackageDownloadAllScript(family string, packages []string) string {
+func buildPackageDownloadAllScript(family string, packages []string, modules []rpmModuleSpec) (string, error) {
 	parts := make([]string, 0, len(packages))
 	for _, p := range packages {
 		p = strings.TrimSpace(p)
@@ -216,20 +236,31 @@ func buildPackageDownloadAllScript(family string, packages []string) string {
 	pkgList := strings.Join(parts, " ")
 
 	if family == "rhel" {
+		moduleEnable, err := buildRPMModuleEnableCommand(modules)
+		if err != nil {
+			return "", err
+		}
+		if moduleEnable != "" {
+			return fmt.Sprintf(
+				"set -euo pipefail; mkdir -p /out; dnf -y install 'dnf-command(download)' >/dev/null 2>&1 || true; %s; dnf -y download --resolve --destdir /out %s",
+				moduleEnable,
+				pkgList,
+			), nil
+		}
 		return fmt.Sprintf(
 			"set -euo pipefail; mkdir -p /out; (dnf -y install 'dnf-command(download)' >/dev/null 2>&1 || yum -y install yum-utils >/dev/null 2>&1 || true); (dnf -y download --resolve --destdir /out %s || yumdownloader --resolve --destdir /out %s)",
 			pkgList,
 			pkgList,
-		)
+		), nil
 	}
 
 	return fmt.Sprintf(
 		"set -euo pipefail; export DEBIAN_FRONTEND=noninteractive; mkdir -p /out; apt-get update -y >/dev/null; apt-get install -y --download-only --no-install-recommends %s >/dev/null; cp -a /var/cache/apt/archives/*.deb /out/ 2>/dev/null || true",
 		pkgList,
-	)
+	), nil
 }
 
-func buildPackageRepoBuildScript(family string, packages []string, repoType string, generate bool, pkgsDir string) string {
+func buildPackageRepoBuildScript(family string, packages []string, modules []rpmModuleSpec, repoType string, generate bool, pkgsDir string) (string, error) {
 	parts := make([]string, 0, len(packages))
 	for _, p := range packages {
 		p = strings.TrimSpace(p)
@@ -245,12 +276,24 @@ func buildPackageRepoBuildScript(family string, packages []string, repoType stri
 		if !generate {
 			gen = "false"
 		}
+		moduleEnable, err := buildRPMModuleEnableCommand(modules)
+		if err != nil {
+			return "", err
+		}
+		if moduleEnable != "" {
+			return fmt.Sprintf(
+				"set -euo pipefail; mkdir -p /out; dnf -y install 'dnf-command(download)' createrepo_c >/dev/null 2>&1 || true; %s; dnf -y download --resolve --destdir /out %s; if %s; then createrepo_c /out >/dev/null; fi",
+				moduleEnable,
+				pkgList,
+				gen,
+			), nil
+		}
 		return fmt.Sprintf(
 			"set -euo pipefail; mkdir -p /out; (dnf -y install 'dnf-command(download)' createrepo_c >/dev/null 2>&1 || yum -y install yum-utils createrepo_c >/dev/null 2>&1 || true); (dnf -y download --resolve --destdir /out %s || yumdownloader --resolve --destdir /out %s); if %s; then createrepo_c /out >/dev/null; fi",
 			pkgList,
 			pkgList,
 			gen,
-		)
+		), nil
 	}
 
 	gen := "true"
@@ -269,20 +312,86 @@ func buildPackageRepoBuildScript(family string, packages []string, repoType stri
 		shellEscape(safePkgsDir),
 		gen,
 		shellEscape(safePkgsDir),
-	)
+	), nil
 }
 
 func shellEscape(v string) string {
 	return strings.ReplaceAll(v, "'", "''")
 }
 
+func parseRPMModules(repo map[string]any) ([]rpmModuleSpec, error) {
+	raw, ok := repo["modules"]
+	if !ok || raw == nil {
+		return nil, nil
+	}
+	items, ok := raw.([]any)
+	if !ok {
+		return nil, fmt.Errorf("packages action download repo.modules must be an array")
+	}
+	modules := make([]rpmModuleSpec, 0, len(items))
+	for _, item := range items {
+		moduleMap, ok := item.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("packages action download repo.modules entries must be objects")
+		}
+		name := strings.TrimSpace(stringValue(moduleMap, "name"))
+		stream := strings.TrimSpace(stringValue(moduleMap, "stream"))
+		if name == "" || stream == "" {
+			return nil, fmt.Errorf("packages action download repo.modules entries require name and stream")
+		}
+		modules = append(modules, rpmModuleSpec{Name: name, Stream: stream})
+	}
+	sort.Slice(modules, func(i, j int) bool {
+		if modules[i].Name == modules[j].Name {
+			return modules[i].Stream < modules[j].Stream
+		}
+		return modules[i].Name < modules[j].Name
+	})
+	return modules, nil
+}
+
+func buildRPMModuleEnableCommand(modules []rpmModuleSpec) (string, error) {
+	if len(modules) == 0 {
+		return "", nil
+	}
+	parts := make([]string, 0, len(modules))
+	for _, module := range modules {
+		name := strings.TrimSpace(module.Name)
+		stream := strings.TrimSpace(module.Stream)
+		if name == "" || stream == "" {
+			return "", fmt.Errorf("packages action download repo.modules entries require name and stream")
+		}
+		parts = append(parts, "'"+shellEscape(name)+":"+shellEscape(stream)+"'")
+	}
+	return "dnf -y module enable " + strings.Join(parts, " ") + " >/dev/null 2>&1", nil
+}
+
 func packageDownloadCacheKey(spec map[string]any, family string, artifactRoot string) (string, error) {
+	repo := mapValue(spec, "repo")
+	modules, err := parseRPMModules(repo)
+	if err != nil {
+		return "", err
+	}
+	normalizedRepo := map[string]any{}
+	for key, value := range repo {
+		if key == "modules" {
+			continue
+		}
+		normalizedRepo[key] = value
+	}
+	if len(modules) > 0 {
+		normalizedModules := make([]map[string]any, 0, len(modules))
+		for _, module := range modules {
+			normalizedModules = append(normalizedModules, map[string]any{"name": module.Name, "stream": module.Stream})
+		}
+		normalizedRepo["modules"] = normalizedModules
+	}
 	payload := map[string]any{
 		"artifactRoot": filepath.ToSlash(strings.TrimSpace(artifactRoot)),
 		"backend":      mapValue(spec, "backend"),
 		"distro":       mapValue(spec, "distro"),
 		"family":       strings.TrimSpace(family),
-		"repo":         mapValue(spec, "repo"),
+		"repo":         normalizedRepo,
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
