@@ -1,0 +1,537 @@
+{
+  "$id": "https://deck.local/schemas/deck-workflow.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "anyOf": [
+    {
+      "required": [
+        "artifacts"
+      ]
+    },
+    {
+      "required": [
+        "phases"
+      ]
+    },
+    {
+      "required": [
+        "steps"
+      ]
+    },
+    {
+      "required": [
+        "imports"
+      ]
+    }
+  ],
+  "description": "Top-level workflow schema for deck workflows.",
+  "not": {
+    "allOf": [
+      {
+        "required": [
+          "phases"
+        ]
+      },
+      {
+        "required": [
+          "steps"
+        ]
+      }
+    ]
+  },
+  "properties": {
+    "artifacts": {
+      "additionalProperties": false,
+      "description": "Declarative prepare artifact inventory. Prefer this over legacy prepare download steps in new role: prepare workflows.",
+      "properties": {
+        "files": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "group": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "items": {
+                "items": {
+                  "additionalProperties": false,
+                  "description": "One file artifact to place under the bundle files/ root.",
+                  "properties": {
+                    "checksum": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "id": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "mode": {
+                      "pattern": "^[0-7]{4}$",
+                      "type": "string"
+                    },
+                    "output": {
+                      "additionalProperties": false,
+                      "description": "Bundle file output. path is relative to the files/ root and must not start with files/.",
+                      "properties": {
+                        "mode": {
+                          "pattern": "^[0-7]{4}$",
+                          "type": "string"
+                        },
+                        "path": {
+                          "minLength": 1,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "path"
+                      ],
+                      "type": "object"
+                    },
+                    "source": {
+                      "additionalProperties": false,
+                      "oneOf": [
+                        {
+                          "required": [
+                            "url"
+                          ]
+                        },
+                        {
+                          "required": [
+                            "path"
+                          ]
+                        }
+                      ],
+                      "properties": {
+                        "path": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "sha256": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "url": {
+                          "minLength": 1,
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "source",
+                    "output"
+                  ],
+                  "type": "object"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "targets": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "arch": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "os": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "osFamily": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "release": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "group",
+              "items"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "images": {
+          "items": {
+            "additionalProperties": false,
+            "description": "A grouped set of images to collect during prepare.",
+            "properties": {
+              "backend": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "group": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "items": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "image": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "image"
+                  ],
+                  "type": "object"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "output": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "targets": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "arch": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "os": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "osFamily": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "release": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "group",
+              "items"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "packages": {
+          "items": {
+            "additionalProperties": false,
+            "description": "A grouped set of packages for one or more OS targets to collect during prepare.",
+            "properties": {
+              "backend": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "group": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "items": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "repo": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "targets": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "arch": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "os": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "osFamily": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "release": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "minItems": 1,
+                "type": "array"
+              }
+            },
+            "required": [
+              "group",
+              "targets",
+              "items"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "imports": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "phases": {
+      "items": {
+        "$id": "https://github.com/taedi90/deck/internal/schemamodel/workflow-phase",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "anyOf": [
+          {
+            "required": [
+              "steps"
+            ]
+          },
+          {
+            "required": [
+              "imports"
+            ]
+          }
+        ],
+        "properties": {
+          "imports": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "when": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path"
+              ],
+              "type": "object"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "apiVersion": {
+                  "const": "deck/v1alpha1",
+                  "type": "string"
+                },
+                "id": {
+                  "pattern": "^[a-z0-9][a-z0-9-]{1,127}$",
+                  "type": "string"
+                },
+                "kind": {
+                  "enum": [
+                    "Artifacts",
+                    "Command",
+                    "Containerd",
+                    "Directory",
+                    "File",
+                    "Image",
+                    "Inspection",
+                    "KernelModule",
+                    "Kubeadm",
+                    "PackageCache",
+                    "Packages",
+                    "Repository",
+                    "Service",
+                    "Swap",
+                    "Symlink",
+                    "Sysctl",
+                    "SystemdUnit",
+                    "Wait"
+                  ],
+                  "type": "string"
+                },
+                "metadata": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "register": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "propertyNames": {
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                  },
+                  "type": "object"
+                },
+                "retry": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "spec": {
+                  "type": "object"
+                },
+                "timeout": {
+                  "pattern": "^[0-9]+(ms|s|m|h)$",
+                  "type": "string"
+                },
+                "when": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "spec"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "role": {
+      "enum": [
+        "prepare",
+        "apply"
+      ],
+      "type": "string"
+    },
+    "steps": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "apiVersion": {
+            "const": "deck/v1alpha1",
+            "type": "string"
+          },
+          "id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{1,127}$",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "Artifacts",
+              "Command",
+              "Containerd",
+              "Directory",
+              "File",
+              "Image",
+              "Inspection",
+              "KernelModule",
+              "Kubeadm",
+              "PackageCache",
+              "Packages",
+              "Repository",
+              "Service",
+              "Swap",
+              "Symlink",
+              "Sysctl",
+              "SystemdUnit",
+              "Wait"
+            ],
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "register": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+            },
+            "type": "object"
+          },
+          "retry": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "spec": {
+            "type": "object"
+          },
+          "timeout": {
+            "pattern": "^[0-9]+(ms|s|m|h)$",
+            "type": "string"
+          },
+          "when": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "spec"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "vars": {
+      "additionalProperties": true,
+      "default": {},
+      "type": "object"
+    },
+    "version": {
+      "const": "v1alpha1",
+      "type": "string"
+    }
+  },
+  "required": [
+    "role",
+    "version"
+  ],
+  "title": "DeckWorkflow",
+  "type": "object"
+}

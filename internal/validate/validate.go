@@ -1,7 +1,6 @@
 package validate
 
 import (
-	"embed"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -14,15 +13,13 @@ import (
 
 	"github.com/taedi90/deck/internal/config"
 	"github.com/taedi90/deck/internal/workflowexec"
+	deckschemas "github.com/taedi90/deck/schemas"
 )
 
 var (
 	runtimeVarNamePattern      = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 	singleBraceTemplatePattern = regexp.MustCompile(`(^|[^\{])(\{\s*\.(vars|runtime)\.[^{}]+\})([^\}]|$)`)
 )
-
-//go:embed schemas/deck-workflow.schema.json schemas/tools/*.schema.json
-var schemaFS embed.FS
 
 // File validates workflow structure and semantic rules.
 func File(path string) error {
@@ -115,7 +112,7 @@ func validateToolSchemas(wf *config.Workflow) error {
 		if !ok {
 			continue
 		}
-		toolSchemaRaw, err := schemaFS.ReadFile("schemas/tools/" + schemaFile)
+		toolSchemaRaw, err := deckschemas.ToolSchema(schemaFile)
 		if err != nil {
 			return fmt.Errorf("E_SCHEMA_INVALID: tool schema not found for kind %s", step.Kind)
 		}
@@ -152,9 +149,9 @@ func validateToolSchemas(wf *config.Workflow) error {
 }
 
 func validateSchema(name string, content []byte) error {
-	schemaRaw, err := schemaFS.ReadFile("schemas/deck-workflow.schema.json")
+	schemaRaw, err := deckschemas.WorkflowSchema()
 	if err != nil {
-		return fmt.Errorf("workflow schema not found: docs/schemas/deck-workflow.schema.json")
+		return fmt.Errorf("workflow schema not found: schemas/deck-workflow.schema.json")
 	}
 
 	var doc any

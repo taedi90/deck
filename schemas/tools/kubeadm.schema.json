@@ -1,0 +1,205 @@
+{
+  "$id": "https://deck.local/schemas/tools/kubeadm.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Runs kubeadm operations through action-specific modes.",
+  "properties": {
+    "apiVersion": {
+      "const": "deck/v1alpha1"
+    },
+    "id": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "Kubeadm"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "register": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      },
+      "type": "object"
+    },
+    "retry": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "spec": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "init"
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          "then": {
+            "required": [
+              "outputJoinFile"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "join"
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          "then": {
+            "required": [
+              "joinFile"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "reset"
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          "then": {
+            "required": []
+          }
+        }
+      ],
+      "properties": {
+        "action": {
+          "enum": [
+            "init",
+            "join",
+            "reset"
+          ],
+          "type": "string"
+        },
+        "advertiseAddress": {
+          "type": "string"
+        },
+        "asControlPlane": {
+          "default": false,
+          "type": "boolean"
+        },
+        "cleanupContainers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "configFile": {
+          "type": "string"
+        },
+        "configTemplate": {
+          "type": "string"
+        },
+        "criSocket": {
+          "type": "string"
+        },
+        "extraArgs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "force": {
+          "default": false,
+          "type": "boolean"
+        },
+        "ignoreErrors": {
+          "default": false,
+          "type": "boolean"
+        },
+        "ignorePreflightErrors": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "joinFile": {
+          "type": "string"
+        },
+        "kubernetesVersion": {
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "stub",
+            "real"
+          ],
+          "type": "string"
+        },
+        "outputJoinFile": {
+          "type": "string"
+        },
+        "podNetworkCIDR": {
+          "type": "string"
+        },
+        "pullImages": {
+          "type": "boolean"
+        },
+        "removeFiles": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "removePaths": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "restartRuntimeService": {
+          "type": "string"
+        },
+        "skipIfAdminConfExists": {
+          "default": true,
+          "type": "boolean"
+        },
+        "stopKubelet": {
+          "default": true,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "type": "object"
+    },
+    "timeout": {
+      "pattern": "^[0-9]+(ms|s|m|h)$",
+      "type": "string"
+    },
+    "when": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "apiVersion",
+    "kind",
+    "spec"
+  ],
+  "title": "KubeadmStep",
+  "type": "object",
+  "x-deck-visibility": "public"
+}

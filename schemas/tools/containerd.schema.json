@@ -1,0 +1,110 @@
+{
+  "$id": "https://deck.local/schemas/tools/containerd.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Configures containerd defaults and registry host settings during apply.",
+  "properties": {
+    "apiVersion": {
+      "const": "deck/v1alpha1"
+    },
+    "id": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "Containerd"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "register": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      },
+      "type": "object"
+    },
+    "retry": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "spec": {
+      "additionalProperties": false,
+      "properties": {
+        "configPath": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "createDefault": {
+          "default": true,
+          "type": "boolean"
+        },
+        "path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "registryHosts": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "capabilities": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "host": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "registry": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "server": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "skipVerify": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "registry",
+              "server",
+              "host",
+              "capabilities",
+              "skipVerify"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "systemdCgroup": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "timeout": {
+      "pattern": "^[0-9]+(ms|s|m|h)$",
+      "type": "string"
+    },
+    "when": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "apiVersion",
+    "kind",
+    "spec"
+  ],
+  "title": "ContainerdStep",
+  "type": "object",
+  "x-deck-visibility": "public"
+}

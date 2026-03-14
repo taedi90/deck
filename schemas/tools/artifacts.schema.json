@@ -1,0 +1,275 @@
+{
+  "$defs": {
+    "artifactSource": {
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "path"
+          ]
+        },
+        {
+          "required": [
+            "url"
+          ]
+        },
+        {
+          "required": [
+            "bundle"
+          ]
+        }
+      ],
+      "properties": {
+        "bundle": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "root": {
+              "enum": [
+                "files",
+                "images",
+                "packages"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "root",
+            "path"
+          ],
+          "type": "object"
+        },
+        "path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[a-fA-F0-9]{64}$",
+          "type": "string"
+        },
+        "url": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$id": "https://deck.local/schemas/tools/artifacts.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Installs or extracts per-architecture artifacts during apply.",
+  "properties": {
+    "apiVersion": {
+      "const": "deck/v1alpha1"
+    },
+    "id": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "Artifacts"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "register": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      },
+      "type": "object"
+    },
+    "retry": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "spec": {
+      "additionalProperties": false,
+      "properties": {
+        "artifacts": {
+          "items": {
+            "additionalProperties": false,
+            "oneOf": [
+              {
+                "required": [
+                  "install"
+                ]
+              },
+              {
+                "required": [
+                  "extract"
+                ]
+              }
+            ],
+            "properties": {
+              "extract": {
+                "additionalProperties": false,
+                "properties": {
+                  "destination": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "include": {
+                    "items": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  "mode": {
+                    "pattern": "^[0-7]{4}$",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "destination"
+                ],
+                "type": "object"
+              },
+              "install": {
+                "additionalProperties": false,
+                "properties": {
+                  "mode": {
+                    "pattern": "^[0-7]{4}$",
+                    "type": "string"
+                  },
+                  "path": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path"
+                ],
+                "type": "object"
+              },
+              "skipIfPresent": {
+                "additionalProperties": false,
+                "properties": {
+                  "executable": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "path": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path"
+                ],
+                "type": "object"
+              },
+              "source": {
+                "additionalProperties": false,
+                "properties": {
+                  "amd64": {
+                    "$ref": "#/$defs/artifactSource"
+                  },
+                  "arm64": {
+                    "$ref": "#/$defs/artifactSource"
+                  }
+                },
+                "required": [
+                  "amd64",
+                  "arm64"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "source"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "fetch": {
+          "additionalProperties": false,
+          "properties": {
+            "offlineOnly": {
+              "default": false,
+              "type": "boolean"
+            },
+            "sources": {
+              "items": {
+                "additionalProperties": false,
+                "anyOf": [
+                  {
+                    "required": [
+                      "path"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "url"
+                    ]
+                  }
+                ],
+                "properties": {
+                  "path": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "type": {
+                    "enum": [
+                      "local",
+                      "bundle",
+                      "repo",
+                      "online"
+                    ],
+                    "type": "string"
+                  },
+                  "url": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "strategy": {
+              "enum": [
+                "fallback"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "artifacts"
+      ],
+      "type": "object"
+    },
+    "timeout": {
+      "pattern": "^[0-9]+(ms|s|m|h)$",
+      "type": "string"
+    },
+    "when": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "apiVersion",
+    "kind",
+    "spec"
+  ],
+  "title": "ArtifactsStep",
+  "type": "object",
+  "x-deck-visibility": "public"
+}

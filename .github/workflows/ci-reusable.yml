@@ -26,6 +26,11 @@ jobs:
       - name: Run golangci-lint
         run: make lint
 
+      - name: Verify generated schema artifacts
+        run: |
+          make generate
+          git diff --exit-code
+
       - name: Run help and completion smoke
         run: |
           ./deck --help
@@ -46,7 +51,7 @@ jobs:
           from pathlib import Path
 
           root = Path('.')
-          files = sorted((root / 'docs' / 'schemas').rglob('*.json'))
+          files = sorted((root / 'schemas').rglob('*.json'))
           if not files:
               print('No schema files found, skipping')
               raise SystemExit(0)

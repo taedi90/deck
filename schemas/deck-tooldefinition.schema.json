@@ -1,0 +1,156 @@
+{
+  "$id": "https://deck.local/schemas/deck-tooldefinition.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Tool definition manifest schema for describing typed workflow tools.",
+  "properties": {
+    "apiVersion": {
+      "const": "deck/v1",
+      "type": "string"
+    },
+    "kind": {
+      "const": "ToolDefinition",
+      "type": "string"
+    },
+    "metadata": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "name": {
+          "pattern": "^[A-Z][A-Za-z0-9]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "spec": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "enum": [
+            "prepare",
+            "install",
+            "shared"
+          ],
+          "type": "string"
+        },
+        "failurePolicy": {
+          "additionalProperties": false,
+          "properties": {
+            "defaultRetry": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "retryable": {
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
+        "idempotency": {
+          "additionalProperties": false,
+          "properties": {
+            "keys": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "mode": {
+              "enum": [
+                "by-output",
+                "by-state",
+                "always-run"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "mode",
+            "keys"
+          ],
+          "type": "object"
+        },
+        "inputSchema": {
+          "type": "object"
+        },
+        "offlineAllowed": {
+          "default": false,
+          "type": "boolean"
+        },
+        "outputContract": {
+          "additionalProperties": false,
+          "properties": {
+            "artifacts": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "stateKeys": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "requires": {
+          "additionalProperties": false,
+          "properties": {
+            "containerRuntime": {
+              "enum": [
+                "required",
+                "optional",
+                "none"
+              ],
+              "type": "string"
+            },
+            "network": {
+              "type": "boolean"
+            },
+            "root": {
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
+        "summary": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "version": {
+          "pattern": "^v[0-9]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "summary",
+        "category",
+        "inputSchema"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec"
+  ],
+  "title": "DeckToolDefinition",
+  "type": "object"
+}

@@ -146,6 +146,6 @@ This is one of the main reasons to use a workflow model instead of passing aroun
 ## Related references
 
 - `../concepts/why-deck.md`
-- `schema-reference.md`
+- `schema/index.md`
 - `bundle-layout.md`
-- `../schemas/deck-workflow.schema.json`
+- `../../schemas/deck-workflow.schema.json`
