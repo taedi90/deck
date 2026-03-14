@@ -258,7 +258,7 @@ Waits for action-specific conditions such as file existence, service activity, c
 
 ### `Image`
 
-Checks image-related state through action-specific modes. The first public action is `present`.
+Checks image-related state through action-specific modes. The first public action is `present`. You can optionally override the image listing command when the local runtime is not exposed through the default `ctr -n k8s.io images list -q` command.
 
 ```yaml
 - id: verify-control-plane-images
@@ -269,6 +269,7 @@ Checks image-related state through action-specific modes. The first public actio
     images:
       - registry.k8s.io/kube-apiserver:v1.30.1
       - registry.k8s.io/kube-controller-manager:v1.30.1
+    command: ["ctr", "-n", "k8s.io", "images", "list", "-q"]
 ```
 
 ### `Symlink`

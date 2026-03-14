@@ -64,6 +64,13 @@
           "type": "object",
           "additionalProperties": true
         },
+        "command": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
         "images": {
           "type": "array",
           "minItems": 1,
