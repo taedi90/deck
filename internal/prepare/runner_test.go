@@ -130,38 +130,38 @@ func TestRun_DeclaredPrepareArtifactsAndManifest(t *testing.T) {
 
 	bundle := t.TempDir()
 	wf := &config.Workflow{
-		Role:    "pack",
+		Role:    "prepare",
 		Version: "v1alpha1",
 		Vars: map[string]any{
 			"kubernetesVersion": "v1.30.1",
 		},
-		Prepare: &config.PrepareSpec{
-			Files: []config.PrepareFileGroup{{
+		Artifacts: &config.ArtifactsSpec{
+			Files: []config.ArtifactFileGroup{{
 				Group: "binaries",
-				Targets: []config.PrepareTarget{{
+				Targets: []config.ArtifactTarget{{
 					OS:   "linux",
 					Arch: "amd64",
 				}},
-				Items: []config.PrepareFileItem{{
+				Items: []config.ArtifactFileItem{{
 					ID:     "artifact",
-					Source: config.PrepareSource{URL: server.URL + "/artifact"},
-					Output: config.PrepareFileOutput{Path: "bin/{{ .target.os }}/{{ .target.arch }}/artifact.bin", Mode: "0755"},
+					Source: config.ArtifactSource{URL: server.URL + "/artifact"},
+					Output: config.ArtifactFileOutput{Path: "bin/{{ .target.os }}/{{ .target.arch }}/artifact.bin", Mode: "0755"},
 				}},
 			}},
-			Images: []config.PrepareImageGroup{{
+			Images: []config.ArtifactImageGroup{{
 				Group: "control-plane",
-				Items: []config.PrepareImageItem{{
+				Items: []config.ArtifactImageItem{{
 					Image: "registry.k8s.io/kube-apiserver:{{ .vars.kubernetesVersion }}",
 				}},
 			}},
-			Packages: []config.PreparePackageGroup{{
+			Packages: []config.ArtifactPackageGroup{{
 				Group: "ubuntu-runtime",
-				Targets: []config.PrepareTarget{{
+				Targets: []config.ArtifactTarget{{
 					OSFamily: "debian",
 					Release:  "ubuntu2204",
 					Arch:     "amd64",
 				}},
-				Items: []config.PreparePackageItem{{Name: "containerd"}},
+				Items: []config.ArtifactPackageItem{{Name: "containerd"}},
 			}},
 		},
 	}

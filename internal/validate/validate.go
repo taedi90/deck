@@ -56,8 +56,8 @@ func Bytes(name string, content []byte) error {
 	if wf.Role == "" {
 		return fmt.Errorf("role is required")
 	}
-	if strings.TrimSpace(wf.Role) != "pack" && strings.TrimSpace(wf.Role) != "apply" {
-		return fmt.Errorf("unsupported role: %s (supported: pack, apply)", wf.Role)
+	if strings.TrimSpace(wf.Role) != "prepare" && strings.TrimSpace(wf.Role) != "apply" {
+		return fmt.Errorf("unsupported role: %s (supported: prepare, apply)", wf.Role)
 	}
 
 	if wf.Version == "" {
@@ -87,11 +87,11 @@ func validateWorkflowMode(wf *config.Workflow) error {
 	if wf == nil {
 		return nil
 	}
-	hasPrepare := wf.Prepare != nil && (len(wf.Prepare.Files) > 0 || len(wf.Prepare.Images) > 0 || len(wf.Prepare.Packages) > 0)
+	hasArtifacts := wf.Artifacts != nil && (len(wf.Artifacts.Files) > 0 || len(wf.Artifacts.Images) > 0 || len(wf.Artifacts.Packages) > 0)
 	hasPhases := len(wf.Phases) > 0
 	hasSteps := len(wf.Steps) > 0
 	modeCount := 0
-	if hasPrepare {
+	if hasArtifacts {
 		modeCount++
 	}
 	if hasPhases {
@@ -103,8 +103,8 @@ func validateWorkflowMode(wf *config.Workflow) error {
 	if modeCount > 1 {
 		return fmt.Errorf("workflow cannot set multiple execution modes")
 	}
-	if hasPrepare && strings.TrimSpace(wf.Role) != "pack" {
-		return fmt.Errorf("E_SCHEMA_INVALID: prepare is only supported for role pack")
+	if hasArtifacts && strings.TrimSpace(wf.Role) != "prepare" {
+		return fmt.Errorf("E_SCHEMA_INVALID: artifacts is only supported for role prepare")
 	}
 	return nil
 }
@@ -235,28 +235,28 @@ func validateSemantics(wf *config.Workflow) error {
 }
 
 func validatePrepareSemantics(wf *config.Workflow) error {
-	if wf == nil || wf.Prepare == nil {
+	if wf == nil || wf.Artifacts == nil {
 		return nil
 	}
-	for _, group := range wf.Prepare.Files {
+	for _, group := range wf.Artifacts.Files {
 		for _, item := range group.Items {
 			path := strings.TrimSpace(item.Output.Path)
 			if path == "" {
-				return fmt.Errorf("E_SCHEMA_INVALID: prepare.files group %s item %s requires output.path", group.Group, item.ID)
+				return fmt.Errorf("E_SCHEMA_INVALID: artifacts.files group %s item %s requires output.path", group.Group, item.ID)
 			}
 			normalized := filepath.ToSlash(strings.TrimSpace(path))
 			if strings.HasPrefix(normalized, "/") {
-				return fmt.Errorf("E_SCHEMA_INVALID: prepare.files group %s item %s output.path must be relative", group.Group, item.ID)
+				return fmt.Errorf("E_SCHEMA_INVALID: artifacts.files group %s item %s output.path must be relative", group.Group, item.ID)
 			}
 			if strings.HasPrefix(normalized, "files/") {
-				return fmt.Errorf("E_SCHEMA_INVALID: prepare.files group %s item %s output.path must be relative to files root", group.Group, item.ID)
+				return fmt.Errorf("E_SCHEMA_INVALID: artifacts.files group %s item %s output.path must be relative to files root", group.Group, item.ID)
 			}
 		}
 	}
-	for _, group := range wf.Prepare.Packages {
+	for _, group := range wf.Artifacts.Packages {
 		for _, target := range group.Targets {
 			if strings.TrimSpace(target.OSFamily) == "" || strings.TrimSpace(target.Release) == "" {
-				return fmt.Errorf("E_SCHEMA_INVALID: prepare.packages group %s targets require osFamily and release", group.Group)
+				return fmt.Errorf("E_SCHEMA_INVALID: artifacts.packages group %s targets require osFamily and release", group.Group)
 			}
 		}
 	}

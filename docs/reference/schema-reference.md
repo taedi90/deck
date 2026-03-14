@@ -8,14 +8,14 @@
 - `../schemas/deck-tooldefinition.schema.json`: tool definition schema
 - `../schemas/tools/public/*.schema.json`: public apply step schemas
 - `../schemas/tools/advanced/*.schema.json`: advanced step schemas
-- `../schemas/tools/legacy-pack/*.schema.json`: legacy/internal pack step schemas
+- `../schemas/tools/legacy-prepare/*.schema.json`: legacy/internal prepare step schemas
 
 ## Workflow schema highlights
 
 The workflow schema currently enforces:
 
 - required `role` and `version`
-- `role` must be `pack` or `apply`
+- `role` must be `prepare` or `apply`
 - either `steps`, `phases`, or `imports` must be present
 - a step must include `id`, `kind`, and `spec`
 - optional `when`, `retry`, `timeout`, and `register`
@@ -26,8 +26,8 @@ Schema roots also carry lightweight documentation metadata such as `description`
 
 ### Prepare authoring
 
-- `../schemas/deck-workflow.schema.json` contains the user-facing `prepare` model for `role: pack`
-- new pack workflows should prefer `prepare.files`, `prepare.images`, and `prepare.packages`
+- `../schemas/deck-workflow.schema.json` contains the user-facing `artifacts` model for `role: prepare`
+- new prepare workflows should prefer `artifacts.files`, `artifacts.images`, and `artifacts.packages`
 
 ### Public apply steps
 
@@ -58,12 +58,12 @@ Schema roots also carry lightweight documentation metadata such as `description`
 - `../schemas/tools/advanced/download-file.schema.json`
 - `../schemas/tools/advanced/run-command.schema.json`
 
-### Legacy/internal pack steps
+### Legacy/internal prepare steps
 
-- `../schemas/tools/legacy-pack/download-images.schema.json`
-- `../schemas/tools/legacy-pack/download-packages.schema.json`
+- `../schemas/tools/legacy-prepare/download-images.schema.json`
+- `../schemas/tools/legacy-prepare/download-packages.schema.json`
 
-These schemas still exist because the engine validates internal or older pack flows against them, but new pack workflows should not start from those step kinds.
+These schemas still exist because the engine validates internal or older prepare flows against them, but new prepare workflows should not start from those step kinds.
 
 ## Typed step reference notes
 

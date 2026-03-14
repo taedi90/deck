@@ -8,7 +8,7 @@ import (
 )
 
 func runPrepareStep(ctx context.Context, runner CommandRunner, bundleRoot, kind string, rendered map[string]any, opts RunOptions) ([]string, map[string]any, error) {
-	if !workflowexec.StepAllowedForRole("pack", kind) {
+	if !workflowexec.StepAllowedForRole("prepare", kind) {
 		return nil, nil, fmt.Errorf("%s: unsupported step kind %s", errCodePrepareKindUnsupported, kind)
 	}
 

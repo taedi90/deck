@@ -231,12 +231,12 @@ func mergeWorkflow(target *Workflow, src *Workflow, sourceLabel string) error {
 
 	hasSrcPhases := len(src.Phases) > 0
 	hasSrcSteps := len(src.Steps) > 0
-	hasSrcPrepare := src.Prepare != nil && (len(src.Prepare.Files) > 0 || len(src.Prepare.Images) > 0 || len(src.Prepare.Packages) > 0)
-	if modeCount(hasSrcPrepare, hasSrcPhases, hasSrcSteps) > 1 {
+	hasSrcArtifacts := src.Artifacts != nil && (len(src.Artifacts.Files) > 0 || len(src.Artifacts.Images) > 0 || len(src.Artifacts.Packages) > 0)
+	if modeCount(hasSrcArtifacts, hasSrcPhases, hasSrcSteps) > 1 {
 		return fmt.Errorf("workflow cannot set both phases and steps in %s", sourceLabel)
 	}
-	if hasSrcPrepare && (len(target.Phases) > 0 || len(target.Steps) > 0) {
-		return fmt.Errorf("workflow phase/step mode mismatch in %s: cannot merge prepare into steps workflow", sourceLabel)
+	if hasSrcArtifacts && (len(target.Phases) > 0 || len(target.Steps) > 0) {
+		return fmt.Errorf("workflow phase/step mode mismatch in %s: cannot merge artifacts into steps workflow", sourceLabel)
 	}
 	if hasSrcPhases && len(target.Steps) > 0 {
 		return fmt.Errorf("workflow phase/step mode mismatch in %s: cannot merge phases into steps workflow", sourceLabel)
@@ -244,19 +244,19 @@ func mergeWorkflow(target *Workflow, src *Workflow, sourceLabel string) error {
 	if hasSrcSteps && len(target.Phases) > 0 {
 		return fmt.Errorf("workflow phase/step mode mismatch in %s: cannot merge steps into phases workflow", sourceLabel)
 	}
-	if hasSrcPhases && target.Prepare != nil {
-		return fmt.Errorf("workflow phase/step mode mismatch in %s: cannot merge phases into prepare workflow", sourceLabel)
+	if hasSrcPhases && target.Artifacts != nil {
+		return fmt.Errorf("workflow phase/step mode mismatch in %s: cannot merge phases into artifacts workflow", sourceLabel)
 	}
-	if hasSrcSteps && target.Prepare != nil {
-		return fmt.Errorf("workflow phase/step mode mismatch in %s: cannot merge steps into prepare workflow", sourceLabel)
+	if hasSrcSteps && target.Artifacts != nil {
+		return fmt.Errorf("workflow phase/step mode mismatch in %s: cannot merge steps into artifacts workflow", sourceLabel)
 	}
-	if hasSrcPrepare {
-		if target.Prepare == nil {
-			target.Prepare = &PrepareSpec{}
+	if hasSrcArtifacts {
+		if target.Artifacts == nil {
+			target.Artifacts = &ArtifactsSpec{}
 		}
-		target.Prepare.Files = append(target.Prepare.Files, src.Prepare.Files...)
-		target.Prepare.Images = append(target.Prepare.Images, src.Prepare.Images...)
-		target.Prepare.Packages = append(target.Prepare.Packages, src.Prepare.Packages...)
+		target.Artifacts.Files = append(target.Artifacts.Files, src.Artifacts.Files...)
+		target.Artifacts.Images = append(target.Artifacts.Images, src.Artifacts.Images...)
+		target.Artifacts.Packages = append(target.Artifacts.Packages, src.Artifacts.Packages...)
 	}
 	if hasSrcPhases {
 		for _, srcPhase := range src.Phases {
@@ -356,20 +356,20 @@ func canonicalWorkflowBytes(wf *Workflow) ([]byte, error) {
 		return nil, fmt.Errorf("workflow is nil")
 	}
 	type canonicalWorkflow struct {
-		Role    string         `json:"role"`
-		Version string         `json:"version"`
-		Vars    map[string]any `json:"vars,omitempty"`
-		Prepare *PrepareSpec   `json:"prepare,omitempty"`
-		Phases  []Phase        `json:"phases,omitempty"`
-		Steps   []Step         `json:"steps,omitempty"`
+		Role      string         `json:"role"`
+		Version   string         `json:"version"`
+		Vars      map[string]any `json:"vars,omitempty"`
+		Artifacts *ArtifactsSpec `json:"artifacts,omitempty"`
+		Phases    []Phase        `json:"phases,omitempty"`
+		Steps     []Step         `json:"steps,omitempty"`
 	}
 	payload := canonicalWorkflow{
-		Role:    wf.Role,
-		Version: wf.Version,
-		Vars:    wf.Vars,
-		Prepare: wf.Prepare,
-		Phases:  wf.Phases,
-		Steps:   wf.Steps,
+		Role:      wf.Role,
+		Version:   wf.Version,
+		Vars:      wf.Vars,
+		Artifacts: wf.Artifacts,
+		Phases:    wf.Phases,
+		Steps:     wf.Steps,
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
@@ -382,8 +382,8 @@ func workflowHasMultipleModes(wf *Workflow) bool {
 	if wf == nil {
 		return false
 	}
-	hasPrepare := wf.Prepare != nil && (len(wf.Prepare.Files) > 0 || len(wf.Prepare.Images) > 0 || len(wf.Prepare.Packages) > 0)
-	return modeCount(hasPrepare, len(wf.Phases) > 0, len(wf.Steps) > 0) > 1
+	hasArtifacts := wf.Artifacts != nil && (len(wf.Artifacts.Files) > 0 || len(wf.Artifacts.Images) > 0 || len(wf.Artifacts.Packages) > 0)
+	return modeCount(hasArtifacts, len(wf.Phases) > 0, len(wf.Steps) > 0) > 1
 }
 
 func modeCount(flags ...bool) int {

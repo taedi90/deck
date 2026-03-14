@@ -24,7 +24,7 @@
 ## Guides
 
 - `concepts/why-deck.md`: scope, positioning, and why large Bash procedures are the real problem
-- `tutorials/quick-start.md`: create, validate, pack, and run a workflow
+- `tutorials/quick-start.md`: create, validate, prepare, and run a workflow
 - `tutorials/offline-kubernetes.md`: use `deck` for offline Kubernetes-oriented maintenance work
 
 ## Reference

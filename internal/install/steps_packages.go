@@ -13,6 +13,7 @@ import (
 )
 
 var installPackagesRunTimedCommandWithContext = runTimedCommandWithContext
+
 var installPackagesLookPath = exec.LookPath
 
 func runInstallPackages(ctx context.Context, spec map[string]any) error {
@@ -85,7 +86,8 @@ func runInstallPackages(ctx context.Context, spec map[string]any) error {
 
 	args := []string{}
 	cleanup := func() {}
-	if installer == "apt-get" {
+	switch installer {
+	case "apt-get":
 		repoArgs, cleanupFn, err := aptRepoArgs(policy)
 		if err != nil {
 			return err
@@ -94,7 +96,7 @@ func runInstallPackages(ctx context.Context, spec map[string]any) error {
 		if cleanupFn != nil {
 			cleanup = cleanupFn
 		}
-	} else if installer == "dnf" {
+	case "dnf":
 		args = append(args, dnfRepoArgs(policy)...)
 	}
 	defer cleanup()

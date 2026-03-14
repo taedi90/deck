@@ -1022,7 +1022,7 @@ func discoverApplyWorkflow(bundleRoot string) (string, error) {
 		if loadErr != nil {
 			return "", loadErr
 		}
-		if strings.TrimSpace(wf.Role) == "pack" {
+		if strings.TrimSpace(wf.Role) == "prepare" {
 			return "", fmt.Errorf("apply workflow role must be apply: %s", preferred)
 		}
 		if strings.TrimSpace(wf.Role) != "apply" {

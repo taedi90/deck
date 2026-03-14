@@ -1,6 +1,6 @@
-role: pack
+role: prepare
 version: v1alpha1
-prepare:
+artifacts:
   packages:
     - group: runtime-deps-rocky9
       targets:

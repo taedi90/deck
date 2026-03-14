@@ -35,19 +35,19 @@ The files are not all equal from a user-authoring point of view.
 
 These remain user-visible, but they are not the preferred starting point when a higher-level typed step or declarative prepare model already exists.
 
-## Legacy/internal pack steps
+## Legacy/internal prepare steps
 
-- `legacy-pack/download-images.schema.json`
-- `legacy-pack/download-packages.schema.json`
+- `legacy-prepare/download-images.schema.json`
+- `legacy-prepare/download-packages.schema.json`
 
-These schemas are still used for validation of legacy or internal pack planning paths.
-New `role: pack` workflows should prefer top-level `prepare` instead.
+These schemas are still used for validation of legacy or internal prepare planning paths.
+New `role: prepare` workflows should prefer top-level `artifacts` instead.
 
 ## Metadata
 
 Each schema root now carries:
 
 - `description`: what the step is for
-- `x-deck-visibility`: one of `public`, `advanced`, or `legacy-pack`
+- `x-deck-visibility`: one of `public`, `advanced`, or `legacy-prepare`
 
 Use `../../reference/schema-reference.md` for the curated reference view.

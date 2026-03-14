@@ -13,11 +13,11 @@ func TestPackCacheInvalidation(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	workflowBytes := []byte("role: pack\r\nversion: v1alpha1\r\nphases: []\r\n")
+	workflowBytes := []byte("role: prepare\r\nversion: v1alpha1\r\nphases: []\r\n")
 	workflowSHA := computeWorkflowSHA256(workflowBytes)
 
 	wf := &config.Workflow{
-		Role:           "pack",
+		Role:           "prepare",
 		Version:        "v1alpha1",
 		WorkflowSHA256: workflowSHA,
 		Vars: map[string]any{
@@ -52,7 +52,7 @@ func TestPackCacheInvalidation(t *testing.T) {
 
 	statePath := filepath.Join(home, ".deck", "cache", "state", workflowSHA+".json")
 	if _, err := os.Stat(statePath); err != nil {
-		t.Fatalf("expected pack cache state file: %v", err)
+		t.Fatalf("expected prepare cache state file: %v", err)
 	}
 	prevState, err := loadPackCacheState(statePath)
 	if err != nil {
@@ -84,7 +84,7 @@ func TestPackCacheInvalidation(t *testing.T) {
 }
 
 func TestRun_PackCacheRoleGate(t *testing.T) {
-	t.Run("apply role does not write pack cache state", func(t *testing.T) {
+	t.Run("apply role does not write prepare cache state", func(t *testing.T) {
 		home := t.TempDir()
 		t.Setenv("HOME", home)
 
@@ -112,11 +112,11 @@ func TestRun_PackCacheRoleGate(t *testing.T) {
 
 		statePath := filepath.Join(home, ".deck", "cache", "state", workflowSHA+".json")
 		if _, err := os.Stat(statePath); !os.IsNotExist(err) {
-			t.Fatalf("pack cache state must not be written for apply role, err=%v", err)
+			t.Fatalf("prepare cache state must not be written for apply role, err=%v", err)
 		}
 	})
 
-	t.Run("empty role does not touch pack cache state", func(t *testing.T) {
+	t.Run("empty role does not touch prepare cache state", func(t *testing.T) {
 		home := t.TempDir()
 		t.Setenv("HOME", home)
 
@@ -144,7 +144,7 @@ func TestRun_PackCacheRoleGate(t *testing.T) {
 
 		statePath := filepath.Join(home, ".deck", "cache", "state", workflowSHA+".json")
 		if _, err := os.Stat(statePath); !os.IsNotExist(err) {
-			t.Fatalf("pack cache state must not be written for empty role, err=%v", err)
+			t.Fatalf("prepare cache state must not be written for empty role, err=%v", err)
 		}
 	})
 }

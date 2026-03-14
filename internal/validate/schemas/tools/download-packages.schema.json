@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://deck.local/schemas/tools/download-packages.schema.json",
   "title": "DownloadPackagesStep",
-  "description": "Legacy pack step for package acquisition. Prefer top-level prepare.packages in new pack workflows.",
-  "x-deck-visibility": "legacy-pack",
+  "description": "Legacy prepare step for package acquisition. Prefer top-level artifacts.packages in new prepare workflows.",
+  "x-deck-visibility": "legacy-prepare",
   "type": "object",
   "additionalProperties": false,
   "required": [

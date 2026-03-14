@@ -157,7 +157,7 @@ func resolveSourceBytes(ctx context.Context, spec map[string]any, sourcePath str
 			})
 		}
 		if len(sources) == 0 {
-			return nil, fmt.Errorf("%s: source.path %s not found in configured fetch sources", errCodePrepareSourceNotFound, sourcePath)
+			return nil, fmt.Errorf("%s: source.path %s not found in configured fetch sources", errCodeArtifactSourceNotFound, sourcePath)
 		}
 		raw, err := fetch.ResolveBytes(ctx, sourcePath, sources, fetch.ResolveOptions{OfflineOnly: offlineOnly})
 		if err == nil {
@@ -169,14 +169,14 @@ func resolveSourceBytes(ctx context.Context, spec map[string]any, sourcePath str
 		if ctx != nil && ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		return nil, fmt.Errorf("%s: source.path %s not found in configured fetch sources", errCodePrepareSourceNotFound, sourcePath)
+		return nil, fmt.Errorf("%s: source.path %s not found in configured fetch sources", errCodeArtifactSourceNotFound, sourcePath)
 	}
 
 	raw, err := os.ReadFile(sourcePath)
 	if err == nil {
 		return raw, nil
 	}
-	return nil, fmt.Errorf("%s: source.path %s not found", errCodePrepareSourceNotFound, sourcePath)
+	return nil, fmt.Errorf("%s: source.path %s not found", errCodeArtifactSourceNotFound, sourcePath)
 }
 
 func verifyFileSHA256(path, expected string) error {

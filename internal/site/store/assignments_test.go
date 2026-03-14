@@ -56,7 +56,7 @@ func TestAssignmentFallsBackToRole(t *testing.T) {
 func TestAssignmentMissingMatch(t *testing.T) {
 	st := newSessionStore(t, "session-assign-missing")
 
-	if err := st.SaveAssignment("session-assign-missing", Assignment{ID: "assign-pack", Role: "pack"}); err != nil {
+	if err := st.SaveAssignment("session-assign-missing", Assignment{ID: "assign-pack", Role: "prepare"}); err != nil {
 		t.Fatalf("save assignment: %v", err)
 	}
 

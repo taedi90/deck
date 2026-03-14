@@ -18,13 +18,13 @@ deck init --out ./demo
 
 This creates:
 
-- `./demo/workflows/pack.yaml`
+- `./demo/workflows/prepare.yaml`
 - `./demo/workflows/apply.yaml`
 - `./demo/workflows/vars.yaml`
 
 ## 2. Add or edit steps
 
-`deck init` starts with empty workflow files. Put preparation work in `pack.yaml` and target-machine work in `apply.yaml`.
+`deck init` starts with empty workflow files. Put preparation work in `prepare.yaml` and target-machine work in `apply.yaml`.
 
 Prefer typed steps first. The goal is to keep the procedure readable when it grows.
 
@@ -49,18 +49,18 @@ Use `vars.yaml` or inline `vars` to keep site-specific values out of the steps t
 
 ```bash
 deck validate --file ./demo/workflows/apply.yaml
-deck validate --file ./demo/workflows/pack.yaml
+deck validate --file ./demo/workflows/prepare.yaml
 ```
 
 Validation checks the workflow structure and the schema for each supported step kind.
 
 ## 4. Build an offline bundle
 
-Run `pack` from a directory that contains `workflows/pack.yaml`, `workflows/apply.yaml`, and `workflows/vars.yaml`.
+Run `prepare` from a directory that contains `workflows/prepare.yaml`, `workflows/apply.yaml`, and `workflows/vars.yaml`.
 
 ```bash
 cd ./demo
-deck pack --out ./bundle.tar
+deck prepare --out ./bundle.tar
 ```
 
 The resulting bundle is designed to be the thing you carry into the site.

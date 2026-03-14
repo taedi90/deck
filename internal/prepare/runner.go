@@ -45,7 +45,7 @@ const (
 	errCodePrepareRuntimeUnsupported = "E_PREPARE_RUNTIME_UNSUPPORTED"
 	errCodePrepareEngineUnsupported  = "E_PREPARE_ENGINE_UNSUPPORTED"
 	errCodePrepareArtifactsEmpty     = "E_PREPARE_NO_ARTIFACTS"
-	errCodePrepareSourceNotFound     = "E_PREPARE_SOURCE_NOT_FOUND"
+	errCodeArtifactSourceNotFound    = "E_PREPARE_SOURCE_NOT_FOUND"
 	errCodePrepareChecksumMismatch   = "E_PREPARE_CHECKSUM_MISMATCH"
 	errCodePrepareOfflinePolicyBlock = "E_PREPARE_OFFLINE_POLICY_BLOCK"
 	errCodePrepareConditionEval      = "E_CONDITION_EVAL"
@@ -83,7 +83,7 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 	if err != nil {
 		return err
 	}
-	packCacheEnabled := strings.TrimSpace(wf.Role) == "pack"
+	packCacheEnabled := strings.TrimSpace(wf.Role) == "prepare"
 	packCacheStatePath := ""
 	packCachePlan := PackCachePlan{}
 	if packCacheEnabled {
@@ -180,7 +180,7 @@ func prepareExecutionSteps(wf *config.Workflow) ([]config.Step, error) {
 	if wf == nil {
 		return nil, fmt.Errorf("workflow is nil")
 	}
-	if wf.Prepare != nil && (len(wf.Prepare.Files) > 0 || len(wf.Prepare.Images) > 0 || len(wf.Prepare.Packages) > 0) {
+	if wf.Artifacts != nil && (len(wf.Artifacts.Files) > 0 || len(wf.Artifacts.Images) > 0 || len(wf.Artifacts.Packages) > 0) {
 		return declaredPrepareSteps(wf)
 	}
 	preparePhase, found := findPhase(wf, "prepare")

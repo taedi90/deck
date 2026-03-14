@@ -46,7 +46,7 @@ func TestRunUsageShowsTopLevelAxes(t *testing.T) {
 			}
 
 			msg := res.stdout
-			for _, cmd := range []string{"init", "validate", "pack", "plan", "apply", "doctor", "completion", "server", "bundle", "cache", "node", "site"} {
+			for _, cmd := range []string{"init", "validate", "prepare", "plan", "apply", "doctor", "completion", "server", "bundle", "cache", "node", "site"} {
 				if !strings.Contains(msg, cmd) {
 					t.Fatalf("usage must include %q, got %q", cmd, msg)
 				}
@@ -59,7 +59,7 @@ func TestRunUsageShowsTopLevelAxes(t *testing.T) {
 			if strings.Index(msg, "Core Commands\n") > strings.Index(msg, "Additional Commands\n") {
 				t.Fatalf("core commands section must appear before additional commands: %q", msg)
 			}
-			coreCommands := []string{"init", "validate", "pack", "plan", "apply"}
+			coreCommands := []string{"init", "validate", "prepare", "plan", "apply"}
 			for i := 0; i < len(coreCommands)-1; i++ {
 				if strings.Index(msg, coreCommands[i]) > strings.Index(msg, coreCommands[i+1]) {
 					t.Fatalf("core commands must keep registration order: %q appeared after %q in %q", coreCommands[i], coreCommands[i+1], msg)
@@ -117,7 +117,7 @@ func TestCompletionCommands(t *testing.T) {
 
 func TestRunTopLevelStubUsage(t *testing.T) {
 	t.Run("pack usage", func(t *testing.T) {
-		err := run([]string{"pack"})
+		err := run([]string{"prepare"})
 		if err == nil {
 			t.Fatalf("expected usage error")
 		}
@@ -142,7 +142,7 @@ func TestNestedHelpRoutesToStdout(t *testing.T) {
 		args []string
 		want string
 	}{
-		{args: []string{"help", "pack"}, want: "deck pack [flags]"},
+		{args: []string{"help", "prepare"}, want: "deck prepare [flags]"},
 		{args: []string{"site", "release", "--help"}, want: "deck site release [command]"},
 		{args: []string{"node", "id", "--help"}, want: "deck node id [command]"},
 		{args: []string{"server", "--help"}, want: "deck server [command]"},
@@ -383,7 +383,7 @@ func TestHealthUsesSavedDefaultServer(t *testing.T) {
 func TestServerWorkflowsUsesSavedDefaultServer(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "server.json")
 	t.Setenv("DECK_SERVER_CONFIG_PATH", configPath)
-	items := []string{"workflows/pack.yaml", "workflows/apply.yaml"}
+	items := []string{"workflows/prepare.yaml", "workflows/apply.yaml"}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/workflows/index.json" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
@@ -946,7 +946,7 @@ func TestServerUpRejectsUnexpectedPositionalArg(t *testing.T) {
 }
 
 func TestPackExtraPositionalStopsFlagParsingLikeLegacy(t *testing.T) {
-	_, err := runWithCapturedStdout([]string{"pack", "extra", "--out", filepath.Join(t.TempDir(), "bundle.tar")})
+	_, err := runWithCapturedStdout([]string{"prepare", "extra", "--out", filepath.Join(t.TempDir(), "bundle.tar")})
 	if err == nil {
 		t.Fatalf("expected missing out error")
 	}
@@ -1023,9 +1023,9 @@ func TestInit(t *testing.T) {
 	assertWorkflowSet := func(t *testing.T, outDir string, wantVars string) {
 		t.Helper()
 		want := map[string]string{
-			"vars.yaml":  wantVars,
-			"pack.yaml":  "role: pack\nversion: v1alpha1\nsteps: []\n",
-			"apply.yaml": "role: apply\nversion: v1alpha1\nsteps: []\n",
+			"vars.yaml":    wantVars,
+			"prepare.yaml": "role: prepare\nversion: v1alpha1\nartifacts:\n  files: []\n",
+			"apply.yaml":   "role: apply\nversion: v1alpha1\nsteps: []\n",
 		}
 		for fileName, expected := range want {
 			path := filepath.Join(outDir, "workflows", fileName)
@@ -1087,9 +1087,9 @@ func TestInit(t *testing.T) {
 		if err := os.MkdirAll(workflowsDir, 0o755); err != nil {
 			t.Fatalf("mkdir workflows: %v", err)
 		}
-		existingPath := filepath.Join(workflowsDir, "pack.yaml")
+		existingPath := filepath.Join(workflowsDir, "prepare.yaml")
 		if err := os.WriteFile(existingPath, []byte("seed\n"), 0o644); err != nil {
-			t.Fatalf("seed pack.yaml: %v", err)
+			t.Fatalf("seed prepare.yaml: %v", err)
 		}
 
 		_, err := runWithCapturedStdout([]string{"init", "--out", outputDir})
@@ -1102,7 +1102,7 @@ func TestInit(t *testing.T) {
 
 		raw, readErr := os.ReadFile(existingPath)
 		if readErr != nil {
-			t.Fatalf("read seeded pack.yaml: %v", readErr)
+			t.Fatalf("read seeded prepare.yaml: %v", readErr)
 		}
 		if string(raw) != "seed\n" {
 			t.Fatalf("existing file must remain unchanged, got %q", string(raw))
@@ -1115,7 +1115,7 @@ func TestInit(t *testing.T) {
 	t.Run("fails when target path exists as directory", func(t *testing.T) {
 		outputDir := t.TempDir()
 		workflowsDir := filepath.Join(outputDir, "workflows")
-		targetDir := filepath.Join(workflowsDir, "pack.yaml")
+		targetDir := filepath.Join(workflowsDir, "prepare.yaml")
 		if err := os.MkdirAll(targetDir, 0o755); err != nil {
 			t.Fatalf("mkdir conflicting directory: %v", err)
 		}
@@ -1174,8 +1174,8 @@ func TestRunPackCreatesBundleTar(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(seedDir, "source.bin"), []byte("seed\n"), 0o644); err != nil {
 		t.Fatalf("write seed file: %v", err)
 	}
-	packPath := filepath.Join(workflowsDir, "pack.yaml")
-	packBody := fmt.Sprintf(`role: pack
+	packPath := filepath.Join(workflowsDir, "prepare.yaml")
+	packBody := fmt.Sprintf(`role: prepare
 version: v1alpha1
 phases:
   - name: prepare
@@ -1191,7 +1191,7 @@ phases:
                 path: %q
 `, filepath.Join(root, "seed"))
 	if err := os.WriteFile(packPath, []byte(packBody), 0o644); err != nil {
-		t.Fatalf("write pack workflow: %v", err)
+		t.Fatalf("write prepare workflow: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(workflowsDir, "apply.yaml"), []byte("role: apply\nversion: v1alpha1\nsteps: []\n"), 0o644); err != nil {
 		t.Fatalf("write apply workflow: %v", err)
@@ -1219,8 +1219,8 @@ phases:
 	})
 
 	outTar := filepath.Join(root, "bundle.tar")
-	if _, err := runWithCapturedStdout([]string{"pack", "--out", outTar}); err != nil {
-		t.Fatalf("pack failed: %v", err)
+	if _, err := runWithCapturedStdout([]string{"prepare", "--out", outTar}); err != nil {
+		t.Fatalf("prepare failed: %v", err)
 	}
 
 	names, err := tarEntryNamesFromFile(outTar)
@@ -1235,7 +1235,7 @@ phases:
 	for _, required := range []string{
 		"bundle/deck",
 		"bundle/files/deck",
-		"bundle/workflows/pack.yaml",
+		"bundle/workflows/prepare.yaml",
 		"bundle/workflows/apply.yaml",
 		"bundle/workflows/vars.yaml",
 		"bundle/workflows/offline-multinode/apply-common.yaml",
@@ -1253,8 +1253,8 @@ func TestRunPackDryRunDoesNotWrite(t *testing.T) {
 	if err := os.MkdirAll(workflowsDir, 0o755); err != nil {
 		t.Fatalf("mkdir workflows: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(workflowsDir, "pack.yaml"), []byte("role: pack\nversion: v1alpha1\nsteps: []\n"), 0o644); err != nil {
-		t.Fatalf("write pack workflow: %v", err)
+	if err := os.WriteFile(filepath.Join(workflowsDir, "prepare.yaml"), []byte("role: prepare\nversion: v1alpha1\nsteps: []\n"), 0o644); err != nil {
+		t.Fatalf("write prepare workflow: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(workflowsDir, "apply.yaml"), []byte("role: apply\nversion: v1alpha1\nsteps: []\n"), 0o644); err != nil {
 		t.Fatalf("write apply workflow: %v", err)
@@ -1274,11 +1274,11 @@ func TestRunPackDryRunDoesNotWrite(t *testing.T) {
 	})
 
 	outTar := filepath.Join(root, "bundle.tar")
-	planOut, err := runWithCapturedStdout([]string{"pack", "--dry-run"})
+	planOut, err := runWithCapturedStdout([]string{"prepare", "--dry-run"})
 	if err != nil {
-		t.Fatalf("pack dry-run failed: %v", err)
+		t.Fatalf("prepare dry-run failed: %v", err)
 	}
-	if !strings.Contains(planOut, "PACK_WORKFLOW=") {
+	if !strings.Contains(planOut, "PREPARE_WORKFLOW=") {
 		t.Fatalf("expected dry-run plan output, got %q", planOut)
 	}
 	if _, statErr := os.Stat(outTar); !os.IsNotExist(statErr) {
@@ -1300,8 +1300,8 @@ func TestRunPackVarFlagOverridesWorkflowVars(t *testing.T) {
 		t.Fatalf("write seed file: %v", err)
 	}
 
-	packPath := filepath.Join(workflowsDir, "pack.yaml")
-	packBody := fmt.Sprintf(`role: pack
+	packPath := filepath.Join(workflowsDir, "prepare.yaml")
+	packBody := fmt.Sprintf(`role: prepare
 version: v1alpha1
 vars:
   relPath: default.bin
@@ -1321,7 +1321,7 @@ phases:
             path: files/{{ .vars.relPath  }}
 `, filepath.Join(root, "seed"))
 	if err := os.WriteFile(packPath, []byte(packBody), 0o644); err != nil {
-		t.Fatalf("write pack workflow: %v", err)
+		t.Fatalf("write prepare workflow: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(workflowsDir, "apply.yaml"), []byte("role: apply\nversion: v1alpha1\nsteps: []\n"), 0o644); err != nil {
 		t.Fatalf("write apply workflow: %v", err)
@@ -1342,8 +1342,8 @@ phases:
 	})
 
 	outTar := filepath.Join(root, "bundle.tar")
-	if _, err := runWithCapturedStdout([]string{"pack", "--out", outTar, "--var", "relPath=override.bin"}); err != nil {
-		t.Fatalf("pack failed: %v", err)
+	if _, err := runWithCapturedStdout([]string{"prepare", "--out", outTar, "--var", "relPath=override.bin"}); err != nil {
+		t.Fatalf("prepare failed: %v", err)
 	}
 
 	names, err := tarEntryNamesFromFile(outTar)
@@ -1725,11 +1725,11 @@ phases:
 		}
 	})
 
-	t.Run("role pack is rejected for remote apply", func(t *testing.T) {
+	t.Run("role prepare is rejected for remote apply", func(t *testing.T) {
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
 			case "/workflows/apply.yaml":
-				_, _ = w.Write([]byte("role: pack\nversion: v1alpha1\nsteps:\n  - id: pack-step\n    kind: DownloadFile\n    spec:\n      source:\n        path: /tmp/source.bin\n      output:\n        path: files/source.bin\n"))
+				_, _ = w.Write([]byte("role: prepare\nversion: v1alpha1\nsteps:\n  - id: pack-step\n    kind: DownloadFile\n    spec:\n      source:\n        path: /tmp/source.bin\n      output:\n        path: files/source.bin\n"))
 			case "/workflows/vars.yaml":
 				http.NotFound(w, r)
 			default:
@@ -2427,8 +2427,8 @@ func TestBundledApplyWorksFromBundleDir(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(seedDir, "source.bin"), []byte("seed\n"), 0o644); err != nil {
 		t.Fatalf("write seed file: %v", err)
 	}
-	packPath := filepath.Join(workflowsDir, "pack.yaml")
-	packBody := fmt.Sprintf(`role: pack
+	packPath := filepath.Join(workflowsDir, "prepare.yaml")
+	packBody := fmt.Sprintf(`role: prepare
 version: v1alpha1
 phases:
   - name: prepare
@@ -2444,7 +2444,7 @@ phases:
                 path: %q
 `, filepath.Join(tmpRoot, "seed"))
 	if err := os.WriteFile(packPath, []byte(packBody), 0o644); err != nil {
-		t.Fatalf("write pack workflow: %v", err)
+		t.Fatalf("write prepare workflow: %v", err)
 	}
 	applyLogPath := filepath.Join(tmpRoot, "apply.log")
 	applyBody := fmt.Sprintf(`role: apply
@@ -2465,11 +2465,11 @@ phases:
 	}
 
 	bundleTar := filepath.Join(tmpRoot, "bundle.tar")
-	packCmd := exec.Command(binaryPath, "pack", "--out", bundleTar)
+	packCmd := exec.Command(binaryPath, "prepare", "--out", bundleTar)
 	packCmd.Dir = tmpRoot
 	packCmd.Env = append(os.Environ(), "HOME="+home)
 	if raw, err := packCmd.CombinedOutput(); err != nil {
-		t.Fatalf("pack bundle: %v, output=%s", err, string(raw))
+		t.Fatalf("prepare bundle: %v, output=%s", err, string(raw))
 	}
 
 	extractCmd := exec.Command("tar", "xf", bundleTar, "-C", tmpRoot)
@@ -2896,7 +2896,7 @@ func writeSiteReleaseBundleTarFixture(t *testing.T, archivePath string) {
 }
 
 func TestServerWorkflows(t *testing.T) {
-	items := []string{"workflows/pack.yaml", "workflows/apply.yaml"}
+	items := []string{"workflows/prepare.yaml", "workflows/apply.yaml"}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			t.Fatalf("unexpected method: %s", r.Method)

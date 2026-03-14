@@ -12,7 +12,7 @@
     ]
   },
   "anyOf": [
-    { "required": ["prepare"] },
+    { "required": ["artifacts"] },
     { "required": ["phases"] },
     { "required": ["steps"] },
     { "required": ["imports"] }
@@ -20,7 +20,7 @@
   "properties": {
     "role": {
       "type": "string",
-      "enum": ["pack", "apply"]
+      "enum": ["prepare", "apply"]
     },
     "version": {
       "type": "string",
@@ -31,9 +31,9 @@
       "additionalProperties": true,
       "default": {}
     },
-    "prepare": {
-      "description": "Declarative pack artifact inventory. Prefer this over pack download steps in new role: pack workflows.",
-      "$ref": "#/$defs/prepare"
+    "artifacts": {
+      "description": "Declarative prepare artifact inventory. Prefer this over legacy prepare download steps in new role: prepare workflows.",
+      "$ref": "#/$defs/artifacts"
     },
     "varImports": {
       "type": "array",
@@ -103,7 +103,7 @@
         }
       }
     },
-    "prepareTarget": {
+    "artifactTarget": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -113,7 +113,7 @@
         "arch": { "type": "string", "minLength": 1 }
       }
     },
-    "prepareFileItem": {
+    "artifactFileItem": {
       "description": "One file artifact to place under the bundle files/ root.",
       "type": "object",
       "additionalProperties": false,
@@ -147,7 +147,7 @@
         "mode": { "type": "string", "pattern": "^[0-7]{4}$" }
       }
     },
-    "prepareFileGroup": {
+    "artifactFileGroup": {
       "type": "object",
       "additionalProperties": false,
       "required": ["group", "items"],
@@ -155,16 +155,16 @@
         "group": { "type": "string", "minLength": 1 },
         "targets": {
           "type": "array",
-          "items": { "$ref": "#/$defs/prepareTarget" }
+          "items": { "$ref": "#/$defs/artifactTarget" }
         },
         "items": {
           "type": "array",
           "minItems": 1,
-          "items": { "$ref": "#/$defs/prepareFileItem" }
+          "items": { "$ref": "#/$defs/artifactFileItem" }
         }
       }
     },
-    "prepareImageItem": {
+    "artifactImageItem": {
       "type": "object",
       "additionalProperties": false,
       "required": ["image"],
@@ -172,8 +172,8 @@
         "image": { "type": "string", "minLength": 1 }
       }
     },
-    "prepareImageGroup": {
-      "description": "A grouped set of images to collect during pack.",
+    "artifactImageGroup": {
+      "description": "A grouped set of images to collect during prepare.",
       "type": "object",
       "additionalProperties": false,
       "required": ["group", "items"],
@@ -181,18 +181,18 @@
         "group": { "type": "string", "minLength": 1 },
         "targets": {
           "type": "array",
-          "items": { "$ref": "#/$defs/prepareTarget" }
+            "items": { "$ref": "#/$defs/artifactTarget" }
         },
         "backend": { "type": "object", "additionalProperties": true },
         "output": { "type": "object", "additionalProperties": true },
         "items": {
           "type": "array",
           "minItems": 1,
-          "items": { "$ref": "#/$defs/prepareImageItem" }
+            "items": { "$ref": "#/$defs/artifactImageItem" }
         }
       }
     },
-    "preparePackageItem": {
+    "artifactPackageItem": {
       "type": "object",
       "additionalProperties": false,
       "required": ["name"],
@@ -200,8 +200,8 @@
         "name": { "type": "string", "minLength": 1 }
       }
     },
-    "preparePackageGroup": {
-      "description": "A grouped set of packages for one or more OS targets to collect during pack.",
+    "artifactPackageGroup": {
+      "description": "A grouped set of packages for one or more OS targets to collect during prepare.",
       "type": "object",
       "additionalProperties": false,
       "required": ["group", "targets", "items"],
@@ -210,33 +210,33 @@
         "targets": {
           "type": "array",
           "minItems": 1,
-          "items": { "$ref": "#/$defs/prepareTarget" }
+            "items": { "$ref": "#/$defs/artifactTarget" }
         },
         "repo": { "type": "object", "additionalProperties": true },
         "backend": { "type": "object", "additionalProperties": true },
         "items": {
           "type": "array",
           "minItems": 1,
-          "items": { "$ref": "#/$defs/preparePackageItem" }
+            "items": { "$ref": "#/$defs/artifactPackageItem" }
         }
       }
     },
-    "prepare": {
-      "description": "Top-level pack artifact declaration model for files, images, and packages.",
+    "artifacts": {
+      "description": "Top-level artifact declaration model for files, images, and packages.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "files": {
           "type": "array",
-          "items": { "$ref": "#/$defs/prepareFileGroup" }
+            "items": { "$ref": "#/$defs/artifactFileGroup" }
         },
         "images": {
           "type": "array",
-          "items": { "$ref": "#/$defs/prepareImageGroup" }
+            "items": { "$ref": "#/$defs/artifactImageGroup" }
         },
         "packages": {
           "type": "array",
-          "items": { "$ref": "#/$defs/preparePackageGroup" }
+            "items": { "$ref": "#/$defs/artifactPackageGroup" }
         }
       }
     },

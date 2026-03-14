@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://deck.local/schemas/tools/legacy-pack/download-images.schema.json",
+  "$id": "https://deck.local/schemas/tools/legacy-prepare/download-images.schema.json",
   "title": "DownloadImagesStep",
-  "description": "Legacy pack step for image acquisition. Prefer top-level prepare.images in new pack workflows.",
-  "x-deck-visibility": "legacy-pack",
+  "description": "Legacy prepare step for image acquisition. Prefer top-level artifacts.images in new prepare workflows.",
+  "x-deck-visibility": "legacy-prepare",
   "type": "object",
   "additionalProperties": false,
   "required": [

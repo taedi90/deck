@@ -9,7 +9,7 @@ It supports a simple operator flow: author the workflow, validate it, build the 
 - `init`: create starter workflow files under `workflows/`
 - `completion`: generate shell completion for bash, zsh, fish, and PowerShell
 - `validate`: validate a workflow file against the workflow and step schemas
-- `pack`: gather artifacts, copy workflows, embed the `deck` binary, and write `bundle.tar`
+- `prepare`: gather artifacts, copy workflows, embed the `deck` binary, and write `bundle.tar`
 - `plan`: inspect which apply steps would run or skip before execution
 - `doctor`: generate a report for preflight-style checks and diagnostics
 - `apply`: execute the `apply` workflow locally
@@ -50,10 +50,10 @@ deck completion powershell
 deck init --out ./demo
 deck completion bash > ./deck.bash
 deck validate --file ./demo/workflows/apply.yaml
-deck validate --file ./demo/workflows/pack.yaml
+deck validate --file ./demo/workflows/prepare.yaml
 
 cd ./demo
-deck pack --out ./bundle.tar
+deck prepare --out ./bundle.tar
 deck plan --file ./workflows/apply.yaml
 deck doctor --file ./workflows/apply.yaml --out ./reports/doctor.json
 deck apply --file ./workflows/apply.yaml
@@ -71,7 +71,7 @@ deck apply --session session-1
 
 ## Notes
 
-- `pack` expects a workflow directory containing `pack.yaml`, `apply.yaml`, and `vars.yaml`.
+- `prepare` expects a workflow directory containing `prepare.yaml`, `apply.yaml`, and `vars.yaml`.
 - `apply` defaults to the `install` phase when phases are used.
 - Help text is shown on stdout only when you request it with `--help` or `help`.
 - Command and flag errors are written to stderr without automatic usage output.

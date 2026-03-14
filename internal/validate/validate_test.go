@@ -12,7 +12,7 @@ func TestFile(t *testing.T) {
 	t.Run("valid yaml", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "cluster.yaml")
-		content := []byte(`role: pack
+		content := []byte(`role: prepare
 version: v1alpha1
 phases:
   - name: prepare
@@ -278,7 +278,7 @@ phases:
 	t.Run("schema invalid kind", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: pack
+		content := []byte(`role: prepare
 version: v1alpha1
 phases:
   - name: prepare
@@ -300,7 +300,7 @@ phases:
 	t.Run("duplicate step id", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: pack
+		content := []byte(`role: prepare
 version: v1alpha1
 phases:
   - name: prepare
@@ -333,7 +333,7 @@ phases:
 	t.Run("runtime register redefinition", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: pack
+		content := []byte(`role: prepare
 version: v1alpha1
 phases:
   - name: prepare
@@ -753,7 +753,7 @@ phases:
 	t.Run("register output key valid for kind", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: pack
+		content := []byte(`role: prepare
 version: v1alpha1
 phases:
   - name: prepare
@@ -781,7 +781,7 @@ phases:
 	t.Run("kind rejected for role", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: pack
+		content := []byte(`role: prepare
 version: v1alpha1
 phases:
   - name: prepare
@@ -809,9 +809,9 @@ phases:
 	t.Run("valid declared prepare workflow", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: pack
+		content := []byte(`role: prepare
 version: v1alpha1
-prepare:
+artifacts:
   files:
     - group: binaries
       items:
@@ -844,9 +844,9 @@ prepare:
 	t.Run("declared prepare file path rejects files prefix", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: pack
+		content := []byte(`role: prepare
 version: v1alpha1
-prepare:
+artifacts:
   files:
     - group: binaries
       items:
@@ -871,7 +871,7 @@ prepare:
 	t.Run("register output key valid for checkhost", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: pack
+		content := []byte(`role: prepare
 version: v1alpha1
 phases:
   - name: prepare
@@ -922,7 +922,7 @@ phases:
 	t.Run("reserved runtime host key is rejected", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: pack
+		content := []byte(`role: prepare
 version: v1alpha1
 phases:
   - name: prepare

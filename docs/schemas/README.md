@@ -8,7 +8,7 @@ This directory contains the raw JSON Schema files used to validate `deck` workfl
 - `deck-tooldefinition.schema.json`: tool definition manifest schema
 - `tools/public/*.schema.json`: primary apply step schemas
 - `tools/advanced/*.schema.json`: advanced or escape-hatch step schemas
-- `tools/legacy-pack/*.schema.json`: legacy/internal pack step schemas
+- `tools/legacy-prepare/*.schema.json`: legacy/internal prepare step schemas
 
 ## Validation model
 

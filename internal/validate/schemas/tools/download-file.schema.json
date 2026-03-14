@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://deck.local/schemas/tools/download-file.schema.json",
   "title": "DownloadFileStep",
-  "description": "Downloads or resolves a file from bundle, local, or remote sources. Advanced step used directly in apply and older pack flows.",
+  "description": "Downloads or resolves a file from bundle, local, or remote sources. Advanced step used directly in apply and older prepare flows.",
   "x-deck-visibility": "advanced",
   "type": "object",
   "additionalProperties": false,

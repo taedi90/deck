@@ -19,7 +19,7 @@ import (
 	"github.com/taedi90/deck/internal/prepare"
 )
 
-type packOptions struct {
+type prepareOptions struct {
 	outPath      string
 	dryRun       bool
 	cacheDir     string
@@ -27,13 +27,13 @@ type packOptions struct {
 	varOverrides map[string]string
 }
 
-func newPackCommand() *cobra.Command {
+func newPrepareCommand() *cobra.Command {
 	vars := &varFlag{}
 	cmd := &cobra.Command{
-		Use:   "pack",
+		Use:   "prepare",
 		Short: "Build an offline bundle from local deck files",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runPackWithOptions(packOptions{
+			return runPrepareWithOptions(prepareOptions{
 				outPath:      cmdFlagValue(cmd, "out"),
 				dryRun:       cmdFlagBoolValue(cmd, "dry-run"),
 				cacheDir:     cmdFlagValue(cmd, "cache-dir"),
@@ -44,14 +44,14 @@ func newPackCommand() *cobra.Command {
 	}
 	cmd.Flags().SetInterspersed(false)
 	cmd.Flags().String("out", "", "output tar archive path")
-	cmd.Flags().Bool("dry-run", false, "print pack plan without writing files")
+	cmd.Flags().Bool("dry-run", false, "print prepare plan without writing files")
 	cmd.Flags().String("cache-dir", "", "artifact cache directory")
 	cmd.Flags().Bool("no-cache", false, "disable artifact cache reuse")
 	cmd.Flags().Var(vars, "var", "set variable override (key=value), repeatable")
 	return cmd
 }
 
-func runPackWithOptions(opts packOptions) error {
+func runPrepareWithOptions(opts prepareOptions) error {
 	resolvedOut := strings.TrimSpace(opts.outPath)
 	if !opts.dryRun && resolvedOut == "" {
 		return errors.New("--out is required")
@@ -59,11 +59,11 @@ func runPackWithOptions(opts packOptions) error {
 
 	ctx := context.Background()
 
-	packWorkflowPath, err := discoverPackWorkflow(ctx)
+	prepareWorkflowPath, err := discoverPrepareWorkflow(ctx)
 	if err != nil {
 		return err
 	}
-	workflowBaseDir := filepath.Dir(packWorkflowPath)
+	workflowBaseDir := filepath.Dir(prepareWorkflowPath)
 	applyWorkflowPath := filepath.Join(workflowBaseDir, "apply.yaml")
 	varsWorkflowPath := filepath.Join(workflowBaseDir, "vars.yaml")
 	for _, requiredPath := range []string{applyWorkflowPath, varsWorkflowPath} {
@@ -75,8 +75,8 @@ func runPackWithOptions(opts packOptions) error {
 
 	if opts.dryRun {
 		for _, line := range []string{
-			fmt.Sprintf("PACK_WORKFLOW=%s", filepath.ToSlash(packWorkflowPath)),
-			fmt.Sprintf("WORKFLOW_INCLUDE=%s", filepath.ToSlash(packWorkflowPath)),
+			fmt.Sprintf("PREPARE_WORKFLOW=%s", filepath.ToSlash(prepareWorkflowPath)),
+			fmt.Sprintf("WORKFLOW_INCLUDE=%s", filepath.ToSlash(prepareWorkflowPath)),
 			fmt.Sprintf("WORKFLOW_INCLUDE=%s", filepath.ToSlash(applyWorkflowPath)),
 			fmt.Sprintf("WORKFLOW_INCLUDE=%s", filepath.ToSlash(varsWorkflowPath)),
 			"ARTIFACT_DEFAULT_DEST=packages->bundle/packages",
@@ -106,19 +106,19 @@ func runPackWithOptions(opts packOptions) error {
 		return fmt.Errorf("create output parent: %w", err)
 	}
 
-	stagingRoot, err := os.MkdirTemp(filepath.Dir(resolvedOutAbs), "deck-pack-")
+	stagingRoot, err := os.MkdirTemp(filepath.Dir(resolvedOutAbs), "deck-prepare-")
 	if err != nil {
 		return fmt.Errorf("create staging root: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(stagingRoot) }()
 	bundleRoot := filepath.Join(stagingRoot, "bundle")
 
-	packWorkflow, err := config.LoadWithOptions(ctx, packWorkflowPath, config.LoadOptions{VarOverrides: varsAsAnyMap(opts.varOverrides)})
+	prepareWorkflow, err := config.LoadWithOptions(ctx, prepareWorkflowPath, config.LoadOptions{VarOverrides: varsAsAnyMap(opts.varOverrides)})
 	if err != nil {
 		return err
 	}
-	if strings.TrimSpace(packWorkflow.Role) != "pack" {
-		return fmt.Errorf("pack workflow role must be pack: %s", packWorkflowPath)
+	if strings.TrimSpace(prepareWorkflow.Role) != "prepare" {
+		return fmt.Errorf("prepare workflow role must be prepare: %s", prepareWorkflowPath)
 	}
 
 	artifactRoot := bundleRoot
@@ -131,7 +131,7 @@ func runPackWithOptions(opts packOptions) error {
 		}
 	}
 
-	if err := prepare.Run(ctx, packWorkflow, prepare.RunOptions{BundleRoot: artifactRoot, ForceRedownload: opts.noCache}); err != nil {
+	if err := prepare.Run(ctx, prepareWorkflow, prepare.RunOptions{BundleRoot: artifactRoot, ForceRedownload: opts.noCache}); err != nil {
 		return err
 	}
 
@@ -178,10 +178,10 @@ func runPackWithOptions(opts packOptions) error {
 		return err
 	}
 
-	return stdoutPrintf("pack: ok (%s)\n", resolvedOutAbs)
+	return stdoutPrintf("prepare: ok (%s)\n", resolvedOutAbs)
 }
 
-func discoverPackWorkflow(ctx context.Context) (string, error) {
+func discoverPrepareWorkflow(ctx context.Context) (string, error) {
 	workflowDir := filepath.Join(".", "workflows")
 	absWorkflowDir, err := filepath.Abs(workflowDir)
 	if err != nil {
@@ -192,14 +192,14 @@ func discoverPackWorkflow(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("workflow directory not found: %s", absWorkflowDir)
 	}
 
-	preferred := filepath.Join(absWorkflowDir, "pack.yaml")
+	preferred := filepath.Join(absWorkflowDir, "prepare.yaml")
 	if preferredInfo, statErr := os.Stat(preferred); statErr == nil && !preferredInfo.IsDir() {
 		wf, loadErr := config.Load(ctx, preferred)
 		if loadErr != nil {
 			return "", loadErr
 		}
-		if strings.TrimSpace(wf.Role) != "pack" {
-			return "", fmt.Errorf("pack workflow role must be pack: %s", preferred)
+		if strings.TrimSpace(wf.Role) != "prepare" {
+			return "", fmt.Errorf("prepare workflow role must be prepare: %s", preferred)
 		}
 		return preferred, nil
 	}
@@ -222,16 +222,16 @@ func discoverPackWorkflow(ctx context.Context) (string, error) {
 		if loadErr != nil {
 			return "", loadErr
 		}
-		if strings.TrimSpace(wf.Role) == "pack" {
+		if strings.TrimSpace(wf.Role) == "prepare" {
 			matches = append(matches, candidate)
 		}
 	}
 	sort.Strings(matches)
 	if len(matches) == 0 {
-		return "", fmt.Errorf("pack workflow not found under %s", absWorkflowDir)
+		return "", fmt.Errorf("prepare workflow not found under %s", absWorkflowDir)
 	}
 	if len(matches) > 1 {
-		return "", fmt.Errorf("multiple pack workflows found under %s", absWorkflowDir)
+		return "", fmt.Errorf("multiple prepare workflows found under %s", absWorkflowDir)
 	}
 
 	return matches[0], nil
@@ -343,7 +343,7 @@ func buildPackManifest(bundleRoot string) (packManifest, error) {
 func writePackManifest(path string, manifest packManifest) error {
 	raw, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
-		return fmt.Errorf("encode pack manifest: %w", err)
+		return fmt.Errorf("encode prepare manifest: %w", err)
 	}
 	return writeBytes(path, raw, 0o644)
 }

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://deck.local/schemas/tools/check-host.schema.json",
   "title": "CheckHostStep",
-  "description": "Validates pack-time host prerequisites before bundle creation.",
+  "description": "Validates prepare-time host prerequisites before bundle creation.",
   "x-deck-visibility": "public",
   "type": "object",
   "additionalProperties": false,

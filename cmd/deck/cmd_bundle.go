@@ -60,10 +60,11 @@ func executeInit(output string) error {
 }
 
 func initTemplateFiles() map[string]string {
-	packContent := strings.Join([]string{
-		"role: pack",
+	prepareContent := strings.Join([]string{
+		"role: prepare",
 		"version: v1alpha1",
-		"steps: []",
+		"artifacts:",
+		"  files: []",
 		"",
 	}, "\n")
 	applyContent := strings.Join([]string{
@@ -74,9 +75,9 @@ func initTemplateFiles() map[string]string {
 	}, "\n")
 
 	return map[string]string{
-		"vars.yaml":  "{}\n",
-		"pack.yaml":  packContent,
-		"apply.yaml": applyContent,
+		"vars.yaml":    "{}\n",
+		"prepare.yaml": prepareContent,
+		"apply.yaml":   applyContent,
 	}
 }
 

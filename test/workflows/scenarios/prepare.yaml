@@ -1,4 +1,4 @@
-role: pack
+role: prepare
 version: v1alpha1
 imports:
   - ../components/prepare/download-packages-ubuntu2204.yaml

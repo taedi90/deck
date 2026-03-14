@@ -123,17 +123,17 @@ steps:
 
 func TestLoadMergesPrepareImports(t *testing.T) {
 	dir := t.TempDir()
-	rootPath := filepath.Join(dir, "pack.yaml")
+	rootPath := filepath.Join(dir, "prepare.yaml")
 	filesPath := filepath.Join(dir, "files.yaml")
 	imagesPath := filepath.Join(dir, "images.yaml")
 
-	if err := os.WriteFile(filesPath, []byte("role: pack\nversion: v1alpha1\nprepare:\n  files:\n    - group: binaries\n      items:\n        - id: kubeadm\n          source:\n            url: https://example.local/kubeadm\n          output:\n            path: bin/kubeadm\n"), 0o644); err != nil {
+	if err := os.WriteFile(filesPath, []byte("role: prepare\nversion: v1alpha1\nartifacts:\n  files:\n    - group: binaries\n      items:\n        - id: kubeadm\n          source:\n            url: https://example.local/kubeadm\n          output:\n            path: bin/kubeadm\n"), 0o644); err != nil {
 		t.Fatalf("write files import: %v", err)
 	}
-	if err := os.WriteFile(imagesPath, []byte("role: pack\nversion: v1alpha1\nprepare:\n  images:\n    - group: control-plane\n      items:\n        - image: registry.k8s.io/kube-apiserver:v1.30.1\n"), 0o644); err != nil {
+	if err := os.WriteFile(imagesPath, []byte("role: prepare\nversion: v1alpha1\nartifacts:\n  images:\n    - group: control-plane\n      items:\n        - image: registry.k8s.io/kube-apiserver:v1.30.1\n"), 0o644); err != nil {
 		t.Fatalf("write images import: %v", err)
 	}
-	if err := os.WriteFile(rootPath, []byte("role: pack\nversion: v1alpha1\nimports:\n  - files.yaml\n  - images.yaml\n"), 0o644); err != nil {
+	if err := os.WriteFile(rootPath, []byte("role: prepare\nversion: v1alpha1\nimports:\n  - files.yaml\n  - images.yaml\n"), 0o644); err != nil {
 		t.Fatalf("write root workflow: %v", err)
 	}
 
@@ -141,11 +141,11 @@ func TestLoadMergesPrepareImports(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
-	if wf.Prepare == nil {
+	if wf.Artifacts == nil {
 		t.Fatalf("expected prepare spec")
 	}
-	if len(wf.Prepare.Files) != 1 || len(wf.Prepare.Images) != 1 {
-		t.Fatalf("unexpected merged prepare content: %+v", wf.Prepare)
+	if len(wf.Artifacts.Files) != 1 || len(wf.Artifacts.Images) != 1 {
+		t.Fatalf("unexpected merged prepare content: %+v", wf.Artifacts)
 	}
 }
 

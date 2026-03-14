@@ -13,7 +13,7 @@ import (
 var prepareStepIDSanitizer = regexp.MustCompile(`[^a-z0-9-]+`)
 
 func declaredPrepareSteps(wf *config.Workflow) ([]config.Step, error) {
-	if wf == nil || wf.Prepare == nil {
+	if wf == nil || wf.Artifacts == nil {
 		return nil, nil
 	}
 	steps := make([]config.Step, 0)
@@ -41,8 +41,8 @@ func declaredPrepareSteps(wf *config.Workflow) ([]config.Step, error) {
 
 func declaredPrepareFileSteps(wf *config.Workflow) ([]config.Step, error) {
 	steps := make([]config.Step, 0)
-	for _, group := range wf.Prepare.Files {
-		for _, target := range expandPrepareTargets(group.Targets) {
+	for _, group := range wf.Artifacts.Files {
+		for _, target := range expandArtifactTargets(group.Targets) {
 			for _, item := range group.Items {
 				rendered, err := workflowexec.RenderSpecWithExtra(map[string]any{
 					"source": map[string]any{
@@ -56,7 +56,7 @@ func declaredPrepareFileSteps(wf *config.Workflow) ([]config.Step, error) {
 					},
 				}, wf, nil, map[string]any{"bundleRoot": "", "stateFile": ""}, map[string]any{"target": prepareTargetMap(target)})
 				if err != nil {
-					return nil, fmt.Errorf("prepare.files group %s item %s: %w", group.Group, item.ID, err)
+					return nil, fmt.Errorf("artifacts.files group %s item %s: %w", group.Group, item.ID, err)
 				}
 				steps = append(steps, config.Step{
 					ID:         prepareSyntheticStepID("file", group.Group, item.ID, target),
@@ -72,13 +72,13 @@ func declaredPrepareFileSteps(wf *config.Workflow) ([]config.Step, error) {
 
 func declaredPrepareImageSteps(wf *config.Workflow) ([]config.Step, error) {
 	steps := make([]config.Step, 0)
-	for _, group := range wf.Prepare.Images {
-		for _, target := range expandPrepareTargets(group.Targets) {
+	for _, group := range wf.Artifacts.Images {
+		for _, target := range expandArtifactTargets(group.Targets) {
 			images := make([]any, 0, len(group.Items))
 			for _, item := range group.Items {
 				renderedImage, err := workflowexec.RenderSpecWithExtra(map[string]any{"image": item.Image}, wf, nil, map[string]any{"bundleRoot": "", "stateFile": ""}, map[string]any{"target": prepareTargetMap(target)})
 				if err != nil {
-					return nil, fmt.Errorf("prepare.images group %s item %s: %w", group.Group, item.Image, err)
+					return nil, fmt.Errorf("artifacts.images group %s item %s: %w", group.Group, item.Image, err)
 				}
 				images = append(images, renderedImage["image"])
 			}
@@ -86,14 +86,14 @@ func declaredPrepareImageSteps(wf *config.Workflow) ([]config.Step, error) {
 			if len(group.Backend) > 0 {
 				renderedBackend, err := workflowexec.RenderSpecWithExtra(group.Backend, wf, nil, map[string]any{"bundleRoot": "", "stateFile": ""}, map[string]any{"target": prepareTargetMap(target)})
 				if err != nil {
-					return nil, fmt.Errorf("prepare.images group %s backend: %w", group.Group, err)
+					return nil, fmt.Errorf("artifacts.images group %s backend: %w", group.Group, err)
 				}
 				spec["backend"] = renderedBackend
 			}
 			if len(group.Output) > 0 {
 				renderedOutput, err := workflowexec.RenderSpecWithExtra(group.Output, wf, nil, map[string]any{"bundleRoot": "", "stateFile": ""}, map[string]any{"target": prepareTargetMap(target)})
 				if err != nil {
-					return nil, fmt.Errorf("prepare.images group %s output: %w", group.Group, err)
+					return nil, fmt.Errorf("artifacts.images group %s output: %w", group.Group, err)
 				}
 				spec["output"] = renderedOutput
 			}
@@ -110,8 +110,8 @@ func declaredPrepareImageSteps(wf *config.Workflow) ([]config.Step, error) {
 
 func declaredPreparePackageSteps(wf *config.Workflow) ([]config.Step, error) {
 	steps := make([]config.Step, 0)
-	for _, group := range wf.Prepare.Packages {
-		for _, target := range expandPrepareTargets(group.Targets) {
+	for _, group := range wf.Artifacts.Packages {
+		for _, target := range expandArtifactTargets(group.Targets) {
 			packages := make([]any, 0, len(group.Items))
 			for _, item := range group.Items {
 				packages = append(packages, item.Name)
@@ -127,14 +127,14 @@ func declaredPreparePackageSteps(wf *config.Workflow) ([]config.Step, error) {
 			if len(group.Repo) > 0 {
 				renderedRepo, err := workflowexec.RenderSpecWithExtra(group.Repo, wf, nil, map[string]any{"bundleRoot": "", "stateFile": ""}, map[string]any{"target": prepareTargetMap(target)})
 				if err != nil {
-					return nil, fmt.Errorf("prepare.packages group %s repo: %w", group.Group, err)
+					return nil, fmt.Errorf("artifacts.packages group %s repo: %w", group.Group, err)
 				}
 				spec["repo"] = renderedRepo
 			}
 			if len(group.Backend) > 0 {
 				renderedBackend, err := workflowexec.RenderSpecWithExtra(group.Backend, wf, nil, map[string]any{"bundleRoot": "", "stateFile": ""}, map[string]any{"target": prepareTargetMap(target)})
 				if err != nil {
-					return nil, fmt.Errorf("prepare.packages group %s backend: %w", group.Group, err)
+					return nil, fmt.Errorf("artifacts.packages group %s backend: %w", group.Group, err)
 				}
 				spec["backend"] = renderedBackend
 			}
@@ -149,14 +149,14 @@ func declaredPreparePackageSteps(wf *config.Workflow) ([]config.Step, error) {
 	return steps, nil
 }
 
-func expandPrepareTargets(targets []config.PrepareTarget) []config.PrepareTarget {
+func expandArtifactTargets(targets []config.ArtifactTarget) []config.ArtifactTarget {
 	if len(targets) == 0 {
-		return []config.PrepareTarget{{}}
+		return []config.ArtifactTarget{{}}
 	}
 	return targets
 }
 
-func prepareTargetMap(target config.PrepareTarget) map[string]any {
+func prepareTargetMap(target config.ArtifactTarget) map[string]any {
 	return map[string]any{
 		"os":       target.OS,
 		"osFamily": target.OSFamily,
@@ -165,7 +165,7 @@ func prepareTargetMap(target config.PrepareTarget) map[string]any {
 	}
 }
 
-func prepareSyntheticStepID(kind, group, item string, target config.PrepareTarget) string {
+func prepareSyntheticStepID(kind, group, item string, target config.ArtifactTarget) string {
 	parts := []string{kind, group}
 	if target.OSFamily != "" {
 		parts = append(parts, target.OSFamily)

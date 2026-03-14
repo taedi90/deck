@@ -93,10 +93,10 @@ deck --help
 ```bash
 deck init --out ./demo
 deck validate --file ./demo/workflows/apply.yaml
-deck validate --file ./demo/workflows/pack.yaml
+deck validate --file ./demo/workflows/prepare.yaml
 
 cd ./demo
-deck pack --out ./bundle.tar
+deck prepare --out ./bundle.tar
 deck apply
 ```
 
