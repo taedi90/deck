@@ -169,6 +169,7 @@ func fetchWorkflowIndexFromServer(server string) ([]string, error) {
 	}
 	return items, nil
 }
+
 func executeHealth(server string) error {
 	resolvedServer, _, err := resolveRequiredServerURL(server)
 	if err != nil {
