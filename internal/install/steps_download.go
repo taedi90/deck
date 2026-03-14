@@ -24,6 +24,21 @@ func runDownloadFile(ctx context.Context, bundleRoot string, spec map[string]any
 	source := mapValue(spec, "source")
 	output := mapValue(spec, "output")
 	fetchCfg := mapValue(spec, "fetch")
+	bundleRef := mapValue(source, "bundle")
+	if len(bundleRef) > 0 {
+		root := stringValue(bundleRef, "root")
+		refPath := stringValue(bundleRef, "path")
+		if root == "" || refPath == "" {
+			return "", fmt.Errorf("DownloadFile bundle source requires root and path")
+		}
+		source["path"] = filepath.ToSlash(filepath.Join(root, refPath))
+		delete(source, "bundle")
+		if bundleRoot != "" {
+			sourcesRaw, _ := fetchCfg["sources"].([]any)
+			fetchCfg["sources"] = append([]any{map[string]any{"type": "bundle", "path": bundleRoot}}, sourcesRaw...)
+		}
+		spec["fetch"] = fetchCfg
+	}
 	url := stringValue(source, "url")
 	sourcePath := stringValue(source, "path")
 	expectedSHA := strings.ToLower(stringValue(source, "sha256"))

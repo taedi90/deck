@@ -7,12 +7,20 @@ phases:
         apiVersion: deck/v1alpha1
         kind: InstallArtifacts
         spec:
+          fetch:
+            sources:
+              - type: online
+                url: http://{{ .vars.serverURL }}
           artifacts:
             - source:
                 amd64:
-                  url: http://{{ .vars.serverURL }}/files/bin/linux/amd64/kubelet
+                  bundle:
+                    root: files
+                    path: bin/linux/amd64/kubelet
                 arm64:
-                  url: http://{{ .vars.serverURL }}/files/bin/linux/arm64/kubelet
+                  bundle:
+                    root: files
+                    path: bin/linux/arm64/kubelet
               skipIfPresent:
                 path: /usr/bin/kubelet
                 executable: true
@@ -21,9 +29,13 @@ phases:
                 mode: "0755"
             - source:
                 amd64:
-                  url: http://{{ .vars.serverURL }}/files/bin/linux/amd64/kubeadm
+                  bundle:
+                    root: files
+                    path: bin/linux/amd64/kubeadm
                 arm64:
-                  url: http://{{ .vars.serverURL }}/files/bin/linux/arm64/kubeadm
+                  bundle:
+                    root: files
+                    path: bin/linux/arm64/kubeadm
               skipIfPresent:
                 path: /usr/bin/kubeadm
                 executable: true
@@ -32,9 +44,13 @@ phases:
                 mode: "0755"
             - source:
                 amd64:
-                  url: http://{{ .vars.serverURL }}/files/bin/linux/amd64/kubectl
+                  bundle:
+                    root: files
+                    path: bin/linux/amd64/kubectl
                 arm64:
-                  url: http://{{ .vars.serverURL }}/files/bin/linux/arm64/kubectl
+                  bundle:
+                    root: files
+                    path: bin/linux/arm64/kubectl
               skipIfPresent:
                 path: /usr/bin/kubectl
                 executable: true
@@ -43,9 +59,13 @@ phases:
                 mode: "0755"
             - source:
                 amd64:
-                  url: http://{{ .vars.serverURL }}/files/bin/linux/amd64/crictl.tar.gz
+                  bundle:
+                    root: files
+                    path: bin/linux/amd64/crictl.tar.gz
                 arm64:
-                  url: http://{{ .vars.serverURL }}/files/bin/linux/arm64/crictl.tar.gz
+                  bundle:
+                    root: files
+                    path: bin/linux/arm64/crictl.tar.gz
               skipIfPresent:
                 path: /usr/bin/crictl
                 executable: true

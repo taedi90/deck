@@ -806,6 +806,68 @@ phases:
 		}
 	})
 
+	t.Run("valid declared prepare workflow", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "workflow.yaml")
+		content := []byte(`role: pack
+version: v1alpha1
+prepare:
+  files:
+    - group: binaries
+      items:
+        - id: kubeadm
+          source:
+            url: https://example.local/kubeadm
+          output:
+            path: bin/kubeadm
+  images:
+    - group: control-plane
+      items:
+        - image: registry.k8s.io/kube-apiserver:v1.30.1
+  packages:
+    - group: ubuntu
+      targets:
+        - osFamily: debian
+          release: ubuntu2204
+          arch: amd64
+      items:
+        - name: containerd
+`)
+		if err := os.WriteFile(path, content, 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+		if err := File(path); err != nil {
+			t.Fatalf("expected valid prepare workflow, got %v", err)
+		}
+	})
+
+	t.Run("declared prepare file path rejects files prefix", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "workflow.yaml")
+		content := []byte(`role: pack
+version: v1alpha1
+prepare:
+  files:
+    - group: binaries
+      items:
+        - id: kubeadm
+          source:
+            url: https://example.local/kubeadm
+          output:
+            path: files/bin/kubeadm
+`)
+		if err := os.WriteFile(path, content, 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+		err := File(path)
+		if err == nil {
+			t.Fatalf("expected invalid prepare output path")
+		}
+		if !strings.Contains(err.Error(), "relative to files root") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
 	t.Run("register output key valid for checkhost", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")

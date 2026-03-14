@@ -9,6 +9,10 @@ import (
 )
 
 func RenderSpec(spec map[string]any, wf *config.Workflow, runtimeVars map[string]any, ctxData map[string]any) (map[string]any, error) {
+	return RenderSpecWithExtra(spec, wf, runtimeVars, ctxData, nil)
+}
+
+func RenderSpecWithExtra(spec map[string]any, wf *config.Workflow, runtimeVars map[string]any, ctxData map[string]any, extra map[string]any) (map[string]any, error) {
 	if spec == nil {
 		return map[string]any{}, nil
 	}
@@ -23,6 +27,9 @@ func RenderSpec(spec map[string]any, wf *config.Workflow, runtimeVars map[string
 	}
 	if ctx["context"] == nil {
 		ctx["context"] = map[string]any{}
+	}
+	for k, v := range extra {
+		ctx[k] = v
 	}
 	return renderMap(spec, ctx)
 }

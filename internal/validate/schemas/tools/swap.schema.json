@@ -2,29 +2,65 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://deck.local/schemas/tools/swap.schema.json",
   "title": "SwapStep",
+  "description": "Enables or disables swap and its persistence settings.",
+  "x-deck-visibility": "public",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "apiVersion", "kind", "spec"],
+  "required": [
+    "id",
+    "apiVersion",
+    "kind",
+    "spec"
+  ],
   "properties": {
-    "id": { "type": "string" },
-    "apiVersion": { "const": "deck/v1alpha1" },
-    "kind": { "const": "Swap" },
-    "metadata": { "type": "object", "additionalProperties": true },
-    "when": { "type": "string" },
-    "retry": { "type": "integer", "minimum": 0 },
-    "timeout": { "type": "string", "pattern": "^[0-9]+(ms|s|m|h)$" },
+    "id": {
+      "type": "string"
+    },
+    "apiVersion": {
+      "const": "deck/v1alpha1"
+    },
+    "kind": {
+      "const": "Swap"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "when": {
+      "type": "string"
+    },
+    "retry": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "timeout": {
+      "type": "string",
+      "pattern": "^[0-9]+(ms|s|m|h)$"
+    },
     "register": {
       "type": "object",
-      "propertyNames": { "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
-      "additionalProperties": { "type": "string" }
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
     },
     "spec": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "disable": { "type": "boolean", "default": true },
-        "persist": { "type": "boolean", "default": true },
-        "fstabPath": { "type": "string" }
+        "disable": {
+          "type": "boolean",
+          "default": true
+        },
+        "persist": {
+          "type": "boolean",
+          "default": true
+        },
+        "fstabPath": {
+          "type": "string"
+        }
       }
     }
   }

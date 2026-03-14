@@ -79,9 +79,9 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 
 	runtimeVars := map[string]any{}
 	entries := make([]manifestEntry, 0)
-	preparePhase, found := findPhase(wf, "prepare")
-	if !found {
-		return fmt.Errorf("prepare phase not found")
+	prepareSteps, err := prepareExecutionSteps(wf)
+	if err != nil {
+		return err
 	}
 	packCacheEnabled := strings.TrimSpace(wf.Role) == "pack"
 	packCacheStatePath := ""
@@ -108,12 +108,12 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 		if err != nil {
 			return fmt.Errorf("encode workflow for pack cache plan: %w", err)
 		}
-		packCachePlan = ComputePackCachePlan(prevPackCacheState, workflowBytesForPlan, wf.Vars, preparePhase.Steps)
+		packCachePlan = ComputePackCachePlan(prevPackCacheState, workflowBytesForPlan, wf.Vars, prepareSteps)
 		packCachePlan.WorkflowSHA256 = workflowSHA
 	}
 	ctxData := map[string]any{"bundleRoot": bundleRoot, "stateFile": ""}
 
-	for _, step := range preparePhase.Steps {
+	for _, step := range prepareSteps {
 		ok, err := evaluateWhen(step.When, wf.Vars, runtimeVars, ctxData)
 		if err != nil {
 			return fmt.Errorf("step %s (%s): %w", step.ID, step.Kind, err)
@@ -174,6 +174,20 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 	}
 
 	return nil
+}
+
+func prepareExecutionSteps(wf *config.Workflow) ([]config.Step, error) {
+	if wf == nil {
+		return nil, fmt.Errorf("workflow is nil")
+	}
+	if wf.Prepare != nil && (len(wf.Prepare.Files) > 0 || len(wf.Prepare.Images) > 0 || len(wf.Prepare.Packages) > 0) {
+		return declaredPrepareSteps(wf)
+	}
+	preparePhase, found := findPhase(wf, "prepare")
+	if !found {
+		return nil, fmt.Errorf("prepare phase not found")
+	}
+	return preparePhase.Steps, nil
 }
 
 func applyRegister(step config.Step, outputs map[string]any, runtimeVars map[string]any) error {

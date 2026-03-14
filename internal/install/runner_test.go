@@ -2371,7 +2371,7 @@ func TestInstallArtifactsStep_InstallsSingleFileWithMode(t *testing.T) {
 		}},
 	}
 
-	if err := runInstallArtifacts(context.Background(), spec); err != nil {
+	if err := runInstallArtifacts(context.Background(), spec, ""); err != nil {
 		t.Fatalf("runInstallArtifacts failed: %v", err)
 	}
 
@@ -2415,7 +2415,7 @@ func TestInstallArtifactsStep_ExtractsTarGzArtifact(t *testing.T) {
 		}},
 	}
 
-	if err := runInstallArtifacts(context.Background(), spec); err != nil {
+	if err := runInstallArtifacts(context.Background(), spec, ""); err != nil {
 		t.Fatalf("runInstallArtifacts failed: %v", err)
 	}
 
@@ -2463,7 +2463,7 @@ func TestInstallArtifactsStep_SelectsSourceByArchitecture(t *testing.T) {
 			"install": map[string]any{"path": target, "mode": "0755"},
 		}},
 	}
-	if err := runInstallArtifacts(context.Background(), spec); err != nil {
+	if err := runInstallArtifacts(context.Background(), spec, ""); err != nil {
 		t.Fatalf("runInstallArtifacts amd64 failed: %v", err)
 	}
 	raw, err := os.ReadFile(target)
@@ -2477,7 +2477,7 @@ func TestInstallArtifactsStep_SelectsSourceByArchitecture(t *testing.T) {
 	installArtifactsDetectHostFacts = func() map[string]any {
 		return map[string]any{"arch": "arm64"}
 	}
-	if err := runInstallArtifacts(context.Background(), spec); err != nil {
+	if err := runInstallArtifacts(context.Background(), spec, ""); err != nil {
 		t.Fatalf("runInstallArtifacts arm64 failed: %v", err)
 	}
 	raw, err = os.ReadFile(target)
@@ -2520,7 +2520,7 @@ func TestInstallArtifactsStep_SkipIfPresentExecutable(t *testing.T) {
 		}},
 	}
 
-	if err := runInstallArtifacts(context.Background(), spec); err != nil {
+	if err := runInstallArtifacts(context.Background(), spec, ""); err != nil {
 		t.Fatalf("runInstallArtifacts failed: %v", err)
 	}
 	raw, err := os.ReadFile(target)
@@ -2529,6 +2529,68 @@ func TestInstallArtifactsStep_SkipIfPresentExecutable(t *testing.T) {
 	}
 	if string(raw) != "existing-content" {
 		t.Fatalf("expected skip to preserve existing target content, got %q", string(raw))
+	}
+}
+
+func TestInstallArtifactsStep_InstallsFromBundleReference(t *testing.T) {
+	bundle := t.TempDir()
+	source := filepath.Join(bundle, "files", "bin", "linux", "amd64", "kubelet")
+	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+	if err := os.WriteFile(source, []byte("bundle-kubelet"), 0o644); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	target := filepath.Join(t.TempDir(), "usr", "bin", "kubelet")
+
+	origDetect := installArtifactsDetectHostFacts
+	t.Cleanup(func() { installArtifactsDetectHostFacts = origDetect })
+	installArtifactsDetectHostFacts = func() map[string]any { return map[string]any{"arch": "amd64"} }
+
+	spec := map[string]any{
+		"artifacts": []any{map[string]any{
+			"source": map[string]any{
+				"amd64": map[string]any{"bundle": map[string]any{"root": "files", "path": "bin/linux/amd64/kubelet"}},
+				"arm64": map[string]any{"bundle": map[string]any{"root": "files", "path": "bin/linux/arm64/kubelet"}},
+			},
+			"install": map[string]any{"path": target, "mode": "0755"},
+		}},
+	}
+
+	if err := runInstallArtifacts(context.Background(), spec, bundle); err != nil {
+		t.Fatalf("runInstallArtifacts failed: %v", err)
+	}
+	raw, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read target: %v", err)
+	}
+	if string(raw) != "bundle-kubelet" {
+		t.Fatalf("unexpected target content: %q", string(raw))
+	}
+}
+
+func TestDownloadFileStep_DownloadsFromBundleReference(t *testing.T) {
+	bundle := t.TempDir()
+	source := filepath.Join(bundle, "files", "cluster", "join.txt")
+	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+	if err := os.WriteFile(source, []byte("join-token"), 0o644); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	spec := map[string]any{
+		"source": map[string]any{"bundle": map[string]any{"root": "files", "path": "cluster/join.txt"}},
+		"output": map[string]any{"path": "downloaded/join.txt"},
+	}
+	if _, err := runDownloadFile(context.Background(), bundle, spec); err != nil {
+		t.Fatalf("runDownloadFile failed: %v", err)
+	}
+	raw, err := os.ReadFile(filepath.Join(bundle, "downloaded", "join.txt"))
+	if err != nil {
+		t.Fatalf("read output: %v", err)
+	}
+	if string(raw) != "join-token" {
+		t.Fatalf("unexpected output content: %q", string(raw))
 	}
 }
 
@@ -3016,6 +3078,81 @@ func TestPackageCacheStep(t *testing.T) {
 			t.Fatalf("expected auto/rhel to resolve to dnf makecache, got %#v", calls)
 		}
 	})
+
+	t.Run("apt restricts to selected repo files", func(t *testing.T) {
+		origRun := packageCacheRunTimedCommand
+		t.Cleanup(func() { packageCacheRunTimedCommand = origRun })
+
+		dir := t.TempDir()
+		repoFile := filepath.Join(dir, "offline.list")
+		if err := os.WriteFile(repoFile, []byte("deb http://example.local ./\n"), 0o644); err != nil {
+			t.Fatalf("write repo file: %v", err)
+		}
+
+		calls := make([]string, 0)
+		packageCacheRunTimedCommand = func(name string, args []string, timeout time.Duration) error {
+			calls = append(calls, name+" "+strings.Join(args, " "))
+			return nil
+		}
+
+		spec := map[string]any{"manager": "apt", "update": true, "restrictToRepos": []any{repoFile}}
+		if err := runPackageCache(spec); err != nil {
+			t.Fatalf("runPackageCache failed: %v", err)
+		}
+		if len(calls) != 1 || !strings.Contains(calls[0], "Dir::Etc::sourceparts=") || !strings.Contains(calls[0], "apt-get -o") {
+			t.Fatalf("expected apt repo restriction args, got %#v", calls)
+		}
+	})
+
+	t.Run("dnf restricts to selected repo ids", func(t *testing.T) {
+		origRun := packageCacheRunTimedCommand
+		t.Cleanup(func() { packageCacheRunTimedCommand = origRun })
+
+		calls := make([]string, 0)
+		packageCacheRunTimedCommand = func(name string, args []string, timeout time.Duration) error {
+			calls = append(calls, name+" "+strings.Join(args, " "))
+			return nil
+		}
+
+		spec := map[string]any{"manager": "dnf", "update": true, "restrictToRepos": []any{"deck-os"}, "excludeRepos": []any{"extras"}}
+		if err := runPackageCache(spec); err != nil {
+			t.Fatalf("runPackageCache failed: %v", err)
+		}
+		if len(calls) != 1 || !strings.Contains(calls[0], "--disablerepo=*") || !strings.Contains(calls[0], "--enablerepo=deck-os") || !strings.Contains(calls[0], "--disablerepo=extras") {
+			t.Fatalf("expected dnf repo policy args, got %#v", calls)
+		}
+	})
+}
+
+func TestInstallPackagesStep_RestrictsToDNFRepos(t *testing.T) {
+	origRun := installPackagesRunTimedCommandWithContext
+	origLookPath := installPackagesLookPath
+	t.Cleanup(func() {
+		installPackagesRunTimedCommandWithContext = origRun
+		installPackagesLookPath = origLookPath
+	})
+
+	installPackagesRunTimedCommandWithContext = func(ctx context.Context, name string, args []string, timeout time.Duration) error {
+		if name != "dnf" {
+			return fmt.Errorf("unexpected installer %s", name)
+		}
+		joined := strings.Join(args, " ")
+		if !strings.Contains(joined, "--disablerepo=*") || !strings.Contains(joined, "--enablerepo=deck-os") || !strings.Contains(joined, "install -y kubelet") {
+			return fmt.Errorf("unexpected args: %s", joined)
+		}
+		return nil
+	}
+	installPackagesLookPath = func(file string) (string, error) {
+		if file == "dnf" {
+			return "/usr/bin/dnf", nil
+		}
+		return "", os.ErrNotExist
+	}
+
+	spec := map[string]any{"packages": []any{"kubelet"}, "restrictToRepos": []any{"deck-os"}}
+	if err := runInstallPackages(context.Background(), spec); err != nil {
+		t.Fatalf("runInstallPackages failed: %v", err)
+	}
 }
 
 func TestContainerdConfigStep(t *testing.T) {

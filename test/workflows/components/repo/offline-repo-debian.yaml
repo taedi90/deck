@@ -22,3 +22,5 @@ phases:
           manager: apt
           clean: true
           update: true
+          restrictToRepos:
+            - /etc/apt/sources.list.d/offline.list

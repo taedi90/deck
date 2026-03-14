@@ -29,6 +29,16 @@ phases:
             - id: offline-repo
               baseurl: http://{{ .vars.serverURL }}/packages/apt/{{ .vars.release }}
               trusted: true
+      - id: refresh-offline-repo-cache-apt
+        when: vars.osFamily == "debian"
+        apiVersion: deck/v1alpha1
+        kind: PackageCache
+        spec:
+          manager: apt
+          clean: true
+          update: true
+          restrictToRepos:
+            - /etc/apt/sources.list.d/deck-offline.list
       - id: apply-offline-repo-config-yum
         when: vars.osFamily == "rhel"
         apiVersion: deck/v1alpha1
@@ -43,6 +53,15 @@ phases:
               enabled: true
               gpgcheck: false
               module_hotfixes: true
+      - id: refresh-offline-repo-cache-yum
+        when: vars.osFamily == "rhel"
+        apiVersion: deck/v1alpha1
+        kind: PackageCache
+        spec:
+          manager: dnf
+          clean: true
+          update: true
+          restrictToRepos: [offline-repo]
       - id: disable-firewalld-and-ufw
         apiVersion: deck/v1alpha1
         kind: Service

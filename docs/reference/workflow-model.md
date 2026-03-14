@@ -18,10 +18,16 @@ The goal is not to invent a giant DSL. The goal is to give air-gapped operationa
 - `vars`: optional variable map
 - `varImports`: optional external variable imports
 - `imports`: optional workflow imports
+- `prepare`: declarative pack artifact inventory for `role: pack`
 - `steps`: top-level step list
 - `phases`: named phase list for more structured execution
 
-The schema allows either top-level `steps`, named `phases`, or imported workflow fragments.
+The schema allows one execution mode at a time:
+
+- `prepare` for declarative pack workflows
+- top-level `steps`
+- named `phases`
+- imported workflow fragments that resolve to one of those modes
 
 ## Minimal workflow
 
@@ -35,6 +41,22 @@ steps:
     spec:
       path: /var/lib/deck
       mode: "0755"
+```
+
+## Minimal pack workflow
+
+```yaml
+role: pack
+version: v1alpha1
+prepare:
+  files:
+    - group: binaries
+      items:
+        - id: kubeadm
+          source:
+            url: https://example.local/kubeadm
+          output:
+            path: bin/kubeadm
 ```
 
 ## Step shape
@@ -56,6 +78,8 @@ Optional execution controls:
 ## Phases
 
 Use phases when the procedure has natural boundaries.
+
+`prepare` is the preferred pack authoring mode. Use `steps` or `phases` for `apply`, or for older pack workflows that have not been migrated yet.
 
 That keeps large workflows readable and lets the operator see the intended order without reading every command detail.
 
@@ -93,6 +117,15 @@ Supported step kinds include:
 - `VerifyImages`
 - `KubeadmInit`
 - `KubeadmJoin`
+
+## Prepare semantics
+
+`role: pack` can use top-level `prepare` to declare artifact inventory instead of writing repeated download steps.
+
+- `prepare.files[*].items[*].output.path` is relative to the `files/` bundle root, so use `bin/kubeadm`, not `files/bin/kubeadm`
+- `prepare.images` declares image groups and lets the engine choose bundle tar layout
+- `prepare.packages` declares package groups per target OS family, release, and arch
+- internally, `deck` still plans typed actions, but the authoring model stays inventory-driven
 
 ## When to use RunCommand
 

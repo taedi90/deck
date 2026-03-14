@@ -2,46 +2,112 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://deck.local/schemas/tools/systemd-unit.schema.json",
   "title": "SystemdUnitStep",
+  "description": "Writes a systemd unit file and optionally manages the related service.",
+  "x-deck-visibility": "public",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "apiVersion", "kind", "spec"],
+  "required": [
+    "id",
+    "apiVersion",
+    "kind",
+    "spec"
+  ],
   "properties": {
-    "id": { "type": "string" },
-    "apiVersion": { "const": "deck/v1alpha1" },
-    "kind": { "const": "SystemdUnit" },
-    "metadata": { "type": "object", "additionalProperties": true },
-    "when": { "type": "string" },
-    "retry": { "type": "integer", "minimum": 0 },
-    "timeout": { "type": "string", "pattern": "^[0-9]+(ms|s|m|h)$" },
+    "id": {
+      "type": "string"
+    },
+    "apiVersion": {
+      "const": "deck/v1alpha1"
+    },
+    "kind": {
+      "const": "SystemdUnit"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "when": {
+      "type": "string"
+    },
+    "retry": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "timeout": {
+      "type": "string",
+      "pattern": "^[0-9]+(ms|s|m|h)$"
+    },
     "register": {
       "type": "object",
-      "propertyNames": { "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
-      "additionalProperties": { "type": "string" }
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
     },
     "spec": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["path"],
+      "required": [
+        "path"
+      ],
       "properties": {
-        "path": { "type": "string", "minLength": 1 },
-        "content": { "type": "string" },
-        "contentFromTemplate": { "type": "string" },
-        "mode": { "type": "string", "pattern": "^[0-7]{4}$" },
-        "daemonReload": { "type": "boolean" },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "content": {
+          "type": "string"
+        },
+        "contentFromTemplate": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string",
+          "pattern": "^[0-7]{4}$"
+        },
+        "daemonReload": {
+          "type": "boolean"
+        },
         "service": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["name"],
+          "required": [
+            "name"
+          ],
           "properties": {
-            "name": { "type": "string", "minLength": 1 },
-            "enabled": { "type": "boolean" },
-            "state": { "type": "string", "enum": ["unchanged", "started", "stopped", "restarted", "reloaded"] }
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "state": {
+              "type": "string",
+              "enum": [
+                "unchanged",
+                "started",
+                "stopped",
+                "restarted",
+                "reloaded"
+              ]
+            }
           }
         }
       },
       "oneOf": [
-        { "required": ["content"] },
-        { "required": ["contentFromTemplate"] }
+        {
+          "required": [
+            "content"
+          ]
+        },
+        {
+          "required": [
+            "contentFromTemplate"
+          ]
+        }
       ]
     }
   }

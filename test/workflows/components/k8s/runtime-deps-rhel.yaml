@@ -8,12 +8,20 @@ phases:
         kind: InstallArtifacts
         timeout: 20m
         spec:
+          fetch:
+            sources:
+              - type: online
+                url: http://{{ .vars.serverURL }}
           artifacts:
             - source:
                 amd64:
-                  url: http://{{ .vars.serverURL }}/files/bin/linux/amd64/containerd.tar.gz
+                  bundle:
+                    root: files
+                    path: bin/linux/amd64/containerd.tar.gz
                 arm64:
-                  url: http://{{ .vars.serverURL }}/files/bin/linux/arm64/containerd.tar.gz
+                  bundle:
+                    root: files
+                    path: bin/linux/arm64/containerd.tar.gz
               skipIfPresent:
                 path: /usr/local/bin/containerd
                 executable: true
@@ -45,9 +53,13 @@ phases:
                 mode: "0755"
             - source:
                 amd64:
-                  url: http://{{ .vars.serverURL }}/files/bin/linux/amd64/runc
+                  bundle:
+                    root: files
+                    path: bin/linux/amd64/runc
                 arm64:
-                  url: http://{{ .vars.serverURL }}/files/bin/linux/arm64/runc
+                  bundle:
+                    root: files
+                    path: bin/linux/arm64/runc
               skipIfPresent:
                 path: /usr/local/sbin/runc
                 executable: true
@@ -56,9 +68,13 @@ phases:
                 mode: "0755"
             - source:
                 amd64:
-                  url: http://{{ .vars.serverURL }}/files/bin/linux/amd64/cni-plugins.tgz
+                  bundle:
+                    root: files
+                    path: bin/linux/amd64/cni-plugins.tgz
                 arm64:
-                  url: http://{{ .vars.serverURL }}/files/bin/linux/arm64/cni-plugins.tgz
+                  bundle:
+                    root: files
+                    path: bin/linux/arm64/cni-plugins.tgz
               extract:
                 destination: /opt/cni/bin
       - id: symlink-runc-rhel

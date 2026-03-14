@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -69,6 +70,9 @@ func Bytes(name string, content []byte) error {
 	if err := validateSchema(name, content); err != nil {
 		return err
 	}
+	if err := validateWorkflowMode(&wf); err != nil {
+		return err
+	}
 	if err := validateToolSchemas(&wf); err != nil {
 		return err
 	}
@@ -76,6 +80,32 @@ func Bytes(name string, content []byte) error {
 		return err
 	}
 
+	return nil
+}
+
+func validateWorkflowMode(wf *config.Workflow) error {
+	if wf == nil {
+		return nil
+	}
+	hasPrepare := wf.Prepare != nil && (len(wf.Prepare.Files) > 0 || len(wf.Prepare.Images) > 0 || len(wf.Prepare.Packages) > 0)
+	hasPhases := len(wf.Phases) > 0
+	hasSteps := len(wf.Steps) > 0
+	modeCount := 0
+	if hasPrepare {
+		modeCount++
+	}
+	if hasPhases {
+		modeCount++
+	}
+	if hasSteps {
+		modeCount++
+	}
+	if modeCount > 1 {
+		return fmt.Errorf("workflow cannot set multiple execution modes")
+	}
+	if hasPrepare && strings.TrimSpace(wf.Role) != "pack" {
+		return fmt.Errorf("E_SCHEMA_INVALID: prepare is only supported for role pack")
+	}
 	return nil
 }
 
@@ -162,6 +192,9 @@ func validateSchema(name string, content []byte) error {
 }
 
 func validateSemantics(wf *config.Workflow) error {
+	if err := validatePrepareSemantics(wf); err != nil {
+		return err
+	}
 	if err := validateRoleKinds(wf); err != nil {
 		return err
 	}
@@ -198,6 +231,35 @@ func validateSemantics(wf *config.Workflow) error {
 		}
 	}
 
+	return nil
+}
+
+func validatePrepareSemantics(wf *config.Workflow) error {
+	if wf == nil || wf.Prepare == nil {
+		return nil
+	}
+	for _, group := range wf.Prepare.Files {
+		for _, item := range group.Items {
+			path := strings.TrimSpace(item.Output.Path)
+			if path == "" {
+				return fmt.Errorf("E_SCHEMA_INVALID: prepare.files group %s item %s requires output.path", group.Group, item.ID)
+			}
+			normalized := filepath.ToSlash(strings.TrimSpace(path))
+			if strings.HasPrefix(normalized, "/") {
+				return fmt.Errorf("E_SCHEMA_INVALID: prepare.files group %s item %s output.path must be relative", group.Group, item.ID)
+			}
+			if strings.HasPrefix(normalized, "files/") {
+				return fmt.Errorf("E_SCHEMA_INVALID: prepare.files group %s item %s output.path must be relative to files root", group.Group, item.ID)
+			}
+		}
+	}
+	for _, group := range wf.Prepare.Packages {
+		for _, target := range group.Targets {
+			if strings.TrimSpace(target.OSFamily) == "" || strings.TrimSpace(target.Release) == "" {
+				return fmt.Errorf("E_SCHEMA_INVALID: prepare.packages group %s targets require osFamily and release", group.Group)
+			}
+		}
+	}
 	return nil
 }
 

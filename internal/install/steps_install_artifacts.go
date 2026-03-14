@@ -46,9 +46,15 @@ type installArtifactSourcesSpec struct {
 }
 
 type installArtifactSourceSpec struct {
-	URL    string `json:"url"`
-	Path   string `json:"path"`
-	SHA256 string `json:"sha256"`
+	URL    string                    `json:"url"`
+	Path   string                    `json:"path"`
+	SHA256 string                    `json:"sha256"`
+	Bundle *installArtifactBundleRef `json:"bundle"`
+}
+
+type installArtifactBundleRef struct {
+	Root string `json:"root"`
+	Path string `json:"path"`
 }
 
 type installArtifactSkipSpec struct {
@@ -67,7 +73,7 @@ type installArtifactExtractSpec struct {
 	Mode        string   `json:"mode"`
 }
 
-func runInstallArtifacts(ctx context.Context, spec map[string]any) error {
+func runInstallArtifacts(ctx context.Context, spec map[string]any, bundleRoot string) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -95,6 +101,10 @@ func runInstallArtifacts(ctx context.Context, spec map[string]any) error {
 		if err != nil {
 			return fmt.Errorf("artifact[%d]: %w", i, err)
 		}
+		resolvedSource, fetchCfgForArtifact, err := resolveInstallArtifactSource(source, fetchCfg, bundleRoot)
+		if err != nil {
+			return fmt.Errorf("artifact[%d]: %w", i, err)
+		}
 
 		tmpDir, err := os.MkdirTemp("", "deck-install-artifacts-*")
 		if err != nil {
@@ -103,11 +113,11 @@ func runInstallArtifacts(ctx context.Context, spec map[string]any) error {
 
 		downloadSpec := map[string]any{
 			"source": map[string]any{
-				"url":    source.URL,
-				"path":   source.Path,
-				"sha256": source.SHA256,
+				"url":    resolvedSource.URL,
+				"path":   resolvedSource.Path,
+				"sha256": resolvedSource.SHA256,
 			},
-			"fetch": fetchCfg,
+			"fetch": fetchCfgForArtifact,
 			"output": map[string]any{
 				"path": "artifact.bin",
 			},
@@ -155,10 +165,49 @@ func sourceForArch(sources installArtifactSourcesSpec, arch string) (installArti
 	default:
 		return installArtifactSourceSpec{}, fmt.Errorf("%s: unsupported host architecture %q", errCodeInstallArtifactArch, arch)
 	}
-	if strings.TrimSpace(source.Path) == "" && strings.TrimSpace(source.URL) == "" {
+	if strings.TrimSpace(source.Path) == "" && strings.TrimSpace(source.URL) == "" && source.Bundle == nil {
 		return installArtifactSourceSpec{}, fmt.Errorf("%s: source for arch %s requires path or url", errCodeInstallArtifactSource, arch)
 	}
 	return source, nil
+}
+
+func resolveInstallArtifactSource(source installArtifactSourceSpec, fetchCfg map[string]any, bundleRoot string) (installArtifactSourceSpec, map[string]any, error) {
+	if source.Bundle == nil {
+		return source, fetchCfg, nil
+	}
+	root := strings.TrimSpace(source.Bundle.Root)
+	path := strings.TrimSpace(source.Bundle.Path)
+	if root == "" || path == "" {
+		return installArtifactSourceSpec{}, nil, fmt.Errorf("%s: bundle source requires root and path", errCodeInstallArtifactSource)
+	}
+	rel := filepath.ToSlash(filepath.Join(root, path))
+	resolved := source
+	resolved.Bundle = nil
+	resolved.Path = rel
+	updatedFetch := cloneInstallFetchSpecMap(fetchCfg)
+	if bundleRoot != "" {
+		updatedFetch["sources"] = prependBundleFetchSource(updatedFetch["sources"], bundleRoot)
+	}
+	return resolved, updatedFetch, nil
+}
+
+func cloneInstallFetchSpecMap(input map[string]any) map[string]any {
+	if input == nil {
+		return map[string]any{}
+	}
+	out := make(map[string]any, len(input))
+	for k, v := range input {
+		out[k] = v
+	}
+	return out
+}
+
+func prependBundleFetchSource(raw any, bundleRoot string) []any {
+	items, _ := raw.([]any)
+	out := make([]any, 0, len(items)+1)
+	out = append(out, map[string]any{"type": "bundle", "path": bundleRoot})
+	out = append(out, items...)
+	return out
 }
 
 func fetchSpecMap(fetchSpec installArtifactsFetchSpec) map[string]any {

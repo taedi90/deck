@@ -120,6 +120,67 @@ func TestRun_PrepareArtifactsAndManifest(t *testing.T) {
 	}
 }
 
+func TestRun_DeclaredPrepareArtifactsAndManifest(t *testing.T) {
+	stubImageDownload(t)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("hello-declared-prepare"))
+	}))
+	defer server.Close()
+
+	bundle := t.TempDir()
+	wf := &config.Workflow{
+		Role:    "pack",
+		Version: "v1alpha1",
+		Vars: map[string]any{
+			"kubernetesVersion": "v1.30.1",
+		},
+		Prepare: &config.PrepareSpec{
+			Files: []config.PrepareFileGroup{{
+				Group: "binaries",
+				Targets: []config.PrepareTarget{{
+					OS:   "linux",
+					Arch: "amd64",
+				}},
+				Items: []config.PrepareFileItem{{
+					ID:     "artifact",
+					Source: config.PrepareSource{URL: server.URL + "/artifact"},
+					Output: config.PrepareFileOutput{Path: "bin/{{ .target.os }}/{{ .target.arch }}/artifact.bin", Mode: "0755"},
+				}},
+			}},
+			Images: []config.PrepareImageGroup{{
+				Group: "control-plane",
+				Items: []config.PrepareImageItem{{
+					Image: "registry.k8s.io/kube-apiserver:{{ .vars.kubernetesVersion }}",
+				}},
+			}},
+			Packages: []config.PreparePackageGroup{{
+				Group: "ubuntu-runtime",
+				Targets: []config.PrepareTarget{{
+					OSFamily: "debian",
+					Release:  "ubuntu2204",
+					Arch:     "amd64",
+				}},
+				Items: []config.PreparePackageItem{{Name: "containerd"}},
+			}},
+		},
+	}
+
+	if err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle}); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	for _, rel := range []string{
+		"files/bin/linux/amd64/artifact.bin",
+		"images/registry.k8s.io_kube-apiserver_v1.30.1.tar",
+		"packages/containerd.txt",
+	} {
+		if _, err := os.Stat(filepath.Join(bundle, rel)); err != nil {
+			t.Fatalf("expected artifact %s: %v", rel, err)
+		}
+	}
+}
+
 func TestRun_NoPreparePhase(t *testing.T) {
 	wf := &config.Workflow{Version: "v1", Phases: []config.Phase{{Name: "install"}}}
 	if err := Run(context.Background(), wf, RunOptions{BundleRoot: t.TempDir()}); err == nil {

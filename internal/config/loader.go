@@ -47,7 +47,7 @@ func LoadWithOptions(ctx context.Context, source string, opts LoadOptions) (*Wor
 	if err != nil {
 		return nil, err
 	}
-	if len(resolved.Phases) > 0 && len(resolved.Steps) > 0 {
+	if workflowHasMultipleModes(resolved) {
 		return nil, fmt.Errorf("workflow cannot set both phases and steps")
 	}
 
@@ -78,7 +78,7 @@ func loadWorkflowWithImports(ctx context.Context, workflowBytes []byte, origin w
 	if err := yaml.Unmarshal(workflowBytes, &wf); err != nil {
 		return nil, nil, fmt.Errorf("parse yaml: %w", err)
 	}
-	if len(wf.Phases) > 0 && len(wf.Steps) > 0 {
+	if workflowHasMultipleModes(&wf) {
 		return nil, nil, fmt.Errorf("workflow cannot set both phases and steps")
 	}
 
@@ -231,14 +231,32 @@ func mergeWorkflow(target *Workflow, src *Workflow, sourceLabel string) error {
 
 	hasSrcPhases := len(src.Phases) > 0
 	hasSrcSteps := len(src.Steps) > 0
-	if hasSrcPhases && hasSrcSteps {
+	hasSrcPrepare := src.Prepare != nil && (len(src.Prepare.Files) > 0 || len(src.Prepare.Images) > 0 || len(src.Prepare.Packages) > 0)
+	if modeCount(hasSrcPrepare, hasSrcPhases, hasSrcSteps) > 1 {
 		return fmt.Errorf("workflow cannot set both phases and steps in %s", sourceLabel)
+	}
+	if hasSrcPrepare && (len(target.Phases) > 0 || len(target.Steps) > 0) {
+		return fmt.Errorf("workflow phase/step mode mismatch in %s: cannot merge prepare into steps workflow", sourceLabel)
 	}
 	if hasSrcPhases && len(target.Steps) > 0 {
 		return fmt.Errorf("workflow phase/step mode mismatch in %s: cannot merge phases into steps workflow", sourceLabel)
 	}
 	if hasSrcSteps && len(target.Phases) > 0 {
 		return fmt.Errorf("workflow phase/step mode mismatch in %s: cannot merge steps into phases workflow", sourceLabel)
+	}
+	if hasSrcPhases && target.Prepare != nil {
+		return fmt.Errorf("workflow phase/step mode mismatch in %s: cannot merge phases into prepare workflow", sourceLabel)
+	}
+	if hasSrcSteps && target.Prepare != nil {
+		return fmt.Errorf("workflow phase/step mode mismatch in %s: cannot merge steps into prepare workflow", sourceLabel)
+	}
+	if hasSrcPrepare {
+		if target.Prepare == nil {
+			target.Prepare = &PrepareSpec{}
+		}
+		target.Prepare.Files = append(target.Prepare.Files, src.Prepare.Files...)
+		target.Prepare.Images = append(target.Prepare.Images, src.Prepare.Images...)
+		target.Prepare.Packages = append(target.Prepare.Packages, src.Prepare.Packages...)
 	}
 	if hasSrcPhases {
 		for _, srcPhase := range src.Phases {
@@ -341,6 +359,7 @@ func canonicalWorkflowBytes(wf *Workflow) ([]byte, error) {
 		Role    string         `json:"role"`
 		Version string         `json:"version"`
 		Vars    map[string]any `json:"vars,omitempty"`
+		Prepare *PrepareSpec   `json:"prepare,omitempty"`
 		Phases  []Phase        `json:"phases,omitempty"`
 		Steps   []Step         `json:"steps,omitempty"`
 	}
@@ -348,6 +367,7 @@ func canonicalWorkflowBytes(wf *Workflow) ([]byte, error) {
 		Role:    wf.Role,
 		Version: wf.Version,
 		Vars:    wf.Vars,
+		Prepare: wf.Prepare,
 		Phases:  wf.Phases,
 		Steps:   wf.Steps,
 	}
@@ -356,6 +376,24 @@ func canonicalWorkflowBytes(wf *Workflow) ([]byte, error) {
 		return nil, fmt.Errorf("marshal workflow: %w", err)
 	}
 	return raw, nil
+}
+
+func workflowHasMultipleModes(wf *Workflow) bool {
+	if wf == nil {
+		return false
+	}
+	hasPrepare := wf.Prepare != nil && (len(wf.Prepare.Files) > 0 || len(wf.Prepare.Images) > 0 || len(wf.Prepare.Packages) > 0)
+	return modeCount(hasPrepare, len(wf.Phases) > 0, len(wf.Steps) > 0) > 1
+}
+
+func modeCount(flags ...bool) int {
+	count := 0
+	for _, flag := range flags {
+		if flag {
+			count++
+		}
+	}
+	return count
 }
 
 func computeStateKey(workflowBytes []byte, effectiveVars map[string]any) string {

@@ -24,3 +24,10 @@ The bundle is part of the product model, not an afterthought.
 ## Core rule
 
 If the site needs it to run the workflow, the safest default is to include it in the bundle rather than assume it already exists.
+
+## Authoring note
+
+- `pack` workflows declare artifacts logically
+- file outputs under `prepare.files` are relative to the `files/` root
+- `apply` workflows can consume bundled files with logical `bundle` references instead of hard-coded `http://.../files/...` URLs
+- package workflows still point package managers at repo URLs, but can now restrict which repos are visible during cache refresh or install

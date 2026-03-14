@@ -17,7 +17,7 @@ func executeStep(ctx context.Context, kind string, spec map[string]any, bundleRo
 		_, err := runDownloadFile(ctx, bundleRoot, spec)
 		return err
 	case "InstallArtifacts":
-		return runInstallArtifacts(ctx, spec)
+		return runInstallArtifacts(ctx, spec, bundleRoot)
 	case "InstallPackages":
 		return runInstallPackages(ctx, spec)
 	case "EditFile":

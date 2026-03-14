@@ -23,3 +23,5 @@ phases:
           manager: dnf
           clean: true
           update: true
+          restrictToRepos:
+            - deck-os

@@ -6,7 +6,9 @@
 
 - `../schemas/deck-workflow.schema.json`: top-level workflow schema
 - `../schemas/deck-tooldefinition.schema.json`: tool definition schema
-- `../schemas/tools/*.schema.json`: per-step-kind schemas
+- `../schemas/tools/public/*.schema.json`: public apply step schemas
+- `../schemas/tools/advanced/*.schema.json`: advanced step schemas
+- `../schemas/tools/legacy-pack/*.schema.json`: legacy/internal pack step schemas
 
 ## Workflow schema highlights
 
@@ -18,33 +20,50 @@ The workflow schema currently enforces:
 - a step must include `id`, `kind`, and `spec`
 - optional `when`, `retry`, `timeout`, and `register`
 
-## Supported step schemas
+Schema roots also carry lightweight documentation metadata such as `description` and `x-deck-visibility` so tooling can distinguish public, advanced, and legacy/internal surfaces.
 
-- `check-host.schema.json`
-- `containerd-config.schema.json`
-- `copy-file.schema.json`
-- `download-packages.schema.json`
-- `download-images.schema.json`
-- `download-file.schema.json`
-- `ensure-dir.schema.json`
-- `install-artifacts.schema.json`
-- `install-file.schema.json`
-- `install-packages.schema.json`
-- `edit-file.schema.json`
-- `kernel-module.schema.json`
-- `kubeadm-init.schema.json`
-- `kubeadm-join.schema.json`
-- `kubeadm-reset.schema.json`
-- `package-cache.schema.json`
-- `repo-config.schema.json`
-- `run-command.schema.json`
-- `service.schema.json`
-- `swap.schema.json`
-- `symlink.schema.json`
-- `systemd-unit.schema.json`
-- `sysctl.schema.json`
-- `wait-path.schema.json`
-- `verify-images.schema.json`
+## Schema groups
+
+### Prepare authoring
+
+- `../schemas/deck-workflow.schema.json` contains the user-facing `prepare` model for `role: pack`
+- new pack workflows should prefer `prepare.files`, `prepare.images`, and `prepare.packages`
+
+### Public apply steps
+
+- `../schemas/tools/public/check-host.schema.json`
+- `../schemas/tools/public/containerd-config.schema.json`
+- `../schemas/tools/public/copy-file.schema.json`
+- `../schemas/tools/public/ensure-dir.schema.json`
+- `../schemas/tools/public/install-artifacts.schema.json`
+- `../schemas/tools/public/install-file.schema.json`
+- `../schemas/tools/public/install-packages.schema.json`
+- `../schemas/tools/public/edit-file.schema.json`
+- `../schemas/tools/public/kernel-module.schema.json`
+- `../schemas/tools/public/kubeadm-init.schema.json`
+- `../schemas/tools/public/kubeadm-join.schema.json`
+- `../schemas/tools/public/kubeadm-reset.schema.json`
+- `../schemas/tools/public/package-cache.schema.json`
+- `../schemas/tools/public/repo-config.schema.json`
+- `../schemas/tools/public/service.schema.json`
+- `../schemas/tools/public/swap.schema.json`
+- `../schemas/tools/public/symlink.schema.json`
+- `../schemas/tools/public/systemd-unit.schema.json`
+- `../schemas/tools/public/sysctl.schema.json`
+- `../schemas/tools/public/wait-path.schema.json`
+- `../schemas/tools/public/verify-images.schema.json`
+
+### Advanced steps
+
+- `../schemas/tools/advanced/download-file.schema.json`
+- `../schemas/tools/advanced/run-command.schema.json`
+
+### Legacy/internal pack steps
+
+- `../schemas/tools/legacy-pack/download-images.schema.json`
+- `../schemas/tools/legacy-pack/download-packages.schema.json`
+
+These schemas still exist because the engine validates internal or older pack flows against them, but new pack workflows should not start from those step kinds.
 
 ## Typed step reference notes
 
@@ -70,7 +89,7 @@ Supports both apt and yum repository definitions, plus file placement and refres
 
 ### `PackageCache`
 
-Refreshes local package metadata with `manager`, `clean`, and `update`. Set at least one of `clean` or `update`.
+Refreshes local package metadata with `manager`, `clean`, and `update`. Set at least one of `clean` or `update`. Use `restrictToRepos` and `excludeRepos` to control which repos the package manager sees during refresh.
 
 ```yaml
 - id: refresh-apt-package-cache
@@ -80,6 +99,8 @@ Refreshes local package metadata with `manager`, `clean`, and `update`. Set at l
     manager: apt
     clean: true
     update: true
+    restrictToRepos:
+      - /etc/apt/sources.list.d/offline.list
 ```
 
 ### `ContainerdConfig`
@@ -147,19 +168,27 @@ Writes a unit file at `path` from either `content` or `contentFromTemplate`. It 
 
 ### `InstallArtifacts`
 
-Installs or extracts per-architecture artifacts. Each entry requires `source.amd64` and `source.arm64`, optional `skipIfPresent`, and exactly one of `install` or `extract`. The step also supports shared `fetch` defaults. This exists for operator clarity instead of overloading `DownloadFile`, because the target workflows express artifact-install intent, not plain fetch/copy intent.
+Installs or extracts per-architecture artifacts. Each entry requires `source.amd64` and `source.arm64`, optional `skipIfPresent`, and exactly one of `install` or `extract`. Sources can use direct `url` or `path`, or a logical `bundle` reference. Shared `fetch` defaults still apply for explicit transport sources.
 
 ```yaml
 - id: install-k8s-binaries
   apiVersion: deck/v1alpha1
   kind: InstallArtifacts
   spec:
+    fetch:
+      sources:
+        - type: online
+          url: http://{{ .vars.serverURL }}
     artifacts:
       - source:
           amd64:
-            url: http://{{ .vars.serverURL }}/files/bin/linux/amd64/kubelet
+            bundle:
+              root: files
+              path: bin/linux/amd64/kubelet
           arm64:
-            url: http://{{ .vars.serverURL }}/files/bin/linux/arm64/kubelet
+            bundle:
+              root: files
+              path: bin/linux/arm64/kubelet
         skipIfPresent:
           path: /usr/bin/kubelet
           executable: true
