@@ -14,7 +14,7 @@ phases:
           repositories:
             - type: deb
               trusted: true
-              baseurl: http://{{ .vars.serverURL  }}/packages/apt/{{ .vars.release  }}
+              baseurl: http://{{ .vars.serverURL  }}/packages/deb/{{ .vars.release  }}
               suite: ./
       - id: refresh-apt-package-cache
         apiVersion: deck/v1alpha1

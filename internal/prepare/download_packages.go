@@ -59,9 +59,9 @@ func runPackagesDownload(ctx context.Context, runner CommandRunner, bundleRoot s
 			var repoRoot string
 			switch repoType {
 			case "apt-flat":
-				repoRoot = filepath.ToSlash(filepath.Join("packages", "apt", release))
+				repoRoot = filepath.ToSlash(filepath.Join("packages", "deb", release))
 			case "yum":
-				repoRoot = filepath.ToSlash(filepath.Join("packages", "yum", release))
+				repoRoot = filepath.ToSlash(filepath.Join("packages", "rpm", release))
 			default:
 				return nil, fmt.Errorf("packages action download repo.type must be apt-flat or yum")
 			}

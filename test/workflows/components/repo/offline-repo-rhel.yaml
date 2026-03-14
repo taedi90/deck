@@ -14,7 +14,7 @@ phases:
           repositories:
             - id: deck-os
               name: deck-os
-              baseurl: http://{{ .vars.serverURL  }}/packages/yum/{{ .vars.release  }}
+              baseurl: http://{{ .vars.serverURL  }}/packages/rpm/{{ .vars.release  }}
               enabled: true
               gpgcheck: false
       - id: refresh-dnf-package-cache

@@ -29,7 +29,7 @@ phases:
           replaceExisting: true
           repositories:
             - id: offline-repo
-              baseurl: http://{{ .vars.serverURL }}/packages/apt/{{ .vars.release }}
+              baseurl: http://{{ .vars.serverURL }}/packages/deb/{{ .vars.release }}
               trusted: true
       - id: refresh-offline-repo-cache-apt
         when: vars.osFamily == "debian"
@@ -52,7 +52,7 @@ phases:
           repositories:
             - id: offline-repo
               name: Offline repo for kubespray
-              baseurl: http://{{ .vars.serverURL }}/packages/yum/{{ .vars.release }}
+              baseurl: http://{{ .vars.serverURL }}/packages/rpm/{{ .vars.release }}
               enabled: true
               gpgcheck: false
               module_hotfixes: true

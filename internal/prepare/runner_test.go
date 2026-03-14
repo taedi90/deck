@@ -974,13 +974,13 @@ func TestRun_PackagesRepoModeAptFlatGeneratesMetadata(t *testing.T) {
 		t.Fatalf("Run failed: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(bundle, "packages", "apt", "ubuntu2204", "pkgs", "mock-package.deb")); err != nil {
+	if _, err := os.Stat(filepath.Join(bundle, "packages", "deb", "ubuntu2204", "pkgs", "mock-package.deb")); err != nil {
 		t.Fatalf("expected mock deb artifact: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(bundle, "packages", "apt", "ubuntu2204", "Packages.gz")); err != nil {
+	if _, err := os.Stat(filepath.Join(bundle, "packages", "deb", "ubuntu2204", "Packages.gz")); err != nil {
 		t.Fatalf("expected Packages.gz: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(bundle, "packages", "apt", "ubuntu2204", "Release")); err != nil {
+	if _, err := os.Stat(filepath.Join(bundle, "packages", "deb", "ubuntu2204", "Release")); err != nil {
 		t.Fatalf("expected Release: %v", err)
 	}
 }
@@ -1019,7 +1019,7 @@ func TestRun_PackagesRepoModeYumGeneratesRepodata(t *testing.T) {
 		t.Fatalf("Run failed: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(bundle, "packages", "yum", "rhel9", "repodata", "repomd.xml")); err != nil {
+	if _, err := os.Stat(filepath.Join(bundle, "packages", "rpm", "rhel9", "repodata", "repomd.xml")); err != nil {
 		t.Fatalf("expected repodata/repomd.xml: %v", err)
 	}
 }
@@ -1180,7 +1180,7 @@ func (f *fakeRunner) Run(_ context.Context, name string, args ...string) error {
 					return err
 				}
 				// repo-mode simulation: create minimal artifacts + metadata
-				if strings.Contains(host, string(filepath.Separator)+"packages"+string(filepath.Separator)+"apt"+string(filepath.Separator)) {
+				if strings.Contains(host, string(filepath.Separator)+"packages"+string(filepath.Separator)+"deb"+string(filepath.Separator)) {
 					pkgs := filepath.Join(host, "pkgs")
 					if err := os.MkdirAll(pkgs, 0o755); err != nil {
 						return err
@@ -1199,7 +1199,7 @@ func (f *fakeRunner) Run(_ context.Context, name string, args ...string) error {
 					}
 					continue
 				}
-				if strings.Contains(host, string(filepath.Separator)+"packages"+string(filepath.Separator)+"yum"+string(filepath.Separator)) {
+				if strings.Contains(host, string(filepath.Separator)+"packages"+string(filepath.Separator)+"rpm"+string(filepath.Separator)) {
 					repodata := filepath.Join(host, "repodata")
 					if err := os.MkdirAll(repodata, 0o755); err != nil {
 						return err
