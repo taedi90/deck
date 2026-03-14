@@ -40,8 +40,25 @@ func generatePackagesToolSchema() map[string]any {
 			"excludeRepos":    stringArraySchema(0, true),
 			"action":          enumStringSchema("download", "install"),
 			"distro":          map[string]any{"type": "object", "additionalProperties": true},
-			"repo":            map[string]any{"type": "object", "additionalProperties": true},
-			"backend":         map[string]any{"type": "object", "additionalProperties": true},
+			"repo": map[string]any{
+				"type":                 "object",
+				"additionalProperties": true,
+				"properties": map[string]any{
+					"modules": map[string]any{
+						"type": "array",
+						"items": map[string]any{
+							"type":                 "object",
+							"additionalProperties": false,
+							"required":             []any{"name", "stream"},
+							"properties": map[string]any{
+								"name":   minLenStringSchema(),
+								"stream": minLenStringSchema(),
+							},
+						},
+					},
+				},
+			},
+			"backend": map[string]any{"type": "object", "additionalProperties": true},
 		},
 		"allOf": []any{
 			conditionalRequired("download", []string{"packages"}, nil),

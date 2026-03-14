@@ -61,10 +61,14 @@ spec:
 | `spec.repo` | `object` | no | `` | `` |  | `{...}` |
 | `spec.restrictToRepos` | `array<string>` | no | `` | `` | Limit package manager visibility to the listed repositories during the operation. | `[offline-kubernetes]` |
 | `spec.source` | `object` | no | `` | `` | Optional local repository source used when installs should come from a prepared repo path. | `{type:local-repo,path:/opt/deck/repos/kubernetes}` |
-| `spec.source.path` | `string` | yes | `` | `` |  | `example` |
-| `spec.source.type` | `string` | yes | `` | `` |  | `local-repo` |
 
 ## Nested Objects
+
+### `spec.repo`
+
+| Key | Type | Required | Default | Enum | Description | Example |
+|---|---|---:|---|---|---|---|
+| `spec.repo.modules` | `array<object>` | no | `` | `` | Optional RPM module streams to enable before resolving downloads on RHEL-family images. | `[{name:container-tools,stream:4.0}]` |
 
 ### `spec.source`
 
@@ -109,9 +113,19 @@ spec:
 kind: Packages
 spec:
   action: download
-  packages: [kubelet, kubeadm, kubectl]
+  packages: [podman]
+  distro:
+    family: rhel
+    release: rocky9
   repo:
-    mirror: http://repo.local/kubernetes
+    type: yum
+    modules:
+      - name: container-tools
+        stream: "4.0"
+  backend:
+    mode: container
+    runtime: docker
+    image: rockylinux:9
 ```
 ### `install`
 

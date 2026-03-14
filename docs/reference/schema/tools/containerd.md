@@ -60,25 +60,7 @@ spec:
 | `spec.createDefault` | `boolean` | no | `true` | `` |  | `true` |
 | `spec.path` | `string` | no | `` | `` |  | `example` |
 | `spec.registryHosts` | `array<object>` | no | `` | `` |  | `[{...}]` |
-| `spec.registryHosts[].capabilities` | `array<string>` | yes | `` | `` |  | `[example]` |
-| `spec.registryHosts[].host` | `string` | yes | `` | `` |  | `example` |
-| `spec.registryHosts[].registry` | `string` | yes | `` | `` |  | `example` |
-| `spec.registryHosts[].server` | `string` | yes | `` | `` |  | `example` |
-| `spec.registryHosts[].skipVerify` | `boolean` | yes | `` | `` |  | `true` |
 | `spec.systemdCgroup` | `boolean` | no | `` | `` |  | `true` |
-
-## Nested Objects
-
-### `spec.registryHosts`
-
-| Key | Type | Required | Default | Enum | Description | Example |
-|---|---|---:|---|---|---|---|
-| `spec.registryHosts[].capabilities` | `array<string>` | yes | `` | `` |  | `[example]` |
-| `spec.registryHosts[].host` | `string` | yes | `` | `` |  | `example` |
-| `spec.registryHosts[].registry` | `string` | yes | `` | `` |  | `example` |
-| `spec.registryHosts[].server` | `string` | yes | `` | `` |  | `example` |
-| `spec.registryHosts[].skipVerify` | `boolean` | yes | `` | `` |  | `true` |
-
 
 ## Related
 

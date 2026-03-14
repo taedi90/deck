@@ -66,35 +66,16 @@ spec:
 | `spec.contentFromTemplate` | `string` | no | `` | `` |  | `example` |
 | `spec.dest` | `string` | no | `` | `` | Destination path on the node for `copy`. | `/home/vagrant/.kube/config` |
 | `spec.edits` | `array<object>` | no | `` | `` | Ordered match/replace edit rules for `edit`. | `[{match:SystemdCgroup = false,with:SystemdCgroup = true}]` |
-| `spec.edits[].match` | `string` | yes | `` | `` |  | `example` |
-| `spec.edits[].op` | `string` | no | `` | `` |  | `example` |
-| `spec.edits[].with` | `string` | no | `` | `` |  | `example` |
 | `spec.fetch` | `object` | no | `` | `` |  | `{...}` |
 | `spec.group` | `string` | no | `` | `` |  | `example` |
 | `spec.mode` | `string` | no | `` | `` |  | `example` |
 | `spec.output` | `object` | no | `` | `` |  | `{...}` |
-| `spec.output.chmod` | `string` | no | `` | `` |  | `example` |
-| `spec.output.path` | `string` | yes | `` | `` | Bundle-relative output path for the downloaded file. | `files/bin/runc` |
 | `spec.owner` | `string` | no | `` | `` |  | `example` |
 | `spec.path` | `string` | no | `` | `` | Target path for `install` or `edit` actions. | `/etc/containerd/config.toml` |
 | `spec.source` | `object` | no | `` | `` | Structured download source used by `download`. | `{url:https://example.invalid/file.tar.gz}` |
-| `spec.source.bundle` | `object` | no | `` | `` | Bundle-root reference for offline file staging. | `{root:files,path:bin/linux/amd64/runc}` |
-| `spec.source.bundle.path` | `string` | yes | `` | `` |  | `example` |
-| `spec.source.bundle.root` | `string` | yes | `` | `files, images, packages` |  | `files` |
-| `spec.source.path` | `string` | no | `` | `` |  | `example` |
-| `spec.source.sha256` | `string` | no | `` | `` |  | `example` |
-| `spec.source.url` | `string` | no | `` | `` |  | `example` |
 | `spec.src` | `string` | no | `` | `` | Source path already present on the node for `copy`. | `/etc/kubernetes/admin.conf` |
 
 ## Nested Objects
-
-### `spec.edits`
-
-| Key | Type | Required | Default | Enum | Description | Example |
-|---|---|---:|---|---|---|---|
-| `spec.edits[].match` | `string` | yes | `` | `` |  | `example` |
-| `spec.edits[].op` | `string` | no | `` | `` |  | `example` |
-| `spec.edits[].with` | `string` | no | `` | `` |  | `example` |
 
 ### `spec.output`
 
@@ -108,8 +89,6 @@ spec:
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
 | `spec.source.bundle` | `object` | no | `` | `` | Bundle-root reference for offline file staging. | `{root:files,path:bin/linux/amd64/runc}` |
-| `spec.source.bundle.path` | `string` | yes | `` | `` |  | `example` |
-| `spec.source.bundle.root` | `string` | yes | `` | `files, images, packages` |  | `files` |
 | `spec.source.path` | `string` | no | `` | `` |  | `example` |
 | `spec.source.sha256` | `string` | no | `` | `` |  | `example` |
 | `spec.source.url` | `string` | no | `` | `` |  | `example` |

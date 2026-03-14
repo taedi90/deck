@@ -63,9 +63,6 @@ spec:
 | `spec.mode` | `string` | no | `` | `` |  | `example` |
 | `spec.path` | `string` | yes | `` | `` |  | `example` |
 | `spec.service` | `object` | no | `` | `` |  | `{...}` |
-| `spec.service.enabled` | `boolean` | no | `` | `` |  | `true` |
-| `spec.service.name` | `string` | yes | `` | `` |  | `example` |
-| `spec.service.state` | `string` | no | `` | `unchanged, started, stopped, restarted, reloaded` |  | `unchanged` |
 
 ## Nested Objects
 

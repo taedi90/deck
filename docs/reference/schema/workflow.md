@@ -41,114 +41,14 @@ artifacts:
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
 | `artifacts` | `object` | no | `` | `` | Declarative prepare inventory that replaces legacy prepare download steps. | `{files:[...],images:[...],packages:[...]}` |
-| `artifacts.files` | `array<object>` | no | `` | `` |  | `[{...}]` |
-| `artifacts.files[].group` | `string` | yes | `` | `` |  | `example` |
-| `artifacts.files[].items` | `array<object>` | yes | `` | `` |  | `[{...}]` |
-| `artifacts.files[].items[].checksum` | `string` | no | `` | `` |  | `example` |
-| `artifacts.files[].items[].id` | `string` | yes | `` | `` |  | `example` |
-| `artifacts.files[].items[].mode` | `string` | no | `` | `` |  | `example` |
-| `artifacts.files[].items[].output` | `object` | yes | `` | `` | Bundle file output. path is relative to the files/ root and must not start with files/. | `{...}` |
-| `artifacts.files[].items[].output.mode` | `string` | no | `` | `` |  | `example` |
-| `artifacts.files[].items[].output.path` | `string` | yes | `` | `` |  | `example` |
-| `artifacts.files[].items[].source` | `object` | yes | `` | `` |  | `{...}` |
-| `artifacts.files[].items[].source.path` | `string` | no | `` | `` |  | `example` |
-| `artifacts.files[].items[].source.sha256` | `string` | no | `` | `` |  | `example` |
-| `artifacts.files[].items[].source.url` | `string` | no | `` | `` |  | `example` |
-| `artifacts.files[].targets` | `array<object>` | no | `` | `` |  | `[{...}]` |
-| `artifacts.files[].targets[].arch` | `string` | no | `` | `` |  | `example` |
-| `artifacts.files[].targets[].os` | `string` | no | `` | `` |  | `example` |
-| `artifacts.files[].targets[].osFamily` | `string` | no | `` | `` |  | `example` |
-| `artifacts.files[].targets[].release` | `string` | no | `` | `` |  | `example` |
-| `artifacts.images` | `array<object>` | no | `` | `` |  | `[{...}]` |
-| `artifacts.images[].backend` | `object` | no | `` | `` |  | `{...}` |
-| `artifacts.images[].group` | `string` | yes | `` | `` |  | `example` |
-| `artifacts.images[].items` | `array<object>` | yes | `` | `` |  | `[{...}]` |
-| `artifacts.images[].items[].image` | `string` | yes | `` | `` |  | `example` |
-| `artifacts.images[].output` | `object` | no | `` | `` |  | `{...}` |
-| `artifacts.images[].targets` | `array<object>` | no | `` | `` |  | `[{...}]` |
-| `artifacts.images[].targets[].arch` | `string` | no | `` | `` |  | `example` |
-| `artifacts.images[].targets[].os` | `string` | no | `` | `` |  | `example` |
-| `artifacts.images[].targets[].osFamily` | `string` | no | `` | `` |  | `example` |
-| `artifacts.images[].targets[].release` | `string` | no | `` | `` |  | `example` |
-| `artifacts.packages` | `array<object>` | no | `` | `` |  | `[{...}]` |
-| `artifacts.packages[].backend` | `object` | no | `` | `` |  | `{...}` |
-| `artifacts.packages[].group` | `string` | yes | `` | `` |  | `example` |
-| `artifacts.packages[].items` | `array<object>` | yes | `` | `` |  | `[{...}]` |
-| `artifacts.packages[].items[].name` | `string` | yes | `` | `` |  | `example` |
-| `artifacts.packages[].repo` | `object` | no | `` | `` |  | `{...}` |
-| `artifacts.packages[].targets` | `array<object>` | yes | `` | `` |  | `[{...}]` |
-| `artifacts.packages[].targets[].arch` | `string` | no | `` | `` |  | `example` |
-| `artifacts.packages[].targets[].os` | `string` | no | `` | `` |  | `example` |
-| `artifacts.packages[].targets[].osFamily` | `string` | no | `` | `` |  | `example` |
-| `artifacts.packages[].targets[].release` | `string` | no | `` | `` |  | `example` |
 | `imports` | `array<string>` | no | `` | `` | Scenario or component imports resolved relative to the workflow/component model. | `[common/base.yaml]` |
 | `phases` | `array<object>` | no | `` | `` | Ordered execution phases. Each phase can contain imports, steps, or both. | `[{name:install,steps:[...]}]` |
-| `phases[].imports` | `array<object>` | no | `` | `` | Imports that expand into this phase before step execution. | `[{path:k8s/containerd-kubelet.yaml}]` |
-| `phases[].imports[].path` | `string` | yes | `` | `` |  | `example` |
-| `phases[].imports[].when` | `string` | no | `` | `` |  | `example` |
-| `phases[].name` | `string` | yes | `` | `` | Stable phase name used for ordering and selective execution. | `install` |
-| `phases[].steps` | `array<object>` | no | `` | `` |  | `[{...}]` |
-| `phases[].steps[].apiVersion` | `string` | no | `` | `` |  | `deck/v1alpha1` |
-| `phases[].steps[].id` | `string` | yes | `` | `` |  | `example` |
-| `phases[].steps[].kind` | `string` | yes | `` | `Artifacts, Command, Containerd, Directory, File, Image, Inspection, KernelModule, Kubeadm, PackageCache, Packages, Repository, Service, Swap, Symlink, Sysctl, SystemdUnit, Wait` |  | `Artifacts` |
-| `phases[].steps[].metadata` | `object` | no | `` | `` |  | `{...}` |
-| `phases[].steps[].register` | `object` | no | `` | `` |  | `{...}` |
-| `phases[].steps[].retry` | `integer` | no | `` | `` |  | `1` |
-| `phases[].steps[].spec` | `object` | yes | `` | `` |  | `{...}` |
-| `phases[].steps[].timeout` | `string` | no | `` | `` |  | `example` |
-| `phases[].steps[].when` | `string` | no | `` | `` |  | `example` |
 | `role` | `string` | yes | `` | `prepare, apply` | Workflow role. `prepare` builds offline artifacts and `apply` changes the local node. | `apply` |
 | `steps` | `array<object>` | no | `` | `` | Flat step list for workflows that do not need named phases. | `[{id:configure-runtime,kind:Containerd,spec:{...}}]` |
-| `steps[].apiVersion` | `string` | no | `` | `` |  | `deck/v1alpha1` |
-| `steps[].id` | `string` | yes | `` | `` |  | `example` |
-| `steps[].kind` | `string` | yes | `` | `Artifacts, Command, Containerd, Directory, File, Image, Inspection, KernelModule, Kubeadm, PackageCache, Packages, Repository, Service, Swap, Symlink, Sysctl, SystemdUnit, Wait` | Typed step kind selected from the shipped public step inventory. | `File` |
-| `steps[].metadata` | `object` | no | `` | `` |  | `{...}` |
-| `steps[].register` | `object` | no | `` | `` |  | `{...}` |
-| `steps[].retry` | `integer` | no | `` | `` |  | `1` |
-| `steps[].spec` | `object` | yes | `` | `` | Action-specific step payload validated against the schema for the chosen kind. | `{action:install,path:/etc/example.conf,content:hello}` |
-| `steps[].timeout` | `string` | no | `` | `` |  | `example` |
-| `steps[].when` | `string` | no | `` | `` |  | `example` |
 | `vars` | `object` | no | `map[]` | `` |  | `map[]` |
 | `version` | `string` | yes | `` | `` |  | `v1alpha1` |
 
 ## Nested Objects
-
-### `artifacts.files`
-
-| Key | Type | Required | Default | Enum | Description | Example |
-|---|---|---:|---|---|---|---|
-| `artifacts.files[].group` | `string` | yes | `` | `` |  | `example` |
-| `artifacts.files[].items` | `array<object>` | yes | `` | `` |  | `[{...}]` |
-| `artifacts.files[].items[].checksum` | `string` | no | `` | `` |  | `example` |
-| `artifacts.files[].items[].id` | `string` | yes | `` | `` |  | `example` |
-| `artifacts.files[].items[].mode` | `string` | no | `` | `` |  | `example` |
-| `artifacts.files[].items[].output` | `object` | yes | `` | `` | Bundle file output. path is relative to the files/ root and must not start with files/. | `{...}` |
-| `artifacts.files[].items[].output.mode` | `string` | no | `` | `` |  | `example` |
-| `artifacts.files[].items[].output.path` | `string` | yes | `` | `` |  | `example` |
-| `artifacts.files[].items[].source` | `object` | yes | `` | `` |  | `{...}` |
-| `artifacts.files[].items[].source.path` | `string` | no | `` | `` |  | `example` |
-| `artifacts.files[].items[].source.sha256` | `string` | no | `` | `` |  | `example` |
-| `artifacts.files[].items[].source.url` | `string` | no | `` | `` |  | `example` |
-| `artifacts.files[].targets` | `array<object>` | no | `` | `` |  | `[{...}]` |
-| `artifacts.files[].targets[].arch` | `string` | no | `` | `` |  | `example` |
-| `artifacts.files[].targets[].os` | `string` | no | `` | `` |  | `example` |
-| `artifacts.files[].targets[].osFamily` | `string` | no | `` | `` |  | `example` |
-| `artifacts.files[].targets[].release` | `string` | no | `` | `` |  | `example` |
-
-### `artifacts.files[].items`
-
-| Key | Type | Required | Default | Enum | Description | Example |
-|---|---|---:|---|---|---|---|
-| `artifacts.files[].items[].checksum` | `string` | no | `` | `` |  | `example` |
-| `artifacts.files[].items[].id` | `string` | yes | `` | `` |  | `example` |
-| `artifacts.files[].items[].mode` | `string` | no | `` | `` |  | `example` |
-| `artifacts.files[].items[].output` | `object` | yes | `` | `` | Bundle file output. path is relative to the files/ root and must not start with files/. | `{...}` |
-| `artifacts.files[].items[].output.mode` | `string` | no | `` | `` |  | `example` |
-| `artifacts.files[].items[].output.path` | `string` | yes | `` | `` |  | `example` |
-| `artifacts.files[].items[].source` | `object` | yes | `` | `` |  | `{...}` |
-| `artifacts.files[].items[].source.path` | `string` | no | `` | `` |  | `example` |
-| `artifacts.files[].items[].source.sha256` | `string` | no | `` | `` |  | `example` |
-| `artifacts.files[].items[].source.url` | `string` | no | `` | `` |  | `example` |
 
 ### `artifacts.files[].items[].output`
 
@@ -164,96 +64,6 @@ artifacts:
 | `artifacts.files[].items[].source.path` | `string` | no | `` | `` |  | `example` |
 | `artifacts.files[].items[].source.sha256` | `string` | no | `` | `` |  | `example` |
 | `artifacts.files[].items[].source.url` | `string` | no | `` | `` |  | `example` |
-
-### `artifacts.files[].targets`
-
-| Key | Type | Required | Default | Enum | Description | Example |
-|---|---|---:|---|---|---|---|
-| `artifacts.files[].targets[].arch` | `string` | no | `` | `` |  | `example` |
-| `artifacts.files[].targets[].os` | `string` | no | `` | `` |  | `example` |
-| `artifacts.files[].targets[].osFamily` | `string` | no | `` | `` |  | `example` |
-| `artifacts.files[].targets[].release` | `string` | no | `` | `` |  | `example` |
-
-### `artifacts.images`
-
-| Key | Type | Required | Default | Enum | Description | Example |
-|---|---|---:|---|---|---|---|
-| `artifacts.images[].backend` | `object` | no | `` | `` |  | `{...}` |
-| `artifacts.images[].group` | `string` | yes | `` | `` |  | `example` |
-| `artifacts.images[].items` | `array<object>` | yes | `` | `` |  | `[{...}]` |
-| `artifacts.images[].items[].image` | `string` | yes | `` | `` |  | `example` |
-| `artifacts.images[].output` | `object` | no | `` | `` |  | `{...}` |
-| `artifacts.images[].targets` | `array<object>` | no | `` | `` |  | `[{...}]` |
-| `artifacts.images[].targets[].arch` | `string` | no | `` | `` |  | `example` |
-| `artifacts.images[].targets[].os` | `string` | no | `` | `` |  | `example` |
-| `artifacts.images[].targets[].osFamily` | `string` | no | `` | `` |  | `example` |
-| `artifacts.images[].targets[].release` | `string` | no | `` | `` |  | `example` |
-
-### `artifacts.images[].items`
-
-| Key | Type | Required | Default | Enum | Description | Example |
-|---|---|---:|---|---|---|---|
-| `artifacts.images[].items[].image` | `string` | yes | `` | `` |  | `example` |
-
-### `artifacts.images[].targets`
-
-| Key | Type | Required | Default | Enum | Description | Example |
-|---|---|---:|---|---|---|---|
-| `artifacts.images[].targets[].arch` | `string` | no | `` | `` |  | `example` |
-| `artifacts.images[].targets[].os` | `string` | no | `` | `` |  | `example` |
-| `artifacts.images[].targets[].osFamily` | `string` | no | `` | `` |  | `example` |
-| `artifacts.images[].targets[].release` | `string` | no | `` | `` |  | `example` |
-
-### `artifacts.packages`
-
-| Key | Type | Required | Default | Enum | Description | Example |
-|---|---|---:|---|---|---|---|
-| `artifacts.packages[].backend` | `object` | no | `` | `` |  | `{...}` |
-| `artifacts.packages[].group` | `string` | yes | `` | `` |  | `example` |
-| `artifacts.packages[].items` | `array<object>` | yes | `` | `` |  | `[{...}]` |
-| `artifacts.packages[].items[].name` | `string` | yes | `` | `` |  | `example` |
-| `artifacts.packages[].repo` | `object` | no | `` | `` |  | `{...}` |
-| `artifacts.packages[].targets` | `array<object>` | yes | `` | `` |  | `[{...}]` |
-| `artifacts.packages[].targets[].arch` | `string` | no | `` | `` |  | `example` |
-| `artifacts.packages[].targets[].os` | `string` | no | `` | `` |  | `example` |
-| `artifacts.packages[].targets[].osFamily` | `string` | no | `` | `` |  | `example` |
-| `artifacts.packages[].targets[].release` | `string` | no | `` | `` |  | `example` |
-
-### `artifacts.packages[].items`
-
-| Key | Type | Required | Default | Enum | Description | Example |
-|---|---|---:|---|---|---|---|
-| `artifacts.packages[].items[].name` | `string` | yes | `` | `` |  | `example` |
-
-### `artifacts.packages[].targets`
-
-| Key | Type | Required | Default | Enum | Description | Example |
-|---|---|---:|---|---|---|---|
-| `artifacts.packages[].targets[].arch` | `string` | no | `` | `` |  | `example` |
-| `artifacts.packages[].targets[].os` | `string` | no | `` | `` |  | `example` |
-| `artifacts.packages[].targets[].osFamily` | `string` | no | `` | `` |  | `example` |
-| `artifacts.packages[].targets[].release` | `string` | no | `` | `` |  | `example` |
-
-### `phases[].imports`
-
-| Key | Type | Required | Default | Enum | Description | Example |
-|---|---|---:|---|---|---|---|
-| `phases[].imports[].path` | `string` | yes | `` | `` |  | `example` |
-| `phases[].imports[].when` | `string` | no | `` | `` |  | `example` |
-
-### `phases[].steps`
-
-| Key | Type | Required | Default | Enum | Description | Example |
-|---|---|---:|---|---|---|---|
-| `phases[].steps[].apiVersion` | `string` | no | `` | `` |  | `deck/v1alpha1` |
-| `phases[].steps[].id` | `string` | yes | `` | `` |  | `example` |
-| `phases[].steps[].kind` | `string` | yes | `` | `Artifacts, Command, Containerd, Directory, File, Image, Inspection, KernelModule, Kubeadm, PackageCache, Packages, Repository, Service, Swap, Symlink, Sysctl, SystemdUnit, Wait` |  | `Artifacts` |
-| `phases[].steps[].metadata` | `object` | no | `` | `` |  | `{...}` |
-| `phases[].steps[].register` | `object` | no | `` | `` |  | `{...}` |
-| `phases[].steps[].retry` | `integer` | no | `` | `` |  | `1` |
-| `phases[].steps[].spec` | `object` | yes | `` | `` |  | `{...}` |
-| `phases[].steps[].timeout` | `string` | no | `` | `` |  | `example` |
-| `phases[].steps[].when` | `string` | no | `` | `` |  | `example` |
 
 
 ## Validation Rules

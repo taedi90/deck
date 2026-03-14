@@ -1022,6 +1022,105 @@ func TestRun_PackagesRepoModeYumGeneratesRepodata(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(bundle, "packages", "rpm", "rhel9", "repodata", "repomd.xml")); err != nil {
 		t.Fatalf("expected repodata/repomd.xml: %v", err)
 	}
+	joined := strings.Join(r.commands, "\n")
+	if strings.Contains(joined, "module enable") {
+		t.Fatalf("did not expect module enable without repo.modules, commands=%s", joined)
+	}
+	if strings.Contains(joined, "yumdownloader") == false && strings.Contains(joined, "dnf -y download") == false {
+		t.Fatalf("expected rpm download command, commands=%s", joined)
+	}
+}
+
+func TestRun_PackagesRepoModeYumEnablesModules(t *testing.T) {
+	bundle := t.TempDir()
+	r := &fakeRunner{}
+
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "prepare",
+			Steps: []config.Step{{
+				ID:   "pkgs",
+				Kind: "Packages",
+				Spec: map[string]any{
+					"packages": []any{"containerd"},
+					"distro": map[string]any{
+						"family":  "rhel",
+						"release": "rhel9",
+					},
+					"repo": map[string]any{
+						"type": "yum",
+						"modules": []any{
+							map[string]any{"name": "container-tools", "stream": "4.0"},
+						},
+					},
+					"backend": map[string]any{
+						"mode":    "container",
+						"runtime": "docker",
+						"image":   "rockylinux:9",
+					},
+				},
+			}},
+		}},
+	}
+
+	if err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, CommandRunner: r}); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	joined := strings.Join(r.commands, "\n")
+	if !strings.Contains(joined, "dnf -y module enable 'container-tools:4.0'") {
+		t.Fatalf("expected module enable command, commands=%s", joined)
+	}
+	if strings.Contains(joined, "yumdownloader") {
+		t.Fatalf("did not expect yumdownloader fallback when modules are configured, commands=%s", joined)
+	}
+	if _, err := os.Stat(filepath.Join(bundle, "packages", "rpm", "rhel9", "repodata", "repomd.xml")); err != nil {
+		t.Fatalf("expected repodata/repomd.xml: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(bundle, "packages", "rpm", "rhel9", "mock-package.rpm")); err != nil {
+		t.Fatalf("expected rpm artifact: %v", err)
+	}
+}
+
+func TestRun_PackagesRepoModeYumModuleRequiresStream(t *testing.T) {
+	bundle := t.TempDir()
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "prepare",
+			Steps: []config.Step{{
+				ID:   "pkgs",
+				Kind: "Packages",
+				Spec: map[string]any{
+					"packages": []any{"containerd"},
+					"distro": map[string]any{
+						"family":  "rhel",
+						"release": "rhel9",
+					},
+					"repo": map[string]any{
+						"type": "yum",
+						"modules": []any{
+							map[string]any{"name": "container-tools"},
+						},
+					},
+					"backend": map[string]any{
+						"mode":    "container",
+						"runtime": "docker",
+						"image":   "rockylinux:9",
+					},
+				},
+			}},
+		}},
+	}
+
+	err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, CommandRunner: &fakeRunner{}})
+	if err == nil {
+		t.Fatalf("expected missing module stream error")
+	}
+	if !strings.Contains(err.Error(), "repo.modules entries require name and stream") {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 type fakeRunner struct {

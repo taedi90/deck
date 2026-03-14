@@ -74,9 +74,9 @@ func RenderToolPage(in PageInput) []byte {
 	fields := CollectFields(in.Schema)
 	applyFieldDocs(fields, in.Meta.FieldDocs)
 	buf.WriteString("\n## Fields\n\n")
-	buf.WriteString(renderFieldTable(filterFields(fields, func(f Field) bool { return !strings.HasPrefix(f.Path, "spec.") })))
+	buf.WriteString(renderFieldTable(directChildFields(fields, "")))
 	buf.WriteString("\n## Spec Fields\n\n")
-	buf.WriteString(renderFieldTable(filterFields(fields, func(f Field) bool { return strings.HasPrefix(f.Path, "spec.") })))
+	buf.WriteString(renderFieldTable(directChildFields(fields, "spec")))
 	if nested := renderNestedSections(fields, "spec"); nested != "" {
 		buf.WriteString("\n## Nested Objects\n\n")
 		buf.WriteString(nested)
@@ -204,7 +204,7 @@ func RenderWorkflowPage(schemaPath string, schema map[string]any, meta PageMetad
 	fields := CollectFields(schema)
 	applyFieldDocs(fields, meta.FieldDocs)
 	buf.WriteString("\n## Fields\n\n")
-	buf.WriteString(renderFieldTable(fields))
+	buf.WriteString(renderFieldTable(directChildFields(fields, "")))
 	if nested := renderNestedSections(fields, ""); nested != "" {
 		buf.WriteString("\n## Nested Objects\n\n")
 		buf.WriteString(nested)
@@ -233,7 +233,7 @@ func RenderToolDefinitionPage(schemaPath string, schema map[string]any, meta Pag
 	fields := CollectFields(schema)
 	applyFieldDocs(fields, meta.FieldDocs)
 	buf.WriteString("## Fields\n\n")
-	buf.WriteString(renderFieldTable(fields))
+	buf.WriteString(renderFieldTable(directChildFields(fields, "")))
 	if nested := renderNestedSections(fields, ""); nested != "" {
 		buf.WriteString("\n## Nested Objects\n\n")
 		buf.WriteString(nested)
@@ -671,9 +671,7 @@ func renderNestedSections(fields []Field, prefix string) string {
 	}
 	var buf bytes.Buffer
 	for _, section := range sections {
-		sectionFields := filterFields(fields, func(f Field) bool {
-			return strings.HasPrefix(f.Path, section+".") || strings.HasPrefix(f.Path, section+"[]")
-		})
+		sectionFields := directChildFields(fields, section)
 		if len(sectionFields) == 0 {
 			continue
 		}
@@ -682,6 +680,19 @@ func renderNestedSections(fields []Field, prefix string) string {
 		buf.WriteString("\n")
 	}
 	return buf.String()
+}
+
+func directChildFields(fields []Field, prefix string) []Field {
+	return filterFields(fields, func(f Field) bool {
+		if prefix == "" {
+			return !strings.Contains(f.Path, ".") && !strings.Contains(f.Path, "[]")
+		}
+		if !strings.HasPrefix(f.Path, prefix+".") && !strings.HasPrefix(f.Path, prefix+"[]") {
+			return false
+		}
+		remainder := strings.TrimPrefix(strings.TrimPrefix(f.Path, prefix+"."), prefix+"[]")
+		return !strings.Contains(remainder, ".") && !strings.Contains(remainder, "[]")
+	})
 }
 
 func nestedSectionPaths(fields []Field, prefix string) []string {
