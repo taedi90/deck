@@ -356,12 +356,7 @@ func buildRPMModuleEnableCommand(modules []rpmModuleSpec) (string, error) {
 	}
 	parts := make([]string, 0, len(modules))
 	for _, module := range modules {
-		name := strings.TrimSpace(module.Name)
-		stream := strings.TrimSpace(module.Stream)
-		if name == "" || stream == "" {
-			return "", fmt.Errorf("packages action download repo.modules entries require name and stream")
-		}
-		parts = append(parts, "'"+shellEscape(name)+":"+shellEscape(stream)+"'")
+		parts = append(parts, "'"+shellEscape(module.Name)+":"+shellEscape(module.Stream)+"'")
 	}
 	return "dnf -y module enable " + strings.Join(parts, " ") + " >/dev/null 2>&1", nil
 }

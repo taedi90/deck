@@ -74,70 +74,9 @@ spec:
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
 | `spec.artifacts` | `array<object>` | yes | `` | `` | List of per-architecture artifact entries to install or extract. | `[{source:{...},install:{...}}]` |
-| `spec.artifacts[].extract` | `object` | no | `` | `` |  | `{...}` |
-| `spec.artifacts[].extract.destination` | `string` | yes | `` | `` | Directory where an archive artifact should be extracted. | `/opt/cni/bin` |
-| `spec.artifacts[].extract.include` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.artifacts[].extract.mode` | `string` | no | `` | `` |  | `example` |
-| `spec.artifacts[].install` | `object` | no | `` | `` |  | `{...}` |
-| `spec.artifacts[].install.mode` | `string` | no | `` | `` |  | `example` |
-| `spec.artifacts[].install.path` | `string` | yes | `` | `` | Destination path on the node when installing a single artifact file. | `/usr/local/sbin/runc` |
-| `spec.artifacts[].skipIfPresent` | `object` | no | `` | `` |  | `{...}` |
-| `spec.artifacts[].skipIfPresent.executable` | `boolean` | no | `false` | `` |  | `false` |
-| `spec.artifacts[].skipIfPresent.path` | `string` | yes | `` | `` |  | `example` |
-| `spec.artifacts[].source` | `object` | yes | `` | `` |  | `{...}` |
-| `spec.artifacts[].source.amd64` | `object` | yes | `` | `` | Source selection for amd64 nodes. Use a bundle reference, local path, or URL. | `{bundle:{root:files,path:bin/linux/amd64/runc}}` |
-| `spec.artifacts[].source.amd64.bundle` | `object` | no | `` | `` |  | `{...}` |
-| `spec.artifacts[].source.amd64.bundle.path` | `string` | yes | `` | `` |  | `example` |
-| `spec.artifacts[].source.amd64.bundle.root` | `string` | yes | `` | `files, images, packages` |  | `files` |
-| `spec.artifacts[].source.amd64.path` | `string` | no | `` | `` |  | `example` |
-| `spec.artifacts[].source.amd64.sha256` | `string` | no | `` | `` |  | `example` |
-| `spec.artifacts[].source.amd64.url` | `string` | no | `` | `` |  | `example` |
-| `spec.artifacts[].source.arm64` | `object` | yes | `` | `` | Source selection for arm64 nodes. Use a bundle reference, local path, or URL. | `{bundle:{root:files,path:bin/linux/arm64/runc}}` |
-| `spec.artifacts[].source.arm64.bundle` | `object` | no | `` | `` |  | `{...}` |
-| `spec.artifacts[].source.arm64.bundle.path` | `string` | yes | `` | `` |  | `example` |
-| `spec.artifacts[].source.arm64.bundle.root` | `string` | yes | `` | `files, images, packages` |  | `files` |
-| `spec.artifacts[].source.arm64.path` | `string` | no | `` | `` |  | `example` |
-| `spec.artifacts[].source.arm64.sha256` | `string` | no | `` | `` |  | `example` |
-| `spec.artifacts[].source.arm64.url` | `string` | no | `` | `` |  | `example` |
 | `spec.fetch` | `object` | no | `` | `` |  | `{...}` |
-| `spec.fetch.offlineOnly` | `boolean` | no | `false` | `` |  | `false` |
-| `spec.fetch.sources` | `array<object>` | no | `` | `` |  | `[{...}]` |
-| `spec.fetch.sources[].path` | `string` | no | `` | `` |  | `example` |
-| `spec.fetch.sources[].type` | `string` | yes | `` | `local, bundle, repo, online` | Fallback source class used when artifact entries refer to transport sources. | `bundle` |
-| `spec.fetch.sources[].url` | `string` | no | `` | `` |  | `example` |
-| `spec.fetch.strategy` | `string` | no | `` | `fallback` |  | `fallback` |
 
 ## Nested Objects
-
-### `spec.artifacts`
-
-| Key | Type | Required | Default | Enum | Description | Example |
-|---|---|---:|---|---|---|---|
-| `spec.artifacts[].extract` | `object` | no | `` | `` |  | `{...}` |
-| `spec.artifacts[].extract.destination` | `string` | yes | `` | `` | Directory where an archive artifact should be extracted. | `/opt/cni/bin` |
-| `spec.artifacts[].extract.include` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.artifacts[].extract.mode` | `string` | no | `` | `` |  | `example` |
-| `spec.artifacts[].install` | `object` | no | `` | `` |  | `{...}` |
-| `spec.artifacts[].install.mode` | `string` | no | `` | `` |  | `example` |
-| `spec.artifacts[].install.path` | `string` | yes | `` | `` | Destination path on the node when installing a single artifact file. | `/usr/local/sbin/runc` |
-| `spec.artifacts[].skipIfPresent` | `object` | no | `` | `` |  | `{...}` |
-| `spec.artifacts[].skipIfPresent.executable` | `boolean` | no | `false` | `` |  | `false` |
-| `spec.artifacts[].skipIfPresent.path` | `string` | yes | `` | `` |  | `example` |
-| `spec.artifacts[].source` | `object` | yes | `` | `` |  | `{...}` |
-| `spec.artifacts[].source.amd64` | `object` | yes | `` | `` | Source selection for amd64 nodes. Use a bundle reference, local path, or URL. | `{bundle:{root:files,path:bin/linux/amd64/runc}}` |
-| `spec.artifacts[].source.amd64.bundle` | `object` | no | `` | `` |  | `{...}` |
-| `spec.artifacts[].source.amd64.bundle.path` | `string` | yes | `` | `` |  | `example` |
-| `spec.artifacts[].source.amd64.bundle.root` | `string` | yes | `` | `files, images, packages` |  | `files` |
-| `spec.artifacts[].source.amd64.path` | `string` | no | `` | `` |  | `example` |
-| `spec.artifacts[].source.amd64.sha256` | `string` | no | `` | `` |  | `example` |
-| `spec.artifacts[].source.amd64.url` | `string` | no | `` | `` |  | `example` |
-| `spec.artifacts[].source.arm64` | `object` | yes | `` | `` | Source selection for arm64 nodes. Use a bundle reference, local path, or URL. | `{bundle:{root:files,path:bin/linux/arm64/runc}}` |
-| `spec.artifacts[].source.arm64.bundle` | `object` | no | `` | `` |  | `{...}` |
-| `spec.artifacts[].source.arm64.bundle.path` | `string` | yes | `` | `` |  | `example` |
-| `spec.artifacts[].source.arm64.bundle.root` | `string` | yes | `` | `files, images, packages` |  | `files` |
-| `spec.artifacts[].source.arm64.path` | `string` | no | `` | `` |  | `example` |
-| `spec.artifacts[].source.arm64.sha256` | `string` | no | `` | `` |  | `example` |
-| `spec.artifacts[].source.arm64.url` | `string` | no | `` | `` |  | `example` |
 
 ### `spec.artifacts[].extract`
 
@@ -166,27 +105,13 @@ spec:
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
 | `spec.artifacts[].source.amd64` | `object` | yes | `` | `` | Source selection for amd64 nodes. Use a bundle reference, local path, or URL. | `{bundle:{root:files,path:bin/linux/amd64/runc}}` |
-| `spec.artifacts[].source.amd64.bundle` | `object` | no | `` | `` |  | `{...}` |
-| `spec.artifacts[].source.amd64.bundle.path` | `string` | yes | `` | `` |  | `example` |
-| `spec.artifacts[].source.amd64.bundle.root` | `string` | yes | `` | `files, images, packages` |  | `files` |
-| `spec.artifacts[].source.amd64.path` | `string` | no | `` | `` |  | `example` |
-| `spec.artifacts[].source.amd64.sha256` | `string` | no | `` | `` |  | `example` |
-| `spec.artifacts[].source.amd64.url` | `string` | no | `` | `` |  | `example` |
 | `spec.artifacts[].source.arm64` | `object` | yes | `` | `` | Source selection for arm64 nodes. Use a bundle reference, local path, or URL. | `{bundle:{root:files,path:bin/linux/arm64/runc}}` |
-| `spec.artifacts[].source.arm64.bundle` | `object` | no | `` | `` |  | `{...}` |
-| `spec.artifacts[].source.arm64.bundle.path` | `string` | yes | `` | `` |  | `example` |
-| `spec.artifacts[].source.arm64.bundle.root` | `string` | yes | `` | `files, images, packages` |  | `files` |
-| `spec.artifacts[].source.arm64.path` | `string` | no | `` | `` |  | `example` |
-| `spec.artifacts[].source.arm64.sha256` | `string` | no | `` | `` |  | `example` |
-| `spec.artifacts[].source.arm64.url` | `string` | no | `` | `` |  | `example` |
 
 ### `spec.artifacts[].source.amd64`
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
 | `spec.artifacts[].source.amd64.bundle` | `object` | no | `` | `` |  | `{...}` |
-| `spec.artifacts[].source.amd64.bundle.path` | `string` | yes | `` | `` |  | `example` |
-| `spec.artifacts[].source.amd64.bundle.root` | `string` | yes | `` | `files, images, packages` |  | `files` |
 | `spec.artifacts[].source.amd64.path` | `string` | no | `` | `` |  | `example` |
 | `spec.artifacts[].source.amd64.sha256` | `string` | no | `` | `` |  | `example` |
 | `spec.artifacts[].source.amd64.url` | `string` | no | `` | `` |  | `example` |
@@ -203,8 +128,6 @@ spec:
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
 | `spec.artifacts[].source.arm64.bundle` | `object` | no | `` | `` |  | `{...}` |
-| `spec.artifacts[].source.arm64.bundle.path` | `string` | yes | `` | `` |  | `example` |
-| `spec.artifacts[].source.arm64.bundle.root` | `string` | yes | `` | `files, images, packages` |  | `files` |
 | `spec.artifacts[].source.arm64.path` | `string` | no | `` | `` |  | `example` |
 | `spec.artifacts[].source.arm64.sha256` | `string` | no | `` | `` |  | `example` |
 | `spec.artifacts[].source.arm64.url` | `string` | no | `` | `` |  | `example` |
@@ -222,18 +145,7 @@ spec:
 |---|---|---:|---|---|---|---|
 | `spec.fetch.offlineOnly` | `boolean` | no | `false` | `` |  | `false` |
 | `spec.fetch.sources` | `array<object>` | no | `` | `` |  | `[{...}]` |
-| `spec.fetch.sources[].path` | `string` | no | `` | `` |  | `example` |
-| `spec.fetch.sources[].type` | `string` | yes | `` | `local, bundle, repo, online` | Fallback source class used when artifact entries refer to transport sources. | `bundle` |
-| `spec.fetch.sources[].url` | `string` | no | `` | `` |  | `example` |
 | `spec.fetch.strategy` | `string` | no | `` | `fallback` |  | `fallback` |
-
-### `spec.fetch.sources`
-
-| Key | Type | Required | Default | Enum | Description | Example |
-|---|---|---:|---|---|---|---|
-| `spec.fetch.sources[].path` | `string` | no | `` | `` |  | `example` |
-| `spec.fetch.sources[].type` | `string` | yes | `` | `local, bundle, repo, online` | Fallback source class used when artifact entries refer to transport sources. | `bundle` |
-| `spec.fetch.sources[].url` | `string` | no | `` | `` |  | `example` |
 
 
 ## Notes

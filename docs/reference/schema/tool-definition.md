@@ -46,28 +46,7 @@ spec:
 | `apiVersion` | `string` | yes | `` | `` |  | `deck/v1` |
 | `kind` | `string` | yes | `` | `` |  | `ToolDefinition` |
 | `metadata` | `object` | yes | `` | `` |  | `{...}` |
-| `metadata.description` | `string` | no | `` | `` |  | `example` |
-| `metadata.labels` | `object` | no | `` | `` |  | `{...}` |
-| `metadata.name` | `string` | yes | `` | `` | Public tool kind name described by this manifest. | `File` |
 | `spec` | `object` | yes | `` | `` |  | `{...}` |
-| `spec.category` | `string` | yes | `` | `prepare, install, shared` | High-level grouping used for docs and discovery. | `shared` |
-| `spec.failurePolicy` | `object` | no | `` | `` |  | `{...}` |
-| `spec.failurePolicy.defaultRetry` | `integer` | no | `` | `` |  | `1` |
-| `spec.failurePolicy.retryable` | `boolean` | no | `` | `` |  | `true` |
-| `spec.idempotency` | `object` | no | `` | `` |  | `{...}` |
-| `spec.idempotency.keys` | `array<string>` | yes | `` | `` |  | `[example]` |
-| `spec.idempotency.mode` | `string` | yes | `` | `by-output, by-state, always-run` | How callers should reason about repeated runs of the tool. | `by-output` |
-| `spec.inputSchema` | `object` | yes | `` | `` | Schema fragment describing the tool's input contract. | `{}` |
-| `spec.offlineAllowed` | `boolean` | no | `false` | `` |  | `false` |
-| `spec.outputContract` | `object` | no | `` | `` | Declared outputs or state keys produced by the tool. | `{artifacts:[joinFile],stateKeys:[nodeReady]}` |
-| `spec.outputContract.artifacts` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.outputContract.stateKeys` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.requires` | `object` | no | `` | `` |  | `{...}` |
-| `spec.requires.containerRuntime` | `string` | no | `` | `required, optional, none` | Whether the tool expects a container runtime on the node. | `required` |
-| `spec.requires.network` | `boolean` | no | `` | `` |  | `true` |
-| `spec.requires.root` | `boolean` | no | `` | `` |  | `true` |
-| `spec.summary` | `string` | yes | `` | `` | Short product-facing summary of the tool's purpose. | `Manage files on the local node.` |
-| `spec.version` | `string` | yes | `` | `` | Manifest version for the tool definition contract. | `v1` |
 
 ## Nested Objects
 
