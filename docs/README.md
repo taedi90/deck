@@ -32,10 +32,10 @@
 - `reference/workflow-model.md`: workflow shape, phases, steps, and execution controls
 - `reference/cli.md`: command surface and default usage pattern
 - `reference/bundle-layout.md`: bundle contract and why it matters offline
-- `reference/schema-reference.md`: schema files and supported step kinds
+- `reference/schema/index.md`: generated schema reference and examples
 - `reference/server-audit-log.md`: audit log format for `deck server up`
 
 ## Examples and schemas
 
 - `examples/README.md`: example workflows to adapt to real procedures
-- `schemas/README.md`: raw schema files and validation entry points
+- `../schemas/README.md`: raw schema files and validation entry points

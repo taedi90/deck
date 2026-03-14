@@ -89,5 +89,5 @@ deck validate --file ./workflows/apply.yaml
 For planning and diagnostics, also review:
 
 - `../reference/workflow-model.md`
-- `../reference/schema-reference.md`
+- `../reference/schema/index.md`
 - `../reference/server-audit-log.md`

@@ -1,5 +1,7 @@
 package workflowexec
 
+import "sort"
+
 type StepContract struct {
 	Kind       string
 	SchemaFile string
@@ -72,6 +74,15 @@ func StepSchemaFile(kind string) (string, bool) {
 		return "", false
 	}
 	return contract.SchemaFile, true
+}
+
+func StepKinds() []string {
+	kinds := make([]string, 0, len(stepContracts))
+	for kind := range stepContracts {
+		kinds = append(kinds, kind)
+	}
+	sort.Strings(kinds)
+	return kinds
 }
 
 func StepAllowedForRole(role, kind string, spec map[string]any) bool {

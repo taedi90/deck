@@ -5,7 +5,7 @@ GOLANGCI_LINT ?= $(BIN_DIR)/golangci-lint
 GOLANGCI_LINT_PKG ?= github.com/golangci/golangci-lint/v2/cmd/golangci-lint
 GOLANGCI_LINT_VERSION ?= latest
 
-.PHONY: build test lint
+.PHONY: build test lint generate
 
 build:
 	@mkdir -p $(BIN_DIR)
@@ -13,6 +13,9 @@ build:
 
 test:
 	$(GO) test ./...
+
+generate:
+	$(GO) run ./cmd/schema-gen
 
 lint:
 	@if [ ! -x "$(GOLANGCI_LINT)" ]; then \
