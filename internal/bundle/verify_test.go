@@ -79,10 +79,10 @@ func TestVerifyManifest(t *testing.T) {
 
 	t.Run("fails when apt metadata missing from manifest", func(t *testing.T) {
 		root := t.TempDir()
-		writeBundleFile(t, root, "packages/apt/jammy/Release", []byte("release"))
-		writeBundleFile(t, root, "packages/apt/jammy/Packages.gz", []byte("packages"))
+		writeBundleFile(t, root, "packages/deb/jammy/Release", []byte("release"))
+		writeBundleFile(t, root, "packages/deb/jammy/Packages.gz", []byte("packages"))
 
-		if err := writeManifestForPaths(root, "packages/apt/jammy/Packages.gz"); err != nil {
+		if err := writeManifestForPaths(root, "packages/deb/jammy/Packages.gz"); err != nil {
 			t.Fatalf("write manifest: %v", err)
 		}
 
@@ -93,7 +93,7 @@ func TestVerifyManifest(t *testing.T) {
 		if !strings.Contains(err.Error(), "required offline artifact missing from manifest") {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !strings.Contains(err.Error(), "packages/apt/jammy/Release") {
+		if !strings.Contains(err.Error(), "packages/deb/jammy/Release") {
 			t.Fatalf("expected missing Release path, got %v", err)
 		}
 	})
@@ -101,7 +101,7 @@ func TestVerifyManifest(t *testing.T) {
 	t.Run("fails when yum metadata missing from manifest", func(t *testing.T) {
 		root := t.TempDir()
 		writeBundleFile(t, root, "files/a.txt", []byte("ok"))
-		writeBundleFile(t, root, "packages/yum/el8/repodata/repomd.xml", []byte("repomd"))
+		writeBundleFile(t, root, "packages/rpm/el8/repodata/repomd.xml", []byte("repomd"))
 
 		if err := writeManifestForPaths(root, "files/a.txt"); err != nil {
 			t.Fatalf("write manifest: %v", err)
@@ -114,7 +114,7 @@ func TestVerifyManifest(t *testing.T) {
 		if !strings.Contains(err.Error(), "required offline artifact missing from manifest") {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !strings.Contains(err.Error(), "packages/yum/el8/repodata/repomd.xml") {
+		if !strings.Contains(err.Error(), "packages/rpm/el8/repodata/repomd.xml") {
 			t.Fatalf("expected missing repomd path, got %v", err)
 		}
 	})
@@ -143,12 +143,12 @@ func TestVerifyManifest(t *testing.T) {
 	t.Run("passes when offline artifacts are included in manifest", func(t *testing.T) {
 		root := t.TempDir()
 		paths := []string{
-			"packages/apt/noble/Release",
-			"packages/apt/noble/Packages.gz",
-			"packages/apt-k8s/v1.32/Release",
-			"packages/apt-k8s/v1.32/Packages.gz",
-			"packages/yum/el9/repodata/repomd.xml",
-			"packages/yum-k8s/el9-k8s/repodata/repomd.xml",
+			"packages/deb/noble/Release",
+			"packages/deb/noble/Packages.gz",
+			"packages/deb-k8s/v1.32/Release",
+			"packages/deb-k8s/v1.32/Packages.gz",
+			"packages/rpm/el9/repodata/repomd.xml",
+			"packages/rpm-k8s/el9-k8s/repodata/repomd.xml",
 			"images/pause.tar",
 		}
 		for i, p := range paths {

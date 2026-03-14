@@ -254,6 +254,57 @@ func TestRun_ContainerBackendsWithFakeRunner(t *testing.T) {
 	}
 }
 
+func TestRun_PackagesDownloadUsesSharedCacheAndCopyOut(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	bundle := t.TempDir()
+	r := &fakeRunner{}
+
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "prepare",
+			Steps: []config.Step{{
+				ID:   "pkg",
+				Kind: "Packages",
+				Spec: map[string]any{
+					"packages": []any{"containerd"},
+					"backend": map[string]any{
+						"mode":    "container",
+						"runtime": "docker",
+						"image":   "ubuntu:22.04",
+					},
+				},
+			}},
+		}},
+	}
+
+	if err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, CommandRunner: r}); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	joined := strings.Join(r.commands, "\n")
+	if strings.Contains(joined, ":/out ") {
+		t.Fatalf("expected package download to avoid host /out bind mount, commands=%s", joined)
+	}
+	if !strings.Contains(joined, " cp ") {
+		t.Fatalf("expected runtime cp in command flow, commands=%s", joined)
+	}
+	if !strings.Contains(joined, filepath.Join(home, ".deck", "cache", "packages")) {
+		t.Fatalf("expected shared package cache mount under HOME, commands=%s", joined)
+	}
+	if !strings.Contains(joined, "/var/cache/apt/archives") || !strings.Contains(joined, "/var/lib/apt/lists") {
+		t.Fatalf("expected apt cache mounts, commands=%s", joined)
+	}
+	if _, err := os.Stat(filepath.Join(bundle, "packages", "mock-package.deb")); err != nil {
+		t.Fatalf("expected copied package artifact: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".deck", "cache", "packages")); err != nil {
+		t.Fatalf("expected shared package cache root: %v", err)
+	}
+}
+
 func stubImageDownload(t *testing.T) {
 	t.Helper()
 
@@ -923,13 +974,13 @@ func TestRun_PackagesRepoModeAptFlatGeneratesMetadata(t *testing.T) {
 		t.Fatalf("Run failed: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(bundle, "packages", "apt", "ubuntu2204", "pkgs", "mock-package.deb")); err != nil {
+	if _, err := os.Stat(filepath.Join(bundle, "packages", "deb", "ubuntu2204", "pkgs", "mock-package.deb")); err != nil {
 		t.Fatalf("expected mock deb artifact: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(bundle, "packages", "apt", "ubuntu2204", "Packages.gz")); err != nil {
+	if _, err := os.Stat(filepath.Join(bundle, "packages", "deb", "ubuntu2204", "Packages.gz")); err != nil {
 		t.Fatalf("expected Packages.gz: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(bundle, "packages", "apt", "ubuntu2204", "Release")); err != nil {
+	if _, err := os.Stat(filepath.Join(bundle, "packages", "deb", "ubuntu2204", "Release")); err != nil {
 		t.Fatalf("expected Release: %v", err)
 	}
 }
@@ -968,15 +1019,24 @@ func TestRun_PackagesRepoModeYumGeneratesRepodata(t *testing.T) {
 		t.Fatalf("Run failed: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(bundle, "packages", "yum", "rhel9", "repodata", "repomd.xml")); err != nil {
+	if _, err := os.Stat(filepath.Join(bundle, "packages", "rpm", "rhel9", "repodata", "repomd.xml")); err != nil {
 		t.Fatalf("expected repodata/repomd.xml: %v", err)
 	}
 }
 
-type fakeRunner struct{}
+type fakeRunner struct {
+	commands   []string
+	containers map[string]fakeContainer
+}
+
+type fakeContainer struct {
+	outDir string
+	script string
+}
 
 type failOnceRunner struct {
-	calls int
+	calls  int
+	innerR *fakeRunner
 }
 
 type noRuntimeRunner struct{}
@@ -989,12 +1049,16 @@ func (f *failOnceRunner) LookPath(file string) (string, error) {
 }
 
 func (f *failOnceRunner) Run(ctx context.Context, name string, args ...string) error {
-	f.calls++
-	if f.calls == 1 {
-		return fmt.Errorf("intentional first failure")
+	if len(args) > 0 && args[0] == "create" {
+		f.calls++
+		if f.calls == 1 {
+			return fmt.Errorf("intentional first failure")
+		}
 	}
-	fr := &fakeRunner{}
-	return fr.Run(ctx, name, args...)
+	if f.innerR == nil {
+		f.innerR = &fakeRunner{}
+	}
+	return f.innerR.Run(ctx, name, args...)
 }
 
 func (n *noRuntimeRunner) LookPath(_ string) (string, error) {
@@ -1029,6 +1093,78 @@ func (f *fakeRunner) Run(_ context.Context, name string, args ...string) error {
 	if name != "docker" && name != "podman" {
 		return nil
 	}
+	f.commands = append(f.commands, name+" "+strings.Join(args, " "))
+	if f.containers == nil {
+		f.containers = map[string]fakeContainer{}
+	}
+	if len(args) > 0 {
+		switch args[0] {
+		case "create":
+			containerName := ""
+			script := ""
+			for i := 1; i < len(args); i++ {
+				if args[i] == "--name" && i+1 < len(args) {
+					containerName = args[i+1]
+					i++
+				}
+			}
+			if len(args) > 0 {
+				script = args[len(args)-1]
+			}
+			if containerName == "" {
+				return fmt.Errorf("missing container name")
+			}
+			outDir := filepath.Join(os.TempDir(), containerName)
+			if err := os.RemoveAll(outDir); err != nil {
+				return err
+			}
+			if err := os.MkdirAll(outDir, 0o755); err != nil {
+				return err
+			}
+			f.containers[containerName] = fakeContainer{outDir: outDir, script: script}
+			return nil
+		case "start":
+			if len(args) == 0 {
+				return nil
+			}
+			containerName := args[len(args)-1]
+			container, ok := f.containers[containerName]
+			if !ok {
+				return fmt.Errorf("unknown container %s", containerName)
+			}
+			return populateFakePackageOutput(container.outDir, container.script)
+		case "cp":
+			if len(args) < 3 {
+				return fmt.Errorf("invalid cp args")
+			}
+			src := args[1]
+			dest := args[2]
+			parts := strings.SplitN(src, ":", 2)
+			if len(parts) != 2 {
+				return fmt.Errorf("invalid cp source %q", src)
+			}
+			container, ok := f.containers[parts[0]]
+			if !ok {
+				return fmt.Errorf("unknown container %s", parts[0])
+			}
+			if err := os.MkdirAll(dest, 0o755); err != nil {
+				return err
+			}
+			return copyDirContents(container.outDir, dest)
+		case "rm":
+			if len(args) == 0 {
+				return nil
+			}
+			containerName := args[len(args)-1]
+			if container, ok := f.containers[containerName]; ok {
+				if err := os.RemoveAll(container.outDir); err != nil {
+					return err
+				}
+				delete(f.containers, containerName)
+			}
+			return nil
+		}
+	}
 
 	for i := 0; i < len(args); i++ {
 		if args[i] == "-v" && i+1 < len(args) {
@@ -1044,7 +1180,7 @@ func (f *fakeRunner) Run(_ context.Context, name string, args ...string) error {
 					return err
 				}
 				// repo-mode simulation: create minimal artifacts + metadata
-				if strings.Contains(host, string(filepath.Separator)+"packages"+string(filepath.Separator)+"apt"+string(filepath.Separator)) {
+				if strings.Contains(host, string(filepath.Separator)+"packages"+string(filepath.Separator)+"deb"+string(filepath.Separator)) {
 					pkgs := filepath.Join(host, "pkgs")
 					if err := os.MkdirAll(pkgs, 0o755); err != nil {
 						return err
@@ -1063,7 +1199,7 @@ func (f *fakeRunner) Run(_ context.Context, name string, args ...string) error {
 					}
 					continue
 				}
-				if strings.Contains(host, string(filepath.Separator)+"packages"+string(filepath.Separator)+"yum"+string(filepath.Separator)) {
+				if strings.Contains(host, string(filepath.Separator)+"packages"+string(filepath.Separator)+"rpm"+string(filepath.Separator)) {
 					repodata := filepath.Join(host, "repodata")
 					if err := os.MkdirAll(repodata, 0o755); err != nil {
 						return err
@@ -1103,6 +1239,70 @@ func (f *fakeRunner) Run(_ context.Context, name string, args ...string) error {
 		}
 	}
 
+	return nil
+}
+
+func populateFakePackageOutput(outDir, script string) error {
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		return err
+	}
+	if strings.Contains(script, "apt-ftparchive packages") {
+		pkgs := filepath.Join(outDir, "pkgs")
+		if err := os.MkdirAll(pkgs, 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(pkgs, "mock-package.deb"), []byte("pkg"), 0o644); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(outDir, "Packages"), []byte("Packages"), 0o644); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(outDir, "Packages.gz"), []byte("Packages.gz"), 0o644); err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(outDir, "Release"), []byte("Release"), 0o644)
+	}
+	if strings.Contains(script, "createrepo_c /out") {
+		repodata := filepath.Join(outDir, "repodata")
+		if err := os.MkdirAll(repodata, 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(outDir, "mock-package.rpm"), []byte("pkg"), 0o644); err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(repodata, "repomd.xml"), []byte("repomd"), 0o644)
+	}
+	return os.WriteFile(filepath.Join(outDir, "mock-package.deb"), []byte("pkg"), 0o644)
+}
+
+func copyDirContents(src, dest string) error {
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		destPath := filepath.Join(dest, entry.Name())
+		if entry.IsDir() {
+			if err := os.MkdirAll(destPath, 0o755); err != nil {
+				return err
+			}
+			if err := copyDirContents(srcPath, destPath); err != nil {
+				return err
+			}
+			continue
+		}
+		raw, err := os.ReadFile(srcPath)
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(destPath, raw, 0o644); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

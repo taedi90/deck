@@ -28,10 +28,10 @@ phases:
             clean: true
           repositories:
             - id: deck-os
-              baseurl: http://{{ .vars.serverURL }}/packages/apt/{{ .vars.release }}
+              baseurl: http://{{ .vars.serverURL }}/packages/deb/{{ .vars.release }}
               trusted: true
             - id: deck-k8s
-              baseurl: http://{{ .vars.serverURL }}/packages/apt-k8s/{{ .vars.release }}
+              baseurl: http://{{ .vars.serverURL }}/packages/deb-k8s/{{ .vars.release }}
               trusted: true
       - id: configure-offline-repo-yum
         when: vars.osFamily == "rhel"
@@ -47,12 +47,12 @@ phases:
           repositories:
             - id: deck-os
               name: deck-os
-              baseurl: http://{{ .vars.serverURL }}/packages/yum/{{ .vars.release }}
+              baseurl: http://{{ .vars.serverURL }}/packages/rpm/{{ .vars.release }}
               enabled: true
               gpgcheck: false
             - id: deck-k8s
               name: deck-k8s
-              baseurl: http://{{ .vars.serverURL }}/packages/yum-k8s/{{ .vars.release }}
+              baseurl: http://{{ .vars.serverURL }}/packages/rpm-k8s/{{ .vars.release }}
               enabled: true
               gpgcheck: false
       - id: install-k8s-deps

@@ -351,16 +351,16 @@ func isManifestTrackedPath(rel string) bool {
 }
 
 func verifyOfflineArtifactCoverage(bundleRoot string, manifestPaths map[string]struct{}) error {
-	if err := verifyAPTRepoCoverage(bundleRoot, manifestPaths, filepath.Join("packages", "apt")); err != nil {
+	if err := verifyAPTRepoCoverage(bundleRoot, manifestPaths, filepath.Join("packages", "deb")); err != nil {
 		return err
 	}
-	if err := verifyAPTRepoCoverage(bundleRoot, manifestPaths, filepath.Join("packages", "apt-k8s")); err != nil {
+	if err := verifyAPTRepoCoverage(bundleRoot, manifestPaths, filepath.Join("packages", "deb-k8s")); err != nil {
 		return err
 	}
-	if err := verifyYUMRepoCoverage(bundleRoot, manifestPaths, filepath.Join("packages", "yum")); err != nil {
+	if err := verifyYUMRepoCoverage(bundleRoot, manifestPaths, filepath.Join("packages", "rpm")); err != nil {
 		return err
 	}
-	if err := verifyYUMRepoCoverage(bundleRoot, manifestPaths, filepath.Join("packages", "yum-k8s")); err != nil {
+	if err := verifyYUMRepoCoverage(bundleRoot, manifestPaths, filepath.Join("packages", "rpm-k8s")); err != nil {
 		return err
 	}
 
@@ -368,16 +368,16 @@ func verifyOfflineArtifactCoverage(bundleRoot string, manifestPaths map[string]s
 }
 
 func verifyOfflineArtifactCoverageFromTar(files map[string]tarFileInfo, dirs map[string]struct{}, manifestPaths map[string]struct{}) error {
-	if err := verifyAPTRepoCoverageFromTar(files, dirs, manifestPaths, path.Join("packages", "apt")); err != nil {
+	if err := verifyAPTRepoCoverageFromTar(files, dirs, manifestPaths, path.Join("packages", "deb")); err != nil {
 		return err
 	}
-	if err := verifyAPTRepoCoverageFromTar(files, dirs, manifestPaths, path.Join("packages", "apt-k8s")); err != nil {
+	if err := verifyAPTRepoCoverageFromTar(files, dirs, manifestPaths, path.Join("packages", "deb-k8s")); err != nil {
 		return err
 	}
-	if err := verifyYUMRepoCoverageFromTar(files, dirs, manifestPaths, path.Join("packages", "yum")); err != nil {
+	if err := verifyYUMRepoCoverageFromTar(files, dirs, manifestPaths, path.Join("packages", "rpm")); err != nil {
 		return err
 	}
-	if err := verifyYUMRepoCoverageFromTar(files, dirs, manifestPaths, path.Join("packages", "yum-k8s")); err != nil {
+	if err := verifyYUMRepoCoverageFromTar(files, dirs, manifestPaths, path.Join("packages", "rpm-k8s")); err != nil {
 		return err
 	}
 

@@ -2,17 +2,25 @@ package prepare
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 )
 
 type packageCacheMeta struct {
 	Packages []string `json:"packages"`
 	Files    []string `json:"files"`
+}
+
+type packageCacheMount struct {
+	host      string
+	container string
 }
 
 func runPackagesDownload(ctx context.Context, runner CommandRunner, bundleRoot string, spec map[string]any, defaultDir string, opts RunOptions) ([]string, error) {
@@ -51,9 +59,9 @@ func runPackagesDownload(ctx context.Context, runner CommandRunner, bundleRoot s
 			var repoRoot string
 			switch repoType {
 			case "apt-flat":
-				repoRoot = filepath.ToSlash(filepath.Join("packages", "apt", release))
+				repoRoot = filepath.ToSlash(filepath.Join("packages", "deb", release))
 			case "yum":
-				repoRoot = filepath.ToSlash(filepath.Join("packages", "yum", release))
+				repoRoot = filepath.ToSlash(filepath.Join("packages", "rpm", release))
 			default:
 				return nil, fmt.Errorf("packages action download repo.type must be apt-flat or yum")
 			}
@@ -127,8 +135,15 @@ func runContainerPackageRepoBuild(
 	}
 
 	cmdScript := buildPackageRepoBuildScript(family, packages, repoType, generate, pkgsDir)
-	args := []string{"run", "--rm", "-v", outAbs + ":/out", image, "bash", "-lc", cmdScript}
-	if err := runner.Run(ctx, runtimeSel, args...); err != nil {
+	cacheKey, err := packageDownloadCacheKey(spec, family, repoRoot)
+	if err != nil {
+		return nil, err
+	}
+	mounts, err := preparePackageCacheMounts(family, cacheKey)
+	if err != nil {
+		return nil, err
+	}
+	if err := runPackageDownloadContainer(ctx, runner, runtimeSel, image, outAbs, cmdScript, mounts); err != nil {
 		return nil, fmt.Errorf("container package repo build failed: %w", err)
 	}
 
@@ -169,8 +184,15 @@ func runContainerPackageDownloadAll(ctx context.Context, runner CommandRunner, b
 	}
 
 	cmdScript := buildPackageDownloadAllScript(family, packages)
-	args := []string{"run", "--rm", "-v", outAbs + ":/out", image, "bash", "-lc", cmdScript}
-	if err := runner.Run(ctx, runtimeSel, args...); err != nil {
+	cacheKey, err := packageDownloadCacheKey(spec, family, dir)
+	if err != nil {
+		return nil, err
+	}
+	mounts, err := preparePackageCacheMounts(family, cacheKey)
+	if err != nil {
+		return nil, err
+	}
+	if err := runPackageDownloadContainer(ctx, runner, runtimeSel, image, outAbs, cmdScript, mounts); err != nil {
 		return nil, fmt.Errorf("container package download failed: %w", err)
 	}
 
@@ -195,14 +217,14 @@ func buildPackageDownloadAllScript(family string, packages []string) string {
 
 	if family == "rhel" {
 		return fmt.Sprintf(
-			"set -euo pipefail; (dnf -y install 'dnf-command(download)' >/dev/null 2>&1 || yum -y install yum-utils >/dev/null 2>&1 || true); (dnf -y download --resolve --destdir /out %s || yumdownloader --resolve --destdir /out %s)",
+			"set -euo pipefail; mkdir -p /out; (dnf -y install 'dnf-command(download)' >/dev/null 2>&1 || yum -y install yum-utils >/dev/null 2>&1 || true); (dnf -y download --resolve --destdir /out %s || yumdownloader --resolve --destdir /out %s)",
 			pkgList,
 			pkgList,
 		)
 	}
 
 	return fmt.Sprintf(
-		"set -euo pipefail; export DEBIAN_FRONTEND=noninteractive; apt-get update -y >/dev/null; apt-get install -y --download-only --no-install-recommends %s >/dev/null; cp -a /var/cache/apt/archives/*.deb /out/ 2>/dev/null || true",
+		"set -euo pipefail; export DEBIAN_FRONTEND=noninteractive; mkdir -p /out; apt-get update -y >/dev/null; apt-get install -y --download-only --no-install-recommends %s >/dev/null; cp -a /var/cache/apt/archives/*.deb /out/ 2>/dev/null || true",
 		pkgList,
 	)
 }
@@ -224,7 +246,7 @@ func buildPackageRepoBuildScript(family string, packages []string, repoType stri
 			gen = "false"
 		}
 		return fmt.Sprintf(
-			"set -euo pipefail; (dnf -y install 'dnf-command(download)' createrepo_c >/dev/null 2>&1 || yum -y install yum-utils createrepo_c >/dev/null 2>&1 || true); (dnf -y download --resolve --destdir /out %s || yumdownloader --resolve --destdir /out %s); if %s; then createrepo_c /out >/dev/null; fi",
+			"set -euo pipefail; mkdir -p /out; (dnf -y install 'dnf-command(download)' createrepo_c >/dev/null 2>&1 || yum -y install yum-utils createrepo_c >/dev/null 2>&1 || true); (dnf -y download --resolve --destdir /out %s || yumdownloader --resolve --destdir /out %s); if %s; then createrepo_c /out >/dev/null; fi",
 			pkgList,
 			pkgList,
 			gen,
@@ -241,7 +263,7 @@ func buildPackageRepoBuildScript(family string, packages []string, repoType stri
 		safePkgsDir = "pkgs"
 	}
 	return fmt.Sprintf(
-		"set -euo pipefail; export DEBIAN_FRONTEND=noninteractive; apt-get update -y >/dev/null; apt-get install -y apt-utils gzip >/dev/null; mkdir -p /out/%s; apt-get install -y --download-only --no-install-recommends %s >/dev/null; cp -a /var/cache/apt/archives/*.deb /out/%s/ 2>/dev/null || true; if %s; then cd /out; apt-ftparchive packages %s > Packages; gzip -c Packages > Packages.gz; apt-ftparchive release . > Release; fi",
+		"set -euo pipefail; export DEBIAN_FRONTEND=noninteractive; mkdir -p /out/%s; apt-get update -y >/dev/null; apt-get install -y apt-utils gzip >/dev/null; apt-get install -y --download-only --no-install-recommends %s >/dev/null; cp -a /var/cache/apt/archives/*.deb /out/%s/ 2>/dev/null || true; if %s; then cd /out; apt-ftparchive packages %s > Packages; gzip -c Packages > Packages.gz; apt-ftparchive release . > Release; fi",
 		shellEscape(safePkgsDir),
 		pkgList,
 		shellEscape(safePkgsDir),
@@ -252,6 +274,71 @@ func buildPackageRepoBuildScript(family string, packages []string, repoType stri
 
 func shellEscape(v string) string {
 	return strings.ReplaceAll(v, "'", "''")
+}
+
+func packageDownloadCacheKey(spec map[string]any, family string, artifactRoot string) (string, error) {
+	payload := map[string]any{
+		"artifactRoot": filepath.ToSlash(strings.TrimSpace(artifactRoot)),
+		"backend":      mapValue(spec, "backend"),
+		"distro":       mapValue(spec, "distro"),
+		"family":       strings.TrimSpace(family),
+		"repo":         mapValue(spec, "repo"),
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("encode package cache key: %w", err)
+	}
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+func preparePackageCacheMounts(family string, cacheKey string) ([]packageCacheMount, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("resolve user home directory: %w", err)
+	}
+	root := filepath.Join(home, ".deck", "cache", "packages", cacheKey)
+	if strings.TrimSpace(family) == "rhel" {
+		dnfRoot := filepath.Join(root, "dnf")
+		if err := os.MkdirAll(dnfRoot, 0o755); err != nil {
+			return nil, err
+		}
+		return []packageCacheMount{{host: dnfRoot, container: "/var/cache/dnf"}}, nil
+	}
+
+	archives := filepath.Join(root, "apt", "archives")
+	lists := filepath.Join(root, "apt", "lists")
+	for _, dir := range []string{archives, filepath.Join(archives, "partial"), lists, filepath.Join(lists, "partial")} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return nil, err
+		}
+	}
+	return []packageCacheMount{
+		{host: archives, container: "/var/cache/apt/archives"},
+		{host: lists, container: "/var/lib/apt/lists"},
+	}, nil
+}
+
+func runPackageDownloadContainer(ctx context.Context, runner CommandRunner, runtimeSel, image, outAbs, script string, mounts []packageCacheMount) error {
+	containerName := fmt.Sprintf("deck-pkg-%d", time.Now().UnixNano())
+	createArgs := []string{"create", "--name", containerName}
+	for _, mount := range mounts {
+		createArgs = append(createArgs, "-v", mount.host+":"+mount.container)
+	}
+	createArgs = append(createArgs, image, "bash", "-lc", script)
+	if err := runner.Run(ctx, runtimeSel, createArgs...); err != nil {
+		return err
+	}
+	defer func() {
+		_ = runner.Run(context.Background(), runtimeSel, "rm", "-f", containerName)
+	}()
+	if err := runner.Run(ctx, runtimeSel, "start", "-a", containerName); err != nil {
+		return err
+	}
+	if err := runner.Run(ctx, runtimeSel, "cp", containerName+":/out/.", outAbs); err != nil {
+		return err
+	}
+	return nil
 }
 
 func writePackagePlaceholders(bundleRoot, dir string, packages []string) []string {
