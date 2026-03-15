@@ -205,7 +205,7 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 		}
 	}
 
-	st.Phase = wf.Phases[len(wf.Phases)-1].Name
+	st.Phase = "completed"
 	st.FailedStep = ""
 	st.Error = ""
 	st.RuntimeVars = runtimeVars

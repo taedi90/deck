@@ -22,11 +22,11 @@ type runCommandSpec struct {
 func runCommand(ctx context.Context, spec map[string]any) error {
 	decoded, err := workflowexec.DecodeSpec[runCommandSpec](spec)
 	if err != nil {
-		return fmt.Errorf("decode RunCommand spec: %w", err)
+		return fmt.Errorf("decode Command spec: %w", err)
 	}
 	cmdArgs := decoded.Command
 	if len(cmdArgs) == 0 {
-		return fmt.Errorf("%s: RunCommand requires command", errCodeInstallCommandMissing)
+		return fmt.Errorf("%s: Command requires command", errCodeInstallCommandMissing)
 	}
 
 	err = runTimedCommandWithContext(ctx, cmdArgs[0], cmdArgs[1:], commandTimeout(spec))

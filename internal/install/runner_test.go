@@ -111,6 +111,9 @@ func TestRun_InstallTools(t *testing.T) {
 	if len(st.CompletedSteps) != 9 {
 		t.Fatalf("expected 9 completed steps, got %d", len(st.CompletedSteps))
 	}
+	if st.Phase != "completed" {
+		t.Fatalf("expected final phase state completed, got %q", st.Phase)
+	}
 }
 
 func TestRun_DefaultStatePathUsesHomeStateKey(t *testing.T) {
