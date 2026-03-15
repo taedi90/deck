@@ -132,12 +132,6 @@ scenario_requires_workers() {
   [[ "${SCENARIO_METADATA_USES_WORKERS}" == "1" ]]
 }
 
-legacy_offline_multinode_shim_selected() {
-  local vm_script="${DECK_VAGRANT_VM_SCENARIO_SCRIPT:-}"
-  local vm_staged_path="${DECK_VAGRANT_VM_STAGED_PATH:-}"
-  [[ "${vm_script}" == "${ROOT_DIR}/test/vagrant/run-offline-multinode-vm.sh" || "${vm_staged_path}" == "test/vagrant/run-offline-multinode-vm.sh" ]]
-}
-
 active_nodes() {
   scenario_nodes
 }
@@ -446,14 +440,9 @@ prepare_shared_bundle_cache() {
   local arch="$3"
   local workflow_root_abs="${ROOT_DIR}/${DECK_VAGRANT_WORKFLOW_ROOT_REL}"
   local helper_root_abs="${ROOT_DIR}/${DECK_VAGRANT_HELPER_ROOT_REL}"
-  local include_legacy_workflows="0"
   local cache_key=""
 
-  if legacy_offline_multinode_shim_selected; then
-    include_legacy_workflows="1"
-  fi
-
-  cache_key="$(compute_prepared_bundle_cache_key "${host_bin}" "${workflow_root_abs}" "${helper_root_abs}" "${backend_runtime}" "${arch}" "${include_legacy_workflows}" "${DECK_VAGRANT_VM_SCENARIO_SCRIPT:-}" "${DECK_VAGRANT_VM_DISPATCHER_SCRIPT:-}")"
+  cache_key="$(compute_prepared_bundle_cache_key "${host_bin}" "${workflow_root_abs}" "${helper_root_abs}" "${backend_runtime}" "${arch}" "0" "${DECK_VAGRANT_VM_SCENARIO_SCRIPT:-}" "${DECK_VAGRANT_VM_DISPATCHER_SCRIPT:-}")"
   CACHE_KEY="${cache_key}"
   refresh_layout_contracts
   if [[ -f "${PREPARED_BUNDLE_STAMP}" ]] && [[ -f "${PREPARED_BUNDLE_ABS}/.deck/manifest.json" ]] && [[ "$(cat "${PREPARED_BUNDLE_STAMP}" 2>/dev/null || true)" == "${cache_key}" ]]; then
@@ -488,14 +477,9 @@ prepare_rsync_stage_root() {
   local dispatcher_stage_path="${DECK_VAGRANT_VM_DISPATCHER_STAGED_PATH:-test/e2e/vagrant/run-scenario-vm.sh}"
   local dispatcher_scenario_helper_source="${ROOT_DIR}/test/e2e/vagrant/run-scenario-vm-scenario.sh"
   local dispatcher_scenario_helper_stage_path="test/e2e/vagrant/run-scenario-vm-scenario.sh"
-  local include_legacy_workflows="0"
   local rsync_key=""
 
-  if legacy_offline_multinode_shim_selected; then
-    include_legacy_workflows="1"
-  fi
-
-  rsync_key="$(python3 - <<'PY' "${ROOT_DIR}" "${deck_bin_source}" "${DECK_VAGRANT_VM_SCENARIO_SCRIPT}" "${dispatcher_source}" "${dispatcher_scenario_helper_source}" "${PREPARED_BUNDLE_ABS}" "${include_legacy_workflows}"
+  rsync_key="$(python3 - <<'PY' "${ROOT_DIR}" "${deck_bin_source}" "${DECK_VAGRANT_VM_SCENARIO_SCRIPT}" "${dispatcher_source}" "${dispatcher_scenario_helper_source}" "${PREPARED_BUNDLE_ABS}"
 import hashlib
 from pathlib import Path
 import sys
@@ -506,7 +490,6 @@ scenario_script = Path(sys.argv[3])
 dispatcher_script = Path(sys.argv[4]) if sys.argv[4] else None
 dispatcher_scenario_helper = Path(sys.argv[5]) if sys.argv[5] else None
 prepared_bundle = Path(sys.argv[6])
-include_legacy_workflows = sys.argv[7] == "1"
 
 paths = [scenario_script, deck_bin]
 if dispatcher_script:
@@ -514,10 +497,6 @@ if dispatcher_script:
 if dispatcher_scenario_helper and dispatcher_scenario_helper.is_file():
     paths.append(dispatcher_scenario_helper)
 for base in (root / "test/workflows", root / "test/e2e/scenario-meta", root / "test/e2e/scenario-hooks"):
-    if base.exists():
-        paths.extend(sorted(p for p in base.rglob("*") if p.is_file()))
-if include_legacy_workflows:
-    base = root / "test/vagrant/workflows"
     if base.exists():
         paths.extend(sorted(p for p in base.rglob("*") if p.is_file()))
 

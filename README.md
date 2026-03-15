@@ -127,7 +127,6 @@ bash test/e2e/vagrant/run-scenario.sh --scenario k8s-node-reset
 
 The maintained Kubernetes regression layout lives under `test/workflows/`, with scenario entrypoints in `test/workflows/scenarios/`, reusable fragments in `test/workflows/components/`, and shared defaults in `test/workflows/vars.yaml`.
 Local Vagrant runs keep machine state in `test/vagrant/.vagrant/`, reuse scenario caches under `test/artifacts/cache/bundles/<scenario>/`, and reuse run artifacts under `test/artifacts/runs/<scenario>/<run-id>/` unless you choose a different `--art-dir` or run with `--fresh`.
-
 ## License
 
 Apache-2.0. See `LICENSE`.

@@ -1,14 +1,14 @@
 # Vagrant scenario runner
 
-이 디렉터리는 Linux 호스트에서 libvirt 기반 Vagrant 회귀 테스트를 돌릴 때 쓰는 호스트 자산과 호환성 shim을 둔다. 현재 유지보수 기준 경로는 `test/workflows/*` 시나리오와 `test/e2e/vagrant/run-scenario.sh`다.
+이 디렉터리는 Linux 호스트에서 libvirt 기반 Vagrant 회귀 테스트를 돌릴 때 쓰는 호스트 자산을 둔다. 현재 유지보수 기준 경로는 `test/workflows/*` 시나리오와 `test/e2e/vagrant/run-scenario.sh`다.
 
 ## 구성 파일
 
 - `Vagrantfile`: control-plane + worker 2대(총 3노드) VM 정의
-- `run-offline-multinode-agent.sh`: 이전 `offline-multinode` 호출 경로를 유지하는 임시 호환성 shim
-- `run-offline-multinode-vm.sh`: guest 내부 legacy 호출을 유지하는 임시 호환성 shim
 - `build-deck-binaries.sh`: 호스트에서 테스트용 `deck` 바이너리 빌드
 - `libvirt-env.sh`: libvirt pool/network 및 Vagrant plugin/home 준비
+
+Canonical scenario execution helpers now live under `test/e2e/vagrant/`.
 
 ## 실행 전제
 
@@ -80,7 +80,6 @@ bash test/e2e/vagrant/run-scenario.sh --scenario k8s-node-reset
 - `--art-dir`를 바꿔도 prepared bundle은 공유 cache 경로를 재사용한다.
 - 상태를 완전히 초기화하려면 `rm -rf test/vagrant/.vagrant test/artifacts/runs/k8s-worker-join/local test/artifacts/cache/bundles/k8s-worker-join test/artifacts/cache/staging/k8s-worker-join test/artifacts/cache/vagrant/k8s-worker-join` 후 다시 실행한다.
 
-## 호환성 메모
+## 유지보수 메모
 
-- `test/vagrant/run-offline-multinode-agent.sh`와 `test/vagrant/run-offline-multinode-vm.sh`는 한 번의 migration window 동안만 남겨둔 shim이다.
-- 새 유지보수나 문서 갱신은 shim 경로가 아니라 `test/e2e/vagrant/run-scenario.sh`와 `test/workflows/*`를 기준으로 한다.
+- 새 유지보수나 문서 갱신은 `test/e2e/vagrant/run-scenario.sh`와 `test/workflows/*`를 기준으로 한다.

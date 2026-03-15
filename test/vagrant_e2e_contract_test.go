@@ -20,24 +20,14 @@ func expectContainsAll(t *testing.T, content string, expected ...string) {
 func TestVagrantRunnerThinInterfaceContracts(t *testing.T) {
 	root := projectRoot(t)
 	runnerPath := filepath.Join(root, "test", "e2e", "vagrant", "run-scenario.sh")
-	shimPath := filepath.Join(root, "test", "vagrant", "run-offline-multinode-agent.sh")
 	if _, err := os.Stat(runnerPath); err != nil {
 		t.Fatalf("stat runner: %v", err)
-	}
-	if _, err := os.Stat(shimPath); err != nil {
-		t.Fatalf("stat shim: %v", err)
 	}
 	out, err := exec.Command("bash", runnerPath, "--help").CombinedOutput()
 	if err != nil {
 		t.Fatalf("run runner --help: %v\n%s", err, string(out))
 	}
 	expectContainsAll(t, string(out), "--scenario", "--resume", "--art-dir")
-
-	shimHelp, err := exec.Command("bash", shimPath, "--help").CombinedOutput()
-	if err != nil {
-		t.Fatalf("run shim --help: %v\n%s", err, string(shimHelp))
-	}
-	expectContainsAll(t, string(shimHelp), "--scenario", "--fresh-cache", "--art-dir")
 }
 
 func TestLibvirtEnvScriptContracts(t *testing.T) {

@@ -7,8 +7,6 @@ source "${ROOT_DIR}/test/e2e/vagrant/common.sh"
 CONTRACT_WORKFLOW_COMPONENTS_ROOT="test/workflows/components"
 CONTRACT_WORKFLOW_SCENARIOS_ROOT="test/workflows/scenarios"
 CONTRACT_E2E_VAGRANT_ROOT="test/e2e/vagrant"
-CONTRACT_COMPATIBILITY_POLICY="offline-multinode entrypoints are temporary shims for one migration window"
-
 DECK_VAGRANT_WORKFLOW_ROOT_REL="test/workflows"
 DECK_VAGRANT_VM_SCENARIO_SCRIPT="${ROOT_DIR}/test/e2e/vagrant/run-scenario-vm.sh"
 DECK_VAGRANT_VM_STAGED_PATH="test/e2e/vagrant/run-scenario-vm.sh"
@@ -50,7 +48,7 @@ EOF
 }
 
 deck_vagrant_prepare_workflow_bundle() {
-  "${ROOT_DIR}/test/vagrant/render-prepared-bundle-workflows.sh" "${ROOT_DIR}" "${PREPARED_BUNDLE_WORKFLOW_DIR}" "${SCENARIO_ID}"
+  "${ROOT_DIR}/test/e2e/vagrant/render-workflows.sh" "${ROOT_DIR}" "${PREPARED_BUNDLE_WORKFLOW_DIR}"
 }
 
 guest_vm_action_command() {

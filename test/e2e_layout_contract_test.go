@@ -10,24 +10,19 @@ import (
 
 func TestE2ELayoutContracts(t *testing.T) {
 	root := testProjectRoot(t)
-	agentPath := filepath.Join(root, "test", "vagrant", "run-offline-multinode-agent.sh")
 	runnerPath := filepath.Join(root, "test", "e2e", "vagrant", "run-scenario.sh")
-	vmPath := filepath.Join(root, "test", "vagrant", "run-offline-multinode-vm.sh")
+	renderPath := filepath.Join(root, "test", "e2e", "vagrant", "render-workflows.sh")
 	scenarioHelperPath := filepath.Join(root, "test", "e2e", "vagrant", "run-scenario-vm-scenario.sh")
-	if _, err := os.Stat(agentPath); err != nil {
-		t.Fatalf("stat agent shim: %v", err)
-	}
 	if _, err := os.Stat(runnerPath); err != nil {
 		t.Fatalf("stat canonical runner: %v", err)
 	}
-	if _, err := os.Stat(vmPath); err != nil {
-		t.Fatalf("stat vm shim: %v", err)
+	if _, err := os.Stat(renderPath); err != nil {
+		t.Fatalf("stat workflow renderer: %v", err)
 	}
 	if _, err := os.Stat(scenarioHelperPath); err != nil {
 		t.Fatalf("stat scenario helper: %v", err)
 	}
 	requireScriptHelpContainsAll(t, runnerPath, "--scenario", "--resume", "--fresh", "--fresh-cache", "--art-dir")
-	requireScriptHelpContainsAll(t, agentPath, "--scenario", "--fresh-cache", "--art-dir")
 
 	layoutContractCmd := "ROOT_DIR='" + root + "'; DECK_VAGRANT_SCENARIO=k8s-worker-join; DECK_VAGRANT_RUN_ID=contract-run; DECK_VAGRANT_CACHE_KEY=contract-cache; source '" + filepath.Join(root, "test", "e2e", "vagrant", "common.sh") + "'; parse_args --art-dir test/tmp/e2e-layout-contract-run; test \"${ART_DIR_REL}\" = test/tmp/e2e-layout-contract-run; test \"${CHECKPOINT_DIR}\" = \"${ROOT_DIR}/test/tmp/e2e-layout-contract-run/checkpoints\"; test \"${RUN_LOG_DIR}\" = \"${ROOT_DIR}/test/tmp/e2e-layout-contract-run/logs\"; test \"${RUN_REPORT_DIR}\" = \"${ROOT_DIR}/test/tmp/e2e-layout-contract-run/reports\"; test \"${RUN_BUNDLE_SOURCE_FILE}\" = \"${ROOT_DIR}/test/tmp/e2e-layout-contract-run/bundle-source.txt\"; refresh_layout_contracts; test \"${PREPARED_BUNDLE_REL}\" = test/artifacts/cache/bundles/k8s-worker-join/contract-cache; test \"${PREPARED_BUNDLE_WORK_REL}\" = test/artifacts/cache/staging/k8s-worker-join/contract-cache; test \"${RSYNC_STAGE_REL}\" = test/artifacts/cache/vagrant/k8s-worker-join/rsync-root"
 	cmd := exec.Command("bash", "-lc", layoutContractCmd)
@@ -71,7 +66,7 @@ func TestE2ELayoutContracts(t *testing.T) {
 	}
 
 	renderDir := filepath.Join(tmp, "rendered")
-	cmd = exec.Command("bash", filepath.Join(root, "test", "vagrant", "render-prepared-bundle-workflows.sh"), root, renderDir, "k8s-control-plane-bootstrap")
+	cmd = exec.Command("bash", filepath.Join(root, "test", "e2e", "vagrant", "render-workflows.sh"), root, renderDir)
 	cmd.Dir = root
 	out, err = cmd.CombinedOutput()
 	if err != nil {

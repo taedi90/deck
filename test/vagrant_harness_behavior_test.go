@@ -27,22 +27,21 @@ func requireScriptHelpContainsAll(t *testing.T, scriptPath string, items ...stri
 	requireContainsAll(t, help, items...)
 }
 
-func TestVagrantHarnessBehaviorCompatibilityShim(t *testing.T) {
+func TestVagrantHarnessBehaviorCanonicalScripts(t *testing.T) {
 	root := testProjectRoot(t)
-	agentPath := filepath.Join(root, "test", "vagrant", "run-offline-multinode-agent.sh")
-	vmtPath := filepath.Join(root, "test", "vagrant", "run-offline-multinode-vm.sh")
+	runnerPath := filepath.Join(root, "test", "e2e", "vagrant", "run-scenario.sh")
 	vmdPath := filepath.Join(root, "test", "e2e", "vagrant", "run-scenario-vm.sh")
-	if _, err := os.Stat(agentPath); err != nil {
-		t.Fatalf("stat agent shim: %v", err)
-	}
-	if _, err := os.Stat(vmtPath); err != nil {
-		t.Fatalf("stat vm shim: %v", err)
+	renderPath := filepath.Join(root, "test", "e2e", "vagrant", "render-workflows.sh")
+	if _, err := os.Stat(runnerPath); err != nil {
+		t.Fatalf("stat canonical runner: %v", err)
 	}
 	if _, err := os.Stat(vmdPath); err != nil {
 		t.Fatalf("stat canonical vm dispatcher: %v", err)
 	}
-	requireScriptHelpContainsAll(t, agentPath, "--scenario", "--fresh-cache", "--art-dir")
-	requireScriptHelpContainsAll(t, vmtPath, "orchestrate", "verify-install", "assert-cluster")
+	if _, err := os.Stat(renderPath); err != nil {
+		t.Fatalf("stat workflow renderer: %v", err)
+	}
+	requireScriptHelpContainsAll(t, runnerPath, "--scenario", "--fresh-cache", "--art-dir")
 	requireScriptHelpContainsAll(t, vmdPath, "prepare-bundle", "apply-scenario", "verify-scenario", "bootstrap|cluster|all")
 }
 
