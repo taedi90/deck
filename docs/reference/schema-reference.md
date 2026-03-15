@@ -138,9 +138,9 @@ Writes a unit file at `path` from either `content` or `contentFromTemplate`. It 
       state: started
 ```
 
-### `InstallArtifacts`
+### `Artifacts`
 
-Installs or extracts per-architecture artifacts. Each entry requires `source.amd64` and `source.arm64`, optional `skipIfPresent`, and exactly one of `install` or `extract`. The step also supports shared `fetch` defaults. This exists for operator clarity instead of overloading `DownloadFile`, because the target workflows express artifact-install intent, not plain fetch/copy intent.
+Installs or extracts per-architecture artifacts. Each entry requires `source.amd64` and `source.arm64`, optional `skipIfPresent`, and exactly one of `install` or `extract`. The step also supports shared `fetch` defaults.
 
 ```yaml
 - id: install-k8s-binaries
@@ -181,7 +181,7 @@ Runs `kubeadm init` with either `configFile` or `configTemplate`, plus bootstrap
     criSocket: unix:///run/containerd/containerd.sock
 ```
 
-### `KubeadmReset`
+### `Kubeadm` (reset mode)
 
 Wraps `kubeadm reset` and related cleanup with `force`, `ignoreErrors`, `stopKubelet`, `criSocket`, `removePaths`, `removeFiles`, `cleanupContainers`, `restartRuntimeService`, and `timeout`.
 
@@ -204,7 +204,7 @@ Wraps `kubeadm reset` and related cleanup with `force`, `ignoreErrors`, `stopKub
     restartRuntimeService: containerd
 ```
 
-### `WaitPath`
+### `Wait`
 
 Waits for a path to become `exists` or `absent`. The step also supports `type`, `nonEmpty`, `pollInterval`, and `timeout`. Use `nonEmpty` only with `state: exists`.
 

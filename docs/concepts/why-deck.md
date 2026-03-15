@@ -1,46 +1,24 @@
 # Why deck
 
-`deck` exists for a narrow problem.
+`deck` grew out of a specific situation: air-gapped Kubernetes operations where SSH-driven tooling was not available, internet access was not assumed, and the shell scripts running maintenance procedures had grown large enough that reviewing them before execution was genuinely hard.
 
-In connected environments, established tools already cover a lot of ground. `deck` does not try to outgrow or out-market them. It focuses on the places they do not fit well: disconnected sites, constrained operations, and procedures that still need local human execution.
+The problem was not just that shell is fragile. It was that a long shell file hides what the procedure actually does. Intent gets buried inside implementation. Reviews become reverse-engineering sessions. Reuse turns into copy-paste.
 
-## The real problem
+`deck` gives those procedures a cleaner shape. A typed `Packages` step says more than a block of `apt install` commands. A named phase boundary makes the procedure easier to scan. `deck lint` catches structural mistakes before the bundle leaves the connected environment. The bundle itself travels with the workflow and the artifacts it needs — no implicit dependencies, no reach-back to external services at run time.
 
-The problem is not only that Bash can be dangerous.
+## How it fits together
 
-The bigger problem is that Bash-based procedures often collapse as they grow:
+The operating model has two parts: preparation happens in a connected environment where packages, images, and files can be fetched; execution happens locally on the target machine inside the air gap. The `prepare` workflow handles the first part, the `apply` workflow handles the second, and `deck bundle build` packages everything needed to cross the boundary.
 
-- the intent of the procedure gets buried inside implementation details
-- reviews get harder because everything looks like shell
-- reuse becomes informal copy-paste
-- validation usually happens late
-- operators have to reverse-engineer the script before trusting it
-
-`deck` gives those procedures a smaller and clearer shape.
-
-## What deck does
-
-- models maintenance work as YAML workflows with steps and phases
-- prefers typed operations for common host changes
-- validates workflow structure before transport or execution
-- builds a self-contained bundle for offline handoff
-- runs locally on the target machine without requiring SSH or a long-lived controller
+This separation is intentional. The operator on the far side of the air gap should be able to run `deck apply` without resolving external dependencies, contacting a control plane, or interpreting a long shell script.
 
 ## Design principles
 
-- **Simple**: small command surface and a bounded operating model
-- **Local-first**: the default path is local execution on the machine that needs the change
-- **Bundle-first**: bring the workflow and its required artifacts together
-- **Readable**: operators should be able to review intent quickly
-- **Pragmatic**: shell stays available through `Command`, but it should not be the main authoring style
+- **Local-first**: the default path is local execution on the machine that needs the change, with no long-lived controller required.
+- **Bundle-first**: workflow, artifacts, and the `deck` binary travel together so the offline handoff is explicit and complete.
+- **Readable**: typed steps and named phases keep the procedure scannable as it grows.
+- **Pragmatic**: `Command` is available for the edges that are not modeled yet, but it should not be the dominant authoring style.
 
-## What deck is not trying to be
+## Who it's for
 
-- a replacement for broad infrastructure platforms
-- a remote orchestration control plane
-- a permanent site management service
-- a tool that assumes rich online dependencies
-
-## The intended user
-
-`deck` is for operators and DevOps engineers who already think in YAML, stages, manifests, and repeatable procedures, but need a much smaller tool for disconnected work.
+`deck` is for operators and engineers who already think in YAML, stages, and repeatable procedures, but need a smaller tool for disconnected or constrained work — somewhere between a shell script and a full automation platform.

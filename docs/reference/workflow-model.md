@@ -1,15 +1,6 @@
 # Workflow Model
 
-`deck` uses a small YAML workflow model so larger procedures stay reviewable.
-
-The goal is not to invent a giant DSL. The goal is to give air-gapped operational work a clearer structure than a growing Bash script.
-
-## Why the model looks this way
-
-- procedures need visible structure when they get long
-- operators should review intent, not reverse-engineer shell
-- DevOps users should feel at home with YAML, stages, and manifest-like documents
-- common host changes should use typed steps instead of ad hoc command blocks
+`deck` uses a YAML workflow model so larger procedures stay reviewable. The goal is not to invent a DSL — it is to give air-gapped operational work a clearer structure than a growing shell script, where typed steps express intent and named phases show the operator what the procedure is doing before they read every detail.
 
 ## Top-level fields
 
@@ -55,24 +46,20 @@ Optional execution controls:
 
 ## Phases
 
-Use phases when the procedure has natural boundaries.
-
-That keeps large workflows readable and lets the operator see the intended order without reading every command detail.
-
-Typical examples:
+Use phases when the procedure has natural boundaries. Typical examples:
 
 - `prepare`
 - `install`
 - `verify`
 - `cleanup`
 
+Named phases keep large workflows readable and let the operator see the intended order without reading every command detail.
+
 ## Prefer typed steps
 
-Typed steps are the center of the model.
+Typed steps are the center of the model. They make the workflow easier to scan, easier to validate, and easier to evolve than shell-heavy procedures.
 
-They make the workflow easier to scan, easier to validate, and easier to evolve than shell-heavy procedures.
-
-Supported step kinds include:
+Supported step kinds:
 
 - `Artifacts`
 - `Command`
@@ -95,9 +82,7 @@ Supported step kinds include:
 
 ## When to use Command
 
-Use `Command` when no supported step kind fits yet.
-
-That is the escape hatch, not the ideal authoring path. If a workflow leans heavily on `Command`, the procedure may still be too close to raw shell.
+Use `Command` when no supported step kind fits yet. It is the escape hatch, not the ideal authoring path. If a workflow leans heavily on `Command`, the procedure may still be too close to raw shell.
 
 ## Validation model
 
@@ -107,7 +92,7 @@ That is the escape hatch, not the ideal authoring path. If a workflow leans heav
 - the schema for each referenced step kind
 - reserved runtime keys and workflow compatibility rules
 
-This is one of the main reasons to use a workflow model instead of passing around shell files.
+Validating before transport is one of the main reasons to use a workflow model instead of passing around shell files.
 
 ## Related references
 

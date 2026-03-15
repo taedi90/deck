@@ -2,7 +2,7 @@
 
 ## Project Overview
 ### Purpose
-- `deck` aims to be a single-binary IaC tool for infrastructure work in air-gapped environments with no SSH, no PXE, and no BMC.
+- `deck` aims to be a single-binary workflow tool for infrastructure work in air-gapped environments with no SSH, no PXE, and no BMC.
 
 ### Key Paths
 - `cmd/`: CLI entry points
@@ -18,7 +18,7 @@
 - Language: Go
 - Package manager: Go modules
 - Test runners: `go test`, `deck workflow validate`, Vagrant scenario tests
-- Formatting/linting: `gofmt`, `golangci-lint` (planned)
+- Formatting/linting: `gofmt`, `golangci-lint`
 
 ## Coding Principles
 1) Think before coding

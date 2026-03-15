@@ -1,21 +1,13 @@
 # Example Workflows
 
-The files in `docs/examples/` are small starting points for real procedures.
-
-They are meant to show how `deck` keeps operational work readable: use typed steps where possible, keep the workflow shape obvious, and treat shell as the fallback.
+The files in `docs/examples/` are starting points for real procedures. They show how typed steps express operational intent more clearly than equivalent shell, and how phases keep larger workflows scannable.
 
 ## How to use these examples
 
-- start from them when you want a concrete workflow to adapt
-- keep the overall structure clear before adding more details
-- replace repetitive shell with typed steps when a step kind already fits
-- validate the result before packaging or transport
-
-## What not to assume
-
-- these are not remote orchestration playbooks
-- these do not require a shared server to be useful
-- `Command` is not the preferred first choice just because it is flexible
+- Start from them when you want a concrete workflow to adapt.
+- Keep the overall structure clear before adding more details.
+- Replace repetitive shell with typed steps when a step kind already fits.
+- Validate the result before packaging or transport.
 
 ## Files
 
@@ -34,4 +26,4 @@ Use `deck lint` for schema-level checks:
 deck lint --file docs/examples/offline-k8s-control-plane.yaml
 ```
 
-`cases.tsv` remains the lightweight example index used by repository maintainers.
+`cases.tsv` is the lightweight example index used by repository maintainers.

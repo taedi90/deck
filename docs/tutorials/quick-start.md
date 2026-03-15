@@ -1,6 +1,6 @@
 # Quick Start
 
-This tutorial shows the default `deck` path:
+This tutorial walks through the default `deck` path:
 
 1. create a workspace
 2. express the procedure as a workflow
@@ -8,15 +8,13 @@ This tutorial shows the default `deck` path:
 4. build the bundle
 5. run it locally
 
-That small loop is the point of the tool.
-
 ## 1. Create a workspace
 
 ```bash
 deck init --out ./demo
 ```
 
-This creates:
+This creates a starter layout with two entry workflows and a set of empty artifact directories:
 
 - `./demo/workflows/scenarios/prepare.yaml`
 - `./demo/workflows/scenarios/apply.yaml`
@@ -29,11 +27,9 @@ This creates:
 
 ## 2. Add or edit steps
 
-`deck init` starts with fixed entry workflows under `workflows/scenarios/` and reusable fragments under `workflows/components/`. Put preparation work in `prepare.yaml` and target-machine work in `apply.yaml`.
+`deck init` creates fixed entry workflows under `workflows/scenarios/` and reusable fragments under `workflows/components/`. Preparation work goes in `prepare.yaml`; work that runs on the target machine goes in `apply.yaml`.
 
-Prefer typed steps first. The goal is to keep the procedure readable when it grows.
-
-Minimal example:
+Prefer typed steps. They make the procedure easier to read and lint as it grows.
 
 ```yaml
 role: apply
@@ -49,7 +45,7 @@ steps:
         deck maintenance session in progress
 ```
 
-Use `vars.yaml` or inline `vars` to keep site-specific values out of the steps themselves.
+Use `vars.yaml` or inline `vars` to keep site-specific values out of the step definitions.
 
 ## 3. Validate before you package
 
@@ -58,7 +54,7 @@ deck lint
 deck lint --file ./demo/workflows/scenarios/apply.yaml
 ```
 
-Validation checks the workflow structure and the schema for each supported step kind.
+`deck lint` checks the workflow structure and the schema for each typed step. Catching mistakes here is cheaper than discovering them inside the air gap.
 
 ## 4. Build an offline bundle
 
@@ -70,7 +66,7 @@ deck prepare
 deck bundle build --out ./bundle.tar
 ```
 
-`prepare` writes generated artifacts under `./demo/outputs/`, refreshes `./demo/deck`, and updates `./demo/.deck/manifest.json`. `bundle build` turns the current workspace into the bundle you carry into the site.
+`prepare` writes generated artifacts under `./demo/outputs/`, refreshes `./demo/deck`, and updates `./demo/.deck/manifest.json`. `bundle build` turns the current workspace into the archive you carry into the site.
 
 ## 5. Apply locally at the target site
 
@@ -78,13 +74,13 @@ deck bundle build --out ./bundle.tar
 deck apply
 ```
 
-`apply` executes the workflow locally. That is the default `deck` story: make the procedure understandable, package what it needs, then run it on the machine that needs the change.
+`apply` executes the workflow locally on the machine that needs the change. No SSH, no controller, no external reach-back required.
 
 ## 6. Optional: add site assistance
 
-Use site-assisted features only when you explicitly want a temporary local server, shared bundle source, or session visibility inside the air gap.
+Some sites benefit from a temporary local server inside the air gap — a shared bundle source or a place to collect session status across multiple nodes. Use `deck server up` for this when it solves a real problem.
 
-That path extends the same local workflow. It does not replace it.
+That path extends the local workflow. It does not replace it.
 
 ## What to read next
 

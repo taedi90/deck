@@ -1,45 +1,20 @@
+<table width="100%"><tr><td valign="middle">
+
 # deck
 
 [Korean README](./README.ko.md) | [Documentation](./docs/README.md)
 
-`deck` is a simple workflow tool for air-gapped and operationally constrained environments.
+`deck` is a workflow tool built for air-gapped and operationally constrained environments. Write a YAML workflow, lint it, bundle everything the site needs, carry it in, and run it locally on the target machine.
 
-It exists for the cases where larger automation platforms are a bad fit and growing Bash procedures become hard to read, review, and maintain. `deck` keeps the model small: write a workflow, lint it, bundle what the site needs, carry it in, and run it locally.
-
-## Visuals
-
-![deck terminal demo](docs/assets/deck-cli.gif)
+</td><td align="right" valign="middle">
+<img src="assets/logo.png" alt="deck logo" width="150" />
+</td></tr></table>
 
 ## Why deck exists
 
-- **Air-gapped by design**: built for sites with no SSH, no PXE, no BMC, and no internet assumptions.
-- **Small tool, bounded problem**: not a new general-purpose automation platform.
-- **Structured over sprawling shell**: large procedures stay readable as steps and phases instead of turning into long Bash files.
-- **Developer-friendly shape**: YAML workflows feel familiar to people who already work with CI/CD pipelines and Kubernetes manifests.
-- **Bundle-first execution**: package the workflow, artifacts, and `deck` binary together before the maintenance session.
+Operational procedures for disconnected sites — Kubernetes bootstraps, package installs, host configuration — often start as shell scripts and grow until they are too large to review confidently. `deck` gives those procedures a cleaner shape: typed steps with visible intent, lint validation before transport, and a self-contained bundle that travels with the workflow.
 
-## What deck is for
-
-- Repeatable maintenance procedures that must run locally on the target host or node.
-- Offline preparation and transfer of packages, images, files, and workflow inputs.
-- Teams that want a simple workflow engine instead of a larger controller, agent system, or runtime stack.
-- Situations where Bash started simple but the procedure is now too large to review comfortably.
-
-## What deck is not for
-
-- Remote orchestration across always-connected infrastructure.
-- General replacement for Terraform, Pulumi, Ansible, Chef, Puppet, or other broad platforms.
-- Long-lived control planes, fleet agents, or policy engines.
-- Cloud-first workflows where live APIs and central controllers are normal assumptions.
-
-## Why not just use Bash
-
-- Small scripts are fast. Large procedures are not.
-- Bash tends to hide operator intent inside command details.
-- Review quality drops when a procedure becomes one long shell file.
-- Reuse, validation, and step-level reasoning get weak quickly.
-
-`deck` does not try to eliminate shell completely. It gives the procedure a clearer structure and keeps `Command` as the escape hatch, not the default authoring model.
+It is built for sites with no SSH-driven orchestration, no internet access, and a local human in the loop. If your environment looks more like a cloud deployment with live APIs and central controllers, deck is probably not the right fit.
 
 ## Core flow
 
@@ -105,21 +80,9 @@ deck bundle build --out ./bundle.tar
 deck apply
 ```
 
-Start with `docs/tutorials/quick-start.md` for the guided path.
-
-## Learn more
-
-- Docs home: `docs/README.md`
-- Why deck: `docs/concepts/why-deck.md`
-- Workflow model: `docs/reference/workflow-model.md`
-- CLI reference: `docs/reference/cli.md`
-- Example workflows: `docs/examples/README.md`
+Start with `docs/tutorials/quick-start.md` for the guided walkthrough.
 
 ## Shell completion
-
-`deck` keeps completion generation behind a dedicated command so normal command output stays unchanged.
-
-Requested help is written to stdout. Command and flag errors are written to stderr without automatic usage output.
 
 ```bash
 deck completion bash
@@ -128,12 +91,15 @@ deck completion fish
 deck completion powershell
 ```
 
-## Scope and non-goals
+Completion output goes to stdout. Help is shown only when requested with `--help`. Command and flag errors are written to stderr without automatic usage output.
 
-- `deck` focuses on simple, local, bundle-first execution in disconnected environments.
-- Site-assisted use is explicit and additive. It does not replace the local operator path.
-- `deck` is not a remote orchestration framework.
-- `deck` is not optimized for broad online infrastructure automation.
+## Learn more
+
+- Docs home: `docs/README.md`
+- Why deck: `docs/concepts/why-deck.md`
+- Workflow model: `docs/reference/workflow-model.md`
+- CLI reference: `docs/reference/cli.md`
+- Example workflows: `docs/examples/README.md`
 
 ## Contributing and validation
 
@@ -159,9 +125,9 @@ bash test/e2e/vagrant/run-scenario.sh --scenario k8s-worker-join
 bash test/e2e/vagrant/run-scenario.sh --scenario k8s-node-reset
 ```
 
-The maintained Kubernetes regression layout now lives under `test/workflows/`, with scenario entrypoints in `test/workflows/scenarios/`, reusable fragments in `test/workflows/components/`, and shared defaults in `test/workflows/vars.yaml`.
+The maintained Kubernetes regression layout lives under `test/workflows/`, with scenario entrypoints in `test/workflows/scenarios/`, reusable fragments in `test/workflows/components/`, and shared defaults in `test/workflows/vars.yaml`.
 Local Vagrant runs keep machine state in `test/vagrant/.vagrant/`, reuse scenario caches under `test/artifacts/cache/bundles/<scenario>/`, and reuse run artifacts under `test/artifacts/runs/<scenario>/<run-id>/` unless you choose a different `--art-dir` or run with `--fresh`.
-The legacy `test/vagrant/run-offline-multinode-agent.sh` entrypoint still exists as a temporary compatibility shim during migration.
+
 ## License
 
 Apache-2.0. See `LICENSE`.

@@ -1,8 +1,6 @@
 # CLI Reference
 
-The `deck` CLI is intentionally small.
-
-It supports a simple operator flow: author the workflow, lint it, prepare bundle contents, build the bundle, and run locally.
+The `deck` CLI is intentionally small. It supports a simple operator flow: author the workflow, lint it, prepare bundle contents, build the bundle, and run locally.
 
 ## Default local flow
 
@@ -21,14 +19,13 @@ It supports a simple operator flow: author the workflow, lint it, prepare bundle
 - `server health`: check `/healthz` on an explicit or saved server
 - `server logs`: read local server audit logs from file or journal
 
-These commands are additive. They do not replace the default local execution path.
+These commands are additive and do not replace the default local execution path.
 
 ## Additional commands
 
 - `plan`: inspect which apply steps would run or skip before execution
 - `doctor`: generate a report for preflight-style checks and diagnostics
-- `completion` is the only completion entrypoint, so normal command stdout stays reserved for command results.
-- Supported shells: `bash`, `zsh`, `fish`, `powershell`
+- `completion`: generate shell completion for `bash`, `zsh`, `fish`, or `powershell`; output goes to stdout so normal command output stays unchanged
 
 ```bash
 deck completion bash
@@ -75,5 +72,4 @@ deck apply --session session-1
 - `apply` defaults to the `install` phase when phases are used.
 - Help text is shown on stdout only when you request it with `--help` or `help`.
 - Command and flag errors are written to stderr without automatic usage output.
-- Prefer typed step kinds for common host changes.
-- Keep `Command` for cases where the clearer typed form does not exist yet.
+- Prefer typed step kinds for common host changes. Keep `Command` for cases where the clearer typed form does not exist yet.
