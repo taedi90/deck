@@ -46,34 +46,34 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `apiVersion` | `string` | yes | `` | `` |  | `deck/v1alpha1` |
-| `id` | `string` | yes | `` | `` |  | `example` |
-| `kind` | `string` | yes | `` | `` |  | `File` |
-| `metadata` | `object` | no | `` | `` |  | `{...}` |
-| `register` | `object` | no | `` | `` |  | `{...}` |
-| `retry` | `integer` | no | `` | `` |  | `1` |
-| `spec` | `object` | yes | `` | `` |  | `{...}` |
-| `timeout` | `string` | no | `` | `` |  | `example` |
-| `when` | `string` | no | `` | `` |  | `example` |
+| `apiVersion` | `string` | yes | `` | `` | Must be `deck/v1alpha1`. | `deck/v1alpha1` |
+| `id` | `string` | yes | `` | `` | Unique identifier for the step within the workflow. Used in logs and plan output. | `configure-containerd` |
+| `kind` | `string` | yes | `` | `` | Typed step kind. Determines which schema is applied to `spec`. | `File` |
+| `metadata` | `object` | no | `` | `` | Optional free-form annotation map attached to the step for tooling or audit purposes. | `{owner: platform-team}` |
+| `register` | `object` | no | `` | `` | Map of variable names to step output keys. Exported values are available to later steps as runtime vars. | `{joinCmd: joinCommand}` |
+| `retry` | `integer` | no | `` | `` | Number of times to retry the step after a failure before marking it as failed. | `3` |
+| `spec` | `object` | yes | `` | `` | Step-specific configuration payload. Shape depends on the chosen `kind`. | `{...}` |
+| `timeout` | `string` | no | `` | `` | Maximum duration allowed for the step before it is cancelled. Accepts Go duration strings. | `5m` |
+| `when` | `string` | no | `` | `` | CEL expression evaluated at runtime. The step is skipped when the expression evaluates to false. | `vars.skipKubeadm != 'true'` |
 
 ## Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | no | `` | `download, install, copy, edit` | Selects the file operation mode and therefore changes which sibling fields become required. | `copy` |
-| `spec.backup` | `boolean` | no | `` | `` |  | `true` |
-| `spec.content` | `string` | no | `` | `` |  | `example` |
-| `spec.contentFromTemplate` | `string` | no | `` | `` |  | `example` |
-| `spec.dest` | `string` | no | `` | `` | Destination path on the node for `copy`. | `/home/vagrant/.kube/config` |
-| `spec.edits` | `array<object>` | no | `` | `` | Ordered match/replace edit rules for `edit`. | `[{match:SystemdCgroup = false,with:SystemdCgroup = true}]` |
-| `spec.fetch` | `object` | no | `` | `` |  | `{...}` |
-| `spec.group` | `string` | no | `` | `` |  | `example` |
-| `spec.mode` | `string` | no | `` | `` |  | `example` |
-| `spec.output` | `object` | no | `` | `` |  | `{...}` |
-| `spec.owner` | `string` | no | `` | `` |  | `example` |
-| `spec.path` | `string` | no | `` | `` | Target path for `install` or `edit` actions. | `/etc/containerd/config.toml` |
-| `spec.source` | `object` | no | `` | `` | Structured download source used by `download`. | `{url:https://example.invalid/file.tar.gz}` |
-| `spec.src` | `string` | no | `` | `` | Source path already present on the node for `copy`. | `/etc/kubernetes/admin.conf` |
+| `spec.action` | `string` | no | `` | `download, install, copy, edit` | Selects the file operation. Each action changes which sibling fields are required. | `copy` |
+| `spec.backup` | `boolean` | no | `` | `` | Create a `.bak` copy of the original file before overwriting it. | `true` |
+| `spec.content` | `string` | no | `` | `` | Inline file content written verbatim to `path`. Used with `install`. | `[offline-base]\nbaseurl=http://repo.local` |
+| `spec.contentFromTemplate` | `string` | no | `` | `` | Path to a template file relative to `workflows/` rendered with the current vars. Used with `install`. Prefer this over `content` for multi-line configs. | `containerd-config.toml.tmpl` |
+| `spec.dest` | `string` | no | `` | `` | Destination path on the node. Required for `copy`. | `/home/vagrant/.kube/config` |
+| `spec.edits` | `array<object>` | no | `` | `` | Ordered list of match/replace rules applied sequentially to the file. Required for `edit`. | `[{match:SystemdCgroup = false,with:SystemdCgroup = true}]` |
+| `spec.fetch` | `object` | no | `` | `` | Optional download transport settings applied to `download` fetches. | `{offlineOnly:true}` |
+| `spec.group` | `string` | no | `` | `` | Group name or GID that should own the written file. | `root` |
+| `spec.mode` | `string` | no | `` | `` | File permissions in octal notation applied after writing. | `0644` |
+| `spec.output` | `object` | no | `` | `` | Output target inside the bundle for the downloaded file. Required for `download`. | `{path:files/bin/runc}` |
+| `spec.owner` | `string` | no | `` | `` | User name or UID that should own the written file. | `root` |
+| `spec.path` | `string` | no | `` | `` | Destination path on the node. Required for `install` and `edit`. | `/etc/containerd/config.toml` |
+| `spec.source` | `object` | no | `` | `` | Download source descriptor. Required for `download`. Provide exactly one of `url`, `path`, or `bundle`. | `{url:https://example.invalid/file.tar.gz}` |
+| `spec.src` | `string` | no | `` | `` | Source path already present on the node. Required for `copy`. | `/etc/kubernetes/admin.conf` |
 
 ## Nested Objects
 
@@ -81,24 +81,24 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.output.chmod` | `string` | no | `` | `` |  | `example` |
-| `spec.output.path` | `string` | yes | `` | `` | Bundle-relative output path for the downloaded file. | `files/bin/runc` |
+| `spec.output.chmod` | `string` | no | `` | `` | File permissions applied to the downloaded output file in octal notation. | `0755` |
+| `spec.output.path` | `string` | yes | `` | `` | Bundle-relative path where the downloaded file is written. | `files/bin/runc` |
 
 ### `spec.source`
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.source.bundle` | `object` | no | `` | `` | Bundle-root reference for offline file staging. | `{root:files,path:bin/linux/amd64/runc}` |
-| `spec.source.path` | `string` | no | `` | `` |  | `example` |
-| `spec.source.sha256` | `string` | no | `` | `` |  | `example` |
-| `spec.source.url` | `string` | no | `` | `` |  | `example` |
+| `spec.source.bundle` | `object` | no | `` | `` | Reference to a file already inside the bundle. Used to stage a bundle-resident file into a new output location. | `{root:files,path:bin/linux/amd64/runc}` |
+| `spec.source.path` | `string` | no | `` | `` | Local filesystem path to use as the source during prepare. | `/opt/cache/runc` |
+| `spec.source.sha256` | `string` | no | `` | `` | Expected SHA-256 checksum. Fails the step if the fetched file does not match. | `abc123...` |
+| `spec.source.url` | `string` | no | `` | `` | URL to fetch the file from during prepare. | `https://mirror.example.com/runc` |
 
 ### `spec.source.bundle`
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.source.bundle.path` | `string` | yes | `` | `` |  | `example` |
-| `spec.source.bundle.root` | `string` | yes | `` | `files, images, packages` |  | `files` |
+| `spec.source.bundle.path` | `string` | yes | `` | `` | Relative path within the bundle root to the source file. | `bin/linux/amd64/runc` |
+| `spec.source.bundle.root` | `string` | yes | `` | `files, images, packages` | Bundle root category to read from (`files`, `images`, or `packages`). | `files` |
 
 
 ## Validation Rules
@@ -112,13 +112,14 @@ spec:
 ## Notes
 
 - `File` is usually the best first choice for host file changes because it stays declarative and validates action-specific inputs.
-- `download` writes into a bundle-style output target, while `copy`, `install`, and `edit` operate on live node paths.
+- `download` writes into a bundle output target during prepare, while `copy`, `install`, and `edit` operate on live node paths during apply.
+- Use `contentFromTemplate` instead of `content` for configs that include variable substitution.
 
 ## Actions
 
 ### `copy`
 
-Use `copy` to move a file already present on the node.
+Use `copy` to move a file already present on the node from one path to another.
 
 - required fields: `spec.src`, `spec.dest`
 
@@ -126,9 +127,9 @@ Use `copy` to move a file already present on the node.
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | no | `` | `download, install, copy, edit` | Selects the file operation mode and therefore changes which sibling fields become required. | `copy` |
-| `spec.dest` | `string` | no | `` | `` | Destination path on the node for `copy`. | `/home/vagrant/.kube/config` |
-| `spec.src` | `string` | no | `` | `` | Source path already present on the node for `copy`. | `/etc/kubernetes/admin.conf` |
+| `spec.action` | `string` | no | `` | `download, install, copy, edit` | Selects the file operation. Each action changes which sibling fields are required. | `copy` |
+| `spec.dest` | `string` | no | `` | `` | Destination path on the node. Required for `copy`. | `/home/vagrant/.kube/config` |
+| `spec.src` | `string` | no | `` | `` | Source path already present on the node. Required for `copy`. | `/etc/kubernetes/admin.conf` |
 
 #### Rules
 
@@ -148,7 +149,7 @@ spec:
 ```
 ### `download`
 
-Use `download` to pull or bundle a source into a staged output target.
+Use `download` to pull or bundle a source into a staged output target during prepare.
 
 - required fields: `spec.source`, `spec.output`
 
@@ -156,17 +157,17 @@ Use `download` to pull or bundle a source into a staged output target.
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | no | `` | `download, install, copy, edit` | Selects the file operation mode and therefore changes which sibling fields become required. | `copy` |
-| `spec.output` | `object` | no | `` | `` |  | `{...}` |
-| `spec.output.chmod` | `string` | no | `` | `` |  | `example` |
-| `spec.output.path` | `string` | yes | `` | `` | Bundle-relative output path for the downloaded file. | `files/bin/runc` |
-| `spec.source` | `object` | no | `` | `` | Structured download source used by `download`. | `{url:https://example.invalid/file.tar.gz}` |
-| `spec.source.bundle` | `object` | no | `` | `` | Bundle-root reference for offline file staging. | `{root:files,path:bin/linux/amd64/runc}` |
-| `spec.source.bundle.path` | `string` | yes | `` | `` |  | `example` |
-| `spec.source.bundle.root` | `string` | yes | `` | `files, images, packages` |  | `files` |
-| `spec.source.path` | `string` | no | `` | `` |  | `example` |
-| `spec.source.sha256` | `string` | no | `` | `` |  | `example` |
-| `spec.source.url` | `string` | no | `` | `` |  | `example` |
+| `spec.action` | `string` | no | `` | `download, install, copy, edit` | Selects the file operation. Each action changes which sibling fields are required. | `copy` |
+| `spec.output` | `object` | no | `` | `` | Output target inside the bundle for the downloaded file. Required for `download`. | `{path:files/bin/runc}` |
+| `spec.output.chmod` | `string` | no | `` | `` | File permissions applied to the downloaded output file in octal notation. | `0755` |
+| `spec.output.path` | `string` | yes | `` | `` | Bundle-relative path where the downloaded file is written. | `files/bin/runc` |
+| `spec.source` | `object` | no | `` | `` | Download source descriptor. Required for `download`. Provide exactly one of `url`, `path`, or `bundle`. | `{url:https://example.invalid/file.tar.gz}` |
+| `spec.source.bundle` | `object` | no | `` | `` | Reference to a file already inside the bundle. Used to stage a bundle-resident file into a new output location. | `{root:files,path:bin/linux/amd64/runc}` |
+| `spec.source.bundle.path` | `string` | yes | `` | `` | Relative path within the bundle root to the source file. | `bin/linux/amd64/runc` |
+| `spec.source.bundle.root` | `string` | yes | `` | `files, images, packages` | Bundle root category to read from (`files`, `images`, or `packages`). | `files` |
+| `spec.source.path` | `string` | no | `` | `` | Local filesystem path to use as the source during prepare. | `/opt/cache/runc` |
+| `spec.source.sha256` | `string` | no | `` | `` | Expected SHA-256 checksum. Fails the step if the fetched file does not match. | `abc123...` |
+| `spec.source.url` | `string` | no | `` | `` | URL to fetch the file from during prepare. | `https://mirror.example.com/runc` |
 
 #### Rules
 
@@ -187,7 +188,7 @@ spec:
 ```
 ### `edit`
 
-Use `edit` for in-place match/replace style edits.
+Use `edit` for in-place match/replace edits on an existing file.
 
 - required fields: `spec.path`, `spec.edits`
 
@@ -195,12 +196,12 @@ Use `edit` for in-place match/replace style edits.
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | no | `` | `download, install, copy, edit` | Selects the file operation mode and therefore changes which sibling fields become required. | `copy` |
-| `spec.edits` | `array<object>` | no | `` | `` | Ordered match/replace edit rules for `edit`. | `[{match:SystemdCgroup = false,with:SystemdCgroup = true}]` |
-| `spec.edits[].match` | `string` | yes | `` | `` |  | `example` |
-| `spec.edits[].op` | `string` | no | `` | `` |  | `example` |
-| `spec.edits[].with` | `string` | no | `` | `` |  | `example` |
-| `spec.path` | `string` | no | `` | `` | Target path for `install` or `edit` actions. | `/etc/containerd/config.toml` |
+| `spec.action` | `string` | no | `` | `download, install, copy, edit` | Selects the file operation. Each action changes which sibling fields are required. | `copy` |
+| `spec.edits` | `array<object>` | no | `` | `` | Ordered list of match/replace rules applied sequentially to the file. Required for `edit`. | `[{match:SystemdCgroup = false,with:SystemdCgroup = true}]` |
+| `spec.edits[].match` | `string` | yes | `` | `` | Literal string or pattern to search for in the file. | `SystemdCgroup = false` |
+| `spec.edits[].op` | `string` | no | `` | `` | Edit operation type. `replace` substitutes the match; `append` adds `with` after each match. Defaults to `replace`. | `replace` |
+| `spec.edits[].with` | `string` | no | `` | `` | Replacement string. Substituted wherever `match` is found. | `SystemdCgroup = true` |
+| `spec.path` | `string` | no | `` | `` | Destination path on the node. Required for `install` and `edit`. | `/etc/containerd/config.toml` |
 
 #### Rules
 
@@ -219,7 +220,7 @@ spec:
 ```
 ### `install`
 
-Use `install` to write inline content or a rendered template to a destination path.
+Use `install` to write inline content or a rendered template to a destination path on the node.
 
 - required fields: `spec.path`, `spec.content`, `spec.contentFromTemplate`
 
@@ -227,10 +228,10 @@ Use `install` to write inline content or a rendered template to a destination pa
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | no | `` | `download, install, copy, edit` | Selects the file operation mode and therefore changes which sibling fields become required. | `copy` |
-| `spec.content` | `string` | no | `` | `` |  | `example` |
-| `spec.contentFromTemplate` | `string` | no | `` | `` |  | `example` |
-| `spec.path` | `string` | no | `` | `` | Target path for `install` or `edit` actions. | `/etc/containerd/config.toml` |
+| `spec.action` | `string` | no | `` | `download, install, copy, edit` | Selects the file operation. Each action changes which sibling fields are required. | `copy` |
+| `spec.content` | `string` | no | `` | `` | Inline file content written verbatim to `path`. Used with `install`. | `[offline-base]\nbaseurl=http://repo.local` |
+| `spec.contentFromTemplate` | `string` | no | `` | `` | Path to a template file relative to `workflows/` rendered with the current vars. Used with `install`. Prefer this over `content` for multi-line configs. | `containerd-config.toml.tmpl` |
+| `spec.path` | `string` | no | `` | `` | Destination path on the node. Required for `install` and `edit`. | `/etc/containerd/config.toml` |
 
 #### Rules
 

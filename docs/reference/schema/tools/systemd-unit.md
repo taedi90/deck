@@ -43,26 +43,26 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `apiVersion` | `string` | yes | `` | `` |  | `deck/v1alpha1` |
-| `id` | `string` | yes | `` | `` |  | `example` |
-| `kind` | `string` | yes | `` | `` |  | `SystemdUnit` |
-| `metadata` | `object` | no | `` | `` |  | `{...}` |
-| `register` | `object` | no | `` | `` |  | `{...}` |
-| `retry` | `integer` | no | `` | `` |  | `1` |
-| `spec` | `object` | yes | `` | `` |  | `{...}` |
-| `timeout` | `string` | no | `` | `` |  | `example` |
-| `when` | `string` | no | `` | `` |  | `example` |
+| `apiVersion` | `string` | yes | `` | `` | Must be `deck/v1alpha1`. | `deck/v1alpha1` |
+| `id` | `string` | yes | `` | `` | Unique identifier for the step within the workflow. Used in logs and plan output. | `configure-containerd` |
+| `kind` | `string` | yes | `` | `` | Typed step kind. Determines which schema is applied to `spec`. | `File` |
+| `metadata` | `object` | no | `` | `` | Optional free-form annotation map attached to the step for tooling or audit purposes. | `{owner: platform-team}` |
+| `register` | `object` | no | `` | `` | Map of variable names to step output keys. Exported values are available to later steps as runtime vars. | `{joinCmd: joinCommand}` |
+| `retry` | `integer` | no | `` | `` | Number of times to retry the step after a failure before marking it as failed. | `3` |
+| `spec` | `object` | yes | `` | `` | Step-specific configuration payload. Shape depends on the chosen `kind`. | `{...}` |
+| `timeout` | `string` | no | `` | `` | Maximum duration allowed for the step before it is cancelled. Accepts Go duration strings. | `5m` |
+| `when` | `string` | no | `` | `` | CEL expression evaluated at runtime. The step is skipped when the expression evaluates to false. | `vars.skipKubeadm != 'true'` |
 
 ## Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.content` | `string` | no | `` | `` |  | `example` |
-| `spec.contentFromTemplate` | `string` | no | `` | `` |  | `example` |
-| `spec.daemonReload` | `boolean` | no | `` | `` |  | `true` |
-| `spec.mode` | `string` | no | `` | `` |  | `example` |
-| `spec.path` | `string` | yes | `` | `` |  | `example` |
-| `spec.service` | `object` | no | `` | `` |  | `{...}` |
+| `spec.content` | `string` | no | `` | `` | Inline unit file content written verbatim to `path`. | `[Unit]\nDescription=kubelet` |
+| `spec.contentFromTemplate` | `string` | no | `` | `` | Path to a template file relative to `workflows/` rendered with the current vars. Prefer this for parameterized unit files. | `kubelet.service.tmpl` |
+| `spec.daemonReload` | `boolean` | no | `` | `` | Run `systemctl daemon-reload` after writing the unit file so systemd picks up the change. | `true` |
+| `spec.mode` | `string` | no | `` | `` | File permissions applied to the unit file in octal notation. | `0644` |
+| `spec.path` | `string` | yes | `` | `` | Destination path for the unit file on the node. | `/etc/systemd/system/kubelet.service` |
+| `spec.service` | `object` | no | `` | `` | Optional service management block run after the unit file is written. | `{name:kubelet,enabled:true,state:started}` |
 
 ## Nested Objects
 
@@ -70,9 +70,9 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.service.enabled` | `boolean` | no | `` | `` |  | `true` |
-| `spec.service.name` | `string` | yes | `` | `` |  | `example` |
-| `spec.service.state` | `string` | no | `` | `unchanged, started, stopped, restarted, reloaded` |  | `unchanged` |
+| `spec.service.enabled` | `boolean` | no | `` | `` | Whether the service should be enabled to start on boot. | `true` |
+| `spec.service.name` | `string` | yes | `` | `` | Service name to manage. Defaults to the unit file name when omitted. | `kubelet` |
+| `spec.service.state` | `string` | no | `` | `unchanged, started, stopped, restarted, reloaded` | Desired service state after writing the unit file. | `started` |
 
 
 ## Related

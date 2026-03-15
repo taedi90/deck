@@ -59,22 +59,22 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `apiVersion` | `string` | yes | `` | `` |  | `deck/v1alpha1` |
-| `id` | `string` | yes | `` | `` |  | `example` |
-| `kind` | `string` | yes | `` | `` |  | `Artifacts` |
-| `metadata` | `object` | no | `` | `` |  | `{...}` |
-| `register` | `object` | no | `` | `` |  | `{...}` |
-| `retry` | `integer` | no | `` | `` |  | `1` |
-| `spec` | `object` | yes | `` | `` |  | `{...}` |
-| `timeout` | `string` | no | `` | `` |  | `example` |
-| `when` | `string` | no | `` | `` |  | `example` |
+| `apiVersion` | `string` | yes | `` | `` | Must be `deck/v1alpha1`. | `deck/v1alpha1` |
+| `id` | `string` | yes | `` | `` | Unique identifier for the step within the workflow. Used in logs and plan output. | `configure-containerd` |
+| `kind` | `string` | yes | `` | `` | Typed step kind. Determines which schema is applied to `spec`. | `File` |
+| `metadata` | `object` | no | `` | `` | Optional free-form annotation map attached to the step for tooling or audit purposes. | `{owner: platform-team}` |
+| `register` | `object` | no | `` | `` | Map of variable names to step output keys. Exported values are available to later steps as runtime vars. | `{joinCmd: joinCommand}` |
+| `retry` | `integer` | no | `` | `` | Number of times to retry the step after a failure before marking it as failed. | `3` |
+| `spec` | `object` | yes | `` | `` | Step-specific configuration payload. Shape depends on the chosen `kind`. | `{...}` |
+| `timeout` | `string` | no | `` | `` | Maximum duration allowed for the step before it is cancelled. Accepts Go duration strings. | `5m` |
+| `when` | `string` | no | `` | `` | CEL expression evaluated at runtime. The step is skipped when the expression evaluates to false. | `vars.skipKubeadm != 'true'` |
 
 ## Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
 | `spec.artifacts` | `array<object>` | yes | `` | `` | List of per-architecture artifact entries to install or extract. | `[{source:{...},install:{...}}]` |
-| `spec.fetch` | `object` | no | `` | `` |  | `{...}` |
+| `spec.fetch` | `object` | no | `` | `` | Shared fetch configuration applied as defaults across all artifact entries. | `{offlineOnly:true}` |
 
 ## Nested Objects
 
@@ -82,76 +82,77 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.artifacts[].extract.destination` | `string` | yes | `` | `` | Directory where an archive artifact should be extracted. | `/opt/cni/bin` |
-| `spec.artifacts[].extract.include` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.artifacts[].extract.mode` | `string` | no | `` | `` |  | `example` |
+| `spec.artifacts[].extract.destination` | `string` | yes | `` | `` | Directory on the node where archive contents are extracted. | `/opt/cni/bin` |
+| `spec.artifacts[].extract.include` | `array<string>` | no | `` | `` | Optional list of paths to extract from the archive. Extracts all files when omitted. | `[loopback,bridge]` |
+| `spec.artifacts[].extract.mode` | `string` | no | `` | `` | File permissions applied to extracted files in octal notation. | `0755` |
 
 ### `spec.artifacts[].install`
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.artifacts[].install.mode` | `string` | no | `` | `` |  | `example` |
-| `spec.artifacts[].install.path` | `string` | yes | `` | `` | Destination path on the node when installing a single artifact file. | `/usr/local/sbin/runc` |
+| `spec.artifacts[].install.mode` | `string` | no | `` | `` | File permissions applied to the installed file in octal notation. | `0755` |
+| `spec.artifacts[].install.path` | `string` | yes | `` | `` | Destination path on the node for the installed file. | `/usr/local/sbin/runc` |
 
 ### `spec.artifacts[].skipIfPresent`
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.artifacts[].skipIfPresent.executable` | `boolean` | no | `false` | `` |  | `false` |
-| `spec.artifacts[].skipIfPresent.path` | `string` | yes | `` | `` |  | `example` |
+| `spec.artifacts[].skipIfPresent.executable` | `boolean` | no | `false` | `` | Also assert that the existing file is executable. If false, the path check alone determines whether to skip. | `true` |
+| `spec.artifacts[].skipIfPresent.path` | `string` | yes | `` | `` | Filesystem path to check before installing or extracting. | `/usr/local/sbin/runc` |
 
 ### `spec.artifacts[].source`
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.artifacts[].source.amd64` | `object` | yes | `` | `` | Source selection for amd64 nodes. Use a bundle reference, local path, or URL. | `{bundle:{root:files,path:bin/linux/amd64/runc}}` |
-| `spec.artifacts[].source.arm64` | `object` | yes | `` | `` | Source selection for arm64 nodes. Use a bundle reference, local path, or URL. | `{bundle:{root:files,path:bin/linux/arm64/runc}}` |
+| `spec.artifacts[].source.amd64` | `object` | yes | `` | `` | Source for amd64 nodes. Provide exactly one of `bundle`, `url`, or `path`. | `{bundle:{root:files,path:bin/linux/amd64/runc}}` |
+| `spec.artifacts[].source.arm64` | `object` | yes | `` | `` | Source for arm64 nodes. Provide exactly one of `bundle`, `url`, or `path`. | `{bundle:{root:files,path:bin/linux/arm64/runc}}` |
 
 ### `spec.artifacts[].source.amd64`
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.artifacts[].source.amd64.bundle` | `object` | no | `` | `` |  | `{...}` |
-| `spec.artifacts[].source.amd64.path` | `string` | no | `` | `` |  | `example` |
-| `spec.artifacts[].source.amd64.sha256` | `string` | no | `` | `` |  | `example` |
-| `spec.artifacts[].source.amd64.url` | `string` | no | `` | `` |  | `example` |
+| `spec.artifacts[].source.amd64.bundle` | `object` | no | `` | `` | Reference to a file inside the bundle prepared by `deck prepare`. Preferred for offline installs. | `{root:files,path:bin/linux/amd64/runc}` |
+| `spec.artifacts[].source.amd64.path` | `string` | no | `` | `` | Local filesystem path to the artifact. Used when the file is already present on the machine running prepare. | `/opt/cache/runc` |
+| `spec.artifacts[].source.amd64.sha256` | `string` | no | `` | `` | Expected SHA-256 checksum of the artifact. Fails the step if the downloaded or copied file does not match. | `abc123...` |
+| `spec.artifacts[].source.amd64.url` | `string` | no | `` | `` | URL to download the artifact from. Used when a live network fetch is acceptable. | `https://mirror.example.com/bin/runc` |
 
 ### `spec.artifacts[].source.amd64.bundle`
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.artifacts[].source.amd64.bundle.path` | `string` | yes | `` | `` |  | `example` |
-| `spec.artifacts[].source.amd64.bundle.root` | `string` | yes | `` | `files, images, packages` |  | `files` |
+| `spec.artifacts[].source.amd64.bundle.path` | `string` | yes | `` | `` | Path within the bundle root to the artifact file. | `bin/linux/amd64/runc` |
+| `spec.artifacts[].source.amd64.bundle.root` | `string` | yes | `` | `files, images, packages` | Bundle root category to read from. Must match the output root used during prepare. | `files` |
 
 ### `spec.artifacts[].source.arm64`
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.artifacts[].source.arm64.bundle` | `object` | no | `` | `` |  | `{...}` |
-| `spec.artifacts[].source.arm64.path` | `string` | no | `` | `` |  | `example` |
-| `spec.artifacts[].source.arm64.sha256` | `string` | no | `` | `` |  | `example` |
-| `spec.artifacts[].source.arm64.url` | `string` | no | `` | `` |  | `example` |
+| `spec.artifacts[].source.arm64.bundle` | `object` | no | `` | `` | Reference to a file inside the bundle prepared by `deck prepare`. Preferred for offline installs. | `{root:files,path:bin/linux/arm64/runc}` |
+| `spec.artifacts[].source.arm64.path` | `string` | no | `` | `` | Local filesystem path to the artifact. Used when the file is already present on the machine running prepare. | `/opt/cache/runc` |
+| `spec.artifacts[].source.arm64.sha256` | `string` | no | `` | `` | Expected SHA-256 checksum of the artifact. Fails the step if the downloaded or copied file does not match. | `abc123...` |
+| `spec.artifacts[].source.arm64.url` | `string` | no | `` | `` | URL to download the artifact from. Used when a live network fetch is acceptable. | `https://mirror.example.com/bin/runc` |
 
 ### `spec.artifacts[].source.arm64.bundle`
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.artifacts[].source.arm64.bundle.path` | `string` | yes | `` | `` |  | `example` |
-| `spec.artifacts[].source.arm64.bundle.root` | `string` | yes | `` | `files, images, packages` |  | `files` |
+| `spec.artifacts[].source.arm64.bundle.path` | `string` | yes | `` | `` | Path within the bundle root to the artifact file. | `bin/linux/arm64/runc` |
+| `spec.artifacts[].source.arm64.bundle.root` | `string` | yes | `` | `files, images, packages` | Bundle root category to read from. Must match the output root used during prepare. | `files` |
 
 ### `spec.fetch`
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.fetch.offlineOnly` | `boolean` | no | `false` | `` |  | `false` |
-| `spec.fetch.sources` | `array<object>` | no | `` | `` |  | `[{...}]` |
-| `spec.fetch.strategy` | `string` | no | `` | `fallback` |  | `fallback` |
+| `spec.fetch.offlineOnly` | `boolean` | no | `false` | `` | When true, reject any source that requires a live network fetch. Fails fast on entries without a bundle or local path source. | `true` |
+| `spec.fetch.sources` | `array<object>` | no | `` | `` | Ordered list of fallback fetch source configurations used when per-entry sources are not sufficient. | `[{type:bundle}]` |
+| `spec.fetch.strategy` | `string` | no | `` | `fallback` | Source selection strategy when multiple sources are defined per entry. `fallback` tries each source in order. | `fallback` |
 
 
 ## Notes
 
 - Each artifact entry must define both `source.amd64` and `source.arm64` so the bundle stays explicit across architectures.
 - Each artifact entry must choose exactly one of `install` or `extract`.
+- Use `skipIfPresent` to make the step idempotent when the binary may already exist on the node.
 
 ## Related
 

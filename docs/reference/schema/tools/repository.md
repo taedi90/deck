@@ -50,30 +50,30 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `apiVersion` | `string` | yes | `` | `` |  | `deck/v1alpha1` |
-| `id` | `string` | yes | `` | `` |  | `example` |
-| `kind` | `string` | yes | `` | `` |  | `Repository` |
-| `metadata` | `object` | no | `` | `` |  | `{...}` |
-| `register` | `object` | no | `` | `` |  | `{...}` |
-| `retry` | `integer` | no | `` | `` |  | `1` |
-| `spec` | `object` | yes | `` | `` |  | `{...}` |
-| `timeout` | `string` | no | `` | `` |  | `example` |
-| `when` | `string` | no | `` | `` |  | `example` |
+| `apiVersion` | `string` | yes | `` | `` | Must be `deck/v1alpha1`. | `deck/v1alpha1` |
+| `id` | `string` | yes | `` | `` | Unique identifier for the step within the workflow. Used in logs and plan output. | `configure-containerd` |
+| `kind` | `string` | yes | `` | `` | Typed step kind. Determines which schema is applied to `spec`. | `File` |
+| `metadata` | `object` | no | `` | `` | Optional free-form annotation map attached to the step for tooling or audit purposes. | `{owner: platform-team}` |
+| `register` | `object` | no | `` | `` | Map of variable names to step output keys. Exported values are available to later steps as runtime vars. | `{joinCmd: joinCommand}` |
+| `retry` | `integer` | no | `` | `` | Number of times to retry the step after a failure before marking it as failed. | `3` |
+| `spec` | `object` | yes | `` | `` | Step-specific configuration payload. Shape depends on the chosen `kind`. | `{...}` |
+| `timeout` | `string` | no | `` | `` | Maximum duration allowed for the step before it is cancelled. Accepts Go duration strings. | `5m` |
+| `when` | `string` | no | `` | `` | CEL expression evaluated at runtime. The step is skipped when the expression evaluates to false. | `vars.skipKubeadm != 'true'` |
 
 ## Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | yes | `` | `configure` |  | `configure` |
-| `spec.backupPaths` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.cleanupPaths` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.disableExisting` | `boolean` | no | `` | `` |  | `true` |
-| `spec.format` | `string` | no | `` | `apt, yum` | Repository file style to emit for the target host family. | `apt` |
-| `spec.mode` | `string` | no | `` | `` |  | `example` |
-| `spec.path` | `string` | no | `` | `` | Optional explicit output path for the generated repository file. | `/etc/apt/sources.list.d/offline.list` |
-| `spec.refreshCache` | `object` | no | `` | `` | Optional package metadata refresh that can run after repository files are written. | `{clean:true,update:true}` |
-| `spec.replaceExisting` | `boolean` | no | `` | `` | Replace existing repo definitions at the target path before writing the new one. | `true` |
-| `spec.repositories` | `array<object>` | no | `` | `` | Repository entries passed through to the package-manager-specific writer. | `[{id:offline,baseurl:http://repo.local/debian}]` |
+| `spec.action` | `string` | yes | `` | `configure` | Operation to perform. Currently only `configure` is supported. | `configure` |
+| `spec.backupPaths` | `array<string>` | no | `` | `` | Paths to back up before modifying. Backed-up files are saved with a `.bak` suffix. | `[/etc/apt/sources.list]` |
+| `spec.cleanupPaths` | `array<string>` | no | `` | `` | Paths to remove before writing the new repository definition. | `[/etc/apt/sources.list.d/ubuntu.list]` |
+| `spec.disableExisting` | `boolean` | no | `` | `` | Disable all existing repository definitions before writing the new one. Prevents conflicts from online repos during offline installs. | `true` |
+| `spec.format` | `string` | no | `` | `apt, yum` | Repository file format to write. `apt` produces a sources.list entry; `yum` produces a `.repo` file. | `apt` |
+| `spec.mode` | `string` | no | `` | `` | File permissions applied to the generated repository file in octal notation. | `0644` |
+| `spec.path` | `string` | no | `` | `` | Explicit output path for the generated repository file. Defaults to a path derived from the first repository id when omitted. | `/etc/apt/sources.list.d/offline.list` |
+| `spec.refreshCache` | `object` | no | `` | `` | Optional package metadata refresh that runs after repository files are written. Equivalent to a follow-up `PackageCache` step. | `{clean:true,update:true}` |
+| `spec.replaceExisting` | `boolean` | no | `` | `` | Replace an existing repository file at the target path before writing the new definition. | `true` |
+| `spec.repositories` | `array<object>` | no | `` | `` | Repository entries to write. Each entry maps to one repository block in the generated file. | `[{id:offline,baseurl:http://repo.local/debian}]` |
 
 ## Validation Rules
 
@@ -81,14 +81,14 @@ spec:
 
 ## Notes
 
-- `Repository` only defines repository files; combine it with `PackageCache` when the package manager needs a metadata refresh.
-- Keep repository definitions explicit and mirror-specific instead of mutating the host's default online sources.
+- `Repository` only writes repository definition files. Combine it with `PackageCache` when the package manager needs an explicit metadata refresh.
+- Keep repository definitions mirror-specific rather than mutating the host's default online sources.
 
 ## Actions
 
 ### `configure`
 
-`configure` writes or rewrites repository definitions and optional refresh behavior.
+`configure` writes or rewrites repository definition files and optionally triggers a cache refresh.
 
 - required fields: `spec.repositories`
 
@@ -96,8 +96,8 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | yes | `` | `configure` |  | `configure` |
-| `spec.repositories` | `array<object>` | no | `` | `` | Repository entries passed through to the package-manager-specific writer. | `[{id:offline,baseurl:http://repo.local/debian}]` |
+| `spec.action` | `string` | yes | `` | `configure` | Operation to perform. Currently only `configure` is supported. | `configure` |
+| `spec.repositories` | `array<object>` | no | `` | `` | Repository entries to write. Each entry maps to one repository block in the generated file. | `[{id:offline,baseurl:http://repo.local/debian}]` |
 
 #### Rules
 

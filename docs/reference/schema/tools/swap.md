@@ -36,23 +36,23 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `apiVersion` | `string` | yes | `` | `` |  | `deck/v1alpha1` |
-| `id` | `string` | yes | `` | `` |  | `example` |
-| `kind` | `string` | yes | `` | `` |  | `Swap` |
-| `metadata` | `object` | no | `` | `` |  | `{...}` |
-| `register` | `object` | no | `` | `` |  | `{...}` |
-| `retry` | `integer` | no | `` | `` |  | `1` |
-| `spec` | `object` | yes | `` | `` |  | `{...}` |
-| `timeout` | `string` | no | `` | `` |  | `example` |
-| `when` | `string` | no | `` | `` |  | `example` |
+| `apiVersion` | `string` | yes | `` | `` | Must be `deck/v1alpha1`. | `deck/v1alpha1` |
+| `id` | `string` | yes | `` | `` | Unique identifier for the step within the workflow. Used in logs and plan output. | `configure-containerd` |
+| `kind` | `string` | yes | `` | `` | Typed step kind. Determines which schema is applied to `spec`. | `File` |
+| `metadata` | `object` | no | `` | `` | Optional free-form annotation map attached to the step for tooling or audit purposes. | `{owner: platform-team}` |
+| `register` | `object` | no | `` | `` | Map of variable names to step output keys. Exported values are available to later steps as runtime vars. | `{joinCmd: joinCommand}` |
+| `retry` | `integer` | no | `` | `` | Number of times to retry the step after a failure before marking it as failed. | `3` |
+| `spec` | `object` | yes | `` | `` | Step-specific configuration payload. Shape depends on the chosen `kind`. | `{...}` |
+| `timeout` | `string` | no | `` | `` | Maximum duration allowed for the step before it is cancelled. Accepts Go duration strings. | `5m` |
+| `when` | `string` | no | `` | `` | CEL expression evaluated at runtime. The step is skipped when the expression evaluates to false. | `vars.skipKubeadm != 'true'` |
 
 ## Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.disable` | `boolean` | no | `true` | `` |  | `true` |
-| `spec.fstabPath` | `string` | no | `` | `` |  | `example` |
-| `spec.persist` | `boolean` | no | `true` | `` |  | `true` |
+| `spec.disable` | `boolean` | no | `true` | `` | Disable all active swap devices with `swapoff -a`. Defaults to `true`. | `true` |
+| `spec.fstabPath` | `string` | no | `` | `` | Path to the fstab file. Defaults to `/etc/fstab`. | `/etc/fstab` |
+| `spec.persist` | `boolean` | no | `true` | `` | Comment out swap entries in `/etc/fstab` so swap stays off after reboot. Defaults to `true`. | `true` |
 
 ## Related
 

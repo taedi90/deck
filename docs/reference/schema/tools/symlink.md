@@ -39,25 +39,25 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `apiVersion` | `string` | yes | `` | `` |  | `deck/v1alpha1` |
-| `id` | `string` | yes | `` | `` |  | `example` |
-| `kind` | `string` | yes | `` | `` |  | `Symlink` |
-| `metadata` | `object` | no | `` | `` |  | `{...}` |
-| `register` | `object` | no | `` | `` |  | `{...}` |
-| `retry` | `integer` | no | `` | `` |  | `1` |
-| `spec` | `object` | yes | `` | `` |  | `{...}` |
-| `timeout` | `string` | no | `` | `` |  | `example` |
-| `when` | `string` | no | `` | `` |  | `example` |
+| `apiVersion` | `string` | yes | `` | `` | Must be `deck/v1alpha1`. | `deck/v1alpha1` |
+| `id` | `string` | yes | `` | `` | Unique identifier for the step within the workflow. Used in logs and plan output. | `configure-containerd` |
+| `kind` | `string` | yes | `` | `` | Typed step kind. Determines which schema is applied to `spec`. | `File` |
+| `metadata` | `object` | no | `` | `` | Optional free-form annotation map attached to the step for tooling or audit purposes. | `{owner: platform-team}` |
+| `register` | `object` | no | `` | `` | Map of variable names to step output keys. Exported values are available to later steps as runtime vars. | `{joinCmd: joinCommand}` |
+| `retry` | `integer` | no | `` | `` | Number of times to retry the step after a failure before marking it as failed. | `3` |
+| `spec` | `object` | yes | `` | `` | Step-specific configuration payload. Shape depends on the chosen `kind`. | `{...}` |
+| `timeout` | `string` | no | `` | `` | Maximum duration allowed for the step before it is cancelled. Accepts Go duration strings. | `5m` |
+| `when` | `string` | no | `` | `` | CEL expression evaluated at runtime. The step is skipped when the expression evaluates to false. | `vars.skipKubeadm != 'true'` |
 
 ## Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.createParent` | `boolean` | no | `false` | `` |  | `false` |
-| `spec.force` | `boolean` | no | `false` | `` |  | `false` |
-| `spec.path` | `string` | yes | `` | `` |  | `example` |
-| `spec.requireTarget` | `boolean` | no | `false` | `` |  | `false` |
-| `spec.target` | `string` | yes | `` | `` |  | `example` |
+| `spec.createParent` | `boolean` | no | `false` | `` | Create parent directories for `path` if they do not exist. Defaults to `false`. | `true` |
+| `spec.force` | `boolean` | no | `false` | `` | Remove an existing file or link at `path` before creating the new link. Defaults to `false`. | `true` |
+| `spec.path` | `string` | yes | `` | `` | Path where the symbolic link will be created. | `/usr/bin/runc` |
+| `spec.requireTarget` | `boolean` | no | `false` | `` | Fail the step if `target` does not exist at the time the link is created. Defaults to `false`. | `true` |
+| `spec.target` | `string` | yes | `` | `` | Path that the symbolic link points to. | `/usr/local/sbin/runc` |
 
 ## Related
 

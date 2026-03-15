@@ -43,7 +43,7 @@ artifacts:
 | `artifacts` | `object` | no | `` | `` | Declarative prepare inventory that replaces legacy prepare download steps. | `{files:[...],images:[...],packages:[...]}` |
 | `imports` | `array<string>` | no | `` | `` | Scenario or component imports resolved relative to the workflow/component model. | `[common/base.yaml]` |
 | `phases` | `array<object>` | no | `` | `` | Ordered execution phases. Each phase can contain imports, steps, or both. | `[{name:install,steps:[...]}]` |
-| `role` | `string` | yes | `` | `prepare, apply` | Workflow role. `prepare` builds offline artifacts and `apply` changes the local node. | `apply` |
+| `role` | `string` | yes | `` | `prepare, apply` | Workflow role. `prepare` builds offline artifacts; `apply` changes the local node. | `apply` |
 | `steps` | `array<object>` | no | `` | `` | Flat step list for workflows that do not need named phases. | `[{id:configure-runtime,kind:Containerd,spec:{...}}]` |
 | `varImports` | `array<string>` | no | `` | `` |  | `[example]` |
 | `vars` | `object` | no | `map[]` | `` |  | `map[]` |

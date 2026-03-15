@@ -40,25 +40,25 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `apiVersion` | `string` | yes | `` | `` |  | `deck/v1alpha1` |
-| `id` | `string` | yes | `` | `` |  | `example` |
-| `kind` | `string` | yes | `` | `` |  | `PackageCache` |
-| `metadata` | `object` | no | `` | `` |  | `{...}` |
-| `register` | `object` | no | `` | `` |  | `{...}` |
-| `retry` | `integer` | no | `` | `` |  | `1` |
-| `spec` | `object` | yes | `` | `` |  | `{...}` |
-| `timeout` | `string` | no | `` | `` |  | `example` |
-| `when` | `string` | no | `` | `` |  | `example` |
+| `apiVersion` | `string` | yes | `` | `` | Must be `deck/v1alpha1`. | `deck/v1alpha1` |
+| `id` | `string` | yes | `` | `` | Unique identifier for the step within the workflow. Used in logs and plan output. | `configure-containerd` |
+| `kind` | `string` | yes | `` | `` | Typed step kind. Determines which schema is applied to `spec`. | `File` |
+| `metadata` | `object` | no | `` | `` | Optional free-form annotation map attached to the step for tooling or audit purposes. | `{owner: platform-team}` |
+| `register` | `object` | no | `` | `` | Map of variable names to step output keys. Exported values are available to later steps as runtime vars. | `{joinCmd: joinCommand}` |
+| `retry` | `integer` | no | `` | `` | Number of times to retry the step after a failure before marking it as failed. | `3` |
+| `spec` | `object` | yes | `` | `` | Step-specific configuration payload. Shape depends on the chosen `kind`. | `{...}` |
+| `timeout` | `string` | no | `` | `` | Maximum duration allowed for the step before it is cancelled. Accepts Go duration strings. | `5m` |
+| `when` | `string` | no | `` | `` | CEL expression evaluated at runtime. The step is skipped when the expression evaluates to false. | `vars.skipKubeadm != 'true'` |
 
 ## Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.clean` | `boolean` | no | `` | `` |  | `true` |
-| `spec.excludeRepos` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.manager` | `string` | no | `` | `auto, apt, dnf` |  | `auto` |
-| `spec.restrictToRepos` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.update` | `boolean` | no | `` | `` |  | `true` |
+| `spec.clean` | `boolean` | no | `` | `` | Run a cache clean before updating metadata (`apt clean` / `dnf clean all`). | `true` |
+| `spec.excludeRepos` | `array<string>` | no | `` | `` | Repository identifiers to skip during the metadata update. | `[updates]` |
+| `spec.manager` | `string` | no | `` | `auto, apt, dnf` | Package manager to use. `auto` detects from the host OS. Supports `apt` and `dnf`. | `apt` |
+| `spec.restrictToRepos` | `array<string>` | no | `` | `` | Limit the metadata update to these repository file paths or identifiers. Prevents fetching from online repos during an offline install. | `[/etc/apt/sources.list.d/offline.list]` |
+| `spec.update` | `boolean` | no | `` | `` | Fetch fresh package metadata from the configured repositories (`apt update` / `dnf makecache`). | `true` |
 
 ## Validation Rules
 

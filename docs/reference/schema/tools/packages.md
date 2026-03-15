@@ -39,28 +39,28 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `apiVersion` | `string` | yes | `` | `` |  | `deck/v1alpha1` |
-| `id` | `string` | yes | `` | `` |  | `example` |
-| `kind` | `string` | yes | `` | `` |  | `Packages` |
-| `metadata` | `object` | no | `` | `` |  | `{...}` |
-| `register` | `object` | no | `` | `` |  | `{...}` |
-| `retry` | `integer` | no | `` | `` |  | `1` |
-| `spec` | `object` | yes | `` | `` |  | `{...}` |
-| `timeout` | `string` | no | `` | `` |  | `example` |
-| `when` | `string` | no | `` | `` |  | `example` |
+| `apiVersion` | `string` | yes | `` | `` | Must be `deck/v1alpha1`. | `deck/v1alpha1` |
+| `id` | `string` | yes | `` | `` | Unique identifier for the step within the workflow. Used in logs and plan output. | `configure-containerd` |
+| `kind` | `string` | yes | `` | `` | Typed step kind. Determines which schema is applied to `spec`. | `File` |
+| `metadata` | `object` | no | `` | `` | Optional free-form annotation map attached to the step for tooling or audit purposes. | `{owner: platform-team}` |
+| `register` | `object` | no | `` | `` | Map of variable names to step output keys. Exported values are available to later steps as runtime vars. | `{joinCmd: joinCommand}` |
+| `retry` | `integer` | no | `` | `` | Number of times to retry the step after a failure before marking it as failed. | `3` |
+| `spec` | `object` | yes | `` | `` | Step-specific configuration payload. Shape depends on the chosen `kind`. | `{...}` |
+| `timeout` | `string` | no | `` | `` | Maximum duration allowed for the step before it is cancelled. Accepts Go duration strings. | `5m` |
+| `when` | `string` | no | `` | `` | CEL expression evaluated at runtime. The step is skipped when the expression evaluates to false. | `vars.skipKubeadm != 'true'` |
 
 ## Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | no | `` | `download, install` | Chooses whether the package list is collected during prepare or installed on the node. | `install` |
-| `spec.backend` | `object` | no | `` | `` |  | `{...}` |
-| `spec.distro` | `object` | no | `` | `` |  | `{...}` |
-| `spec.excludeRepos` | `array<string>` | no | `` | `` | Exclude the listed repositories while resolving packages. | `[updates]` |
-| `spec.packages` | `array<string>` | yes | `` | `` | Package names to gather or install. | `[kubelet,kubeadm,kubectl]` |
-| `spec.repo` | `object` | no | `` | `` |  | `{...}` |
-| `spec.restrictToRepos` | `array<string>` | no | `` | `` | Limit package manager visibility to the listed repositories during the operation. | `[offline-kubernetes]` |
-| `spec.source` | `object` | no | `` | `` | Optional local repository source used when installs should come from a prepared repo path. | `{type:local-repo,path:/opt/deck/repos/kubernetes}` |
+| `spec.action` | `string` | no | `` | `download, install` | Selects whether to collect packages during prepare (`download`) or install them on the node (`install`). | `install` |
+| `spec.backend` | `object` | no | `` | `` | Container-based download backend for `download`. Enables package resolution inside a distro-specific container image when the host OS differs from the target. | `{mode:container,runtime:docker,image:rockylinux:9}` |
+| `spec.distro` | `object` | no | `` | `` | Target distribution hint used by `download` to select the correct package manager and resolver backend. | `{family:rhel,release:rocky9}` |
+| `spec.excludeRepos` | `array<string>` | no | `` | `` | Repository identifiers to exclude from package resolution. Useful for suppressing online repos during an offline install. | `[updates]` |
+| `spec.packages` | `array<string>` | yes | `` | `` | Package names to download or install. Use the same list in both `download` and `install` steps to keep offline parity. | `[kubelet,kubeadm,kubectl]` |
+| `spec.repo` | `object` | no | `` | `` | Package manager repository settings applied before `download`. Currently supports RPM module stream configuration. | `{type:yum,modules:[...]}` |
+| `spec.restrictToRepos` | `array<string>` | no | `` | `` | Limit package manager visibility to these repository identifiers during the operation. Prevents accidental pulls from other configured repos. | `[offline-kubernetes]` |
+| `spec.source` | `object` | no | `` | `` | Local repository source for `install`. Points to a pre-prepared on-disk package repo instead of relying on configured package manager sources. | `{type:local-repo,path:/opt/deck/repos/kubernetes}` |
 
 ## Nested Objects
 
@@ -68,14 +68,14 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.repo.modules` | `array<object>` | no | `` | `` | Optional RPM module streams to enable before resolving downloads on RHEL-family images. | `[{name:container-tools,stream:4.0}]` |
+| `spec.repo.modules` | `array<object>` | no | `` | `` | RPM module streams to enable before resolving downloads on RHEL-family systems. | `[{name:container-tools,stream:4.0}]` |
 
 ### `spec.source`
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.source.path` | `string` | yes | `` | `` |  | `example` |
-| `spec.source.type` | `string` | yes | `` | `` |  | `local-repo` |
+| `spec.source.path` | `string` | yes | `` | `` | Filesystem path to the pre-prepared local package repository. | `/opt/deck/repos/kubernetes` |
+| `spec.source.type` | `string` | yes | `` | `` | Source type. Currently `local-repo` is the only supported value. | `local-repo` |
 
 
 ## Validation Rules
@@ -87,12 +87,13 @@ spec:
 
 - Use `Packages` with `Repository` and `PackageCache` for a complete typed package-management flow.
 - Keeping the same package list across `download` and `install` helps maintain offline parity.
+- Use `restrictToRepos` on the `install` step to prevent the node's default online repos from being consulted during an offline apply.
 
 ## Actions
 
 ### `download`
 
-`download` gathers packages into a prepare artifact set.
+`download` resolves and gathers packages into a prepare artifact set without installing them.
 
 - required fields: `spec.packages`
 
@@ -100,8 +101,8 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | no | `` | `download, install` | Chooses whether the package list is collected during prepare or installed on the node. | `install` |
-| `spec.packages` | `array<string>` | yes | `` | `` | Package names to gather or install. | `[kubelet,kubeadm,kubectl]` |
+| `spec.action` | `string` | no | `` | `download, install` | Selects whether to collect packages during prepare (`download`) or install them on the node (`install`). | `install` |
+| `spec.packages` | `array<string>` | yes | `` | `` | Package names to download or install. Use the same list in both `download` and `install` steps to keep offline parity. | `[kubelet,kubeadm,kubectl]` |
 
 #### Rules
 
@@ -137,8 +138,8 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | no | `` | `download, install` | Chooses whether the package list is collected during prepare or installed on the node. | `install` |
-| `spec.packages` | `array<string>` | yes | `` | `` | Package names to gather or install. | `[kubelet,kubeadm,kubectl]` |
+| `spec.action` | `string` | no | `` | `download, install` | Selects whether to collect packages during prepare (`download`) or install them on the node (`install`). | `install` |
+| `spec.packages` | `array<string>` | yes | `` | `` | Package names to download or install. Use the same list in both `download` and `install` steps to keep offline parity. | `[kubelet,kubeadm,kubectl]` |
 
 #### Rules
 

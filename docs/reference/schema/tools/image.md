@@ -42,26 +42,26 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `apiVersion` | `string` | yes | `` | `` |  | `deck/v1alpha1` |
-| `id` | `string` | yes | `` | `` |  | `example` |
-| `kind` | `string` | yes | `` | `` |  | `Image` |
-| `metadata` | `object` | no | `` | `` |  | `{...}` |
-| `register` | `object` | no | `` | `` |  | `{...}` |
-| `retry` | `integer` | no | `` | `` |  | `1` |
-| `spec` | `object` | yes | `` | `` |  | `{...}` |
-| `timeout` | `string` | no | `` | `` |  | `example` |
-| `when` | `string` | no | `` | `` |  | `example` |
+| `apiVersion` | `string` | yes | `` | `` | Must be `deck/v1alpha1`. | `deck/v1alpha1` |
+| `id` | `string` | yes | `` | `` | Unique identifier for the step within the workflow. Used in logs and plan output. | `configure-containerd` |
+| `kind` | `string` | yes | `` | `` | Typed step kind. Determines which schema is applied to `spec`. | `File` |
+| `metadata` | `object` | no | `` | `` | Optional free-form annotation map attached to the step for tooling or audit purposes. | `{owner: platform-team}` |
+| `register` | `object` | no | `` | `` | Map of variable names to step output keys. Exported values are available to later steps as runtime vars. | `{joinCmd: joinCommand}` |
+| `retry` | `integer` | no | `` | `` | Number of times to retry the step after a failure before marking it as failed. | `3` |
+| `spec` | `object` | yes | `` | `` | Step-specific configuration payload. Shape depends on the chosen `kind`. | `{...}` |
+| `timeout` | `string` | no | `` | `` | Maximum duration allowed for the step before it is cancelled. Accepts Go duration strings. | `5m` |
+| `when` | `string` | no | `` | `` | CEL expression evaluated at runtime. The step is skipped when the expression evaluates to false. | `vars.skipKubeadm != 'true'` |
 
 ## Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | no | `` | `download, present` | Chooses whether the step gathers images or verifies local image presence. | `present` |
+| `spec.action` | `string` | no | `` | `download, present` | Chooses whether the step downloads images into the bundle or verifies their presence on the node. | `present` |
 | `spec.backend` | `object` | no | `` | `` | Backend-specific settings such as runtime or transport configuration. | `{runtime:containerd}` |
 | `spec.command` | `array<string>` | no | `` | `` | Optional image-listing command used by `present` when the default runtime command is not appropriate. | `[ctr,-n,k8s.io,images,list,-q]` |
 | `spec.images` | `array<string>` | yes | `` | `` | Fully qualified image references to download or verify. | `[registry.k8s.io/pause:3.9]` |
-| `spec.output` | `object` | no | `` | `` | Bundle output settings used when downloaded image artifacts are written. | `{layout:oci-archive,path:images/control-plane.tar}` |
-| `spec.runtime` | `object` | no | `` | `` |  | `{...}` |
+| `spec.output` | `object` | no | `` | `` | Bundle output settings used when downloaded image archives are written during prepare. | `{layout:oci-archive,path:images/control-plane.tar}` |
+| `spec.runtime` | `object` | no | `` | `` | Container runtime configuration used when pulling or verifying images. | `{socket:unix:///run/containerd/containerd.sock}` |
 
 ## Validation Rules
 
@@ -85,7 +85,7 @@ Use `download` during prepare to collect images into bundle outputs.
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | no | `` | `download, present` | Chooses whether the step gathers images or verifies local image presence. | `present` |
+| `spec.action` | `string` | no | `` | `download, present` | Chooses whether the step downloads images into the bundle or verifies their presence on the node. | `present` |
 | `spec.images` | `array<string>` | yes | `` | `` | Fully qualified image references to download or verify. | `[registry.k8s.io/pause:3.9]` |
 
 #### Rules
@@ -105,7 +105,7 @@ spec:
 ```
 ### `present`
 
-Use `present` to assert that required images already exist locally.
+Use `present` to assert that required images already exist locally on the node.
 
 - required fields: `spec.images`
 
@@ -113,7 +113,7 @@ Use `present` to assert that required images already exist locally.
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | no | `` | `download, present` | Chooses whether the step gathers images or verifies local image presence. | `present` |
+| `spec.action` | `string` | no | `` | `download, present` | Chooses whether the step downloads images into the bundle or verifies their presence on the node. | `present` |
 | `spec.images` | `array<string>` | yes | `` | `` | Fully qualified image references to download or verify. | `[registry.k8s.io/pause:3.9]` |
 
 #### Rules

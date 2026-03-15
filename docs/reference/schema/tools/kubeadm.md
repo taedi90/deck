@@ -43,42 +43,42 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `apiVersion` | `string` | yes | `` | `` |  | `deck/v1alpha1` |
-| `id` | `string` | yes | `` | `` |  | `example` |
-| `kind` | `string` | yes | `` | `` |  | `Kubeadm` |
-| `metadata` | `object` | no | `` | `` |  | `{...}` |
-| `register` | `object` | no | `` | `` |  | `{...}` |
-| `retry` | `integer` | no | `` | `` |  | `1` |
-| `spec` | `object` | yes | `` | `` |  | `{...}` |
-| `timeout` | `string` | no | `` | `` |  | `example` |
-| `when` | `string` | no | `` | `` |  | `example` |
+| `apiVersion` | `string` | yes | `` | `` | Must be `deck/v1alpha1`. | `deck/v1alpha1` |
+| `id` | `string` | yes | `` | `` | Unique identifier for the step within the workflow. Used in logs and plan output. | `configure-containerd` |
+| `kind` | `string` | yes | `` | `` | Typed step kind. Determines which schema is applied to `spec`. | `File` |
+| `metadata` | `object` | no | `` | `` | Optional free-form annotation map attached to the step for tooling or audit purposes. | `{owner: platform-team}` |
+| `register` | `object` | no | `` | `` | Map of variable names to step output keys. Exported values are available to later steps as runtime vars. | `{joinCmd: joinCommand}` |
+| `retry` | `integer` | no | `` | `` | Number of times to retry the step after a failure before marking it as failed. | `3` |
+| `spec` | `object` | yes | `` | `` | Step-specific configuration payload. Shape depends on the chosen `kind`. | `{...}` |
+| `timeout` | `string` | no | `` | `` | Maximum duration allowed for the step before it is cancelled. Accepts Go duration strings. | `5m` |
+| `when` | `string` | no | `` | `` | CEL expression evaluated at runtime. The step is skipped when the expression evaluates to false. | `vars.skipKubeadm != 'true'` |
 
 ## Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | yes | `` | `init, join, reset` | Chooses which kubeadm subcommand contract applies. | `init` |
-| `spec.advertiseAddress` | `string` | no | `` | `` |  | `example` |
-| `spec.asControlPlane` | `boolean` | no | `false` | `` |  | `false` |
-| `spec.cleanupContainers` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.configFile` | `string` | no | `` | `` |  | `example` |
-| `spec.configTemplate` | `string` | no | `` | `` |  | `example` |
-| `spec.criSocket` | `string` | no | `` | `` |  | `example` |
-| `spec.extraArgs` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.force` | `boolean` | no | `false` | `` |  | `false` |
-| `spec.ignoreErrors` | `boolean` | no | `false` | `` |  | `false` |
-| `spec.ignorePreflightErrors` | `array<string>` | no | `` | `` | Explicit kubeadm preflight checks to ignore when bootstrapping constrained hosts. | `[Swap]` |
-| `spec.joinFile` | `string` | no | `` | `` | Path to a prepared join artifact used by `join`. | `/tmp/deck/join.txt` |
-| `spec.kubernetesVersion` | `string` | no | `` | `` |  | `example` |
-| `spec.mode` | `string` | no | `` | `stub, real` | Controls whether the step performs a real kubeadm invocation or a stubbed contract-oriented run. | `real` |
-| `spec.outputJoinFile` | `string` | no | `` | `` | Path where the generated join command or token data will be written after `init`. | `/tmp/deck/join.txt` |
-| `spec.podNetworkCIDR` | `string` | no | `` | `` |  | `example` |
-| `spec.pullImages` | `boolean` | no | `` | `` |  | `true` |
-| `spec.removeFiles` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.removePaths` | `array<string>` | no | `` | `` | Paths removed during `reset` cleanup. | `[/etc/cni/net.d,/var/lib/etcd]` |
-| `spec.restartRuntimeService` | `string` | no | `` | `` |  | `example` |
-| `spec.skipIfAdminConfExists` | `boolean` | no | `true` | `` |  | `true` |
-| `spec.stopKubelet` | `boolean` | no | `true` | `` |  | `true` |
+| `spec.action` | `string` | yes | `` | `init, join, reset` | Selects the kubeadm subcommand to run: `init`, `join`, or `reset`. | `init` |
+| `spec.advertiseAddress` | `string` | no | `` | `` | API server advertise address for `init`. Use `auto` to detect the primary interface, or provide an explicit IP. | `auto` |
+| `spec.asControlPlane` | `boolean` | no | `false` | `` | When `true`, joins the node as an additional control-plane member rather than a worker. | `false` |
+| `spec.cleanupContainers` | `array<string>` | no | `` | `` | Container names to stop and remove during `reset`. Useful when the runtime has stale control-plane containers. | `[kube-apiserver,etcd]` |
+| `spec.configFile` | `string` | no | `` | `` | Path to an explicit kubeadm config file passed with `--config`. Use instead of individual flags when full config control is needed. | `/tmp/deck/kubeadm.conf` |
+| `spec.configTemplate` | `string` | no | `` | `` | Named built-in config template rendered with the current vars. Use `default` for the deck-managed template. | `default` |
+| `spec.criSocket` | `string` | no | `` | `` | CRI socket path passed to kubeadm. Required when multiple container runtimes are installed on the node. | `unix:///run/containerd/containerd.sock` |
+| `spec.extraArgs` | `array<string>` | no | `` | `` | Additional flags passed directly to the kubeadm subcommand as `--key=value` pairs. | `[--skip-phases=addon/kube-proxy]` |
+| `spec.force` | `boolean` | no | `false` | `` | Pass `--force` to `kubeadm reset` to skip interactive confirmation prompts. | `true` |
+| `spec.ignoreErrors` | `boolean` | no | `false` | `` | Continue reset cleanup even when individual cleanup steps fail. Useful for nodes in a partially broken state. | `true` |
+| `spec.ignorePreflightErrors` | `array<string>` | no | `` | `` | Kubeadm preflight check names to suppress. Use sparingly and only for known-safe deviations. | `[Swap]` |
+| `spec.joinFile` | `string` | no | `` | `` | Path to the join command file produced by a prior `init` run. Required for `join`. | `/tmp/deck/join.txt` |
+| `spec.kubernetesVersion` | `string` | no | `` | `` | Kubernetes version string passed to kubeadm. Accepts the `{{ .vars.* }}` template syntax. | `v1.30.1` |
+| `spec.mode` | `string` | no | `` | `stub, real` | `real` runs kubeadm normally. `stub` performs a dry-run contract check without executing kubeadm. Defaults to `real`. | `real` |
+| `spec.outputJoinFile` | `string` | no | `` | `` | Path where the generated join command is written after `init`. Worker nodes read this file to join the cluster. | `/tmp/deck/join.txt` |
+| `spec.podNetworkCIDR` | `string` | no | `` | `` | CIDR range for the pod network passed to `init`. Must not overlap with node or service CIDRs. | `10.244.0.0/16` |
+| `spec.pullImages` | `boolean` | no | `` | `` | Pull required control-plane images before running `kubeadm init`. Requires network or a pre-configured mirror. | `true` |
+| `spec.removeFiles` | `array<string>` | no | `` | `` | Individual files to delete during `reset` cleanup, such as kubeconfig files. | `[/etc/kubernetes/admin.conf]` |
+| `spec.removePaths` | `array<string>` | no | `` | `` | Directories to delete during `reset` cleanup, such as CNI and etcd data. | `[/etc/cni/net.d,/var/lib/etcd]` |
+| `spec.restartRuntimeService` | `string` | no | `` | `` | Container runtime service name to restart after `reset` cleanup completes. | `containerd` |
+| `spec.skipIfAdminConfExists` | `boolean` | no | `true` | `` | Skip the `init` step if `/etc/kubernetes/admin.conf` already exists, treating the node as already bootstrapped. Defaults to `true`. | `true` |
+| `spec.stopKubelet` | `boolean` | no | `true` | `` | Stop the kubelet service before running `reset`. Defaults to `true`. | `true` |
 
 ## Validation Rules
 
@@ -87,14 +87,15 @@ spec:
 
 ## Notes
 
-- The action controls the contract: `init` requires `outputJoinFile`, `join` requires `joinFile`, and `reset` focuses on cleanup behavior.
-- Keep host preparation steps like `Containerd`, `Swap`, `KernelModule`, and `Sysctl` ahead of `Kubeadm` for clearer bootstrap failures.
+- The action controls the contract: `init` requires `outputJoinFile`, `join` requires `joinFile`, and `reset` focuses on cleanup fields.
+- Place host preparation steps (`Containerd`, `Swap`, `KernelModule`, `Sysctl`) before `Kubeadm` so bootstrap failures point to the correct step.
+- Use `mode: stub` in CI or dry-run contexts where a real cluster is not available.
 
 ## Actions
 
 ### `init`
 
-`init` bootstraps a new control plane and writes a join artifact.
+`init` bootstraps a new control plane and writes a join artifact for worker nodes.
 
 - required fields: `spec.outputJoinFile`
 
@@ -102,8 +103,8 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | yes | `` | `init, join, reset` | Chooses which kubeadm subcommand contract applies. | `init` |
-| `spec.outputJoinFile` | `string` | no | `` | `` | Path where the generated join command or token data will be written after `init`. | `/tmp/deck/join.txt` |
+| `spec.action` | `string` | yes | `` | `init, join, reset` | Selects the kubeadm subcommand to run: `init`, `join`, or `reset`. | `init` |
+| `spec.outputJoinFile` | `string` | no | `` | `` | Path where the generated join command is written after `init`. Worker nodes read this file to join the cluster. | `/tmp/deck/join.txt` |
 
 #### Rules
 
@@ -121,7 +122,7 @@ spec:
 ```
 ### `join`
 
-`join` consumes a prepared join file and joins the node to a cluster.
+`join` consumes a prepared join file and adds the node to an existing cluster.
 
 - required fields: `spec.joinFile`
 
@@ -129,8 +130,8 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | yes | `` | `init, join, reset` | Chooses which kubeadm subcommand contract applies. | `init` |
-| `spec.joinFile` | `string` | no | `` | `` | Path to a prepared join artifact used by `join`. | `/tmp/deck/join.txt` |
+| `spec.action` | `string` | yes | `` | `init, join, reset` | Selects the kubeadm subcommand to run: `init`, `join`, or `reset`. | `init` |
+| `spec.joinFile` | `string` | no | `` | `` | Path to the join command file produced by a prior `init` run. Required for `join`. | `/tmp/deck/join.txt` |
 
 #### Rules
 
@@ -153,7 +154,7 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | yes | `` | `init, join, reset` | Chooses which kubeadm subcommand contract applies. | `init` |
+| `spec.action` | `string` | yes | `` | `init, join, reset` | Selects the kubeadm subcommand to run: `init`, `join`, or `reset`. | `init` |
 
 #### Example
 

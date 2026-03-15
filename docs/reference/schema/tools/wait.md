@@ -13,7 +13,7 @@ Wait for command, service, file, or port conditions.
 
 ## When To Use
 
-Use this between dependent steps when the host needs time to converge.
+Use this between dependent steps when the host needs time to converge after a change.
 
 ## Minimal Example
 
@@ -43,33 +43,33 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `apiVersion` | `string` | yes | `` | `` |  | `deck/v1alpha1` |
-| `id` | `string` | yes | `` | `` |  | `example` |
-| `kind` | `string` | yes | `` | `` |  | `Wait` |
-| `metadata` | `object` | no | `` | `` |  | `{...}` |
-| `register` | `object` | no | `` | `` |  | `{...}` |
-| `retry` | `integer` | no | `` | `` |  | `1` |
-| `spec` | `object` | yes | `` | `` |  | `{...}` |
-| `timeout` | `string` | no | `` | `` |  | `example` |
-| `when` | `string` | no | `` | `` |  | `example` |
+| `apiVersion` | `string` | yes | `` | `` | Must be `deck/v1alpha1`. | `deck/v1alpha1` |
+| `id` | `string` | yes | `` | `` | Unique identifier for the step within the workflow. Used in logs and plan output. | `configure-containerd` |
+| `kind` | `string` | yes | `` | `` | Typed step kind. Determines which schema is applied to `spec`. | `File` |
+| `metadata` | `object` | no | `` | `` | Optional free-form annotation map attached to the step for tooling or audit purposes. | `{owner: platform-team}` |
+| `register` | `object` | no | `` | `` | Map of variable names to step output keys. Exported values are available to later steps as runtime vars. | `{joinCmd: joinCommand}` |
+| `retry` | `integer` | no | `` | `` | Number of times to retry the step after a failure before marking it as failed. | `3` |
+| `spec` | `object` | yes | `` | `` | Step-specific configuration payload. Shape depends on the chosen `kind`. | `{...}` |
+| `timeout` | `string` | no | `` | `` | Maximum duration allowed for the step before it is cancelled. Accepts Go duration strings. | `5m` |
+| `when` | `string` | no | `` | `` | CEL expression evaluated at runtime. The step is skipped when the expression evaluates to false. | `vars.skipKubeadm != 'true'` |
 
 ## Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | yes | `` | `serviceActive, commandSuccess, fileExists, fileAbsent, tcpPortClosed, tcpPortOpen` | Chooses which condition is polled by the wait loop. | `fileExists` |
-| `spec.address` | `string` | no | `` | `` |  | `example` |
-| `spec.command` | `array<string>` | no | `` | `` | Command vector required by `commandSuccess`. | `[test,-f,/etc/kubernetes/admin.conf]` |
-| `spec.initialDelay` | `string` | no | `` | `` |  | `example` |
-| `spec.interval` | `string` | no | `` | `` | Polling interval between retries. | `2s` |
-| `spec.name` | `string` | no | `` | `` | Service name required by `serviceActive`. | `containerd` |
-| `spec.nonEmpty` | `boolean` | no | `` | `` |  | `true` |
-| `spec.path` | `string` | no | `` | `` | Filesystem path checked by `fileExists` or `fileAbsent`. | `/etc/kubernetes/admin.conf` |
-| `spec.pollInterval` | `string` | no | `` | `` |  | `example` |
-| `spec.port` | `string` | no | `` | `` | TCP port checked by `tcpPortOpen` or `tcpPortClosed`. | `6443` |
-| `spec.state` | `string` | no | `` | `` |  | `example` |
-| `spec.timeout` | `string` | no | `` | `` | Overall time budget for the wait condition before failure. | `5m` |
-| `spec.type` | `string` | no | `` | `any, file, dir` |  | `any` |
+| `spec.action` | `string` | yes | `` | `serviceActive, commandSuccess, fileExists, fileAbsent, tcpPortClosed, tcpPortOpen` | Selects the condition to poll: `serviceActive`, `commandSuccess`, `fileExists`, `fileAbsent`, `tcpPortOpen`, or `tcpPortClosed`. | `fileExists` |
+| `spec.address` | `string` | no | `` | `` | Host or IP address for TCP port checks. Defaults to `127.0.0.1` when omitted. | `127.0.0.1` |
+| `spec.command` | `array<string>` | no | `` | `` | Command vector to run on each poll attempt. Required for `commandSuccess`. The step succeeds when the command exits 0. | `[test,-f,/etc/kubernetes/admin.conf]` |
+| `spec.initialDelay` | `string` | no | `` | `` | Duration to wait before the first poll attempt. Useful when a service needs a moment before it becomes checkable. | `1s` |
+| `spec.interval` | `string` | no | `` | `` | Duration between poll attempts. Accepts Go duration strings. | `2s` |
+| `spec.name` | `string` | no | `` | `` | Service name to check. Required for `serviceActive`. | `containerd` |
+| `spec.nonEmpty` | `boolean` | no | `` | `` | For `fileExists`, also assert that the file has non-zero size. Useful when waiting for a file that is written progressively. | `true` |
+| `spec.path` | `string` | no | `` | `` | Filesystem path to check. Required for `fileExists` and `fileAbsent`. | `/etc/kubernetes/admin.conf` |
+| `spec.pollInterval` | `string` | no | `` | `` | Deprecated alias for `interval`. Use `interval` instead. | `2s` |
+| `spec.port` | `string` | no | `` | `` | TCP port number to check. Required for `tcpPortOpen` and `tcpPortClosed`. | `6443` |
+| `spec.state` | `string` | no | `` | `` | Deprecated field from the pre-action Wait schema. Use the `action` field instead (`fileExists` or `fileAbsent`). | `exists` |
+| `spec.timeout` | `string` | no | `` | `` | Maximum total duration to wait before failing the step. | `5m` |
+| `spec.type` | `string` | no | `` | `any, file, dir` | Restricts the path check to a specific filesystem entry type. `file` matches regular files only, `dir` matches directories, `any` matches either. Defaults to `any`. | `file` |
 
 ## Validation Rules
 
@@ -80,14 +80,15 @@ spec:
 
 ## Notes
 
-- `Wait` should bridge convergence gaps between typed steps, not replace the main configuration action itself.
-- Keep waits specific so failures explain exactly which dependency did not become ready.
+- `Wait` bridges convergence gaps between steps. It should not replace the configuration action itself.
+- Keep waits specific so failures identify exactly which dependency did not become ready within the timeout.
+- Use `initialDelay` when a service emits a transient non-active state immediately after being started.
 
 ## Actions
 
 ### `commandSuccess`
 
-Poll a command until it exits successfully.
+Poll a command until it exits with code 0.
 
 - required fields: `spec.command`
 
@@ -95,8 +96,8 @@ Poll a command until it exits successfully.
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | yes | `` | `serviceActive, commandSuccess, fileExists, fileAbsent, tcpPortClosed, tcpPortOpen` | Chooses which condition is polled by the wait loop. | `fileExists` |
-| `spec.command` | `array<string>` | no | `` | `` | Command vector required by `commandSuccess`. | `[test,-f,/etc/kubernetes/admin.conf]` |
+| `spec.action` | `string` | yes | `` | `serviceActive, commandSuccess, fileExists, fileAbsent, tcpPortClosed, tcpPortOpen` | Selects the condition to poll: `serviceActive`, `commandSuccess`, `fileExists`, `fileAbsent`, `tcpPortOpen`, or `tcpPortClosed`. | `fileExists` |
+| `spec.command` | `array<string>` | no | `` | `` | Command vector to run on each poll attempt. Required for `commandSuccess`. The step succeeds when the command exits 0. | `[test,-f,/etc/kubernetes/admin.conf]` |
 
 #### Rules
 
@@ -122,8 +123,8 @@ Wait for a file or directory path to disappear.
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | yes | `` | `serviceActive, commandSuccess, fileExists, fileAbsent, tcpPortClosed, tcpPortOpen` | Chooses which condition is polled by the wait loop. | `fileExists` |
-| `spec.path` | `string` | no | `` | `` | Filesystem path checked by `fileExists` or `fileAbsent`. | `/etc/kubernetes/admin.conf` |
+| `spec.action` | `string` | yes | `` | `serviceActive, commandSuccess, fileExists, fileAbsent, tcpPortClosed, tcpPortOpen` | Selects the condition to poll: `serviceActive`, `commandSuccess`, `fileExists`, `fileAbsent`, `tcpPortOpen`, or `tcpPortClosed`. | `fileExists` |
+| `spec.path` | `string` | no | `` | `` | Filesystem path to check. Required for `fileExists` and `fileAbsent`. | `/etc/kubernetes/admin.conf` |
 
 #### Example
 
@@ -145,8 +146,8 @@ Wait for a file or directory path to appear.
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | yes | `` | `serviceActive, commandSuccess, fileExists, fileAbsent, tcpPortClosed, tcpPortOpen` | Chooses which condition is polled by the wait loop. | `fileExists` |
-| `spec.path` | `string` | no | `` | `` | Filesystem path checked by `fileExists` or `fileAbsent`. | `/etc/kubernetes/admin.conf` |
+| `spec.action` | `string` | yes | `` | `serviceActive, commandSuccess, fileExists, fileAbsent, tcpPortClosed, tcpPortOpen` | Selects the condition to poll: `serviceActive`, `commandSuccess`, `fileExists`, `fileAbsent`, `tcpPortOpen`, or `tcpPortClosed`. | `fileExists` |
+| `spec.path` | `string` | no | `` | `` | Filesystem path to check. Required for `fileExists` and `fileAbsent`. | `/etc/kubernetes/admin.conf` |
 
 #### Rules
 
@@ -166,7 +167,7 @@ spec:
 ```
 ### `serviceActive`
 
-Wait until a service is active.
+Wait until a systemd service reports an active state.
 
 - required fields: `spec.name`
 
@@ -174,8 +175,8 @@ Wait until a service is active.
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | yes | `` | `serviceActive, commandSuccess, fileExists, fileAbsent, tcpPortClosed, tcpPortOpen` | Chooses which condition is polled by the wait loop. | `fileExists` |
-| `spec.name` | `string` | no | `` | `` | Service name required by `serviceActive`. | `containerd` |
+| `spec.action` | `string` | yes | `` | `serviceActive, commandSuccess, fileExists, fileAbsent, tcpPortClosed, tcpPortOpen` | Selects the condition to poll: `serviceActive`, `commandSuccess`, `fileExists`, `fileAbsent`, `tcpPortOpen`, or `tcpPortClosed`. | `fileExists` |
+| `spec.name` | `string` | no | `` | `` | Service name to check. Required for `serviceActive`. | `containerd` |
 
 #### Rules
 
@@ -201,8 +202,8 @@ Wait for a TCP port to stop accepting connections.
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | yes | `` | `serviceActive, commandSuccess, fileExists, fileAbsent, tcpPortClosed, tcpPortOpen` | Chooses which condition is polled by the wait loop. | `fileExists` |
-| `spec.port` | `string` | no | `` | `` | TCP port checked by `tcpPortOpen` or `tcpPortClosed`. | `6443` |
+| `spec.action` | `string` | yes | `` | `serviceActive, commandSuccess, fileExists, fileAbsent, tcpPortClosed, tcpPortOpen` | Selects the condition to poll: `serviceActive`, `commandSuccess`, `fileExists`, `fileAbsent`, `tcpPortOpen`, or `tcpPortClosed`. | `fileExists` |
+| `spec.port` | `string` | no | `` | `` | TCP port number to check. Required for `tcpPortOpen` and `tcpPortClosed`. | `6443` |
 
 #### Rules
 
@@ -220,7 +221,7 @@ spec:
 ```
 ### `tcpPortOpen`
 
-Wait for a TCP listener to accept connections.
+Wait for a TCP listener to accept connections on the given port.
 
 - required fields: `spec.port`
 
@@ -228,8 +229,8 @@ Wait for a TCP listener to accept connections.
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | yes | `` | `serviceActive, commandSuccess, fileExists, fileAbsent, tcpPortClosed, tcpPortOpen` | Chooses which condition is polled by the wait loop. | `fileExists` |
-| `spec.port` | `string` | no | `` | `` | TCP port checked by `tcpPortOpen` or `tcpPortClosed`. | `6443` |
+| `spec.action` | `string` | yes | `` | `serviceActive, commandSuccess, fileExists, fileAbsent, tcpPortClosed, tcpPortOpen` | Selects the condition to poll: `serviceActive`, `commandSuccess`, `fileExists`, `fileAbsent`, `tcpPortOpen`, or `tcpPortClosed`. | `fileExists` |
+| `spec.port` | `string` | no | `` | `` | TCP port number to check. Required for `tcpPortOpen` and `tcpPortClosed`. | `6443` |
 
 #### Example
 
