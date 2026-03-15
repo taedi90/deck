@@ -30,7 +30,17 @@ func runSysctl(spec map[string]any) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644)
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+		return err
+	}
+	if boolValue(spec, "apply") {
+		applySpec := map[string]any{"file": path}
+		if timeout := stringValue(spec, "timeout"); timeout != "" {
+			applySpec["timeout"] = timeout
+		}
+		return runSysctlApply(applySpec)
+	}
+	return nil
 }
 
 func runService(spec map[string]any) error {

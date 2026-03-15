@@ -14,6 +14,10 @@ mkdir -p "${BIN_DIR}"
 desired_stamp=""
 if [[ -d "${ROOT_DIR}/.git" ]]; then
   desired_stamp="git:$(git -C "${ROOT_DIR}" rev-parse HEAD 2>/dev/null || true)"
+  dirty_stamp="$(git -C "${ROOT_DIR}" status --porcelain 2>/dev/null || true)"
+  if [[ -n "${dirty_stamp}" ]]; then
+    desired_stamp+="-dirty:$(printf '%s' "${dirty_stamp}" | sha256sum | cut -d' ' -f1)"
+  fi
 fi
 if [[ -z "${desired_stamp}" ]]; then
   desired_stamp="time:$(date +%Y%m%d%H%M%S)"

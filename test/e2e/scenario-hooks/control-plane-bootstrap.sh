@@ -67,7 +67,7 @@ bootstrap_apply_control_plane_workflow() {
   CONTROL_PLANE_WORKFLOW_URL="${SERVER_URL}/workflows/scenarios/control-plane-bootstrap.yaml"
   local server_no_scheme="${SERVER_URL#http://}"
   server_no_scheme="${server_no_scheme#https://}"
-  sudo -n "${DECK_BIN}" apply --file "${CONTROL_PLANE_WORKFLOW_URL}" --phase install \
+  sudo -n "${DECK_BIN}" apply --file "${CONTROL_PLANE_WORKFLOW_URL}" \
     --var "serverURL=${server_no_scheme}" \
     --var "registryHost=${server_no_scheme}" \
     --var "release=${OFFLINE_RELEASE_CONTROL_PLANE}" \
