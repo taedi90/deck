@@ -41,7 +41,7 @@ func newPlanCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "plan",
 		Aliases: []string{"diff"},
-		Short:   "Show the planned install step execution",
+		Short:   "Show the planned apply step execution",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runDiffWithOptions(diffOptions{
 				workflowPath:  cmdFlagValue(cmd, "file"),
@@ -113,32 +113,36 @@ func executeDiff(workflowPath, selectedPhase, output string, varOverrides map[st
 	}
 	statePath := resolvedRequest.StatePath
 	ctxData := map[string]any{"bundleRoot": "", "stateFile": statePath}
-	phaseView, found := findWorkflowPhaseByName(applyExecutionWorkflow, "install")
-	if !found {
-		return errors.New("install phase not found")
-	}
-
 	type diffStep struct {
+		Phase  string `json:"phase,omitempty"`
 		ID     string `json:"id"`
 		Kind   string `json:"kind"`
 		Action string `json:"action"`
 		Reason string `json:"reason,omitempty"`
 	}
-	steps := make([]diffStep, 0, len(phaseView.Steps))
-	for _, step := range phaseView.Steps {
-		if completed[step.ID] {
-			steps = append(steps, diffStep{ID: step.ID, Kind: step.Kind, Action: "skip", Reason: "completed"})
-			continue
+	steps := make([]diffStep, 0)
+	for _, phase := range applyExecutionWorkflow.Phases {
+		for _, step := range phase.Steps {
+			entry := diffStep{Phase: phase.Name, ID: step.ID, Kind: step.Kind}
+			if completed[step.ID] {
+				entry.Action = "skip"
+				entry.Reason = "completed"
+				steps = append(steps, entry)
+				continue
+			}
+			ok, evalErr := install.EvaluateWhen(step.When, applyExecutionWorkflow.Vars, runtimeVars, ctxData)
+			if evalErr != nil {
+				return fmt.Errorf("WHEN_EVAL_ERROR: step %s (%s): %w", step.ID, step.Kind, evalErr)
+			}
+			if !ok {
+				entry.Action = "skip"
+				entry.Reason = "when"
+				steps = append(steps, entry)
+				continue
+			}
+			entry.Action = "run"
+			steps = append(steps, entry)
 		}
-		ok, evalErr := install.EvaluateWhen(step.When, applyExecutionWorkflow.Vars, runtimeVars, ctxData)
-		if evalErr != nil {
-			return fmt.Errorf("WHEN_EVAL_ERROR: step %s (%s): %w", step.ID, step.Kind, evalErr)
-		}
-		if !ok {
-			steps = append(steps, diffStep{ID: step.ID, Kind: step.Kind, Action: "skip", Reason: "when"})
-			continue
-		}
-		steps = append(steps, diffStep{ID: step.ID, Kind: step.Kind, Action: "run"})
 	}
 
 	if output == "json" {
@@ -150,7 +154,15 @@ func executeDiff(workflowPath, selectedPhase, output string, varOverrides map[st
 		enc := json.NewEncoder(os.Stdout)
 		return enc.Encode(payload)
 	}
+	multiPhase := len(applyExecutionWorkflow.Phases) > 1
+	currentPhase := ""
 	for _, s := range steps {
+		if multiPhase && s.Phase != currentPhase {
+			currentPhase = s.Phase
+			if err := stdoutPrintf("PHASE=%s\n", currentPhase); err != nil {
+				return err
+			}
+		}
 		if s.Action == "skip" && s.Reason != "" {
 			if err := stdoutPrintf("%s %s SKIP (%s)\n", s.ID, s.Kind, s.Reason); err != nil {
 				return err
@@ -782,7 +794,7 @@ func buildApplyPrefetchWorkflow(wf *config.Workflow) *config.Workflow {
 		Role:           wf.Role,
 		Version:        wf.Version,
 		Vars:           wf.Vars,
-		Phases:         []config.Phase{{Name: "install", Steps: prefetchSteps}},
+		Phases:         []config.Phase{{Name: "prefetch", Steps: prefetchSteps}},
 		StateKey:       wf.StateKey,
 		WorkflowSHA256: wf.WorkflowSHA256,
 	}

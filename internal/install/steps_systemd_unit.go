@@ -23,7 +23,7 @@ func runSystemdUnit(spec map[string]any) error {
 		return fmt.Errorf("%s: SystemdUnit requires content or contentFromTemplate", errCodeInstallSystemdUnitInput)
 	}
 
-	if err := runInstallFile(map[string]any{
+	if err := runWriteFile(map[string]any{
 		"path":    path,
 		"content": content,
 		"mode":    stringValue(spec, "mode"),

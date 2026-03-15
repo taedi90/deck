@@ -8,7 +8,7 @@ apiVersion: deck/v1alpha1
 id: example-image
 kind: Image
 spec:
-  action: present
+  action: verify
   images:
     - registry.k8s.io/pause:3.9
 ```
@@ -18,7 +18,7 @@ spec:
 ```yaml
 kind: Image
 spec:
-  action: present
+  action: verify
   images:
     - registry.k8s.io/kube-apiserver:v1.30.1
     - registry.k8s.io/kube-controller-manager:v1.30.1

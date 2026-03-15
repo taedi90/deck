@@ -9,8 +9,8 @@ func runFile(spec map[string]any) error {
 	switch fileAction(spec) {
 	case "download":
 		return fmt.Errorf("file action download is not supported in apply dispatch without context")
-	case "install":
-		return runFileInstall(spec)
+	case "write":
+		return runFileWrite(spec)
 	case "copy":
 		return runFileCopy(spec)
 	case "edit":
@@ -48,8 +48,8 @@ func runImage(ctx context.Context, spec map[string]any) error {
 	switch imageAction(spec) {
 	case "download":
 		return fmt.Errorf("image action download is not supported in apply dispatch")
-	case "present":
-		return runImagePresent(ctx, spec)
+	case "verify":
+		return runImageVerify(ctx, spec)
 	default:
 		return fmt.Errorf("unsupported Image action %q", stringValue(spec, "action"))
 	}
@@ -81,7 +81,7 @@ func fileAction(spec map[string]any) string {
 	if spec["src"] != nil || spec["dest"] != nil {
 		return "copy"
 	}
-	return "install"
+	return "write"
 }
 
 func packagesAction(spec map[string]any) string {
@@ -108,7 +108,7 @@ func imageAction(spec map[string]any) string {
 	if spec != nil && (spec["backend"] != nil || spec["output"] != nil) {
 		return "download"
 	}
-	return "present"
+	return "verify"
 }
 
 func kubeadmAction(spec map[string]any) string {

@@ -11,11 +11,11 @@ Top-level workflow authoring reference for deck workflows.
 role: apply
 version: v1alpha1
 steps:
-  - id: install-config
+  - id: write-config
     apiVersion: deck/v1alpha1
     kind: File
     spec:
-      action: install
+      action: write
       path: /etc/example.conf
       content: hello
 ```
@@ -41,7 +41,6 @@ artifacts:
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
 | `artifacts` | `object` | no | `` | `` | Declarative prepare inventory that replaces legacy prepare download steps. | `{files:[...],images:[...],packages:[...]}` |
-| `imports` | `array<string>` | no | `` | `` | Scenario or component imports resolved relative to the workflow/component model. | `[common/base.yaml]` |
 | `phases` | `array<object>` | no | `` | `` | Ordered execution phases. Each phase can contain imports, steps, or both. | `[{name:install,steps:[...]}]` |
 | `role` | `string` | yes | `` | `prepare, apply` | Workflow role. `prepare` builds offline artifacts; `apply` changes the local node. | `apply` |
 | `steps` | `array<object>` | no | `` | `` | Flat step list for workflows that do not need named phases. | `[{id:configure-runtime,kind:Containerd,spec:{...}}]` |
@@ -68,11 +67,12 @@ artifacts:
 
 ## Validation Rules
 
-- At least one of the top-level groups `artifacts`, `imports`, `phases`, or `steps` must be present.
+- At least one of the top-level groups `artifacts`, `phases`, or `steps` must be present.
 - Top-level `phases` and top-level `steps` cannot both be set in the same workflow.
 
 ## Notes
 
-- A workflow must define at least one of `artifacts`, `imports`, `phases`, or `steps`.
+- A workflow must define at least one of `artifacts`, `phases`, or `steps`.
 - A workflow cannot define both top-level `phases` and top-level `steps` at the same time.
+- Imports are only supported under `phases[].imports` and resolve from `workflows/components/`.
 - Each step still validates against its own kind-specific schema after the top-level workflow schema passes.

@@ -51,7 +51,7 @@ func executeStep(ctx context.Context, kind string, spec map[string]any, bundleRo
 		return runKubeadm(ctx, spec)
 	case "Wait":
 		return runWait(ctx, spec)
-	case "Inspection":
+	case "Checks":
 		return fmt.Errorf("%s: unsupported step kind %s for apply", errCodeInstallKindUnsupported, kind)
 	default:
 		return fmt.Errorf("%s: unsupported step kind %s", errCodeInstallKindUnsupported, kind)

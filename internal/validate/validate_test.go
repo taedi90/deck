@@ -772,7 +772,7 @@ phases:
         register:
           x: notARealOutput
         spec:
-          action: install
+          action: write
           path: /tmp/a.txt
           content: hello
 `)
@@ -828,7 +828,7 @@ phases:
     steps:
       - id: c1
         apiVersion: deck/v1alpha1
-        kind: Inspection
+        kind: Checks
         register:
           hostOk: passed
         spec:
@@ -879,7 +879,7 @@ phases:
     steps:
       - id: c1
         apiVersion: deck/v1alpha1
-        kind: Inspection
+        kind: Checks
         register:
           host: passed
         spec:
@@ -949,7 +949,7 @@ steps:
 	}
 }
 
-func TestSchema_AcceptsImports(t *testing.T) {
+func TestSchema_RejectsTopLevelImports(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "workflow.yaml")
 	content := []byte(`role: apply
@@ -966,8 +966,12 @@ steps:
 		t.Fatalf("write file: %v", err)
 	}
 
-	if err := File(path); err != nil {
-		t.Fatalf("expected no error, got %v", err)
+	err := File(path)
+	if err == nil {
+		t.Fatalf("expected top-level imports validation error")
+	}
+	if got := err.Error(); !strings.Contains(got, "E_SCHEMA_INVALID") {
+		t.Fatalf("expected E_SCHEMA_INVALID, got %v", err)
 	}
 }
 
@@ -988,6 +992,88 @@ phases:
 
 	if err := File(path); err != nil {
 		t.Fatalf("expected no error, got %v", err)
+	}
+}
+
+func TestSchema_AcceptsComponentFragment(t *testing.T) {
+	dir := t.TempDir()
+	componentsDir := filepath.Join(dir, "workflows", "components", "k8s")
+	if err := os.MkdirAll(componentsDir, 0o755); err != nil {
+		t.Fatalf("mkdir components: %v", err)
+	}
+	path := filepath.Join(componentsDir, "prereq.yaml")
+	content := []byte(`steps:
+  - id: prep-disable-swap
+    kind: Swap
+    when: vars.enableSwap == "false"
+    spec:
+      disable: true
+      persist: false
+`)
+	if err := os.WriteFile(path, content, 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	if err := File(path); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+}
+
+func TestSchema_RejectsComponentFragmentVars(t *testing.T) {
+	dir := t.TempDir()
+	componentsDir := filepath.Join(dir, "workflows", "components", "k8s")
+	if err := os.MkdirAll(componentsDir, 0o755); err != nil {
+		t.Fatalf("mkdir components: %v", err)
+	}
+	path := filepath.Join(componentsDir, "prereq.yaml")
+	content := []byte(`vars:
+  osFamily: debian
+steps:
+  - id: prep-disable-swap
+    kind: Swap
+    spec:
+      disable: true
+      persist: false
+`)
+	if err := os.WriteFile(path, content, 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	err := File(path)
+	if err == nil {
+		t.Fatalf("expected schema validation error")
+	}
+	if got := err.Error(); !strings.Contains(got, "E_SCHEMA_INVALID") {
+		t.Fatalf("expected E_SCHEMA_INVALID, got %v", err)
+	}
+}
+
+func TestSchema_RejectsComponentFragmentPhases(t *testing.T) {
+	dir := t.TempDir()
+	componentsDir := filepath.Join(dir, "workflows", "components", "k8s")
+	if err := os.MkdirAll(componentsDir, 0o755); err != nil {
+		t.Fatalf("mkdir components: %v", err)
+	}
+	path := filepath.Join(componentsDir, "prereq.yaml")
+	content := []byte(`phases:
+  - name: install
+    steps:
+      - id: prep-disable-swap
+        kind: Swap
+        spec:
+          disable: true
+          persist: false
+`)
+	if err := os.WriteFile(path, content, 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	err := File(path)
+	if err == nil {
+		t.Fatalf("expected schema validation error")
+	}
+	if got := err.Error(); !strings.Contains(got, "E_SCHEMA_INVALID") {
+		t.Fatalf("expected E_SCHEMA_INVALID, got %v", err)
 	}
 }
 
@@ -1045,14 +1131,14 @@ steps:
   - id: install-file
     kind: File
     spec:
-      action: install
+      action: write
       path: /etc/modules-load.d/k8s.conf
       content: |
         overlay
   - id: template-file
     kind: File
     spec:
-      action: install
+      action: write
       path: /etc/containerd/certs.d/registry.k8s.io/hosts.toml
       contentFromTemplate: |
         server = "http://registry.local"

@@ -17,11 +17,6 @@
       "required": [
         "steps"
       ]
-    },
-    {
-      "required": [
-        "imports"
-      ]
     }
   ],
   "description": "Top-level workflow schema for deck workflows.",
@@ -303,15 +298,6 @@
       },
       "type": "object"
     },
-    "imports": {
-      "items": {
-        "minLength": 1,
-        "type": "string"
-      },
-      "minItems": 1,
-      "type": "array",
-      "uniqueItems": true
-    },
     "phases": {
       "items": {
         "$id": "https://github.com/taedi90/deck/internal/schemamodel/workflow-phase",
@@ -370,12 +356,12 @@
                 "kind": {
                   "enum": [
                     "Artifacts",
+                    "Checks",
                     "Command",
                     "Containerd",
                     "Directory",
                     "File",
                     "Image",
-                    "Inspection",
                     "KernelModule",
                     "Kubeadm",
                     "PackageCache",
@@ -459,12 +445,12 @@
           "kind": {
             "enum": [
               "Artifacts",
+              "Checks",
               "Command",
               "Containerd",
               "Directory",
               "File",
               "Image",
-              "Inspection",
               "KernelModule",
               "Kubeadm",
               "PackageCache",

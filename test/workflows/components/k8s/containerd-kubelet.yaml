@@ -1,72 +1,68 @@
-role: apply
-version: v1alpha1
-phases:
-  - name: install
-    steps:
-      - id: configure-containerd-runtime
-        kind: Containerd
-        spec:
-          path: /etc/containerd/config.toml
-          configPath: /etc/containerd/certs.d
-          systemdCgroup: true
-          registryHosts:
-            - registry: registry.k8s.io
-              server: https://registry.k8s.io
-              host: http://{{ .vars.registryHost  }}
-              capabilities: [pull, resolve]
-              skipVerify: true
-      - id: update-containerd-pause-image
-        kind: File
-        spec:
-          action: edit
-          path: /etc/containerd/config.toml
-          backup: false
-          edits:
-            - op: replace
-              match: registry.k8s.io/pause:3.8
-              with: registry.k8s.io/pause:3.9
-      - id: restart-containerd
-        kind: Service
-        spec:
-          name: containerd
-          enabled: true
-          state: restarted
-      - id: ensure-kubelet-state-dir
-        kind: Directory
-        spec:
-          path: /var/lib/kubelet
-      - id: ensure-kubelet-defaults-dir
-        kind: Directory
-        spec:
-          path: /etc/default
-      - id: setup-kubelet-systemd
-        kind: SystemdUnit
-        spec:
-          path: /etc/systemd/system/kubelet.service
-          mode: "0644"
-          content: |
-            [Unit]
-            Description=kubelet
-            Documentation=https://kubernetes.io/docs/
-            Wants=network-online.target
-            After=network-online.target
+steps:
+  - id: configure-containerd-runtime
+    kind: Containerd
+    spec:
+      path: /etc/containerd/config.toml
+      configPath: /etc/containerd/certs.d
+      systemdCgroup: true
+      registryHosts:
+        - registry: registry.k8s.io
+          server: https://registry.k8s.io
+          host: http://{{ .vars.registryHost  }}
+          capabilities: [pull, resolve]
+          skipVerify: true
+  - id: update-containerd-pause-image
+    kind: File
+    spec:
+      action: edit
+      path: /etc/containerd/config.toml
+      backup: false
+      edits:
+        - op: replace
+          match: registry.k8s.io/pause:3.8
+          with: registry.k8s.io/pause:3.9
+  - id: restart-containerd
+    kind: Service
+    spec:
+      name: containerd
+      enabled: true
+      state: restarted
+  - id: ensure-kubelet-state-dir
+    kind: Directory
+    spec:
+      path: /var/lib/kubelet
+  - id: ensure-kubelet-defaults-dir
+    kind: Directory
+    spec:
+      path: /etc/default
+  - id: setup-kubelet-systemd
+    kind: SystemdUnit
+    spec:
+      path: /etc/systemd/system/kubelet.service
+      mode: "0644"
+      content: |
+        [Unit]
+        Description=kubelet
+        Documentation=https://kubernetes.io/docs/
+        Wants=network-online.target
+        After=network-online.target
 
-            [Service]
-            EnvironmentFile=-/var/lib/kubelet/kubeadm-flags.env
-            EnvironmentFile=-/etc/default/kubelet
-            ExecStart=/usr/bin/kubelet \
-              --bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf \
-              --kubeconfig=/etc/kubernetes/kubelet.conf \
-              --config=/var/lib/kubelet/config.yaml \
-              $KUBELET_KUBEADM_ARGS $KUBELET_EXTRA_ARGS
-            Restart=always
-            StartLimitInterval=0
-            RestartSec=10
+        [Service]
+        EnvironmentFile=-/var/lib/kubelet/kubeadm-flags.env
+        EnvironmentFile=-/etc/default/kubelet
+        ExecStart=/usr/bin/kubelet \
+          --bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf \
+          --kubeconfig=/etc/kubernetes/kubelet.conf \
+          --config=/var/lib/kubelet/config.yaml \
+          $KUBELET_KUBEADM_ARGS $KUBELET_EXTRA_ARGS
+        Restart=always
+        StartLimitInterval=0
+        RestartSec=10
 
-            [Install]
-            WantedBy=multi-user.target
-          daemonReload: true
-          service:
-            name: kubelet
-            enabled: true
-            state: started
+        [Install]
+        WantedBy=multi-user.target
+      daemonReload: true
+      service:
+        name: kubelet
+        enabled: true
+        state: started

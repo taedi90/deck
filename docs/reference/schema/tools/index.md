@@ -8,6 +8,11 @@ Generated reference pages for each typed workflow step.
 - page: `artifacts.md`
 - category: `apply`
 - summary: Install or extract pre-collected artifacts on the node.
+## `Checks`
+
+- page: `checks.md`
+- category: `prepare`
+- summary: Run host checks before prepare execution.
 ## `Command`
 
 - page: `command.md`
@@ -27,17 +32,12 @@ Generated reference pages for each typed workflow step.
 
 - page: `file.md`
 - category: `filesystem`
-- summary: Manage files through install, copy, edit, or download actions.
+- summary: Manage files through write, copy, edit, or download actions.
 ## `Image`
 
 - page: `image.md`
 - category: `prepare`
 - summary: Download or verify container images.
-## `Inspection`
-
-- page: `inspection.md`
-- category: `prepare`
-- summary: Run host inspection checks before prepare execution.
 ## `KernelModule`
 
 - page: `kernel-module.md`

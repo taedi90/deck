@@ -199,7 +199,7 @@ func RenderWorkflowPage(schemaPath string, schema map[string]any, meta PageMetad
 	buf.WriteString("# " + firstNonEmpty(meta.Title, "Workflow Schema") + "\n\n")
 	buf.WriteString(firstNonEmpty(meta.Summary, "Top-level workflow authoring reference for deck workflows.") + "\n\n")
 	buf.WriteString("- schema: `../../../" + schemaPath + "`\n\n")
-	buf.WriteString("## Minimal Example\n\n```yaml\n" + firstNonEmpty(meta.MinimalExample, "role: apply\nversion: v1alpha1\nsteps:\n  - id: example-step\n    kind: File\n    spec:\n      action: install\n      path: /tmp/example\n      content: hello\n") + "```\n")
+	buf.WriteString("## Minimal Example\n\n```yaml\n" + firstNonEmpty(meta.MinimalExample, "role: apply\nversion: v1alpha1\nsteps:\n  - id: example-step\n    kind: File\n    spec:\n      action: write\n      path: /tmp/example\n      content: hello\n") + "```\n")
 	buf.WriteString("\n## Realistic Example\n\n```yaml\n" + firstNonEmpty(meta.RealisticExample, "role: prepare\nversion: v1alpha1\nartifacts:\n  files:\n    - group: runtime-binaries\n      items:\n        - id: runc\n          source:\n            url: https://mirror.example.invalid/runc\n          output:\n            path: bin/runc\n") + "```\n")
 	fields := CollectFields(schema)
 	applyFieldDocs(fields, meta.FieldDocs)
@@ -309,7 +309,11 @@ func ExtractRules(node map[string]any, prefix string) []string {
 			}
 		}
 		if len(requiredGroups) > 0 && prefix == "" {
-			rules = append(rules, "At least one of the top-level groups `artifacts`, `imports`, `phases`, or `steps` must be present.")
+			groups := make([]string, 0, len(requiredGroups))
+			for _, group := range requiredGroups {
+				groups = append(groups, "`"+group+"`")
+			}
+			rules = append(rules, "At least one of the top-level groups "+joinWithFinalConjunction(groups, "or")+" must be present.")
 		}
 		for _, raw := range anyOf {
 			entry, _ := raw.(map[string]any)
@@ -371,6 +375,19 @@ func ExtractRules(node map[string]any, prefix string) []string {
 		}
 	}
 	return dedupeStrings(rules)
+}
+
+func joinWithFinalConjunction(values []string, conjunction string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	if len(values) == 1 {
+		return values[0]
+	}
+	if len(values) == 2 {
+		return values[0] + " " + conjunction + " " + values[1]
+	}
+	return strings.Join(values[:len(values)-1], ", ") + ", " + conjunction + " " + values[len(values)-1]
 }
 
 func minimalToolExample(in PageInput) string {

@@ -1,7 +1,0 @@
-role: apply
-version: v1alpha1
-phases:
-  - name: install
-    imports:
-      - path: bootstrap.yaml
-      - path: k8s/cni.yaml

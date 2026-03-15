@@ -76,7 +76,7 @@ func TestE2ELayoutContracts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read rendered scenario workflow: %v", err)
 	}
-	if !strings.Contains(string(applyContent), "scenario/bootstrap-cluster.yaml") {
+	if !strings.Contains(string(applyContent), "bootstrap.yaml") {
 		t.Fatalf("expected rendered scenario workflow to keep canonical imports, got:\n%s", string(applyContent))
 	}
 }

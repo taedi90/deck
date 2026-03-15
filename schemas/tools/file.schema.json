@@ -55,7 +55,7 @@
           "if": {
             "properties": {
               "action": {
-                "const": "install"
+                "const": "write"
               }
             },
             "required": [
@@ -121,7 +121,7 @@
         "action": {
           "enum": [
             "download",
-            "install",
+            "write",
             "copy",
             "edit"
           ],

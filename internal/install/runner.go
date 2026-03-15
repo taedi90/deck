@@ -84,7 +84,7 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 	}
 
 	if len(wf.Phases) == 0 {
-		return fmt.Errorf("install phase not found")
+		return fmt.Errorf("no phases found")
 	}
 
 	bundleRoot := strings.TrimSpace(opts.BundleRoot)

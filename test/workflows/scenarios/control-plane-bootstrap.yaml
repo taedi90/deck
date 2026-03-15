@@ -6,13 +6,17 @@ vars:
 phases:
   - name: host-prereqs
     imports:
-      - path: scenario/bootstrap-host-prereqs.yaml
+      - path: k8s/prereq.yaml
+      - path: repo/offline-repo-debian.yaml
+      - path: k8s/runtime-deps-debian.yaml
   - name: runtime
     imports:
-      - path: scenario/bootstrap-runtime.yaml
+      - path: k8s/k8s-binaries.yaml
+      - path: k8s/containerd-kubelet.yaml
   - name: bootstrap
     imports:
-      - path: scenario/bootstrap-cluster.yaml
+      - path: bootstrap.yaml
+      - path: k8s/cni.yaml
   - name: verify
     steps:
       - id: bootstrap-report

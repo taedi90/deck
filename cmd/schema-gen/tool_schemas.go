@@ -8,7 +8,7 @@ func toolSchemaDefinitions() map[string]map[string]any {
 		"directory.schema.json":     generateDirectoryToolSchema(),
 		"file.schema.json":          generateFileToolSchema(),
 		"image.schema.json":         generateImageToolSchema(),
-		"inspection.schema.json":    generateInspectionToolSchema(),
+		"checks.schema.json":        generateChecksToolSchema(),
 		"kernel-module.schema.json": generateKernelModuleToolSchema(),
 		"kubeadm.schema.json":       generateKubeadmToolSchema(),
 		"package-cache.schema.json": generatePackageCacheToolSchema(),

@@ -33,6 +33,8 @@ func main() {
 	}
 	workflowSchemaPath := filepath.Join(root, "schemas", "deck-workflow.schema.json")
 	writeJSONFile(workflowSchemaPath, generateWorkflowSchema())
+	componentFragmentSchemaPath := filepath.Join(root, "schemas", "deck-component-fragment.schema.json")
+	writeJSONFile(componentFragmentSchemaPath, generateComponentFragmentSchema())
 	writeToolSchemas(root)
 
 	toolDefinitionSchemaPath := filepath.Join(root, "schemas", "deck-tooldefinition.schema.json")

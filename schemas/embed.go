@@ -9,11 +9,15 @@ import (
 	"strings"
 )
 
-//go:embed deck-workflow.schema.json deck-tooldefinition.schema.json tools/*.schema.json
+//go:embed deck-workflow.schema.json deck-component-fragment.schema.json deck-tooldefinition.schema.json tools/*.schema.json
 var files embed.FS
 
 func WorkflowSchema() ([]byte, error) {
 	return files.ReadFile("deck-workflow.schema.json")
+}
+
+func ComponentFragmentSchema() ([]byte, error) {
+	return files.ReadFile("deck-component-fragment.schema.json")
 }
 
 func ToolDefinitionSchema() ([]byte, error) {

@@ -73,25 +73,14 @@ func initTemplateDirs(root string) []string {
 }
 
 func initTemplateFiles(root string) map[string]string {
-	prepareComponentContent := strings.Join([]string{
-		"role: prepare",
-		"version: v1alpha1",
-		"steps: []",
-		"",
-	}, "\n")
 	applyComponentContent := strings.Join([]string{
-		"role: apply",
-		"version: v1alpha1",
 		"steps: []",
 		"",
 	}, "\n")
 	prepareScenarioContent := strings.Join([]string{
 		"role: prepare",
 		"version: v1alpha1",
-		"phases:",
-		"  - name: prepare",
-		"    imports:",
-		"      - path: example-prepare.yaml",
+		"artifacts: {}",
 		"",
 	}, "\n")
 	applyScenarioContent := strings.Join([]string{
@@ -108,11 +97,10 @@ func initTemplateFiles(root string) map[string]string {
 		canonicalVarsPath(root):            "{}\n",
 		canonicalPrepareWorkflowPath(root): prepareScenarioContent,
 		canonicalApplyWorkflowPath(root):   applyScenarioContent,
-		filepath.Join(root, workflowRootDir, workflowComponentsDir, "example-prepare.yaml"): prepareComponentContent,
-		filepath.Join(root, workflowRootDir, workflowComponentsDir, "example-apply.yaml"):   applyComponentContent,
-		filepath.Join(root, preparedDirRel, "files", ".keep"):                               "",
-		filepath.Join(root, preparedDirRel, "images", ".keep"):                              "",
-		filepath.Join(root, preparedDirRel, "packages", ".keep"):                            "",
+		filepath.Join(root, workflowRootDir, workflowComponentsDir, "example-apply.yaml"): applyComponentContent,
+		filepath.Join(root, preparedDirRel, "files", ".keep"):                             "",
+		filepath.Join(root, preparedDirRel, "images", ".keep"):                            "",
+		filepath.Join(root, preparedDirRel, "packages", ".keep"):                          "",
 	}
 }
 

@@ -10,8 +10,8 @@ func runPackagesApply(ctx context.Context, spec map[string]any) error {
 	return runInstallPackages(ctx, spec)
 }
 
-func runFileInstall(spec map[string]any) error {
-	return runInstallFile(spec)
+func runFileWrite(spec map[string]any) error {
+	return runWriteFile(spec)
 }
 
 func runFileCopy(spec map[string]any) error {
@@ -30,6 +30,6 @@ func runRepositoryConfigure(spec map[string]any) error {
 	return runRepoConfig(spec)
 }
 
-func runImagePresent(ctx context.Context, spec map[string]any) error {
+func runImageVerify(ctx context.Context, spec map[string]any) error {
 	return runVerifyImages(ctx, spec)
 }

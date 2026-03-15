@@ -1,6 +1,0 @@
-role: apply
-version: v1alpha1
-phases:
-  - name: install
-    imports:
-      - path: k8s/prereq.yaml

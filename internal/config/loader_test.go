@@ -121,39 +121,6 @@ steps:
 	}
 }
 
-func TestLoadMergesPrepareImports(t *testing.T) {
-	dir := t.TempDir()
-	workflowsDir := filepath.Join(dir, "workflows")
-	componentsDir := filepath.Join(workflowsDir, "components")
-	if err := os.MkdirAll(componentsDir, 0o755); err != nil {
-		t.Fatalf("mkdir components: %v", err)
-	}
-	rootPath := filepath.Join(workflowsDir, "prepare.yaml")
-	filesPath := filepath.Join(componentsDir, "files.yaml")
-	imagesPath := filepath.Join(componentsDir, "images.yaml")
-
-	if err := os.WriteFile(filesPath, []byte("role: prepare\nversion: v1alpha1\nartifacts:\n  files:\n    - group: binaries\n      items:\n        - id: kubeadm\n          source:\n            url: https://example.local/kubeadm\n          output:\n            path: bin/kubeadm\n"), 0o644); err != nil {
-		t.Fatalf("write files import: %v", err)
-	}
-	if err := os.WriteFile(imagesPath, []byte("role: prepare\nversion: v1alpha1\nartifacts:\n  images:\n    - group: control-plane\n      items:\n        - image: registry.k8s.io/kube-apiserver:v1.30.1\n"), 0o644); err != nil {
-		t.Fatalf("write images import: %v", err)
-	}
-	if err := os.WriteFile(rootPath, []byte("role: prepare\nversion: v1alpha1\nimports:\n  - files.yaml\n  - images.yaml\n"), 0o644); err != nil {
-		t.Fatalf("write root workflow: %v", err)
-	}
-
-	wf, err := Load(context.Background(), rootPath)
-	if err != nil {
-		t.Fatalf("Load failed: %v", err)
-	}
-	if wf.Artifacts == nil {
-		t.Fatalf("expected prepare spec")
-	}
-	if len(wf.Artifacts.Files) != 1 || len(wf.Artifacts.Images) != 1 {
-		t.Fatalf("unexpected merged prepare content: %+v", wf.Artifacts)
-	}
-}
-
 func TestStateKey(t *testing.T) {
 	t.Run("changes when vars yaml changes", func(t *testing.T) {
 		dir := t.TempDir()
@@ -227,7 +194,7 @@ func TestStateKeyIgnoresAssistedMetadata(t *testing.T) {
 	}
 }
 
-func TestLoadWithImports_Local(t *testing.T) {
+func TestLoadWithPhaseImports_Local(t *testing.T) {
 	dir := t.TempDir()
 	workflowsDir := filepath.Join(dir, "workflows")
 	fragmentDir := filepath.Join(workflowsDir, "components", "fragments")
@@ -237,12 +204,7 @@ func TestLoadWithImports_Local(t *testing.T) {
 	rootPath := filepath.Join(workflowsDir, "apply.yaml")
 
 	fragmentPath := filepath.Join(fragmentDir, "common.yaml")
-	fragment := []byte(`role: apply
-version: v1alpha1
-vars:
-  imageRepo: from-import
-  importedOnly: true
-steps:
+	fragment := []byte(`steps:
   - id: imported-step
     kind: Command
     spec:
@@ -254,15 +216,15 @@ steps:
 
 	root := []byte(`role: apply
 version: v1alpha1
-imports:
-  - fragments/common.yaml
-vars:
-  imageRepo: from-root
-steps:
-  - id: root-step
-    kind: Command
-    spec:
-      command: ["true"]
+phases:
+  - name: bootstrap
+    imports:
+      - path: fragments/common.yaml
+    steps:
+      - id: root-step
+        kind: Command
+        spec:
+          command: ["true"]
 `)
 	if err := os.WriteFile(rootPath, root, 0o644); err != nil {
 		t.Fatalf("write root workflow: %v", err)
@@ -273,98 +235,66 @@ steps:
 		t.Fatalf("Load failed: %v", err)
 	}
 
-	if got := len(wf.Steps); got != 2 {
+	if got := len(wf.Phases); got != 1 {
+		t.Fatalf("expected 1 phase, got %d", got)
+	}
+	if got := len(wf.Phases[0].Steps); got != 2 {
 		t.Fatalf("expected 2 steps, got %d", got)
 	}
-	if wf.Steps[0].ID != "imported-step" || wf.Steps[1].ID != "root-step" {
-		t.Fatalf("unexpected merged step order: %s, %s", wf.Steps[0].ID, wf.Steps[1].ID)
-	}
-	if got := wf.Vars["imageRepo"]; got != "from-root" {
-		t.Fatalf("expected root var override, got %v", got)
-	}
-	if got := wf.Vars["importedOnly"]; got != true {
-		t.Fatalf("expected imported var, got %v", got)
+	if wf.Phases[0].Steps[0].ID != "imported-step" || wf.Phases[0].Steps[1].ID != "root-step" {
+		t.Fatalf("unexpected merged step order: %s, %s", wf.Phases[0].Steps[0].ID, wf.Phases[0].Steps[1].ID)
 	}
 }
 
-func TestLoadWithImports_Cycle(t *testing.T) {
+func TestLoadRejectsTopLevelImports(t *testing.T) {
 	dir := t.TempDir()
 	workflowsDir := filepath.Join(dir, "workflows")
-	componentsDir := filepath.Join(workflowsDir, "components")
-	if err := os.MkdirAll(componentsDir, 0o755); err != nil {
-		t.Fatalf("mkdir components: %v", err)
+	if err := os.MkdirAll(workflowsDir, 0o755); err != nil {
+		t.Fatalf("mkdir workflows: %v", err)
 	}
-	aPath := filepath.Join(workflowsDir, "apply.yaml")
-	bPath := filepath.Join(componentsDir, "b.yaml")
-	cPath := filepath.Join(componentsDir, "c.yaml")
+	workflowPath := filepath.Join(workflowsDir, "apply.yaml")
 
-	a := []byte(`role: apply
+	workflow := []byte(`role: apply
 version: v1alpha1
 imports:
-  - b.yaml
-steps:
-  - id: a-step
-    kind: Command
-    spec:
-      command: ["true"]
-`)
-	b := []byte(`role: apply
-version: v1alpha1
-imports:
-  - c.yaml
-steps:
-  - id: b-step
-    kind: Command
-    spec:
-      command: ["true"]
-`)
-	c := []byte(`role: apply
-version: v1alpha1
-imports:
-  - b.yaml
-steps:
-  - id: c-step
-    kind: Command
-    spec:
-      command: ["true"]
-`)
-	if err := os.WriteFile(aPath, a, 0o644); err != nil {
-		t.Fatalf("write a.yaml: %v", err)
-	}
-	if err := os.WriteFile(bPath, b, 0o644); err != nil {
-		t.Fatalf("write b.yaml: %v", err)
-	}
-	if err := os.WriteFile(cPath, c, 0o644); err != nil {
-		t.Fatalf("write c.yaml: %v", err)
-	}
-
-	_, err := Load(context.Background(), aPath)
-	if err == nil {
-		t.Fatalf("expected import cycle error")
-	}
-	if !strings.Contains(err.Error(), "import cycle") {
-		t.Fatalf("expected import cycle error, got %v", err)
-	}
-}
-
-func TestLoadWithImports_RemoteRelative(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/wf/workflows/apply.yaml":
-			_, _ = w.Write([]byte(`role: apply
-version: v1alpha1
-imports:
-  - fragments/common.yaml
+  - legacy.yaml
 steps:
   - id: root-step
     kind: Command
     spec:
       command: ["true"]
-`))
-		case "/wf/workflows/components/fragments/common.yaml":
+`)
+	if err := os.WriteFile(workflowPath, workflow, 0o644); err != nil {
+		t.Fatalf("write workflow: %v", err)
+	}
+
+	_, err := Load(context.Background(), workflowPath)
+	if err == nil {
+		t.Fatalf("expected top-level import error")
+	}
+	if !strings.Contains(err.Error(), "field imports not found") {
+		t.Fatalf("expected strict top-level import error, got %v", err)
+	}
+}
+
+func TestLoadWithPhaseImports_RemoteRelative(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/wf/workflows/apply.yaml":
 			_, _ = w.Write([]byte(`role: apply
 version: v1alpha1
-steps:
+phases:
+  - name: bootstrap
+    imports:
+      - path: fragments/common.yaml
+    steps:
+      - id: root-step
+        kind: Command
+        spec:
+          command: ["true"]
+`))
+		case "/wf/workflows/components/fragments/common.yaml":
+			_, _ = w.Write([]byte(`steps:
   - id: imported-step
     kind: Command
     spec:
@@ -382,18 +312,21 @@ steps:
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
-	if got := len(wf.Steps); got != 2 {
+	if got := len(wf.Phases); got != 1 {
+		t.Fatalf("expected 1 phase, got %d", got)
+	}
+	if got := len(wf.Phases[0].Steps); got != 2 {
 		t.Fatalf("expected 2 steps, got %d", got)
 	}
-	if wf.Steps[0].ID != "imported-step" || wf.Steps[1].ID != "root-step" {
-		t.Fatalf("unexpected merged step order: %s, %s", wf.Steps[0].ID, wf.Steps[1].ID)
+	if wf.Phases[0].Steps[0].ID != "imported-step" || wf.Phases[0].Steps[1].ID != "root-step" {
+		t.Fatalf("unexpected merged step order: %s, %s", wf.Phases[0].Steps[0].ID, wf.Phases[0].Steps[1].ID)
 	}
 	if got := wf.Vars["fromVarsFile"]; got != true {
 		t.Fatalf("expected vars.yaml value, got %v", got)
 	}
 }
 
-func TestLoadWithImports_MergesPhasesByName(t *testing.T) {
+func TestLoadRejectsComponentPhases(t *testing.T) {
 	dir := t.TempDir()
 	workflowsDir := filepath.Join(dir, "workflows")
 	componentsDir := filepath.Join(workflowsDir, "components")
@@ -403,9 +336,7 @@ func TestLoadWithImports_MergesPhasesByName(t *testing.T) {
 	rootPath := filepath.Join(workflowsDir, "apply.yaml")
 	fragmentPath := filepath.Join(componentsDir, "phase-fragment.yaml")
 
-	fragment := []byte(`role: apply
-version: v1alpha1
-phases:
+	fragment := []byte(`phases:
   - name: install
     steps:
       - id: imported-step
@@ -419,10 +350,10 @@ phases:
 
 	root := []byte(`role: apply
 version: v1alpha1
-imports:
-  - phase-fragment.yaml
 phases:
   - name: install
+    imports:
+      - path: phase-fragment.yaml
     steps:
       - id: root-step
         kind: Command
@@ -433,18 +364,12 @@ phases:
 		t.Fatalf("write root workflow: %v", err)
 	}
 
-	wf, err := Load(context.Background(), rootPath)
-	if err != nil {
-		t.Fatalf("Load failed: %v", err)
+	_, err := Load(context.Background(), rootPath)
+	if err == nil {
+		t.Fatalf("expected component fragment parse failure")
 	}
-	if got := len(wf.Phases); got != 1 {
-		t.Fatalf("expected 1 merged phase, got %d", got)
-	}
-	if got := len(wf.Phases[0].Steps); got != 2 {
-		t.Fatalf("expected 2 merged steps, got %d", got)
-	}
-	if wf.Phases[0].Steps[0].ID != "imported-step" || wf.Phases[0].Steps[1].ID != "root-step" {
-		t.Fatalf("unexpected merged step order: %s, %s", wf.Phases[0].Steps[0].ID, wf.Phases[0].Steps[1].ID)
+	if !strings.Contains(err.Error(), "field phases not found") {
+		t.Fatalf("expected steps-only fragment error, got %v", err)
 	}
 }
 
@@ -458,9 +383,7 @@ func TestLoadWithPhaseImports_CombinesWhenAndSteps(t *testing.T) {
 	rootPath := filepath.Join(workflowsDir, "apply.yaml")
 	fragmentPath := filepath.Join(componentsDir, "phase-install.yaml")
 
-	fragment := []byte(`role: apply
-version: v1alpha1
-steps:
+	fragment := []byte(`steps:
   - id: imported-a
     kind: Command
     when: vars.enableCommon == true

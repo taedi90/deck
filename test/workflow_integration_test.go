@@ -111,11 +111,12 @@ func TestWorkflowIntegrationNodeReset(t *testing.T) {
 func TestWorkflowIntegrationRejectsBrokenImports(t *testing.T) {
 	dir := t.TempDir()
 	workflowsDir := filepath.Join(dir, "workflows")
-	if err := os.MkdirAll(workflowsDir, 0o755); err != nil {
+	componentsDir := filepath.Join(workflowsDir, "components")
+	if err := os.MkdirAll(componentsDir, 0o755); err != nil {
 		t.Fatalf("mkdir workflows: %v", err)
 	}
 	workflowPath := filepath.Join(workflowsDir, "broken.yaml")
-	content := "role: apply\nversion: v1alpha1\nimports:\n  - missing/import.yaml\nphases:\n  - name: install\n    steps: []\n"
+	content := "role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    imports:\n      - path: missing/import.yaml\n"
 	if err := os.WriteFile(workflowPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("write broken workflow: %v", err)
 	}

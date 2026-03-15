@@ -7,10 +7,20 @@ vars:
 phases:
   - name: host-prereqs
     imports:
-      - path: scenario/worker-host-prereqs.yaml
+      - path: k8s/prereq.yaml
+      - path: repo/offline-repo-debian.yaml
+        when: vars.osFamily == "debian"
+      - path: repo/offline-repo-rhel.yaml
+        when: vars.osFamily == "rhel"
+      - path: k8s/runtime-deps-debian.yaml
+        when: vars.osFamily == "debian"
+      - path: k8s/runtime-deps-rhel.yaml
+        when: vars.osFamily == "rhel"
   - name: runtime
     imports:
-      - path: scenario/worker-runtime.yaml
+      - path: k8s/k8s-binaries.yaml
+      - path: k8s/containerd-kubelet.yaml
   - name: join
     imports:
-      - path: scenario/worker-join.yaml
+      - path: worker-join.yaml
+      - path: k8s/cni.yaml

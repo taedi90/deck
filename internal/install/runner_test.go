@@ -225,6 +225,16 @@ func TestRun_ManifestIntegrityMismatch(t *testing.T) {
 	}
 }
 
+func TestRun_NoPhasesFails(t *testing.T) {
+	err := Run(context.Background(), &config.Workflow{Version: "v1"}, RunOptions{})
+	if err == nil {
+		t.Fatalf("expected no phases error")
+	}
+	if !strings.Contains(err.Error(), "no phases found") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestRun_ResumeFromFailedStep(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state", "state.json")
@@ -2330,16 +2340,16 @@ func TestInstallFileStep(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "installed.txt")
 	spec := map[string]any{"path": target, "content": "hello", "mode": "0640"}
-	if err := runInstallFile(spec); err != nil {
-		t.Fatalf("runInstallFile failed: %v", err)
+	if err := runWriteFile(spec); err != nil {
+		t.Fatalf("runWriteFile failed: %v", err)
 	}
 	before, err := os.Stat(target)
 	if err != nil {
 		t.Fatalf("stat before: %v", err)
 	}
 	time.Sleep(20 * time.Millisecond)
-	if err := runInstallFile(spec); err != nil {
-		t.Fatalf("runInstallFile second pass failed: %v", err)
+	if err := runWriteFile(spec); err != nil {
+		t.Fatalf("runWriteFile second pass failed: %v", err)
 	}
 	after, err := os.Stat(target)
 	if err != nil {

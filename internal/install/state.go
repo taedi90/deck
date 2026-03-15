@@ -23,7 +23,7 @@ func LoadState(path string) (*State, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return &State{Phase: "install", CompletedSteps: []string{}}, nil
+			return &State{CompletedSteps: []string{}}, nil
 		}
 		return nil, fmt.Errorf("read state file: %w", err)
 	}

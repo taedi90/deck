@@ -740,7 +740,7 @@ func TestWhen_NamespaceEnforced(t *testing.T) {
 	}
 }
 
-func TestRun_InspectionStep(t *testing.T) {
+func TestRun_ChecksStep(t *testing.T) {
 	t.Run("pass and register", func(t *testing.T) {
 		bundle := t.TempDir()
 		wf := &config.Workflow{
@@ -751,7 +751,7 @@ func TestRun_InspectionStep(t *testing.T) {
 				Steps: []config.Step{
 					{
 						ID:       "host-check",
-						Kind:     "Inspection",
+						Kind:     "Checks",
 						Register: map[string]string{"hostPassed": "passed"},
 						Spec: map[string]any{
 							"checks":   []any{"os", "arch", "binaries"},
@@ -809,7 +809,7 @@ func TestRun_InspectionStep(t *testing.T) {
 				Name: "prepare",
 				Steps: []config.Step{{
 					ID:   "host-check",
-					Kind: "Inspection",
+					Kind: "Checks",
 					Spec: map[string]any{
 						"checks":   []any{"os", "arch", "binaries", "swap", "kernelModules"},
 						"binaries": []any{"missing-bin"},

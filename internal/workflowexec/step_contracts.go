@@ -16,8 +16,8 @@ type ActionContract struct {
 }
 
 var stepContracts = map[string]StepContract{
-	"Inspection": simpleStep("inspection.schema.json", setOf("prepare"), setOf("passed", "failedChecks")),
-	"Artifacts":  simpleStep("artifacts.schema.json", setOf("apply"), nil),
+	"Checks":    simpleStep("checks.schema.json", setOf("prepare"), setOf("passed", "failedChecks")),
+	"Artifacts": simpleStep("artifacts.schema.json", setOf("apply"), nil),
 	"Packages": familyStep("packages.schema.json", setOf("prepare", "apply"), map[string]ActionContract{
 		"download": {Outputs: setOf("artifacts"), Roles: setOf("prepare")},
 		"install":  {Outputs: nil, Roles: setOf("apply")},
@@ -34,7 +34,7 @@ var stepContracts = map[string]StepContract{
 	"Sysctl":       simpleStep("sysctl.schema.json", setOf("apply"), nil),
 	"File": familyStep("file.schema.json", setOf("prepare", "apply"), map[string]ActionContract{
 		"download": {Outputs: setOf("path", "artifacts"), Roles: setOf("prepare", "apply")},
-		"install":  {Outputs: setOf("path"), Roles: setOf("apply")},
+		"write":    {Outputs: setOf("path"), Roles: setOf("apply")},
 		"copy":     {Outputs: setOf("dest"), Roles: setOf("apply")},
 		"edit":     {Outputs: setOf("path"), Roles: setOf("apply")},
 	}),
@@ -43,7 +43,7 @@ var stepContracts = map[string]StepContract{
 	}),
 	"Image": familyStep("image.schema.json", setOf("prepare", "apply"), map[string]ActionContract{
 		"download": {Outputs: setOf("artifacts"), Roles: setOf("prepare")},
-		"present":  {Outputs: nil, Roles: setOf("apply")},
+		"verify":   {Outputs: nil, Roles: setOf("apply")},
 	}),
 	"Wait": familyStep("wait.schema.json", setOf("apply"), map[string]ActionContract{
 		"serviceActive":  {Outputs: nil, Roles: setOf("apply")},
@@ -153,7 +153,7 @@ func inferContractAction(kind string, spec map[string]any) string {
 				return "copy"
 			}
 		}
-		return "install"
+		return "write"
 	case "Repository":
 		return "configure"
 	case "Image":
@@ -162,7 +162,7 @@ func inferContractAction(kind string, spec map[string]any) string {
 				return "download"
 			}
 		}
-		return "present"
+		return "verify"
 	case "Packages":
 		if spec != nil {
 			if spec["backend"] != nil || spec["distro"] != nil || spec["repo"] != nil {

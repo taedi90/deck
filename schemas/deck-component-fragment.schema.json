@@ -1,0 +1,87 @@
+{
+  "$id": "https://deck.local/schemas/deck-component-fragment.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Workflow component fragment schema for reusable apply step bundles.",
+  "properties": {
+    "steps": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "apiVersion": {
+            "const": "deck/v1alpha1",
+            "type": "string"
+          },
+          "id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{1,127}$",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "Artifacts",
+              "Checks",
+              "Command",
+              "Containerd",
+              "Directory",
+              "File",
+              "Image",
+              "KernelModule",
+              "Kubeadm",
+              "PackageCache",
+              "Packages",
+              "Repository",
+              "Service",
+              "Swap",
+              "Symlink",
+              "Sysctl",
+              "SystemdUnit",
+              "Wait"
+            ],
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "register": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+            },
+            "type": "object"
+          },
+          "retry": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "spec": {
+            "type": "object"
+          },
+          "timeout": {
+            "pattern": "^[0-9]+(ms|s|m|h)$",
+            "type": "string"
+          },
+          "when": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "spec"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    }
+  },
+  "required": [
+    "steps"
+  ],
+  "title": "DeckComponentFragment",
+  "type": "object"
+}

@@ -12,7 +12,7 @@ phases:
         apiVersion: deck/v1alpha1
         kind: File
         spec:
-          action: install
+          action: write
           path: /etc/apt/apt.conf.d/99offline
           mode: "0644"
           contentFromTemplate: |

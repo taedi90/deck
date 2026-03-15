@@ -7,10 +7,10 @@ vars:
 phases:
   - name: host-prereqs
     imports:
-      - path: scenario/reset-host-prereqs.yaml
+      - path: k8s/prereq.yaml
   - name: reset
     imports:
-      - path: scenario/reset-actions.yaml
+      - path: node-reset.yaml
   - name: verify
     steps:
       - id: reset-summary

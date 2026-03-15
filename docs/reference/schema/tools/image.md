@@ -9,7 +9,7 @@ Download or verify container images.
 - visibility: `public`
 - schema: `../../../schemas/tools/image.schema.json`
 - category: `prepare`
-- actions: `download`, `present`
+- actions: `download`, `verify`
 
 ## When To Use
 
@@ -22,7 +22,7 @@ apiVersion: deck/v1alpha1
 id: example-image
 kind: Image
 spec:
-  action: present
+  action: verify
   images:
     - registry.k8s.io/pause:3.9
 ```
@@ -32,7 +32,7 @@ spec:
 ```yaml
 kind: Image
 spec:
-  action: present
+  action: verify
   images:
     - registry.k8s.io/kube-apiserver:v1.30.1
     - registry.k8s.io/kube-controller-manager:v1.30.1
@@ -56,9 +56,9 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | no | `` | `download, present` | Chooses whether the step downloads images into the bundle or verifies their presence on the node. | `present` |
+| `spec.action` | `string` | no | `` | `download, verify` | Chooses whether the step downloads images into the bundle or verifies their presence on the node. | `verify` |
 | `spec.backend` | `object` | no | `` | `` | Backend-specific settings such as runtime or transport configuration. | `{runtime:containerd}` |
-| `spec.command` | `array<string>` | no | `` | `` | Optional image-listing command used by `present` when the default runtime command is not appropriate. | `[ctr,-n,k8s.io,images,list,-q]` |
+| `spec.command` | `array<string>` | no | `` | `` | Optional image-listing command used by `verify` when the default runtime command is not appropriate. | `[ctr,-n,k8s.io,images,list,-q]` |
 | `spec.images` | `array<string>` | yes | `` | `` | Fully qualified image references to download or verify. | `[registry.k8s.io/pause:3.9]` |
 | `spec.output` | `object` | no | `` | `` | Bundle output settings used when downloaded image archives are written during prepare. | `{layout:oci-archive,path:images/control-plane.tar}` |
 | `spec.runtime` | `object` | no | `` | `` | Container runtime configuration used when pulling or verifying images. | `{socket:unix:///run/containerd/containerd.sock}` |
@@ -66,7 +66,7 @@ spec:
 ## Validation Rules
 
 - When `spec.action=download`, `spec.images` are required.
-- When `spec.action=present`, `spec.images` are required.
+- When `spec.action=verify`, `spec.images` are required.
 
 ## Notes
 
@@ -85,7 +85,7 @@ Use `download` during prepare to collect images into bundle outputs.
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | no | `` | `download, present` | Chooses whether the step downloads images into the bundle or verifies their presence on the node. | `present` |
+| `spec.action` | `string` | no | `` | `download, verify` | Chooses whether the step downloads images into the bundle or verifies their presence on the node. | `verify` |
 | `spec.images` | `array<string>` | yes | `` | `` | Fully qualified image references to download or verify. | `[registry.k8s.io/pause:3.9]` |
 
 #### Rules
@@ -103,9 +103,9 @@ spec:
   output:
     path: images/control-plane.tar
 ```
-### `present`
+### `verify`
 
-Use `present` to assert that required images already exist locally on the node.
+Use `verify` to assert that required images already exist locally on the node.
 
 - required fields: `spec.images`
 
@@ -113,19 +113,19 @@ Use `present` to assert that required images already exist locally on the node.
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | no | `` | `download, present` | Chooses whether the step downloads images into the bundle or verifies their presence on the node. | `present` |
+| `spec.action` | `string` | no | `` | `download, verify` | Chooses whether the step downloads images into the bundle or verifies their presence on the node. | `verify` |
 | `spec.images` | `array<string>` | yes | `` | `` | Fully qualified image references to download or verify. | `[registry.k8s.io/pause:3.9]` |
 
 #### Rules
 
-- When `spec.action=present`, `spec.images` are required.
+- When `spec.action=verify`, `spec.images` are required.
 
 #### Example
 
 ```yaml
 kind: Image
 spec:
-  action: present
+  action: verify
   command: [ctr, -n, k8s.io, images, list, -q]
   images:
     - registry.k8s.io/kube-apiserver:v1.30.1

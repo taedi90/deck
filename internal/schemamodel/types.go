@@ -5,7 +5,6 @@ type WorkflowDocument struct {
 	Version   string            `json:"version"`
 	Vars      map[string]any    `json:"vars,omitempty"`
 	Artifacts *ArtifactsSpec    `json:"artifacts,omitempty"`
-	Imports   []string          `json:"imports,omitempty"`
 	Phases    []WorkflowPhase   `json:"phases,omitempty"`
 	Steps     []WorkflowStepRef `json:"steps,omitempty"`
 }

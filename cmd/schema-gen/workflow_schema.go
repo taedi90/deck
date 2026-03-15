@@ -27,19 +27,33 @@ func generateWorkflowSchema() map[string]any {
 		map[string]any{"required": []any{"artifacts"}},
 		map[string]any{"required": []any{"phases"}},
 		map[string]any{"required": []any{"steps"}},
-		map[string]any{"required": []any{"imports"}},
 	}
 
 	props := propertyMap(root)
 	setMap(props, "role", map[string]any{"type": "string", "enum": []any{"prepare", "apply"}})
 	setMap(props, "version", map[string]any{"type": "string", "const": "v1alpha1"})
 	mergeMap(props, "vars", map[string]any{"type": "object", "additionalProperties": true, "default": map[string]any{}})
-	mergeMap(props, "imports", map[string]any{"type": "array", "minItems": 1, "uniqueItems": true, "items": map[string]any{"type": "string", "minLength": 1}})
 	mergeMap(props, "artifacts", map[string]any{"description": "Declarative prepare artifact inventory. Prefer this over legacy prepare download steps in new role: prepare workflows."})
 	setMap(props, "steps", map[string]any{"type": "array", "minItems": 1, "items": stepBaseSchema()})
 	setMap(props, "phases", map[string]any{"type": "array", "minItems": 1, "items": phaseSchema()})
 	patchArtifactsSchema(props["artifacts"])
 
+	return root
+}
+
+func generateComponentFragmentSchema() map[string]any {
+	root := map[string]any{
+		"$schema":              "https://json-schema.org/draft/2020-12/schema",
+		"$id":                  "https://deck.local/schemas/deck-component-fragment.schema.json",
+		"title":                "DeckComponentFragment",
+		"description":          "Workflow component fragment schema for reusable apply step bundles.",
+		"type":                 "object",
+		"additionalProperties": false,
+		"required":             []any{"steps"},
+		"properties": map[string]any{
+			"steps": map[string]any{"type": "array", "minItems": 1, "items": stepBaseSchema()},
+		},
+	}
 	return root
 }
 
@@ -400,7 +414,7 @@ func stringArraySchema(minItems int, minLen bool) map[string]any {
 
 func schemaFileName(kind string) string {
 	for _, pair := range []struct{ kind, file string }{
-		{"Inspection", "inspection.schema.json"},
+		{"Checks", "checks.schema.json"},
 		{"Artifacts", "artifacts.schema.json"},
 		{"Packages", "packages.schema.json"},
 		{"Directory", "directory.schema.json"},

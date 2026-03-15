@@ -1,6 +1,7 @@
 package validate
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -22,6 +23,17 @@ var (
 	runtimeVarNamePattern      = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 	singleBraceTemplatePattern = regexp.MustCompile(`(^|[^\{])(\{\s*\.(vars|runtime)\.[^{}]+\})([^\}]|$)`)
 )
+
+type documentKind string
+
+const (
+	documentKindWorkflow          documentKind = "workflow"
+	documentKindComponentFragment documentKind = "component-fragment"
+)
+
+type componentFragment struct {
+	Steps []config.Step `yaml:"steps"`
+}
 
 // File validates workflow structure and semantic rules.
 func File(path string) error {
@@ -111,31 +123,7 @@ func Workflow(name string, wf *config.Workflow) error {
 	if strings.TrimSpace(name) == "" {
 		name = "<workflow>"
 	}
-	if wf == nil {
-		return withWorkflowName(name, fmt.Errorf("workflow is nil"))
-	}
-	if len(wf.Phases) > 0 && len(wf.Steps) > 0 {
-		return withWorkflowName(name, fmt.Errorf("workflow cannot set both phases and steps"))
-	}
-	if wf.Role == "" {
-		return withWorkflowName(name, fmt.Errorf("role is required"))
-	}
-	if strings.TrimSpace(wf.Role) != "prepare" && strings.TrimSpace(wf.Role) != "apply" {
-		return withWorkflowName(name, fmt.Errorf("unsupported role: %s (supported: prepare, apply)", wf.Role))
-	}
-	if wf.Version == "" {
-		return withWorkflowName(name, fmt.Errorf("version is required"))
-	}
-	if strings.TrimSpace(wf.Version) != "v1alpha1" {
-		return withWorkflowName(name, fmt.Errorf("unsupported version: %s (supported: v1alpha1)", wf.Version))
-	}
-	if err := validateWorkflowMode(wf); err != nil {
-		return withWorkflowName(name, err)
-	}
-	if err := validateToolSchemas(wf); err != nil {
-		return withWorkflowName(name, err)
-	}
-	if err := validateSemantics(wf); err != nil {
+	if err := validateLoadedWorkflow(name, wf); err != nil {
 		return withWorkflowName(name, err)
 	}
 	return nil
@@ -150,38 +138,23 @@ func Bytes(name string, content []byte) error {
 		return err
 	}
 
-	var wf config.Workflow
-	if err := yaml.Unmarshal(content, &wf); err != nil {
-		return fmt.Errorf("parse yaml: %w", err)
-	}
-	if len(wf.Phases) > 0 && len(wf.Steps) > 0 {
-		return fmt.Errorf("workflow cannot set both phases and steps")
-	}
-
-	if wf.Role == "" {
-		return fmt.Errorf("role is required")
-	}
-	if strings.TrimSpace(wf.Role) != "prepare" && strings.TrimSpace(wf.Role) != "apply" {
-		return fmt.Errorf("unsupported role: %s (supported: prepare, apply)", wf.Role)
-	}
-
-	if wf.Version == "" {
-		return fmt.Errorf("version is required")
-	}
-	if strings.TrimSpace(wf.Version) != "v1alpha1" {
-		return fmt.Errorf("unsupported version: %s (supported: v1alpha1)", wf.Version)
-	}
-
-	if err := validateSchema(name, content); err != nil {
+	kind := detectDocumentKind(name)
+	if err := validateSchema(name, content, kind); err != nil {
 		return err
 	}
-	if err := validateWorkflowMode(&wf); err != nil {
+	if kind == documentKindComponentFragment {
+		fragment, err := parseComponentFragment(content)
+		if err != nil {
+			return err
+		}
+		return validateComponentFragment(name, fragment)
+	}
+
+	wf, err := parseWorkflow(content)
+	if err != nil {
 		return err
 	}
-	if err := validateToolSchemas(&wf); err != nil {
-		return err
-	}
-	if err := validateSemantics(&wf); err != nil {
+	if err := validateLoadedWorkflow(name, wf); err != nil {
 		return err
 	}
 
@@ -216,12 +189,24 @@ func lintLocalEntrypoint(path string, inheritedVars map[string]any, visiting map
 	if err := validateSingleBraceTemplates(absPath, content); err != nil {
 		return nil, withWorkflowName(absPath, err)
 	}
-	if err := validateSchema(absPath, content); err != nil {
+	kind := detectDocumentKind(absPath)
+	if err := validateSchema(absPath, content, kind); err != nil {
 		return nil, withWorkflowName(absPath, err)
 	}
+	if kind == documentKindComponentFragment {
+		fragment, err := parseComponentFragment(content)
+		if err != nil {
+			return nil, withWorkflowName(absPath, err)
+		}
+		if err := validateComponentFragment(absPath, fragment); err != nil {
+			return nil, withWorkflowName(absPath, err)
+		}
+		delete(visiting, absPath)
+		return []string{absPath}, nil
+	}
 
-	var raw config.Workflow
-	if err := yaml.Unmarshal(content, &raw); err != nil {
+	raw, err := parseWorkflow(content)
+	if err != nil {
 		return nil, withWorkflowName(absPath, fmt.Errorf("parse yaml: %w", err))
 	}
 
@@ -232,17 +217,6 @@ func lintLocalEntrypoint(path string, inheritedVars map[string]any, visiting map
 	}
 
 	validated := []string{absPath}
-	for _, ref := range append([]string{}, raw.Imports...) {
-		child, err := resolveLocalWorkflowImport(absPath, ref)
-		if err != nil {
-			return nil, withWorkflowName(absPath, err)
-		}
-		files, err := lintLocalEntrypoint(child, wf.Vars, visiting)
-		if err != nil {
-			return nil, err
-		}
-		validated = append(validated, files...)
-	}
 	for _, phase := range raw.Phases {
 		for _, phaseImport := range phase.Imports {
 			child, err := resolveLocalWorkflowImport(absPath, phaseImport.Path)
@@ -262,6 +236,86 @@ func lintLocalEntrypoint(path string, inheritedVars map[string]any, visiting map
 	return dedupeAndSort(validated), nil
 }
 
+func parseWorkflow(content []byte) (*config.Workflow, error) {
+	var wf config.Workflow
+	if err := unmarshalYAMLStrict(content, &wf); err != nil {
+		return nil, fmt.Errorf("parse yaml: %w", err)
+	}
+	return &wf, nil
+}
+
+func parseComponentFragment(content []byte) (*componentFragment, error) {
+	var fragment componentFragment
+	if err := unmarshalYAMLStrict(content, &fragment); err != nil {
+		return nil, fmt.Errorf("parse yaml: %w", err)
+	}
+	return &fragment, nil
+}
+
+func validateLoadedWorkflow(name string, wf *config.Workflow) error {
+	if wf == nil {
+		return fmt.Errorf("workflow is nil")
+	}
+	if len(wf.Phases) > 0 && len(wf.Steps) > 0 {
+		return fmt.Errorf("workflow cannot set both phases and steps")
+	}
+	if wf.Role == "" {
+		return fmt.Errorf("role is required")
+	}
+	if strings.TrimSpace(wf.Role) != "prepare" && strings.TrimSpace(wf.Role) != "apply" {
+		return fmt.Errorf("unsupported role: %s (supported: prepare, apply)", wf.Role)
+	}
+	if wf.Version == "" {
+		return fmt.Errorf("version is required")
+	}
+	if strings.TrimSpace(wf.Version) != "v1alpha1" {
+		return fmt.Errorf("unsupported version: %s (supported: v1alpha1)", wf.Version)
+	}
+	if err := validateWorkflowMode(wf); err != nil {
+		return err
+	}
+	if err := validateToolSchemas(wf); err != nil {
+		return err
+	}
+	if err := validateSemantics(wf); err != nil {
+		return err
+	}
+	_ = name
+	return nil
+}
+
+func validateComponentFragment(name string, fragment *componentFragment) error {
+	if fragment == nil {
+		return fmt.Errorf("component fragment is nil")
+	}
+	if len(fragment.Steps) == 0 {
+		return fmt.Errorf("steps is required")
+	}
+	wf := &config.Workflow{Role: "apply", Version: "v1alpha1", Steps: fragment.Steps}
+	if err := validateToolSchemas(wf); err != nil {
+		return err
+	}
+	if err := validateSemantics(wf); err != nil {
+		return err
+	}
+	_ = name
+	return nil
+}
+
+func detectDocumentKind(name string) documentKind {
+	trimmed := filepath.ToSlash(strings.TrimSpace(name))
+	if strings.Contains(trimmed, "/workflows/components/") || strings.HasPrefix(trimmed, "workflows/components/") {
+		return documentKindComponentFragment
+	}
+	return documentKindWorkflow
+}
+
+func unmarshalYAMLStrict(content []byte, target any) error {
+	dec := yaml.NewDecoder(bytes.NewReader(content))
+	dec.KnownFields(true)
+	return dec.Decode(target)
+}
+
 func resolveLocalWorkflowImport(originPath string, importRef string) (string, error) {
 	ref := strings.TrimSpace(importRef)
 	if ref == "" {
@@ -273,15 +327,15 @@ func resolveLocalWorkflowImport(originPath string, importRef string) (string, er
 	cleaned := filepath.ToSlash(strings.TrimSpace(ref))
 	cleaned = strings.TrimPrefix(cleaned, "../components/")
 	cleaned = strings.TrimPrefix(cleaned, "components/")
-	if !strings.HasPrefix(cleaned, "../") && !strings.HasPrefix(cleaned, "./") {
-		workflowRoot, err := localWorkflowRoot(originPath)
-		if err != nil {
-			return "", err
-		}
-		return filepath.Join(workflowRoot, "components", filepath.FromSlash(cleaned)), nil
+	cleaned = strings.TrimPrefix(cleaned, "./")
+	if strings.HasPrefix(cleaned, "../") || cleaned == ".." || strings.HasPrefix(cleaned, "/") || cleaned == "" {
+		return "", fmt.Errorf("workflow import path must stay under components root: %s", ref)
 	}
-	joined := filepath.Clean(filepath.Join(filepath.Dir(originPath), ref))
-	return filepath.Abs(joined)
+	workflowRoot, err := localWorkflowRoot(originPath)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(workflowRoot, "components", filepath.FromSlash(filepath.Clean(cleaned))), nil
 }
 
 func localWorkflowRoot(localPath string) (string, error) {
@@ -394,10 +448,21 @@ func validateToolSchemas(wf *config.Workflow) error {
 	return nil
 }
 
-func validateSchema(name string, content []byte) error {
-	schemaRaw, err := deckschemas.WorkflowSchema()
-	if err != nil {
-		return fmt.Errorf("workflow schema not found: schemas/deck-workflow.schema.json")
+func validateSchema(name string, content []byte, kind documentKind) error {
+	var (
+		schemaRaw []byte
+		err       error
+	)
+	if kind == documentKindComponentFragment {
+		schemaRaw, err = deckschemas.ComponentFragmentSchema()
+		if err != nil {
+			return fmt.Errorf("component fragment schema not found: schemas/deck-component-fragment.schema.json")
+		}
+	} else {
+		schemaRaw, err = deckschemas.WorkflowSchema()
+		if err != nil {
+			return fmt.Errorf("workflow schema not found: schemas/deck-workflow.schema.json")
+		}
 	}
 
 	var doc any
