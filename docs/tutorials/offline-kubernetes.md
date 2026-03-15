@@ -43,7 +43,7 @@ Typical boundaries in Kubernetes workflows:
 - kubeadm bootstrap or join
 - verification
 
-Prefer typed steps where possible. Keep `RunCommand` for the edges that are not modeled yet.
+Prefer typed steps where possible. Keep `Command` for the edges that are not modeled yet.
 
 ## 4. Prepare the bundle in the connected environment
 

@@ -92,25 +92,12 @@ Supported step kinds include:
 - `Sysctl`
 - `SystemdUnit`
 - `Wait`
-- `Service`
-- `EnsureDir`
-- `InstallFile`
-- `TemplateFile`
-- `RepoConfig`
-- `ContainerdConfig`
-- `Swap`
-- `KernelModule`
-- `SysctlApply`
-- `RunCommand`
-- `VerifyImages`
-- `KubeadmInit`
-- `KubeadmJoin`
 
-## When to use RunCommand
+## When to use Command
 
-Use `RunCommand` when no supported step kind fits yet.
+Use `Command` when no supported step kind fits yet.
 
-That is the escape hatch, not the ideal authoring path. If a workflow leans heavily on `RunCommand`, the procedure may still be too close to raw shell.
+That is the escape hatch, not the ideal authoring path. If a workflow leans heavily on `Command`, the procedure may still be too close to raw shell.
 
 ## Validation model
 

@@ -15,7 +15,7 @@ They are meant to show how `deck` keeps operational work readable: use typed ste
 
 - these are not remote orchestration playbooks
 - these do not require a shared server to be useful
-- `RunCommand` is not the preferred first choice just because it is flexible
+- `Command` is not the preferred first choice just because it is flexible
 
 ## Files
 

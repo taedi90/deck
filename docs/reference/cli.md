@@ -76,4 +76,4 @@ deck apply --session session-1
 - Help text is shown on stdout only when you request it with `--help` or `help`.
 - Command and flag errors are written to stderr without automatic usage output.
 - Prefer typed step kinds for common host changes.
-- Keep `RunCommand` for cases where the clearer typed form does not exist yet.
+- Keep `Command` for cases where the clearer typed form does not exist yet.

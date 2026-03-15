@@ -41,7 +41,7 @@ The workflow schema currently enforces:
 
 ## Typed step reference notes
 
-### `RepoConfig`
+### `Repository`
 
 Supports both apt and yum repository definitions, plus file placement and refresh controls such as `path`, `mode`, `replaceExisting`, `disableExisting`, `backupPaths`, `cleanupPaths`, and `refreshCache`.
 
@@ -75,7 +75,7 @@ Refreshes local package metadata with `manager`, `clean`, and `update`. Set at l
     update: true
 ```
 
-### `ContainerdConfig`
+### `Containerd`
 
 Supports `path`, `configPath`, `systemdCgroup`, `createDefault`, and per-registry `registryHosts` entries with `registry`, `server`, `host`, `capabilities`, and `skipVerify`.
 
@@ -161,7 +161,7 @@ Installs or extracts per-architecture artifacts. Each entry requires `source.amd
           mode: "0755"
 ```
 
-### `KubeadmInit`
+### `Kubeadm`
 
 Runs `kubeadm init` with either `configFile` or `configTemplate`, plus bootstrap-oriented fields such as `pullImages`, `outputJoinFile`, `kubernetesVersion`, `advertiseAddress`, `podNetworkCIDR`, `criSocket`, `ignorePreflightErrors`, `extraArgs`, `timeout`, and `skipIfAdminConfExists`.
 
