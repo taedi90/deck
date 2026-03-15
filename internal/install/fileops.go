@@ -23,18 +23,6 @@ func writeFileIfChanged(path string, content []byte, mode os.FileMode) error {
 	return os.WriteFile(path, content, mode)
 }
 
-func editFileBackupEnabled(spec map[string]any) bool {
-	backup, exists := spec["backup"]
-	if !exists {
-		return true
-	}
-	v, ok := backup.(bool)
-	if !ok {
-		return true
-	}
-	return v
-}
-
 func editFileBackupEnabledValue(backup *bool) bool {
 	if backup == nil {
 		return true
