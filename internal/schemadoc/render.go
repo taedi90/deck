@@ -199,7 +199,7 @@ func RenderWorkflowPage(schemaPath string, schema map[string]any, meta PageMetad
 	buf.WriteString("# " + firstNonEmpty(meta.Title, "Workflow Schema") + "\n\n")
 	buf.WriteString(firstNonEmpty(meta.Summary, "Top-level workflow authoring reference for deck workflows.") + "\n\n")
 	buf.WriteString("- schema: `../../../" + schemaPath + "`\n\n")
-	buf.WriteString("## Minimal Example\n\n```yaml\n" + firstNonEmpty(meta.MinimalExample, "role: apply\nversion: v1alpha1\nsteps:\n  - id: example-step\n    kind: File\n    spec:\n      action: install\n      path: /tmp/example\n      content: hello\n") + "```\n")
+	buf.WriteString("## Minimal Example\n\n```yaml\n" + firstNonEmpty(meta.MinimalExample, "role: apply\nversion: v1alpha1\nsteps:\n  - id: example-step\n    kind: File\n    spec:\n      action: write\n      path: /tmp/example\n      content: hello\n") + "```\n")
 	buf.WriteString("\n## Realistic Example\n\n```yaml\n" + firstNonEmpty(meta.RealisticExample, "role: prepare\nversion: v1alpha1\nartifacts:\n  files:\n    - group: runtime-binaries\n      items:\n        - id: runc\n          source:\n            url: https://mirror.example.invalid/runc\n          output:\n            path: bin/runc\n") + "```\n")
 	fields := CollectFields(schema)
 	applyFieldDocs(fields, meta.FieldDocs)

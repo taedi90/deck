@@ -11,11 +11,11 @@ Top-level workflow authoring reference for deck workflows.
 role: apply
 version: v1alpha1
 steps:
-  - id: install-config
+  - id: write-config
     apiVersion: deck/v1alpha1
     kind: File
     spec:
-      action: install
+      action: write
       path: /etc/example.conf
       content: hello
 ```

@@ -414,7 +414,7 @@ func stringArraySchema(minItems int, minLen bool) map[string]any {
 
 func schemaFileName(kind string) string {
 	for _, pair := range []struct{ kind, file string }{
-		{"Inspection", "inspection.schema.json"},
+		{"Checks", "checks.schema.json"},
 		{"Artifacts", "artifacts.schema.json"},
 		{"Packages", "packages.schema.json"},
 		{"Directory", "directory.schema.json"},

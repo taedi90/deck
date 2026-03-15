@@ -19,12 +19,12 @@ This is the generated entrypoint for deck schema documentation.
 ## Available Tool Pages
 
 - `tools/artifacts.md`: `Artifacts`
+- `tools/checks.md`: `Checks`
 - `tools/command.md`: `Command`
 - `tools/containerd.md`: `Containerd`
 - `tools/directory.md`: `Directory`
 - `tools/file.md`: `File`
 - `tools/image.md`: `Image`
-- `tools/inspection.md`: `Inspection`
 - `tools/kernel-module.md`: `KernelModule`
 - `tools/kubeadm.md`: `Kubeadm`
 - `tools/package-cache.md`: `PackageCache`

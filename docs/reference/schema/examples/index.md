@@ -4,12 +4,12 @@
 Every schema gets a minimal generated example. High-value kinds also include curated examples.
 
 - `Artifacts`: `artifacts.md`
+- `Checks`: `checks.md`
 - `Command`: `command.md`
 - `Containerd`: `containerd.md`
 - `Directory`: `directory.md`
 - `File`: `file.md`
 - `Image`: `image.md`
-- `Inspection`: `inspection.md`
 - `KernelModule`: `kernel-module.md`
 - `Kubeadm`: `kubeadm.md`
 - `PackageCache`: `package-cache.md`

@@ -36,7 +36,7 @@ steps:
     apiVersion: deck/v1alpha1
     kind: File
     spec:
-      action: install
+      action: write
       path: /etc/example.repo
       content: |
         [offline-base]

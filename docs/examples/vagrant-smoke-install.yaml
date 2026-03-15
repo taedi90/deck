@@ -7,7 +7,7 @@ phases:
         apiVersion: deck/v1alpha1
         kind: File
         spec:
-          action: install
+          action: write
           path: /tmp/deck/examples/vagrant-smoke.txt
           mode: "0644"
           content: |

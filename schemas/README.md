@@ -19,12 +19,12 @@ For the human-facing reference, read `../docs/reference/schema/index.md`.
 ## Current tool schemas
 
 - `tools/artifacts.schema.json`: `Artifacts` (`public`)
+- `tools/checks.schema.json`: `Checks` (`public`)
 - `tools/command.schema.json`: `Command` (`advanced`)
 - `tools/containerd.schema.json`: `Containerd` (`public`)
 - `tools/directory.schema.json`: `Directory` (`public`)
 - `tools/file.schema.json`: `File` (`public`)
 - `tools/image.schema.json`: `Image` (`public`)
-- `tools/inspection.schema.json`: `Inspection` (`public`)
 - `tools/kernel-module.schema.json`: `KernelModule` (`public`)
 - `tools/kubeadm.schema.json`: `Kubeadm` (`public`)
 - `tools/package-cache.schema.json`: `PackageCache` (`public`)

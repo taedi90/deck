@@ -6,7 +6,7 @@ steps:
   - id: write-basic-cni-config
     kind: File
     spec:
-      action: install
+      action: write
       path: /etc/cni/net.d/10-deck-bridge.conflist
       content: |
         {

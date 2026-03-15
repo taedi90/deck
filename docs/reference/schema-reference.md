@@ -35,7 +35,7 @@ The component fragment schema enforces:
 - `directory.schema.json`
 - `file.schema.json`
 - `image.schema.json`
-- `inspection.schema.json`
+- `checks.schema.json`
 - `kernel-module.schema.json`
 - `kubeadm.schema.json`
 - `package-cache.schema.json`

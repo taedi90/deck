@@ -73,7 +73,7 @@ func generateImageToolSchema() map[string]any {
 		"additionalProperties": false,
 		"required":             []any{"images"},
 		"properties": map[string]any{
-			"action":  enumStringSchema("download", "present"),
+			"action":  enumStringSchema("download", "verify"),
 			"runtime": map[string]any{"type": "object", "additionalProperties": true},
 			"command": stringArraySchema(1, false),
 			"images":  stringArraySchema(1, false),
@@ -82,14 +82,14 @@ func generateImageToolSchema() map[string]any {
 		},
 		"allOf": []any{
 			conditionalRequired("download", []string{"images"}, nil),
-			conditionalRequired("present", []string{"images"}, nil),
+			conditionalRequired("verify", []string{"images"}, nil),
 		},
 	})
 	return root
 }
 
-func generateInspectionToolSchema() map[string]any {
-	root := stepEnvelopeSchema("Inspection", "InspectionStep", "Runs host inspection checks before prepare execution.", "public")
+func generateChecksToolSchema() map[string]any {
+	root := stepEnvelopeSchema("Checks", "ChecksStep", "Runs host checks before prepare execution.", "public")
 	props := propertyMap(root)
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",

@@ -19,12 +19,12 @@
           "kind": {
             "enum": [
               "Artifacts",
+              "Checks",
               "Command",
               "Containerd",
               "Directory",
               "File",
               "Image",
-              "Inspection",
               "KernelModule",
               "Kubeadm",
               "PackageCache",

@@ -54,7 +54,7 @@
           "if": {
             "properties": {
               "action": {
-                "const": "present"
+                "const": "verify"
               }
             },
             "required": [
@@ -72,7 +72,7 @@
         "action": {
           "enum": [
             "download",
-            "present"
+            "verify"
           ],
           "type": "string"
         },

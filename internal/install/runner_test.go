@@ -2340,16 +2340,16 @@ func TestInstallFileStep(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "installed.txt")
 	spec := map[string]any{"path": target, "content": "hello", "mode": "0640"}
-	if err := runInstallFile(spec); err != nil {
-		t.Fatalf("runInstallFile failed: %v", err)
+	if err := runWriteFile(spec); err != nil {
+		t.Fatalf("runWriteFile failed: %v", err)
 	}
 	before, err := os.Stat(target)
 	if err != nil {
 		t.Fatalf("stat before: %v", err)
 	}
 	time.Sleep(20 * time.Millisecond)
-	if err := runInstallFile(spec); err != nil {
-		t.Fatalf("runInstallFile second pass failed: %v", err)
+	if err := runWriteFile(spec); err != nil {
+		t.Fatalf("runWriteFile second pass failed: %v", err)
 	}
 	after, err := os.Stat(target)
 	if err != nil {

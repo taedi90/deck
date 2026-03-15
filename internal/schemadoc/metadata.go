@@ -149,27 +149,27 @@ var toolMetadata = map[string]ToolMetadata{
 	"File": {
 		Kind:           "File",
 		Category:       "filesystem",
-		Summary:        "Manage files through install, copy, edit, or download actions.",
+		Summary:        "Manage files through write, copy, edit, or download actions.",
 		WhenToUse:      "Use this for most file-oriented host changes instead of generic commands.",
 		MinimalExample: "apiVersion: deck/v1alpha1\nid: example-file\nkind: File\nspec:\n  action: download\n  source:\n    url: https://example.invalid/file.tar.gz\n  output:\n    path: files/example.tar.gz\n",
 		CuratedExample: "kind: File\nspec:\n  action: copy\n  src: /etc/kubernetes/admin.conf\n  dest: /home/vagrant/.kube/config\n  owner: vagrant\n  group: vagrant\n  mode: \"0644\"\n",
 		ActionNotes: map[string]string{
 			"download": "Use `download` to pull or bundle a source into a staged output target during prepare.",
-			"install":  "Use `install` to write inline content or a rendered template to a destination path on the node.",
+			"write":    "Use `write` to write inline content or a rendered template to a destination path on the node.",
 			"copy":     "Use `copy` to move a file already present on the node from one path to another.",
 			"edit":     "Use `edit` for in-place match/replace edits on an existing file.",
 		},
 		ActionExamples: map[string]string{
 			"download": "kind: File\nspec:\n  action: download\n  source:\n    bundle:\n      root: files\n      path: upstream/runc\n  output:\n    path: files/bin/runc\n",
-			"install":  "kind: File\nspec:\n  action: install\n  path: /etc/containerd/config.toml\n  contentFromTemplate: containerd-config.toml.tmpl\n  mode: \"0644\"\n",
+			"write":    "kind: File\nspec:\n  action: write\n  path: /etc/containerd/config.toml\n  contentFromTemplate: containerd-config.toml.tmpl\n  mode: \"0644\"\n",
 			"copy":     "kind: File\nspec:\n  action: copy\n  src: /etc/kubernetes/admin.conf\n  dest: /home/vagrant/.kube/config\n  owner: vagrant\n  group: vagrant\n  mode: \"0644\"\n",
 			"edit":     "kind: File\nspec:\n  action: edit\n  path: /etc/containerd/config.toml\n  edits:\n    - match: SystemdCgroup = false\n      with: SystemdCgroup = true\n",
 		},
 		FieldDocs: map[string]FieldDoc{
 			"spec.action":              {Description: "Selects the file operation. Each action changes which sibling fields are required.", Example: "copy"},
-			"spec.path":                {Description: "Destination path on the node. Required for `install` and `edit`.", Example: "/etc/containerd/config.toml"},
-			"spec.content":             {Description: "Inline file content written verbatim to `path`. Used with `install`.", Example: "[offline-base]\\nbaseurl=http://repo.local"},
-			"spec.contentFromTemplate": {Description: "Path to a template file relative to `workflows/` rendered with the current vars. Used with `install`. Prefer this over `content` for multi-line configs.", Example: "containerd-config.toml.tmpl"},
+			"spec.path":                {Description: "Destination path on the node. Required for `write` and `edit`.", Example: "/etc/containerd/config.toml"},
+			"spec.content":             {Description: "Inline file content written verbatim to `path`. Used with `write`.", Example: "[offline-base]\\nbaseurl=http://repo.local"},
+			"spec.contentFromTemplate": {Description: "Path to a template file relative to `workflows/` rendered with the current vars. Used with `write`. Prefer this over `content` for multi-line configs.", Example: "containerd-config.toml.tmpl"},
 			"spec.mode":                {Description: "File permissions in octal notation applied after writing.", Example: "0644"},
 			"spec.owner":               {Description: "User name or UID that should own the written file.", Example: "root"},
 			"spec.group":               {Description: "Group name or GID that should own the written file.", Example: "root"},
@@ -194,7 +194,7 @@ var toolMetadata = map[string]ToolMetadata{
 		},
 		Notes: []string{
 			"`File` is usually the best first choice for host file changes because it stays declarative and validates action-specific inputs.",
-			"`download` writes into a bundle output target during prepare, while `copy`, `install`, and `edit` operate on live node paths during apply.",
+			"`download` writes into a bundle output target during prepare, while `copy`, `write`, and `edit` operate on live node paths during apply.",
 			"Use `contentFromTemplate` instead of `content` for configs that include variable substitution.",
 		},
 	},
@@ -204,20 +204,20 @@ var toolMetadata = map[string]ToolMetadata{
 		Category:       "prepare",
 		Summary:        "Download or verify container images.",
 		WhenToUse:      "Use this when workflows need image presence checks or bundle-time image collection.",
-		MinimalExample: "apiVersion: deck/v1alpha1\nid: example-image\nkind: Image\nspec:\n  action: present\n  images:\n    - registry.k8s.io/pause:3.9\n",
-		CuratedExample: "kind: Image\nspec:\n  action: present\n  images:\n    - registry.k8s.io/kube-apiserver:v1.30.1\n    - registry.k8s.io/kube-controller-manager:v1.30.1\n",
+		MinimalExample: "apiVersion: deck/v1alpha1\nid: example-image\nkind: Image\nspec:\n  action: verify\n  images:\n    - registry.k8s.io/pause:3.9\n",
+		CuratedExample: "kind: Image\nspec:\n  action: verify\n  images:\n    - registry.k8s.io/kube-apiserver:v1.30.1\n    - registry.k8s.io/kube-controller-manager:v1.30.1\n",
 		ActionNotes: map[string]string{
 			"download": "Use `download` during prepare to collect images into bundle outputs.",
-			"present":  "Use `present` to assert that required images already exist locally on the node.",
+			"verify":   "Use `verify` to assert that required images already exist locally on the node.",
 		},
 		ActionExamples: map[string]string{
 			"download": "kind: Image\nspec:\n  action: download\n  images:\n    - registry.k8s.io/kube-apiserver:v1.30.1\n  output:\n    path: images/control-plane.tar\n",
-			"present":  "kind: Image\nspec:\n  action: present\n  command: [ctr, -n, k8s.io, images, list, -q]\n  images:\n    - registry.k8s.io/kube-apiserver:v1.30.1\n",
+			"verify":   "kind: Image\nspec:\n  action: verify\n  command: [ctr, -n, k8s.io, images, list, -q]\n  images:\n    - registry.k8s.io/kube-apiserver:v1.30.1\n",
 		},
 		FieldDocs: map[string]FieldDoc{
-			"spec.action":  {Description: "Chooses whether the step downloads images into the bundle or verifies their presence on the node.", Example: "present"},
+			"spec.action":  {Description: "Chooses whether the step downloads images into the bundle or verifies their presence on the node.", Example: "verify"},
 			"spec.images":  {Description: "Fully qualified image references to download or verify.", Example: "[registry.k8s.io/pause:3.9]"},
-			"spec.command": {Description: "Optional image-listing command used by `present` when the default runtime command is not appropriate.", Example: "[ctr,-n,k8s.io,images,list,-q]"},
+			"spec.command": {Description: "Optional image-listing command used by `verify` when the default runtime command is not appropriate.", Example: "[ctr,-n,k8s.io,images,list,-q]"},
 			"spec.output":  {Description: "Bundle output settings used when downloaded image archives are written during prepare.", Example: "{layout:oci-archive,path:images/control-plane.tar}"},
 			"spec.backend": {Description: "Backend-specific settings such as runtime or transport configuration.", Example: "{runtime:containerd}"},
 			"spec.runtime": {Description: "Container runtime configuration used when pulling or verifying images.", Example: "{socket:unix:///run/containerd/containerd.sock}"},
@@ -228,12 +228,12 @@ var toolMetadata = map[string]ToolMetadata{
 		},
 	},
 
-	"Inspection": {
-		Kind:           "Inspection",
+	"Checks": {
+		Kind:           "Checks",
 		Category:       "prepare",
-		Summary:        "Run host inspection checks before prepare execution.",
+		Summary:        "Run host checks before prepare execution.",
 		WhenToUse:      "Use this at the start of prepare workflows to fail early on unsupported hosts.",
-		CuratedExample: "kind: Inspection\nspec:\n  checks: [os, arch, swap]\n  failFast: true\n",
+		CuratedExample: "kind: Checks\nspec:\n  checks: [os, arch, swap]\n  failFast: true\n",
 		FieldDocs: map[string]FieldDoc{
 			"spec.checks":   {Description: "Named checks to run. Supported values include `os`, `arch`, `swap`, and `binaries`.", Example: "[os,arch,swap]"},
 			"spec.binaries": {Description: "Binary names to verify are present in `PATH`. Used when `checks` includes `binaries`.", Example: "[kubeadm,kubelet,kubectl]"},
@@ -536,7 +536,7 @@ func WorkflowMeta() PageMetadata {
 	return PageMetadata{
 		Title:            "Workflow Schema",
 		Summary:          "Top-level workflow authoring reference for deck workflows.",
-		MinimalExample:   "role: apply\nversion: v1alpha1\nsteps:\n  - id: install-config\n    apiVersion: deck/v1alpha1\n    kind: File\n    spec:\n      action: install\n      path: /etc/example.conf\n      content: hello\n",
+		MinimalExample:   "role: apply\nversion: v1alpha1\nsteps:\n  - id: write-config\n    apiVersion: deck/v1alpha1\n    kind: File\n    spec:\n      action: write\n      path: /etc/example.conf\n      content: hello\n",
 		RealisticExample: "role: prepare\nversion: v1alpha1\nartifacts:\n  files:\n    - group: runtime-binaries\n      items:\n        - id: runc\n          source:\n            url: https://mirror.example.invalid/runc\n          output:\n            path: bin/runc\n",
 		FieldDocs: map[string]FieldDoc{
 			"role":             {Description: "Workflow role. `prepare` builds offline artifacts; `apply` changes the local node.", Example: "apply"},

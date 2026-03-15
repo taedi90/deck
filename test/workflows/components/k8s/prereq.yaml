@@ -7,7 +7,7 @@ steps:
   - id: prep-enable-ip-forward
     kind: File
     spec:
-      action: install
+      action: write
       path: /etc/sysctl.d/99-kubernetes-ipforward.conf
       content: |
         net.ipv4.ip_forward = 1

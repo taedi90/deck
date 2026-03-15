@@ -772,7 +772,7 @@ phases:
         register:
           x: notARealOutput
         spec:
-          action: install
+          action: write
           path: /tmp/a.txt
           content: hello
 `)
@@ -828,7 +828,7 @@ phases:
     steps:
       - id: c1
         apiVersion: deck/v1alpha1
-        kind: Inspection
+        kind: Checks
         register:
           hostOk: passed
         spec:
@@ -879,7 +879,7 @@ phases:
     steps:
       - id: c1
         apiVersion: deck/v1alpha1
-        kind: Inspection
+        kind: Checks
         register:
           host: passed
         spec:
@@ -1131,14 +1131,14 @@ steps:
   - id: install-file
     kind: File
     spec:
-      action: install
+      action: write
       path: /etc/modules-load.d/k8s.conf
       content: |
         overlay
   - id: template-file
     kind: File
     spec:
-      action: install
+      action: write
       path: /etc/containerd/certs.d/registry.k8s.io/hosts.toml
       contentFromTemplate: |
         server = "http://registry.local"

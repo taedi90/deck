@@ -150,10 +150,10 @@ func runSymlink(spec map[string]any) error {
 	return os.Symlink(target, path)
 }
 
-func runInstallFile(spec map[string]any) error {
+func runWriteFile(spec map[string]any) error {
 	path := stringValue(spec, "path")
 	if path == "" {
-		return fmt.Errorf("%s: InstallFile requires path", errCodeInstallInstallFilePath)
+		return fmt.Errorf("%s: WriteFile requires path", errCodeInstallInstallFilePath)
 	}
 	content := stringValue(spec, "content")
 	if content == "" {
@@ -162,7 +162,7 @@ func runInstallFile(spec map[string]any) error {
 		}
 	}
 	if content == "" {
-		return fmt.Errorf("%s: InstallFile requires content", errCodeInstallInstallFileInput)
+		return fmt.Errorf("%s: WriteFile requires content", errCodeInstallInstallFileInput)
 	}
 	if !strings.HasSuffix(content, "\n") {
 		content += "\n"
@@ -195,7 +195,7 @@ func runTemplateFile(spec map[string]any) error {
 	if body == "" {
 		return fmt.Errorf("%s: TemplateFile requires template", errCodeInstallTemplateBodyMiss)
 	}
-	return runInstallFile(map[string]any{
+	return runWriteFile(map[string]any{
 		"path":    path,
 		"content": body,
 		"mode":    stringValue(spec, "mode"),

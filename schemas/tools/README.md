@@ -6,12 +6,12 @@ This directory contains JSON Schema files for typed workflow steps.
 ## Current schemas
 
 - `artifacts.schema.json`: `Artifacts` (`public`)
+- `checks.schema.json`: `Checks` (`public`)
 - `command.schema.json`: `Command` (`advanced`)
 - `containerd.schema.json`: `Containerd` (`public`)
 - `directory.schema.json`: `Directory` (`public`)
 - `file.schema.json`: `File` (`public`)
 - `image.schema.json`: `Image` (`public`)
-- `inspection.schema.json`: `Inspection` (`public`)
 - `kernel-module.schema.json`: `KernelModule` (`public`)
 - `kubeadm.schema.json`: `Kubeadm` (`public`)
 - `package-cache.schema.json`: `PackageCache` (`public`)

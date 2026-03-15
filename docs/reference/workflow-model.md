@@ -95,7 +95,7 @@ Supported step kinds:
 - `Directory`
 - `File`
 - `Image`
-- `Inspection`
+- `Checks`
 - `KernelModule`
 - `Kubeadm`
 - `PackageCache`

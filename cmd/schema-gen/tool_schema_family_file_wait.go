@@ -75,7 +75,7 @@ func patchFileSpec(node any) {
 	spec["additionalProperties"] = false
 	spec["required"] = []any{}
 	props := propertyMap(spec)
-	setMap(props, "action", map[string]any{"type": "string", "enum": []any{"download", "install", "copy", "edit"}})
+	setMap(props, "action", map[string]any{"type": "string", "enum": []any{"download", "write", "copy", "edit"}})
 	mergeMap(props, "mode", map[string]any{"type": "string", "pattern": "^[0-7]{4}$"})
 	mergeMap(props, "owner", map[string]any{"type": "string", "minLength": 1})
 	mergeMap(props, "group", map[string]any{"type": "string", "minLength": 1})
@@ -84,7 +84,7 @@ func patchFileSpec(node any) {
 	patchFileOutput(props["output"])
 	spec["allOf"] = []any{
 		conditionalRequired("download", []string{"source", "output"}, nil),
-		conditionalRequired("install", []string{"path"}, []any{
+		conditionalRequired("write", []string{"path"}, []any{
 			map[string]any{"required": []any{"content"}},
 			map[string]any{"required": []any{"contentFromTemplate"}},
 		}),
