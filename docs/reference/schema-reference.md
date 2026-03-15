@@ -1,12 +1,12 @@
 # Schema Reference
 
-`deck` validates both the workflow shape and each supported step kind through JSON Schema files in `docs/schemas/`.
+`deck` validates both the workflow shape and each supported step kind through generated JSON Schema files rooted under `schemas/`.
 
 ## Entry points
 
-- `../schemas/deck-workflow.schema.json`: top-level workflow schema
-- `../schemas/deck-tooldefinition.schema.json`: tool definition schema
-- `../schemas/tools/*.schema.json`: per-step-kind schemas
+- `../../schemas/deck-workflow.schema.json`: top-level workflow schema
+- `../../schemas/deck-tooldefinition.schema.json`: tool definition schema
+- `../../schemas/tools/*.schema.json`: per-step-kind schemas
 
 ## Workflow schema highlights
 
@@ -20,36 +20,24 @@ The workflow schema currently enforces:
 
 ## Supported step schemas
 
-- `check-host.schema.json`
-- `containerd-config.schema.json`
-- `copy-file.schema.json`
-- `download-packages.schema.json`
-- `download-k8s-packages.schema.json`
-- `download-images.schema.json`
-- `download-file.schema.json`
-- `ensure-dir.schema.json`
-- `install-artifacts.schema.json`
-- `install-file.schema.json`
-- `install-packages.schema.json`
-- `edit-file.schema.json`
+- `artifacts.schema.json`
+- `command.schema.json`
+- `containerd.schema.json`
+- `directory.schema.json`
+- `file.schema.json`
+- `image.schema.json`
+- `inspection.schema.json`
 - `kernel-module.schema.json`
-- `modprobe.schema.json`
-- `kubeadm-init.schema.json`
-- `kubeadm-join.schema.json`
-- `kubeadm-reset.schema.json`
+- `kubeadm.schema.json`
 - `package-cache.schema.json`
-- `repo-config.schema.json`
-- `run-command.schema.json`
+- `packages.schema.json`
+- `repository.schema.json`
 - `service.schema.json`
 - `swap.schema.json`
 - `symlink.schema.json`
-- `systemd-unit.schema.json`
 - `sysctl.schema.json`
-- `sysctl-apply.schema.json`
-- `template-file.schema.json`
-- `wait-path.schema.json`
-- `verify-images.schema.json`
-- `write-file.schema.json`
+- `systemd-unit.schema.json`
+- `wait.schema.json`
 
 ## Typed step reference notes
 

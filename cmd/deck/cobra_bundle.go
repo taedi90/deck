@@ -9,7 +9,7 @@ import (
 func newBundleCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "bundle",
-		Short: "Build, inspect, verify, or extract bundles",
+		Short: "Build or verify bundles",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return cmd.Help()
@@ -19,8 +19,6 @@ func newBundleCommand() *cobra.Command {
 	cmd.AddCommand(
 		newBundleBuildCommand(),
 		newBundleVerifyCommand(),
-		newBundleInspectCommand(),
-		newBundleExtractCommand(),
 	)
 
 	return cmd
@@ -39,20 +37,6 @@ func newBundleVerifyCommand() *cobra.Command {
 	return cmd
 }
 
-func newBundleInspectCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "inspect [path]",
-		Short: "List manifest entries in a bundle",
-		Args:  bundleSinglePathArgs("bundle inspect accepts a single <path>"),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return executeBundleInspect(cmdFlagValue(cmd, "file"), cmdFlagValue(cmd, "output"), args)
-		},
-	}
-	cmd.Flags().String("file", "", "bundle path (directory or bundle.tar)")
-	cmd.Flags().StringP("output", "o", "text", "output format (text|json)")
-	return cmd
-}
-
 func newBundleBuildCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "build",
@@ -64,20 +48,6 @@ func newBundleBuildCommand() *cobra.Command {
 	}
 	cmd.Flags().String("root", ".", "workspace root to archive")
 	cmd.Flags().String("out", "", "output tar archive path")
-	return cmd
-}
-
-func newBundleExtractCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "extract",
-		Short: "Extract a bundle archive into a directory",
-		Args:  cobra.ExactArgs(0),
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			return executeBundleExtract(cmdFlagValue(cmd, "file"), cmdFlagValue(cmd, "dest"))
-		},
-	}
-	cmd.Flags().String("file", "", "bundle archive file path")
-	cmd.Flags().String("dest", "", "destination directory")
 	return cmd
 }
 

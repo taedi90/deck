@@ -2,6 +2,8 @@ package prepare
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -15,7 +17,17 @@ type packageCacheMeta struct {
 	Files    []string `json:"files"`
 }
 
-func runDownloadPackages(ctx context.Context, runner CommandRunner, bundleRoot string, spec map[string]any, defaultDir string, opts RunOptions) ([]string, error) {
+type packageCacheMount struct {
+	host      string
+	container string
+}
+
+type rpmModuleSpec struct {
+	Name   string
+	Stream string
+}
+
+func runPackagesDownload(ctx context.Context, runner CommandRunner, bundleRoot string, spec map[string]any, defaultDir string, opts RunOptions) ([]string, error) {
 	output := mapValue(spec, "output")
 	dir := stringValue(output, "dir")
 	if dir == "" {
@@ -24,7 +36,7 @@ func runDownloadPackages(ctx context.Context, runner CommandRunner, bundleRoot s
 
 	packages := stringSlice(spec["packages"])
 	if len(packages) == 0 {
-		return nil, fmt.Errorf("DownloadPackages requires packages")
+		return nil, fmt.Errorf("packages action download requires packages")
 	}
 
 	backend := mapValue(spec, "backend")
@@ -38,7 +50,7 @@ func runDownloadPackages(ctx context.Context, runner CommandRunner, bundleRoot s
 			}
 			release := strings.TrimSpace(stringValue(distro, "release"))
 			if release == "" {
-				return nil, fmt.Errorf("DownloadPackages repo mode requires distro.release")
+				return nil, fmt.Errorf("packages action download repo mode requires distro.release")
 			}
 
 			repoType := strings.TrimSpace(stringValue(repo, "type"))
@@ -55,7 +67,7 @@ func runDownloadPackages(ctx context.Context, runner CommandRunner, bundleRoot s
 			case "yum":
 				repoRoot = filepath.ToSlash(filepath.Join("packages", "yum", release))
 			default:
-				return nil, fmt.Errorf("DownloadPackages repo.type must be apt-flat or yum")
+				return nil, fmt.Errorf("packages action download repo.type must be apt-flat or yum")
 			}
 
 			if files, reused, err := tryReusePackageArtifacts(bundleRoot, repoRoot, packages, opts); err != nil {
@@ -64,7 +76,7 @@ func runDownloadPackages(ctx context.Context, runner CommandRunner, bundleRoot s
 				return files, nil
 			}
 
-			files, err := runContainerPackageRepoBuild(ctx, runner, bundleRoot, repoRoot, family, repoType, generate, pkgsDir, spec, packages, opts)
+			files, err := runContainerPackageRepoBuild(ctx, runner, bundleRoot, repoRoot, family, repoType, generate, pkgsDir, spec, repo, packages, opts)
 			if err != nil {
 				return nil, err
 			}
@@ -80,7 +92,7 @@ func runDownloadPackages(ctx context.Context, runner CommandRunner, bundleRoot s
 			return files, nil
 		}
 
-		files, err := runContainerPackageDownloadAll(ctx, runner, bundleRoot, dir, spec, packages, opts)
+		files, err := runContainerPackageDownloadAll(ctx, runner, bundleRoot, dir, spec, repo, packages, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -93,104 +105,6 @@ func runDownloadPackages(ctx context.Context, runner CommandRunner, bundleRoot s
 	return writePackagePlaceholders(bundleRoot, dir, packages), nil
 }
 
-func runDownloadK8sPackages(ctx context.Context, runner CommandRunner, bundleRoot string, spec map[string]any, opts RunOptions) ([]string, error) {
-	output := mapValue(spec, "output")
-	dir := stringValue(output, "dir")
-	if dir == "" {
-		dir = "packages"
-	}
-
-	version := strings.TrimPrefix(stringValue(spec, "kubernetesVersion"), "v")
-	if version == "" {
-		version = "0.0.0"
-	}
-	components := stringSlice(spec["components"])
-	if len(components) == 0 {
-		return nil, fmt.Errorf("DownloadK8sPackages requires components")
-	}
-
-	pkgs := append([]string{}, components...)
-
-	distro := mapValue(spec, "distro")
-	family := stringValue(distro, "family")
-	if family == "" {
-		family = "debian"
-	}
-	if family == "debian" {
-		pkgs = append(pkgs, "cri-tools", "kubernetes-cni")
-	}
-
-	backend := mapValue(spec, "backend")
-	if stringValue(backend, "mode") == "container" && stringValue(backend, "image") != "" {
-		repo := mapValue(spec, "repo")
-		if len(repo) > 0 {
-			release := strings.TrimSpace(stringValue(distro, "release"))
-			if release == "" {
-				return nil, fmt.Errorf("DownloadK8sPackages repo mode requires distro.release")
-			}
-
-			repoType := strings.TrimSpace(stringValue(repo, "type"))
-			generate := boolValue(repo, "generate")
-			pkgsDir := strings.TrimSpace(stringValue(repo, "pkgsDir"))
-			if pkgsDir == "" {
-				pkgsDir = "pkgs"
-			}
-
-			var repoRoot string
-			switch repoType {
-			case "apt-flat":
-				repoRoot = filepath.ToSlash(filepath.Join("packages", "apt-k8s", release))
-			case "yum":
-				repoRoot = filepath.ToSlash(filepath.Join("packages", "yum-k8s", release))
-			default:
-				return nil, fmt.Errorf("DownloadK8sPackages repo.type must be apt-flat or yum")
-			}
-
-			files, err := runContainerK8sPackageRepoBuild(ctx, runner, bundleRoot, repoRoot, family, repoType, generate, pkgsDir, version, pkgs, spec, opts)
-			if err != nil {
-				return nil, err
-			}
-
-			metaRel := filepath.ToSlash(filepath.Join(repoRoot, "kubernetes-version.txt"))
-			metaAbs := filepath.Join(bundleRoot, filepath.FromSlash(metaRel))
-			if err := os.MkdirAll(filepath.Dir(metaAbs), 0o755); err != nil {
-				return nil, err
-			}
-			if err := os.WriteFile(metaAbs, []byte(version+"\n"), 0o644); err != nil {
-				return nil, err
-			}
-
-			return append(files, metaRel), nil
-		}
-
-		versionLine := strings.TrimSpace(version)
-		files, err := runContainerPackageDownloadWithScript(ctx, runner, bundleRoot, dir, spec, pkgs, func(family, pkg string) string {
-			return buildK8sPackageDownloadScript(family, pkg, versionLine)
-		}, opts)
-		if err != nil {
-			return nil, err
-		}
-		metaRel := filepath.ToSlash(filepath.Join(dir, "kubernetes-version.txt"))
-		metaAbs := filepath.Join(bundleRoot, metaRel)
-		if err := os.MkdirAll(filepath.Dir(metaAbs), 0o755); err != nil {
-			return nil, err
-		}
-		if err := os.WriteFile(metaAbs, []byte(version+"\n"), 0o644); err != nil {
-			return nil, err
-		}
-		return append(files, metaRel), nil
-	}
-
-	placeholderPkgs := make([]string, 0, len(pkgs))
-	for _, p := range pkgs {
-		placeholderPkgs = append(placeholderPkgs, fmt.Sprintf("%s-v%s", p, version))
-	}
-	files := writePackagePlaceholders(bundleRoot, dir, placeholderPkgs)
-	metaRel := filepath.ToSlash(filepath.Join(dir, "kubernetes-version.txt"))
-	_ = os.WriteFile(filepath.Join(bundleRoot, metaRel), []byte(version+"\n"), 0o644)
-	return append(files, metaRel), nil
-}
-
 func runContainerPackageRepoBuild(
 	ctx context.Context,
 	runner CommandRunner,
@@ -201,6 +115,7 @@ func runContainerPackageRepoBuild(
 	generate bool,
 	pkgsDir string,
 	spec map[string]any,
+	repo map[string]any,
 	packages []string,
 	opts RunOptions,
 ) ([]string, error) {
@@ -224,9 +139,23 @@ func runContainerPackageRepoBuild(
 		return nil, err
 	}
 
-	cmdScript := buildPackageRepoBuildScript(family, packages, repoType, generate, pkgsDir)
-	args := []string{"run", "--rm", "-v", outAbs + ":/out", image, "bash", "-lc", cmdScript}
-	if err := runner.Run(ctx, runtimeSel, args...); err != nil {
+	modules, err := parseRPMModules(repo)
+	if err != nil {
+		return nil, err
+	}
+	cmdScript, err := buildPackageRepoBuildScript(family, packages, modules, repoType, generate, pkgsDir)
+	if err != nil {
+		return nil, err
+	}
+	cacheKey, err := packageDownloadCacheKey(spec, family, repoRoot)
+	if err != nil {
+		return nil, err
+	}
+	mounts, err := preparePackageCacheMounts(family, cacheKey)
+	if err != nil {
+		return nil, err
+	}
+	if err := runPackageDownloadContainer(ctx, runner, runtimeSel, image, outAbs, cmdScript, mounts); err != nil {
 		return nil, fmt.Errorf("container package repo build failed: %w", err)
 	}
 
@@ -238,7 +167,7 @@ func runContainerPackageRepoBuild(
 	return files, nil
 }
 
-func runContainerPackageDownloadAll(ctx context.Context, runner CommandRunner, bundleRoot, dir string, spec map[string]any, packages []string, opts RunOptions) ([]string, error) {
+func runContainerPackageDownloadAll(ctx context.Context, runner CommandRunner, bundleRoot, dir string, spec map[string]any, repo map[string]any, packages []string, opts RunOptions) ([]string, error) {
 	backend := mapValue(spec, "backend")
 	runtimeSel, err := detectRuntime(runner, stringValue(backend, "runtime"))
 	if err != nil {
@@ -266,9 +195,23 @@ func runContainerPackageDownloadAll(ctx context.Context, runner CommandRunner, b
 		return nil, err
 	}
 
-	cmdScript := buildPackageDownloadAllScript(family, packages)
-	args := []string{"run", "--rm", "-v", outAbs + ":/out", image, "bash", "-lc", cmdScript}
-	if err := runner.Run(ctx, runtimeSel, args...); err != nil {
+	modules, err := parseRPMModules(repo)
+	if err != nil {
+		return nil, err
+	}
+	cmdScript, err := buildPackageDownloadAllScript(family, packages, modules)
+	if err != nil {
+		return nil, err
+	}
+	cacheKey, err := packageDownloadCacheKey(spec, family, dir)
+	if err != nil {
+		return nil, err
+	}
+	mounts, err := preparePackageCacheMounts(family, cacheKey)
+	if err != nil {
+		return nil, err
+	}
+	if err := runPackageDownloadContainer(ctx, runner, runtimeSel, image, outAbs, cmdScript, mounts); err != nil {
 		return nil, fmt.Errorf("container package download failed: %w", err)
 	}
 
@@ -280,7 +223,7 @@ func runContainerPackageDownloadAll(ctx context.Context, runner CommandRunner, b
 	return files, nil
 }
 
-func buildPackageDownloadAllScript(family string, packages []string) string {
+func buildPackageDownloadAllScript(family string, packages []string, modules []rpmModuleSpec) (string, error) {
 	parts := make([]string, 0, len(packages))
 	for _, p := range packages {
 		p = strings.TrimSpace(p)
@@ -292,20 +235,31 @@ func buildPackageDownloadAllScript(family string, packages []string) string {
 	pkgList := strings.Join(parts, " ")
 
 	if family == "rhel" {
+		moduleEnable, err := buildRPMModuleEnableCommand(modules)
+		if err != nil {
+			return "", err
+		}
+		if moduleEnable != "" {
+			return fmt.Sprintf(
+				"set -euo pipefail; mkdir -p /out; dnf -y install 'dnf-command(download)' >/dev/null 2>&1 || true; %s; dnf -y download --resolve --destdir /out %s",
+				moduleEnable,
+				pkgList,
+			), nil
+		}
 		return fmt.Sprintf(
-			"set -euo pipefail; (dnf -y install 'dnf-command(download)' >/dev/null 2>&1 || yum -y install yum-utils >/dev/null 2>&1 || true); (dnf -y download --resolve --destdir /out %s || yumdownloader --resolve --destdir /out %s)",
+			"set -euo pipefail; mkdir -p /out; (dnf -y install 'dnf-command(download)' >/dev/null 2>&1 || yum -y install yum-utils >/dev/null 2>&1 || true); (dnf -y download --resolve --destdir /out %s || yumdownloader --resolve --destdir /out %s)",
 			pkgList,
 			pkgList,
-		)
+		), nil
 	}
 
 	return fmt.Sprintf(
-		"set -euo pipefail; export DEBIAN_FRONTEND=noninteractive; apt-get update -y >/dev/null; apt-get install -y --download-only --no-install-recommends %s >/dev/null; cp -a /var/cache/apt/archives/*.deb /out/ 2>/dev/null || true",
+		"set -euo pipefail; export DEBIAN_FRONTEND=noninteractive; mkdir -p /out; apt-get update -y >/dev/null; apt-get install -y --download-only --no-install-recommends %s >/dev/null; cp -a /var/cache/apt/archives/*.deb /out/ 2>/dev/null || true",
 		pkgList,
-	)
+	), nil
 }
 
-func buildPackageRepoBuildScript(family string, packages []string, repoType string, generate bool, pkgsDir string) string {
+func buildPackageRepoBuildScript(family string, packages []string, modules []rpmModuleSpec, repoType string, generate bool, pkgsDir string) (string, error) {
 	parts := make([]string, 0, len(packages))
 	for _, p := range packages {
 		p = strings.TrimSpace(p)
@@ -321,12 +275,24 @@ func buildPackageRepoBuildScript(family string, packages []string, repoType stri
 		if !generate {
 			gen = "false"
 		}
+		moduleEnable, err := buildRPMModuleEnableCommand(modules)
+		if err != nil {
+			return "", err
+		}
+		if moduleEnable != "" {
+			return fmt.Sprintf(
+				"set -euo pipefail; mkdir -p /out; dnf -y install 'dnf-command(download)' createrepo_c >/dev/null 2>&1 || true; %s; dnf -y download --resolve --destdir /out %s; if %s; then createrepo_c /out >/dev/null; fi",
+				moduleEnable,
+				pkgList,
+				gen,
+			), nil
+		}
 		return fmt.Sprintf(
-			"set -euo pipefail; (dnf -y install 'dnf-command(download)' createrepo_c >/dev/null 2>&1 || yum -y install yum-utils createrepo_c >/dev/null 2>&1 || true); (dnf -y download --resolve --destdir /out %s || yumdownloader --resolve --destdir /out %s); if %s; then createrepo_c /out >/dev/null; fi",
+			"set -euo pipefail; mkdir -p /out; (dnf -y install 'dnf-command(download)' createrepo_c >/dev/null 2>&1 || yum -y install yum-utils createrepo_c >/dev/null 2>&1 || true); (dnf -y download --resolve --destdir /out %s || yumdownloader --resolve --destdir /out %s); if %s; then createrepo_c /out >/dev/null; fi",
 			pkgList,
 			pkgList,
 			gen,
-		)
+		), nil
 	}
 
 	gen := "true"
@@ -339,187 +305,130 @@ func buildPackageRepoBuildScript(family string, packages []string, repoType stri
 		safePkgsDir = "pkgs"
 	}
 	return fmt.Sprintf(
-		"set -euo pipefail; export DEBIAN_FRONTEND=noninteractive; apt-get update -y >/dev/null; apt-get install -y apt-utils gzip >/dev/null; mkdir -p /out/%s; apt-get install -y --download-only --no-install-recommends %s >/dev/null; cp -a /var/cache/apt/archives/*.deb /out/%s/ 2>/dev/null || true; if %s; then cd /out; apt-ftparchive packages %s > Packages; gzip -c Packages > Packages.gz; apt-ftparchive release . > Release; fi",
+		"set -euo pipefail; export DEBIAN_FRONTEND=noninteractive; mkdir -p /out/%s; apt-get update -y >/dev/null; apt-get install -y apt-utils gzip >/dev/null; apt-get install -y --download-only --no-install-recommends %s >/dev/null; cp -a /var/cache/apt/archives/*.deb /out/%s/ 2>/dev/null || true; if %s; then cd /out; apt-ftparchive packages %s > Packages; gzip -c Packages > Packages.gz; apt-ftparchive release . > Release; fi",
 		shellEscape(safePkgsDir),
 		pkgList,
 		shellEscape(safePkgsDir),
 		gen,
 		shellEscape(safePkgsDir),
-	)
-}
-
-func runContainerK8sPackageRepoBuild(
-	ctx context.Context,
-	runner CommandRunner,
-	bundleRoot string,
-	repoRoot string,
-	family string,
-	repoType string,
-	generate bool,
-	pkgsDir string,
-	kubernetesVersion string,
-	packages []string,
-	spec map[string]any,
-	opts RunOptions,
-) ([]string, error) {
-	backend := mapValue(spec, "backend")
-	runtimeSel, err := detectRuntime(runner, stringValue(backend, "runtime"))
-	if err != nil {
-		return nil, err
-	}
-	image := stringValue(backend, "image")
-	if image == "" {
-		return nil, fmt.Errorf("backend.image is required for container package download")
-	}
-
-	outAbs := filepath.Join(bundleRoot, filepath.FromSlash(repoRoot))
-	if opts.ForceRedownload {
-		if err := os.RemoveAll(outAbs); err != nil {
-			return nil, err
-		}
-	}
-	if err := os.MkdirAll(outAbs, 0o755); err != nil {
-		return nil, err
-	}
-	before, _ := listRelativeFiles(outAbs)
-
-	cmdScript := buildK8sPackageRepoBuildScript(family, packages, kubernetesVersion, repoType, generate, pkgsDir)
-	args := []string{"run", "--rm", "-v", outAbs + ":/out", image, "bash", "-lc", cmdScript}
-	if err := runner.Run(ctx, runtimeSel, args...); err != nil {
-		return nil, fmt.Errorf("container k8s package repo build failed: %w", err)
-	}
-
-	after, _ := listRelativeFiles(outAbs)
-	newFiles := make([]string, 0)
-	seen := map[string]bool{}
-	for _, f := range before {
-		seen[f] = true
-	}
-	for _, f := range after {
-		if !seen[f] {
-			newFiles = append(newFiles, filepath.ToSlash(filepath.Join(repoRoot, f)))
-		}
-	}
-	if len(newFiles) == 0 {
-		return nil, fmt.Errorf("%s: no package artifacts generated in %s", errCodePrepareArtifactsEmpty, repoRoot)
-	}
-	return newFiles, nil
-}
-
-func buildK8sPackageRepoBuildScript(family string, packages []string, kubernetesVersion string, repoType string, generate bool, pkgsDir string) string {
-	parts := make([]string, 0, len(packages))
-	for _, p := range packages {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-		parts = append(parts, "'"+shellEscape(p)+"'")
-	}
-	pkgList := strings.Join(parts, " ")
-	channel := kubernetesStableChannel(kubernetesVersion)
-
-	if repoType == "yum" || family == "rhel" {
-		gen := "true"
-		if !generate {
-			gen = "false"
-		}
-		repoURL := shellEscape(fmt.Sprintf("https://pkgs.k8s.io/core:/stable:/%s/rpm/", channel))
-		return fmt.Sprintf(
-			"set -euo pipefail; cat > /etc/yum.repos.d/kubernetes.repo <<'EOF'\n[kubernetes]\nname=Kubernetes\nbaseurl=%s\nenabled=1\ngpgcheck=0\nrepo_gpgcheck=0\nEOF\n(dnf -y install 'dnf-command(download)' createrepo_c >/dev/null 2>&1 || yum -y install yum-utils createrepo_c >/dev/null 2>&1 || true); (dnf -y download --resolve --destdir /out %s || yumdownloader --resolve --destdir /out %s); if %s; then createrepo_c /out >/dev/null; fi",
-			repoURL,
-			pkgList,
-			pkgList,
-			gen,
-		)
-	}
-
-	gen := "true"
-	if !generate {
-		gen = "false"
-	}
-	safePkgsDir := strings.TrimSpace(pkgsDir)
-	if safePkgsDir == "" {
-		safePkgsDir = "pkgs"
-	}
-	repoURL := shellEscape(fmt.Sprintf("https://pkgs.k8s.io/core:/stable:/%s/deb/", channel))
-	return fmt.Sprintf(
-		"set -euo pipefail; export DEBIAN_FRONTEND=noninteractive; apt-get update -y >/dev/null; apt-get install -y ca-certificates curl gpg apt-utils gzip >/dev/null; install -d -m 0755 /etc/apt/keyrings; curl -fsSL %sRelease.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg; echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] %s /' > /etc/apt/sources.list.d/kubernetes.list; apt-get update -y >/dev/null; mkdir -p /out/%s; apt-get install -y --download-only --no-install-recommends %s >/dev/null; cp -a /var/cache/apt/archives/*.deb /out/%s/ 2>/dev/null || true; if %s; then cd /out; apt-ftparchive packages %s > Packages; gzip -c Packages > Packages.gz; apt-ftparchive release . > Release; fi",
-		repoURL,
-		repoURL,
-		shellEscape(safePkgsDir),
-		pkgList,
-		shellEscape(safePkgsDir),
-		gen,
-		shellEscape(safePkgsDir),
-	)
-}
-
-func runContainerPackageDownloadWithScript(ctx context.Context, runner CommandRunner, bundleRoot, dir string, spec map[string]any, packages []string, scriptBuilder func(family, pkg string) string, opts RunOptions) ([]string, error) {
-	backend := mapValue(spec, "backend")
-	runtimeSel, err := detectRuntime(runner, stringValue(backend, "runtime"))
-	if err != nil {
-		return nil, err
-	}
-
-	image := stringValue(backend, "image")
-	if image == "" {
-		return nil, fmt.Errorf("backend.image is required for container package download")
-	}
-
-	distro := mapValue(spec, "distro")
-	family := stringValue(distro, "family")
-	if family == "" {
-		family = "debian"
-	}
-
-	outAbs := filepath.Join(bundleRoot, filepath.FromSlash(dir))
-	if opts.ForceRedownload {
-		if err := os.RemoveAll(outAbs); err != nil {
-			return nil, err
-		}
-	}
-	if err := os.MkdirAll(outAbs, 0o755); err != nil {
-		return nil, err
-	}
-
-	for _, pkg := range packages {
-		cmdScript := scriptBuilder(family, pkg)
-		args := []string{"run", "--rm", "-v", outAbs + ":/out", image, "bash", "-lc", cmdScript}
-		if err := runner.Run(ctx, runtimeSel, args...); err != nil {
-			return nil, fmt.Errorf("container package download failed for %s: %w", pkg, err)
-		}
-	}
-
-	after, _ := listRelativeFiles(outAbs)
-	files := packageFilesFromDirListing(dir, after)
-	if len(files) == 0 {
-		return nil, fmt.Errorf("%s: no package artifacts generated in %s", errCodePrepareArtifactsEmpty, dir)
-	}
-	return files, nil
-}
-
-func buildK8sPackageDownloadScript(family, pkg, version string) string {
-	safePkg := shellEscape(pkg)
-	channel := kubernetesStableChannel(version)
-	if family == "rhel" {
-		repoURL := shellEscape(fmt.Sprintf("https://pkgs.k8s.io/core:/stable:/%s/rpm/", channel))
-		return fmt.Sprintf("set -euo pipefail; cat > /etc/yum.repos.d/kubernetes.repo <<'EOF'\n[kubernetes]\nname=Kubernetes\nbaseurl=%s\nenabled=1\ngpgcheck=0\nrepo_gpgcheck=0\nEOF\n(dnf -y install 'dnf-command(download)' >/dev/null 2>&1 || yum -y install yum-utils >/dev/null 2>&1 || true); (dnf -y download --destdir /out %s || yumdownloader --destdir /out %s)", repoURL, safePkg, safePkg)
-	}
-	repoURL := shellEscape(fmt.Sprintf("https://pkgs.k8s.io/core:/stable:/%s/deb/", channel))
-	return fmt.Sprintf("set -euo pipefail; export DEBIAN_FRONTEND=noninteractive; mkdir -p /tmp/deck-pkg-download; cd /tmp/deck-pkg-download; apt-get update -y >/dev/null; apt-get install -y ca-certificates curl gpg >/dev/null; install -d -m 0755 /etc/apt/keyrings; curl -fsSL %sRelease.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg; echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] %s /' > /etc/apt/sources.list.d/kubernetes.list; apt-get update -y >/dev/null; (apt-get download %s || true); cp -a ./*.deb /out/ 2>/dev/null || true", repoURL, repoURL, safePkg)
-}
-
-func kubernetesStableChannel(version string) string {
-	trimmed := strings.TrimPrefix(strings.TrimSpace(version), "v")
-	parts := strings.Split(trimmed, ".")
-	if len(parts) >= 2 && parts[0] != "" && parts[1] != "" {
-		return "v" + parts[0] + "." + parts[1]
-	}
-	return "v1.30"
+	), nil
 }
 
 func shellEscape(v string) string {
 	return strings.ReplaceAll(v, "'", "''")
+}
+
+func parseRPMModules(repo map[string]any) ([]rpmModuleSpec, error) {
+	raw, ok := repo["modules"]
+	if !ok || raw == nil {
+		return nil, nil
+	}
+	items, ok := raw.([]any)
+	if !ok {
+		return nil, fmt.Errorf("packages action download repo.modules must be an array")
+	}
+	modules := make([]rpmModuleSpec, 0, len(items))
+	for _, item := range items {
+		moduleMap, ok := item.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("packages action download repo.modules entries must be objects")
+		}
+		name := strings.TrimSpace(stringValue(moduleMap, "name"))
+		stream := strings.TrimSpace(stringValue(moduleMap, "stream"))
+		if name == "" || stream == "" {
+			return nil, fmt.Errorf("packages action download repo.modules entries require name and stream")
+		}
+		modules = append(modules, rpmModuleSpec{Name: name, Stream: stream})
+	}
+	sort.Slice(modules, func(i, j int) bool {
+		if modules[i].Name == modules[j].Name {
+			return modules[i].Stream < modules[j].Stream
+		}
+		return modules[i].Name < modules[j].Name
+	})
+	return modules, nil
+}
+
+func buildRPMModuleEnableCommand(modules []rpmModuleSpec) (string, error) {
+	if len(modules) == 0 {
+		return "", nil
+	}
+	parts := make([]string, 0, len(modules))
+	for _, module := range modules {
+		parts = append(parts, "'"+shellEscape(module.Name)+":"+shellEscape(module.Stream)+"'")
+	}
+	return "dnf -y module enable " + strings.Join(parts, " ") + " >/dev/null 2>&1", nil
+}
+
+func packageDownloadCacheKey(spec map[string]any, family string, artifactRoot string) (string, error) {
+	repo := mapValue(spec, "repo")
+	modules, err := parseRPMModules(repo)
+	if err != nil {
+		return "", err
+	}
+	normalizedRepo := map[string]any{}
+	for key, value := range repo {
+		if key == "modules" {
+			continue
+		}
+		normalizedRepo[key] = value
+	}
+	if len(modules) > 0 {
+		normalizedModules := make([]map[string]any, 0, len(modules))
+		for _, module := range modules {
+			normalizedModules = append(normalizedModules, map[string]any{"name": module.Name, "stream": module.Stream})
+		}
+		normalizedRepo["modules"] = normalizedModules
+	}
+	payload := map[string]any{
+		"artifactRoot": filepath.ToSlash(strings.TrimSpace(artifactRoot)),
+		"backend":      mapValue(spec, "backend"),
+		"distro":       mapValue(spec, "distro"),
+		"family":       strings.TrimSpace(family),
+		"repo":         normalizedRepo,
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("encode package cache key: %w", err)
+	}
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+func preparePackageCacheMounts(family string, cacheKey string) ([]packageCacheMount, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("resolve user home directory: %w", err)
+	}
+	root := filepath.Join(home, ".deck", "cache", "packages", cacheKey)
+	if strings.TrimSpace(family) == "rhel" {
+		dnfRoot := filepath.Join(root, "dnf")
+		if err := os.MkdirAll(dnfRoot, 0o755); err != nil {
+			return nil, err
+		}
+		return []packageCacheMount{{host: dnfRoot, container: "/var/cache/dnf"}}, nil
+	}
+
+	archives := filepath.Join(root, "apt", "archives")
+	lists := filepath.Join(root, "apt", "lists")
+	for _, dir := range []string{archives, filepath.Join(archives, "partial"), lists, filepath.Join(lists, "partial")} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return nil, err
+		}
+	}
+	return []packageCacheMount{
+		{host: archives, container: "/var/cache/apt/archives"},
+		{host: lists, container: "/var/lib/apt/lists"},
+	}, nil
+}
+
+func runPackageDownloadContainer(ctx context.Context, runner CommandRunner, runtimeSel, image, outAbs, script string, mounts []packageCacheMount) error {
+	runArgs := []string{"run", "--rm", "-v", outAbs + ":/out"}
+	for _, mount := range mounts {
+		runArgs = append(runArgs, "-v", mount.host+":"+mount.container)
+	}
+	runArgs = append(runArgs, image, "bash", "-lc", script)
+	return runner.Run(ctx, runtimeSel, runArgs...)
 }
 
 func writePackagePlaceholders(bundleRoot, dir string, packages []string) []string {

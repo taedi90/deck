@@ -27,6 +27,7 @@ func runPackageCache(spec map[string]any) error {
 		manager,
 		clean,
 		update,
+		packageRepoPolicyFromSpec(spec),
 		commandTimeoutWithDefault(spec, defaultPackageCacheTimeout),
 		packageCacheRunTimedCommand,
 		"package cache refresh",
@@ -64,6 +65,7 @@ func runPackageCacheCommands(
 	manager string,
 	clean bool,
 	update bool,
+	policy packageRepoPolicy,
 	timeout time.Duration,
 	runner func(name string, args []string, timeout time.Duration) error,
 	timeoutContext string,
@@ -81,24 +83,38 @@ func runPackageCacheCommands(
 
 	switch strings.TrimSpace(manager) {
 	case "apt":
+		repoArgs, cleanup, err := aptRepoArgs(policy)
+		if err != nil {
+			return err
+		}
+		if cleanup != nil {
+			defer cleanup()
+		}
 		if clean {
 			if err := run("apt-get", []string{"clean"}); err != nil {
 				return err
 			}
 		}
 		if update {
-			if err := run("apt-get", []string{"update"}); err != nil {
+			args := append([]string{}, repoArgs...)
+			args = append(args, "update")
+			if err := run("apt-get", args); err != nil {
 				return err
 			}
 		}
 	case "dnf":
+		dnfArgs := dnfRepoArgs(policy)
 		if clean {
-			if err := run("dnf", []string{"clean", "all"}); err != nil {
+			args := append([]string{}, dnfArgs...)
+			args = append(args, "clean", "all")
+			if err := run("dnf", args); err != nil {
 				return err
 			}
 		}
 		if update {
-			if err := run("dnf", []string{"makecache", "-y"}); err != nil {
+			args := append([]string{}, dnfArgs...)
+			args = append(args, "makecache", "-y")
+			if err := run("dnf", args); err != nil {
 				return err
 			}
 		}

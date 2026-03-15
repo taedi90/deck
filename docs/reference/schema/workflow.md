@@ -45,6 +45,7 @@ artifacts:
 | `phases` | `array<object>` | no | `` | `` | Ordered execution phases. Each phase can contain imports, steps, or both. | `[{name:install,steps:[...]}]` |
 | `role` | `string` | yes | `` | `prepare, apply` | Workflow role. `prepare` builds offline artifacts and `apply` changes the local node. | `apply` |
 | `steps` | `array<object>` | no | `` | `` | Flat step list for workflows that do not need named phases. | `[{id:configure-runtime,kind:Containerd,spec:{...}}]` |
+| `varImports` | `array<string>` | no | `` | `` |  | `[example]` |
 | `vars` | `object` | no | `map[]` | `` |  | `map[]` |
 | `version` | `string` | yes | `` | `` |  | `v1alpha1` |
 

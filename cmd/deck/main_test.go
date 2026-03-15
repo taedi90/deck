@@ -501,7 +501,7 @@ func TestMigratedLeafHelpContracts(t *testing.T) {
 		want string
 	}{
 		{args: []string{"help", "server", "workflows"}, want: "deck server workflows [flags]"},
-		{args: []string{"help", "lint"}, want: "deck lint [flags]"},
+		{args: []string{"help", "lint"}, want: "deck lint [scenario] [flags]"},
 		{args: []string{"help", "server", "health"}, want: "deck server health [flags]"},
 	}
 
@@ -780,13 +780,25 @@ func TestRunWorkflowLintAndLegacyValidateMigration(t *testing.T) {
 		}
 	})
 
-	t.Run("lint rejects positional args", func(t *testing.T) {
-		_, err := runWithCapturedStdout([]string{"lint", wf})
-		if err == nil {
-			t.Fatalf("expected arg validation error")
+	t.Run("lint resolves scenario shorthand", func(t *testing.T) {
+		root := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(root, "workflows", "scenarios"), 0o755); err != nil {
+			t.Fatalf("mkdir scenarios: %v", err)
 		}
-		if !strings.Contains(err.Error(), "accepts 0 arg(s), received 1") {
-			t.Fatalf("unexpected error: %v", err)
+		if err := os.WriteFile(filepath.Join(root, "workflows", "vars.yaml"), []byte("{}\n"), 0o644); err != nil {
+			t.Fatalf("write vars: %v", err)
+		}
+		preparePath := filepath.Join(root, "workflows", "scenarios", "prepare.yaml")
+		if err := os.WriteFile(preparePath, []byte("role: prepare\nversion: v1alpha1\nphases:\n  - name: prepare\n    steps: []\n"), 0o644); err != nil {
+			t.Fatalf("write prepare: %v", err)
+		}
+
+		out, err := runWithCapturedStdout([]string{"lint", "prepare", "--root", root})
+		if err != nil {
+			t.Fatalf("expected success, got %v", err)
+		}
+		if out != "lint: ok (1 workflows)\n" {
+			t.Fatalf("unexpected output: %q", out)
 		}
 	})
 
@@ -855,7 +867,7 @@ func TestRunWorkflowBundleVerifySuccess(t *testing.T) {
 	}
 }
 
-func TestRunWorkflowBundleBuildAndExtractSuccess(t *testing.T) {
+func TestRunWorkflowBundleBuildSuccess(t *testing.T) {
 	bundleDir := t.TempDir()
 	createValidBundleManifest(t, bundleDir)
 	archivePath := filepath.Join(t.TempDir(), "bundle.tar")
@@ -871,43 +883,6 @@ func TestRunWorkflowBundleBuildAndExtractSuccess(t *testing.T) {
 	if _, err := os.Stat(archivePath); err != nil {
 		t.Fatalf("expected archive file, got %v", err)
 	}
-
-	importDest := t.TempDir()
-	importOut, err := runWithCapturedStdout([]string{"bundle", "extract", "--file", archivePath, "--dest", importDest})
-	if err != nil {
-		t.Fatalf("expected extract success, got %v", err)
-	}
-	expectedImport := fmt.Sprintf("bundle extract: ok (%s -> %s)\n", archivePath, importDest)
-	if importOut != expectedImport {
-		t.Fatalf("unexpected extract output\nwant: %q\ngot : %q", expectedImport, importOut)
-	}
-
-	manifestPath := filepath.Join(importDest, "bundle", ".deck", "manifest.json")
-	if _, err := os.Stat(manifestPath); err != nil {
-		t.Fatalf("expected imported manifest, got %v", err)
-	}
-
-	artifactPath := filepath.Join(importDest, "bundle", "outputs", "files", "dummy.txt")
-	artifact, err := os.ReadFile(artifactPath)
-	if err != nil {
-		t.Fatalf("read imported artifact: %v", err)
-	}
-	if string(artifact) != "ok\n" {
-		t.Fatalf("unexpected imported artifact content: %q", string(artifact))
-	}
-}
-
-func TestRunWorkflowBundleInspectTar(t *testing.T) {
-	archivePath := filepath.Join(t.TempDir(), "bundle.tar")
-	writeBundleTarFixture(t, archivePath)
-
-	out, err := runWithCapturedStdout([]string{"bundle", "inspect", archivePath, "-o", "json"})
-	if err != nil {
-		t.Fatalf("expected inspect success, got %v", err)
-	}
-	if !strings.Contains(out, `"entries"`) || !strings.Contains(out, `"outputs/files/dummy.txt"`) {
-		t.Fatalf("unexpected inspect output: %q", out)
-	}
 }
 
 func TestRunWorkflowBundleVerifyRejectsExtraPositionalArgs(t *testing.T) {
@@ -916,16 +891,6 @@ func TestRunWorkflowBundleVerifyRejectsExtraPositionalArgs(t *testing.T) {
 		t.Fatalf("expected positional argument validation error")
 	}
 	if err.Error() != "bundle verify accepts a single <path>" {
-		t.Fatalf("unexpected error: %q", err.Error())
-	}
-}
-
-func TestRunWorkflowBundleInspectRejectsExtraPositionalArgs(t *testing.T) {
-	_, err := runWithCapturedStdout([]string{"bundle", "inspect", "./one", "./two"})
-	if err == nil {
-		t.Fatalf("expected positional argument validation error")
-	}
-	if err.Error() != "bundle inspect accepts a single <path>" {
 		t.Fatalf("unexpected error: %q", err.Error())
 	}
 }
@@ -940,12 +905,22 @@ func TestRunWorkflowBundleMergeIsRemoved(t *testing.T) {
 	}
 }
 
-func TestRunWorkflowBundleImportIsRemoved(t *testing.T) {
-	_, err := runWithCapturedStdout([]string{"bundle", "import"})
+func TestRunWorkflowBundleExtractIsRemoved(t *testing.T) {
+	_, err := runWithCapturedStdout([]string{"bundle", "extract"})
 	if err == nil {
 		t.Fatalf("expected unknown command error")
 	}
-	if !strings.Contains(err.Error(), `unknown command "import" for "deck bundle"`) {
+	if !strings.Contains(err.Error(), `unknown command "extract" for "deck bundle"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRunWorkflowBundleInspectIsRemoved(t *testing.T) {
+	_, err := runWithCapturedStdout([]string{"bundle", "inspect"})
+	if err == nil {
+		t.Fatalf("expected unknown command error")
+	}
+	if !strings.Contains(err.Error(), `unknown command "inspect" for "deck bundle"`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -1841,7 +1816,7 @@ phases:
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
 			case "/workflows/scenarios/apply.yaml":
-				_, _ = w.Write([]byte("role: prepare\nversion: v1alpha1\nsteps:\n  - id: pack-step\n    kind: RunCommand\n    spec:\n      command: [\"true\"]\n"))
+				_, _ = w.Write([]byte("role: prepare\nversion: v1alpha1\nsteps:\n  - id: pack-step\n    kind: Command\n    spec:\n      command: [\"true\"]\n"))
 			default:
 				http.NotFound(w, r)
 			}
@@ -2480,20 +2455,14 @@ func TestCLIContractGroupedParentsRejectUnknownSubcommandsViaBinary(t *testing.T
 	}
 }
 
-func TestCLIContractBundleInspectAllowsPositionalBeforeFlagViaBinary(t *testing.T) {
+func TestCLIContractBundleInspectRemovedViaBinary(t *testing.T) {
 	binaryPath := buildDeckBinary(t, "deck-positional-bin")
-	archivePath := filepath.Join(t.TempDir(), "bundle.tar")
-	writeBundleTarFixture(t, archivePath)
-
-	res := runDeckBinary(t, binaryPath, "bundle", "inspect", archivePath, "-o", "json")
-	if res.exitCode != 0 {
-		t.Fatalf("expected zero exit, got %d stderr=%q", res.exitCode, res.stderr)
+	res := runDeckBinary(t, binaryPath, "bundle", "inspect")
+	if res.exitCode == 0 {
+		t.Fatalf("expected non-zero exit")
 	}
-	if res.stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", res.stderr)
-	}
-	if !strings.Contains(res.stdout, `"entries"`) || !strings.Contains(res.stdout, `"outputs/files/dummy.txt"`) {
-		t.Fatalf("unexpected stdout: %q", res.stdout)
+	if !strings.Contains(res.stderr, `unknown command "inspect" for "deck bundle"`) {
+		t.Fatalf("unexpected stderr: %q", res.stderr)
 	}
 }
 
@@ -2840,27 +2809,6 @@ func createValidBundleManifest(t *testing.T, bundleRoot string) {
 	}
 }
 
-func tarEntryNamesFromFile(path string) ([]string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer closeSilently(f)
-	tr := tar.NewReader(f)
-	names := make([]string, 0)
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-		names = append(names, hdr.Name)
-	}
-	return names, nil
-}
-
 func sliceContains(values []string, target string) bool {
 	for _, value := range values {
 		if value == target {
@@ -2868,49 +2816,6 @@ func sliceContains(values []string, target string) bool {
 		}
 	}
 	return false
-}
-
-func writeBundleTarFixture(t *testing.T, archivePath string) {
-	t.Helper()
-	entries := []struct {
-		path string
-		body []byte
-	}{
-		{path: "outputs/files/dummy.txt", body: []byte("ok\n")},
-		{path: "deck", body: []byte("deck-binary\n")},
-	}
-	manifestEntries := make([]string, 0, 1)
-	for _, entry := range entries[:1] {
-		sum := sha256.Sum256(entry.body)
-		manifestEntries = append(manifestEntries, fmt.Sprintf("    {\"path\": %q, \"sha256\": %q, \"size\": %d}", entry.path, hex.EncodeToString(sum[:]), len(entry.body)))
-	}
-	manifest := fmt.Sprintf("{\n  \"entries\": [\n%s\n  ]\n}\n", strings.Join(manifestEntries, ",\n"))
-
-	f, err := os.Create(archivePath)
-	if err != nil {
-		t.Fatalf("create archive: %v", err)
-	}
-	defer closeSilently(f)
-
-	tw := tar.NewWriter(f)
-	defer closeSilently(tw)
-
-	for _, entry := range []struct {
-		name string
-		body []byte
-	}{
-		{name: "bundle/.deck/manifest.json", body: []byte(manifest)},
-		{name: "bundle/outputs/files/dummy.txt", body: entries[0].body},
-		{name: "bundle/deck", body: entries[1].body},
-	} {
-		h := &tar.Header{Name: entry.name, Mode: 0o644, Size: int64(len(entry.body)), Typeflag: tar.TypeReg}
-		if err := tw.WriteHeader(h); err != nil {
-			t.Fatalf("write tar header %s: %v", entry.name, err)
-		}
-		if _, err := tw.Write(entry.body); err != nil {
-			t.Fatalf("write tar body %s: %v", entry.name, err)
-		}
-	}
 }
 
 func writeApplyBundleTarFixture(t *testing.T, archivePath string) {

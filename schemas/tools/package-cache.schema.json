@@ -1,0 +1,106 @@
+{
+  "$id": "https://deck.local/schemas/tools/package-cache.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Refreshes package metadata and can restrict or exclude repos during refresh.",
+  "properties": {
+    "apiVersion": {
+      "const": "deck/v1alpha1"
+    },
+    "id": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "PackageCache"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "register": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      },
+      "type": "object"
+    },
+    "retry": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "spec": {
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "properties": {
+            "clean": {
+              "const": true
+            }
+          },
+          "required": [
+            "clean"
+          ]
+        },
+        {
+          "properties": {
+            "update": {
+              "const": true
+            }
+          },
+          "required": [
+            "update"
+          ]
+        }
+      ],
+      "properties": {
+        "clean": {
+          "type": "boolean"
+        },
+        "excludeRepos": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "manager": {
+          "enum": [
+            "auto",
+            "apt",
+            "dnf"
+          ],
+          "type": "string"
+        },
+        "restrictToRepos": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "update": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "timeout": {
+      "pattern": "^[0-9]+(ms|s|m|h)$",
+      "type": "string"
+    },
+    "when": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "apiVersion",
+    "kind",
+    "spec"
+  ],
+  "title": "PackageCacheStep",
+  "type": "object",
+  "x-deck-visibility": "public"
+}

@@ -112,7 +112,7 @@ func runInstallArtifacts(ctx context.Context, spec map[string]any) error {
 				"path": "artifact.bin",
 			},
 		}
-		relativePath, err := runDownloadFile(ctx, tmpDir, downloadSpec)
+		relativePath, err := runFileDownload(ctx, tmpDir, downloadSpec)
 		if err != nil {
 			_ = os.RemoveAll(tmpDir)
 			return fmt.Errorf("artifact[%d]: %w", i, err)

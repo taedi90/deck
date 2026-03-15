@@ -202,45 +202,6 @@ func resolveRequiredVarsWorkflowPath(workflowRootPath string) (string, error) {
 	return "", fmt.Errorf("required workflow file not found: %s", varsPath)
 }
 
-func copySubtreeIfExists(srcRoot, dstRoot string) error {
-	info, err := os.Stat(srcRoot)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	if !info.IsDir() {
-		return nil
-	}
-
-	return filepath.WalkDir(srcRoot, func(path string, d os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		rel, err := filepath.Rel(srcRoot, path)
-		if err != nil {
-			return err
-		}
-		if rel == "." {
-			return nil
-		}
-		target := filepath.Join(dstRoot, rel)
-		if d.IsDir() {
-			return os.MkdirAll(target, 0o755)
-		}
-		return copyFile(path, target, 0o644)
-	})
-}
-
-func copyFile(srcPath, dstPath string, mode os.FileMode) error {
-	raw, err := os.ReadFile(srcPath)
-	if err != nil {
-		return fmt.Errorf("read %s: %w", srcPath, err)
-	}
-	return writeBytes(dstPath, raw, mode)
-}
-
 func writeBytes(path string, data []byte, mode os.FileMode) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("create parent directory for %s: %w", path, err)

@@ -41,17 +41,20 @@ func (o osCommandRunner) LookPath(file string) (string, error) {
 }
 
 const (
-	errCodePrepareRuntimeMissing     = "E_PREPARE_RUNTIME_NOT_FOUND"
-	errCodePrepareRuntimeUnsupported = "E_PREPARE_RUNTIME_UNSUPPORTED"
-	errCodePrepareEngineUnsupported  = "E_PREPARE_ENGINE_UNSUPPORTED"
-	errCodePrepareArtifactsEmpty     = "E_PREPARE_NO_ARTIFACTS"
-	errCodePrepareSourceNotFound     = "E_PREPARE_SOURCE_NOT_FOUND"
-	errCodePrepareChecksumMismatch   = "E_PREPARE_CHECKSUM_MISMATCH"
-	errCodePrepareOfflinePolicyBlock = "E_PREPARE_OFFLINE_POLICY_BLOCK"
-	errCodePrepareConditionEval      = "E_CONDITION_EVAL"
-	errCodePrepareRegisterMissing    = "E_REGISTER_OUTPUT_NOT_FOUND"
-	errCodePrepareCheckHostFailed    = "E_PREPARE_CHECKHOST_FAILED"
-	packageCacheMetaFile             = ".deck-cache-packages.json"
+	errCodePrepareRuntimeMissing        = "E_PREPARE_RUNTIME_NOT_FOUND"
+	errCodePrepareRuntimeUnsupported    = "E_PREPARE_RUNTIME_UNSUPPORTED"
+	errCodePrepareEngineUnsupported     = "E_PREPARE_ENGINE_UNSUPPORTED"
+	errCodePrepareArtifactsEmpty        = "E_PREPARE_NO_ARTIFACTS"
+	errCodeArtifactSourceNotFound       = "E_PREPARE_SOURCE_NOT_FOUND"
+	errCodePrepareSourceNotFound        = errCodeArtifactSourceNotFound
+	errCodePrepareChecksumMismatch      = "E_PREPARE_CHECKSUM_MISMATCH"
+	errCodePrepareOfflinePolicyBlock    = "E_PREPARE_OFFLINE_POLICY_BLOCK"
+	errCodePrepareConditionEval         = "E_CONDITION_EVAL"
+	errCodePrepareRegisterMissing       = "E_REGISTER_OUTPUT_NOT_FOUND"
+	errCodePrepareInspectionCheckFailed = "E_PREPARE_CHECKHOST_FAILED"
+	errCodePrepareCheckHostFailed       = errCodePrepareInspectionCheckFailed
+	errCodePrepareKindUnsupported       = "E_PREPARE_KIND_UNSUPPORTED"
+	packageCacheMetaFile                = ".deck-cache-packages.json"
 )
 
 func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
@@ -78,9 +81,9 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 
 	runtimeVars := map[string]any{}
 	entries := make([]manifestEntry, 0)
-	preparePhase, found := findPhase(wf, "prepare")
-	if !found {
-		return fmt.Errorf("prepare phase not found")
+	prepareSteps, err := prepareExecutionSteps(wf)
+	if err != nil {
+		return err
 	}
 	packCacheEnabled := strings.TrimSpace(wf.Role) == "prepare"
 	packCacheStatePath := ""
@@ -107,12 +110,12 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 		if err != nil {
 			return fmt.Errorf("encode workflow for prepare cache plan: %w", err)
 		}
-		packCachePlan = ComputePackCachePlan(prevPackCacheState, workflowBytesForPlan, wf.Vars, preparePhase.Steps)
+		packCachePlan = ComputePackCachePlan(prevPackCacheState, workflowBytesForPlan, wf.Vars, prepareSteps)
 		packCachePlan.WorkflowSHA256 = workflowSHA
 	}
 	ctxData := map[string]any{"bundleRoot": bundleRoot, "stateFile": ""}
 
-	for _, step := range preparePhase.Steps {
+	for _, step := range prepareSteps {
 		ok, err := evaluateWhen(step.When, wf.Vars, runtimeVars, ctxData)
 		if err != nil {
 			return fmt.Errorf("step %s (%s): %w", step.ID, step.Kind, err)
@@ -173,6 +176,20 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 	}
 
 	return nil
+}
+
+func prepareExecutionSteps(wf *config.Workflow) ([]config.Step, error) {
+	if wf == nil {
+		return nil, fmt.Errorf("workflow is nil")
+	}
+	if wf.Artifacts != nil && (len(wf.Artifacts.Files) > 0 || len(wf.Artifacts.Images) > 0 || len(wf.Artifacts.Packages) > 0) {
+		return declaredPrepareSteps(wf)
+	}
+	preparePhase, found := findPhase(wf, "prepare")
+	if !found {
+		return nil, fmt.Errorf("prepare phase not found")
+	}
+	return preparePhase.Steps, nil
 }
 
 func applyRegister(step config.Step, outputs map[string]any, runtimeVars map[string]any) error {

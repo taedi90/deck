@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -164,46 +163,6 @@ func executeBundleVerify(filePath string, positionalArgs []string) error {
 	}
 
 	return stdoutPrintf("bundle verify: ok (%s)\n", resolvedPath)
-}
-
-func executeBundleInspect(filePath string, output string, positionalArgs []string) error {
-	resolvedPath, err := resolveBundlePathArg(filePath, positionalArgs, "bundle inspect accepts a single <path>")
-	if err != nil {
-		return err
-	}
-	if output != "text" && output != "json" {
-		return errors.New("--output must be text or json")
-	}
-
-	entries, err := bundle.InspectManifest(resolvedPath)
-	if err != nil {
-		return err
-	}
-
-	if output == "json" {
-		return json.NewEncoder(os.Stdout).Encode(map[string]any{"entries": entries})
-	}
-	for _, entry := range entries {
-		if _, err := fmt.Fprintln(os.Stdout, entry.Path); err != nil {
-			return fmt.Errorf("bundle inspect: write output: %w", err)
-		}
-	}
-	return nil
-}
-
-func executeBundleExtract(filePath string, destDir string) error {
-	if strings.TrimSpace(filePath) == "" {
-		return errors.New("--file is required")
-	}
-	if strings.TrimSpace(destDir) == "" {
-		return errors.New("--dest is required")
-	}
-
-	if err := bundle.ImportArchive(filePath, destDir); err != nil {
-		return err
-	}
-
-	return stdoutPrintf("bundle extract: ok (%s -> %s)\n", filePath, destDir)
 }
 
 func executeBundleBuild(root string, out string) error {

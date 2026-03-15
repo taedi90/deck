@@ -59,6 +59,7 @@ const (
 	errCodeInstallResetFailed      = "E_INSTALL_KUBEADM_RESET_FAILED"
 	errCodeInstallJoinCmdInvalid   = "E_INSTALL_KUBEADM_JOIN_COMMAND_INVALID"
 	errCodeInstallJoinCmdMissing   = "E_INSTALL_KUBEADM_JOIN_COMMAND_MISSING"
+	errCodeInstallWaitTimeout      = "E_INSTALL_WAIT_TIMEOUT"
 	errCodeInstallWaitPathRequired = "E_INSTALL_WAITPATH_PATH_REQUIRED"
 	errCodeInstallWaitPathState    = "E_INSTALL_WAITPATH_STATE_INVALID"
 	errCodeInstallWaitPathType     = "E_INSTALL_WAITPATH_TYPE_INVALID"

@@ -12,15 +12,16 @@ func TestFile(t *testing.T) {
 	t.Run("valid yaml", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "cluster.yaml")
-		content := []byte(`role: apply
+		content := []byte(`role: prepare
 version: v1alpha1
 phases:
   - name: prepare
     steps:
       - id: prepare-images
         apiVersion: deck/v1alpha1
-        kind: DownloadImages
+        kind: Image
         spec:
+          action: download
           images: [registry.k8s.io/kube-apiserver:v1.30.1]
           backend:
             engine: go-containerregistry
@@ -48,8 +49,9 @@ phases:
     steps:
       - id: install-packages
         apiVersion: deck/v1alpha1
-        kind: InstallPackages
+        kind: Packages
         spec:
+          action: install
           packages: [containerd]
 `)
 		if err := os.WriteFile(path, content, 0o644); err != nil {
@@ -96,7 +98,7 @@ phases:
     steps:
       - id: install-artifacts
         apiVersion: deck/v1alpha1
-        kind: InstallArtifacts
+        kind: Artifacts
         spec:
           artifacts:
             - source:
@@ -139,7 +141,7 @@ phases:
     steps:
       - id: bad-install-artifacts
         apiVersion: deck/v1alpha1
-        kind: InstallArtifacts
+        kind: Artifacts
         spec:
           artifacts:
             - source:
@@ -200,8 +202,9 @@ phases:
     steps:
       - id: install-packages-curl
         apiVersion: deck/v1alpha1
-        kind: InstallPackages
+        kind: Packages
         spec:
+          action: install
           packages: [curl]
 `)
 		if err := os.WriteFile(path, content, 0o644); err != nil {
@@ -223,8 +226,9 @@ phases:
     steps:
       - id: repo-apt
         apiVersion: deck/v1alpha1
-        kind: RepoConfig
+        kind: Repository
         spec:
+          action: configure
           format: apt
           replaceExisting: true
           refreshCache:
@@ -278,7 +282,7 @@ phases:
 	t.Run("schema invalid kind", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
+		content := []byte(`role: prepare
 version: v1alpha1
 phases:
   - name: prepare
@@ -300,15 +304,16 @@ phases:
 	t.Run("duplicate step id", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
+		content := []byte(`role: prepare
 version: v1alpha1
 phases:
   - name: prepare
     steps:
       - id: dup-id
         apiVersion: deck/v1alpha1
-        kind: DownloadFile
+        kind: File
         spec:
+          action: download
           source:
             url: https://example.local/a
           output:
@@ -317,7 +322,7 @@ phases:
     steps:
       - id: dup-id
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: Command
         spec:
           command: ["true"]
 `)
@@ -333,27 +338,29 @@ phases:
 	t.Run("runtime register redefinition", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
+		content := []byte(`role: prepare
 version: v1alpha1
 phases:
   - name: prepare
     steps:
       - id: s1
         apiVersion: deck/v1alpha1
-        kind: DownloadFile
+        kind: File
         register:
           token: outputA
         spec:
+          action: download
           source:
             url: https://example.local/a
           output:
             path: files/a
       - id: s2
         apiVersion: deck/v1alpha1
-        kind: DownloadFile
+        kind: File
         register:
           token: outputB
         spec:
+          action: download
           source:
             url: https://example.local/b
           output:
@@ -378,7 +385,7 @@ phases:
     steps:
       - id: bad-run-command
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: Command
         spec:
           command: []
 `)
@@ -405,7 +412,7 @@ phases:
     steps:
       - id: bad-run-command
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: Command
         spec:
           command: []
 `)
@@ -432,13 +439,13 @@ phases:
     steps:
       - id: wait-admin-conf
         apiVersion: deck/v1alpha1
-        kind: WaitPath
+        kind: Wait
         spec:
+          action: fileExists
           path: /etc/kubernetes/admin.conf
-          state: exists
           type: file
           nonEmpty: true
-          pollInterval: 2s
+          interval: 2s
           timeout: 5m
 `)
 		if err := os.WriteFile(path, content, 0o644); err != nil {
@@ -460,10 +467,10 @@ phases:
     steps:
       - id: bad-wait
         apiVersion: deck/v1alpha1
-        kind: WaitPath
+        kind: Wait
         spec:
+          action: fileAbsent
           path: /tmp/old-file
-          state: absent
           nonEmpty: true
 `)
 		if err := os.WriteFile(path, content, 0o644); err != nil {
@@ -489,10 +496,10 @@ phases:
     steps:
       - id: bad-wait-type
         apiVersion: deck/v1alpha1
-        kind: WaitPath
+        kind: Wait
         spec:
+          action: fileExists
           path: /tmp/target
-          state: exists
           type: socket
 `)
 		if err := os.WriteFile(path, content, 0o644); err != nil {
@@ -639,8 +646,9 @@ phases:
     steps:
       - id: reset-node
         apiVersion: deck/v1alpha1
-        kind: KubeadmReset
+        kind: Kubeadm
         spec:
+          action: reset
           force: true
           ignoreErrors: true
           stopKubelet: true
@@ -669,8 +677,9 @@ phases:
     steps:
       - id: kubeadm-init
         apiVersion: deck/v1alpha1
-        kind: KubeadmInit
+        kind: Kubeadm
         spec:
+          action: init
           mode: real
           outputJoinFile: /tmp/deck/join.txt
           configFile: /tmp/deck/kubeadm-init.yaml
@@ -701,8 +710,9 @@ phases:
     steps:
       - id: kubeadm-init
         apiVersion: deck/v1alpha1
-        kind: KubeadmInit
+        kind: Kubeadm
         spec:
+          action: init
           mode: real
           outputJoinFile: /tmp/deck/join.txt
           pullImages: "yes"
@@ -730,8 +740,9 @@ phases:
     steps:
       - id: reset-node
         apiVersion: deck/v1alpha1
-        kind: KubeadmReset
+        kind: Kubeadm
         spec:
+          action: reset
           cleanupContainers: kube-apiserver
 `)
 		if err := os.WriteFile(path, content, 0o644); err != nil {
@@ -757,10 +768,11 @@ phases:
     steps:
       - id: w1
         apiVersion: deck/v1alpha1
-        kind: WriteFile
+        kind: File
         register:
           x: notARealOutput
         spec:
+          action: install
           path: /tmp/a.txt
           content: hello
 `)
@@ -780,17 +792,18 @@ phases:
 	t.Run("register output key valid for kind", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
+		content := []byte(`role: prepare
 version: v1alpha1
 phases:
   - name: prepare
     steps:
       - id: d1
         apiVersion: deck/v1alpha1
-        kind: DownloadFile
+        kind: File
         register:
           fetched: path
         spec:
+          action: download
           source:
             url: https://example.local/a
           output:
@@ -808,14 +821,14 @@ phases:
 	t.Run("register output key valid for checkhost", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
+		content := []byte(`role: prepare
 version: v1alpha1
 phases:
   - name: prepare
     steps:
       - id: c1
         apiVersion: deck/v1alpha1
-        kind: CheckHost
+        kind: Inspection
         register:
           hostOk: passed
         spec:
@@ -859,14 +872,14 @@ phases:
 	t.Run("reserved runtime host key is rejected", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
+		content := []byte(`role: prepare
 version: v1alpha1
 phases:
   - name: prepare
     steps:
       - id: c1
         apiVersion: deck/v1alpha1
-        kind: CheckHost
+        kind: Inspection
         register:
           host: passed
         spec:
@@ -893,7 +906,7 @@ func TestSchema_ApiVersionOptional(t *testing.T) {
 version: v1alpha1
 steps:
   - id: run-without-api-version
-    kind: RunCommand
+    kind: Command
     spec:
       command: ["true"]
 `)
@@ -913,7 +926,7 @@ func TestValidate_SingleBraceTemplateShowsLine(t *testing.T) {
 version: v1alpha1
 steps:
   - id: bad-template
-    kind: RunCommand
+    kind: Command
     spec:
       command:
         - "echo"
@@ -945,7 +958,7 @@ imports:
   - ./legacy.yaml
 steps:
   - id: ok-step
-    kind: RunCommand
+    kind: Command
     spec:
       command: ["true"]
 `)
@@ -989,7 +1002,7 @@ context:
   bundleRoot: /tmp/bundle
 steps:
   - id: ok-step
-    kind: RunCommand
+    kind: Command
     spec:
       command: ["true"]
 `)
@@ -1027,25 +1040,28 @@ steps:
       ignoreMissing: true
       state: stopped
   - id: ensure-dir
-    kind: EnsureDir
+    kind: Directory
     spec:
       path: /etc/containerd/certs.d
       mode: "0755"
   - id: install-file
-    kind: InstallFile
+    kind: File
     spec:
+      action: install
       path: /etc/modules-load.d/k8s.conf
       content: |
         overlay
   - id: template-file
-    kind: TemplateFile
+    kind: File
     spec:
+      action: install
       path: /etc/containerd/certs.d/registry.k8s.io/hosts.toml
-      template: |
+      contentFromTemplate: |
         server = "http://registry.local"
   - id: repo-config
-    kind: RepoConfig
+    kind: Repository
     spec:
+      action: configure
       path: /etc/yum.repos.d/offline.repo
       repositories:
         - id: offline-base
@@ -1053,7 +1069,7 @@ steps:
           enabled: true
           gpgcheck: false
   - id: containerd-config
-    kind: ContainerdConfig
+    kind: Containerd
     spec:
       path: /etc/containerd/config.toml
       configPath: /etc/containerd/certs.d
@@ -1076,11 +1092,14 @@ steps:
       load: true
       persist: true
   - id: sysctl-apply
-    kind: SysctlApply
+    kind: Sysctl
     spec:
-      file: /etc/sysctl.d/99-kubernetes-cri.conf
+      values:
+        net.ipv4.ip_forward: 1
+      writeFile: /etc/sysctl.d/99-kubernetes-cri.conf
+      apply: true
   - id: run-cmd
-    kind: RunCommand
+    kind: Command
     spec:
       command: ["true"]
 `)

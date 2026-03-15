@@ -2,7 +2,6 @@ package validate
 
 import (
 	"context"
-	"embed"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -16,68 +15,13 @@ import (
 
 	"github.com/taedi90/deck/internal/config"
 	"github.com/taedi90/deck/internal/workflowexec"
+	deckschemas "github.com/taedi90/deck/schemas"
 )
 
 var (
 	runtimeVarNamePattern      = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 	singleBraceTemplatePattern = regexp.MustCompile(`(^|[^\{])(\{\s*\.(vars|runtime)\.[^{}]+\})([^\}]|$)`)
 )
-
-//go:embed schemas/deck-workflow.schema.json schemas/tools/*.schema.json
-var schemaFS embed.FS
-
-var toolSchemaByKind = map[string]string{
-	"CheckHost":           "check-host.schema.json",
-	"DownloadPackages":    "download-packages.schema.json",
-	"DownloadK8sPackages": "download-k8s-packages.schema.json",
-	"DownloadImages":      "download-images.schema.json",
-	"DownloadFile":        "download-file.schema.json",
-	"InstallArtifacts":    "install-artifacts.schema.json",
-	"InstallPackages":     "install-packages.schema.json",
-	"WriteFile":           "write-file.schema.json",
-	"EditFile":            "edit-file.schema.json",
-	"CopyFile":            "copy-file.schema.json",
-	"Sysctl":              "sysctl.schema.json",
-	"Modprobe":            "modprobe.schema.json",
-	"Service":             "service.schema.json",
-	"EnsureDir":           "ensure-dir.schema.json",
-	"Symlink":             "symlink.schema.json",
-	"InstallFile":         "install-file.schema.json",
-	"TemplateFile":        "template-file.schema.json",
-	"SystemdUnit":         "systemd-unit.schema.json",
-	"RepoConfig":          "repo-config.schema.json",
-	"PackageCache":        "package-cache.schema.json",
-	"ContainerdConfig":    "containerd-config.schema.json",
-	"Swap":                "swap.schema.json",
-	"KernelModule":        "kernel-module.schema.json",
-	"SysctlApply":         "sysctl-apply.schema.json",
-	"RunCommand":          "run-command.schema.json",
-	"WaitPath":            "wait-path.schema.json",
-	"VerifyImages":        "verify-images.schema.json",
-	"KubeadmInit":         "kubeadm-init.schema.json",
-	"KubeadmJoin":         "kubeadm-join.schema.json",
-	"KubeadmReset":        "kubeadm-reset.schema.json",
-}
-
-var registerOutputContract = map[string][]string{
-	"CheckHost":           {"passed", "failedChecks"},
-	"DownloadFile":        {"path", "artifacts"},
-	"DownloadPackages":    {"artifacts"},
-	"DownloadK8sPackages": {"artifacts"},
-	"DownloadImages":      {"artifacts"},
-	"WriteFile":           {"path"},
-	"CopyFile":            {"dest"},
-	"Service":             {"name"},
-	"EnsureDir":           {"path"},
-	"Symlink":             {"path"},
-	"InstallFile":         {"path"},
-	"TemplateFile":        {"path"},
-	"SystemdUnit":         {"path"},
-	"RepoConfig":          {"path"},
-	"ContainerdConfig":    {"path"},
-	"KernelModule":        {"name"},
-	"KubeadmInit":         {"joinFile"},
-}
 
 // File validates workflow structure and semantic rules.
 func File(path string) error {
@@ -88,7 +32,7 @@ func File(path string) error {
 	if err != nil {
 		return fmt.Errorf("read workflow file: %w", err)
 	}
-	return Bytes(path, content)
+	return withWorkflowName(path, Bytes(path, content))
 }
 
 func Workspace(root string) ([]string, error) {
@@ -108,9 +52,7 @@ func Workspace(root string) ([]string, error) {
 		return nil, fmt.Errorf("workflow directory is not a directory: %s", workflowRoot)
 	}
 
-	required := []string{
-		filepath.Join(workflowRoot, "scenarios", "prepare.yaml"),
-	}
+	required := []string{filepath.Join(workflowRoot, "scenarios", "prepare.yaml")}
 	for _, path := range required {
 		info, err := os.Stat(path)
 		if err != nil || info.IsDir() {
@@ -141,7 +83,6 @@ func Workspace(root string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read workflow directory: %w", err)
 	}
-	sort.Strings(files)
 	if len(files) == 0 {
 		return nil, fmt.Errorf("no scenario workflow files found under: %s", scenarioRoot)
 	}
@@ -188,7 +129,10 @@ func Workflow(name string, wf *config.Workflow) error {
 	if strings.TrimSpace(wf.Version) != "v1alpha1" {
 		return withWorkflowName(name, fmt.Errorf("unsupported version: %s (supported: v1alpha1)", wf.Version))
 	}
-	if err := validateToolSchemas(wf, true); err != nil {
+	if err := validateWorkflowMode(wf); err != nil {
+		return withWorkflowName(name, err)
+	}
+	if err := validateToolSchemas(wf); err != nil {
 		return withWorkflowName(name, err)
 	}
 	if err := validateSemantics(wf); err != nil {
@@ -203,22 +147,44 @@ func Bytes(name string, content []byte) error {
 	}
 
 	if err := validateSingleBraceTemplates(name, content); err != nil {
-		return withWorkflowName(name, err)
+		return err
 	}
 
 	var wf config.Workflow
 	if err := yaml.Unmarshal(content, &wf); err != nil {
-		return withWorkflowName(name, fmt.Errorf("parse yaml: %w", err))
+		return fmt.Errorf("parse yaml: %w", err)
 	}
+	if len(wf.Phases) > 0 && len(wf.Steps) > 0 {
+		return fmt.Errorf("workflow cannot set both phases and steps")
+	}
+
+	if wf.Role == "" {
+		return fmt.Errorf("role is required")
+	}
+	if strings.TrimSpace(wf.Role) != "prepare" && strings.TrimSpace(wf.Role) != "apply" {
+		return fmt.Errorf("unsupported role: %s (supported: prepare, apply)", wf.Role)
+	}
+
+	if wf.Version == "" {
+		return fmt.Errorf("version is required")
+	}
+	if strings.TrimSpace(wf.Version) != "v1alpha1" {
+		return fmt.Errorf("unsupported version: %s (supported: v1alpha1)", wf.Version)
+	}
+
 	if err := validateSchema(name, content); err != nil {
-		return withWorkflowName(name, err)
+		return err
 	}
-	if err := validateToolSchemas(&wf, false); err != nil {
-		return withWorkflowName(name, err)
+	if err := validateWorkflowMode(&wf); err != nil {
+		return err
+	}
+	if err := validateToolSchemas(&wf); err != nil {
+		return err
 	}
 	if err := validateSemantics(&wf); err != nil {
-		return withWorkflowName(name, err)
+		return err
 	}
+
 	return nil
 }
 
@@ -336,27 +302,49 @@ func dedupeAndSort(values []string) []string {
 	return out
 }
 
-func validateToolSchemas(wf *config.Workflow, renderTemplates bool) error {
+func validateWorkflowMode(wf *config.Workflow) error {
+	if wf == nil {
+		return nil
+	}
+	hasArtifacts := wf.Artifacts != nil && (len(wf.Artifacts.Files) > 0 || len(wf.Artifacts.Images) > 0 || len(wf.Artifacts.Packages) > 0)
+	hasPhases := len(wf.Phases) > 0
+	hasSteps := len(wf.Steps) > 0
+	modeCount := 0
+	if hasArtifacts {
+		modeCount++
+	}
+	if hasPhases {
+		modeCount++
+	}
+	if hasSteps {
+		modeCount++
+	}
+	if modeCount > 1 {
+		return fmt.Errorf("workflow cannot set multiple execution modes")
+	}
+	if hasArtifacts && strings.TrimSpace(wf.Role) != "prepare" {
+		return fmt.Errorf("E_SCHEMA_INVALID: artifacts is only supported for role prepare")
+	}
+	return nil
+}
+
+func validateToolSchemas(wf *config.Workflow) error {
 	for _, step := range workflowSteps(wf) {
-		schemaFile, ok := toolSchemaByKind[step.Kind]
+		canonicalKind, normalizedSpec := workflowexec.NormalizeLegacyKindSpec(step.Kind, step.Spec)
+		schemaFile, ok := workflowexec.StepSchemaFile(canonicalKind)
 		if !ok {
 			continue
 		}
-		toolSchemaRaw, err := schemaFS.ReadFile("schemas/tools/" + schemaFile)
+		toolSchemaRaw, err := deckschemas.ToolSchema(schemaFile)
 		if err != nil {
 			return fmt.Errorf("E_SCHEMA_INVALID: tool schema not found for kind %s", step.Kind)
 		}
 
 		stepForSchema := step
+		stepForSchema.Kind = canonicalKind
+		stepForSchema.Spec = normalizedSpec
 		if strings.TrimSpace(stepForSchema.APIVersion) == "" {
 			stepForSchema.APIVersion = "deck/v1alpha1"
-		}
-		if renderTemplates {
-			renderedSpec, err := workflowexec.RenderSpec(stepForSchema.Spec, wf, nil, nil)
-			if err != nil {
-				return fmt.Errorf("E_TEMPLATE_RENDER: step %s (%s): %w", step.ID, step.Kind, err)
-			}
-			stepForSchema.Spec = renderedSpec
 		}
 
 		raw, err := json.Marshal(stepForSchema)
@@ -386,9 +374,9 @@ func validateToolSchemas(wf *config.Workflow, renderTemplates bool) error {
 }
 
 func validateSchema(name string, content []byte) error {
-	schemaRaw, err := schemaFS.ReadFile("schemas/deck-workflow.schema.json")
+	schemaRaw, err := deckschemas.WorkflowSchema()
 	if err != nil {
-		return fmt.Errorf("workflow schema not found: docs/schemas/deck-workflow.schema.json")
+		return fmt.Errorf("workflow schema not found: schemas/deck-workflow.schema.json")
 	}
 
 	var doc any
@@ -400,6 +388,7 @@ func validateSchema(name string, content []byte) error {
 	if err != nil {
 		return fmt.Errorf("normalize workflow for schema validation: %w", err)
 	}
+	normalizeWorkflowSchemaKinds(normalized)
 
 	raw, err := json.Marshal(normalized)
 	if err != nil {
@@ -426,6 +415,13 @@ func validateSchema(name string, content []byte) error {
 }
 
 func validateSemantics(wf *config.Workflow) error {
+	if err := validatePrepareSemantics(wf); err != nil {
+		return err
+	}
+	if err := validateRoleKinds(wf); err != nil {
+		return err
+	}
+
 	seenStepID := map[string]bool{}
 	assignedRuntime := map[string]string{}
 
@@ -448,7 +444,7 @@ func validateSemantics(wf *config.Workflow) error {
 			if strings.TrimSpace(outputKey) == "" {
 				return fmt.Errorf("E_REGISTER_OUTPUT_NOT_FOUND: empty output key in step %s", step.ID)
 			}
-			if !isValidOutputKey(step.Kind, outputKey) {
+			if !isValidOutputKey(step.Kind, step.Spec, outputKey) {
 				return fmt.Errorf("E_REGISTER_OUTPUT_NOT_FOUND: step %s (%s) has no output key %s", step.ID, step.Kind, outputKey)
 			}
 			if previous, exists := assignedRuntime[runtimeVar]; exists {
@@ -456,8 +452,63 @@ func validateSemantics(wf *config.Workflow) error {
 			}
 			assignedRuntime[runtimeVar] = step.ID
 		}
+
+		if step.Kind == "Wait" {
+			action, _ := step.Spec["action"].(string)
+			if action == "" {
+				if state, _ := step.Spec["state"].(string); state == "absent" {
+					action = "fileAbsent"
+				} else {
+					action = "fileExists"
+				}
+			}
+			nonEmpty, _ := step.Spec["nonEmpty"].(bool)
+			if action == "fileAbsent" && nonEmpty {
+				return fmt.Errorf("E_SCHEMA_INVALID: step %s (Wait): nonEmpty is only valid for fileExists", step.ID)
+			}
+		}
 	}
 
+	return nil
+}
+
+func validatePrepareSemantics(wf *config.Workflow) error {
+	if wf == nil || wf.Artifacts == nil {
+		return nil
+	}
+	for _, group := range wf.Artifacts.Files {
+		for _, item := range group.Items {
+			path := strings.TrimSpace(item.Output.Path)
+			if path == "" {
+				return fmt.Errorf("E_SCHEMA_INVALID: artifacts.files group %s item %s requires output.path", group.Group, item.ID)
+			}
+			normalized := filepath.ToSlash(strings.TrimSpace(path))
+			if strings.HasPrefix(normalized, "/") {
+				return fmt.Errorf("E_SCHEMA_INVALID: artifacts.files group %s item %s output.path must be relative", group.Group, item.ID)
+			}
+			if strings.HasPrefix(normalized, "files/") {
+				return fmt.Errorf("E_SCHEMA_INVALID: artifacts.files group %s item %s output.path must be relative to files root", group.Group, item.ID)
+			}
+		}
+	}
+	for _, group := range wf.Artifacts.Packages {
+		for _, target := range group.Targets {
+			if strings.TrimSpace(target.OSFamily) == "" || strings.TrimSpace(target.Release) == "" {
+				return fmt.Errorf("E_SCHEMA_INVALID: artifacts.packages group %s targets require osFamily and release", group.Group)
+			}
+		}
+	}
+	return nil
+}
+
+func validateRoleKinds(wf *config.Workflow) error {
+	role := strings.TrimSpace(wf.Role)
+	for _, step := range workflowSteps(wf) {
+		if workflowexec.StepAllowedForRole(role, step.Kind, step.Spec) {
+			continue
+		}
+		return fmt.Errorf("E_KIND_ROLE_MISMATCH: step %s (%s) is not supported for role %s", step.ID, step.Kind, role)
+	}
 	return nil
 }
 
@@ -466,17 +517,8 @@ func isReservedRuntimeVar(runtimeVar string) bool {
 	return trimmed == "host" || strings.HasPrefix(trimmed, "host.")
 }
 
-func isValidOutputKey(kind, outputKey string) bool {
-	allowed, ok := registerOutputContract[kind]
-	if !ok {
-		return false
-	}
-	for _, v := range allowed {
-		if v == outputKey {
-			return true
-		}
-	}
-	return false
+func isValidOutputKey(kind string, spec map[string]any, outputKey string) bool {
+	return workflowexec.StepHasOutput(kind, spec, outputKey)
 }
 
 func workflowSteps(wf *config.Workflow) []config.Step {
@@ -542,5 +584,26 @@ func normalizeYAMLForJSON(value any) (any, error) {
 		return out, nil
 	default:
 		return typed, nil
+	}
+}
+
+func normalizeWorkflowSchemaKinds(value any) {
+	switch typed := value.(type) {
+	case map[string]any:
+		if rawKind, ok := typed["kind"].(string); ok {
+			spec, _ := typed["spec"].(map[string]any)
+			canonicalKind, normalizedSpec := workflowexec.NormalizeLegacyKindSpec(rawKind, spec)
+			typed["kind"] = canonicalKind
+			if normalizedSpec != nil {
+				typed["spec"] = normalizedSpec
+			}
+		}
+		for _, nested := range typed {
+			normalizeWorkflowSchemaKinds(nested)
+		}
+	case []any:
+		for _, nested := range typed {
+			normalizeWorkflowSchemaKinds(nested)
+		}
 	}
 }

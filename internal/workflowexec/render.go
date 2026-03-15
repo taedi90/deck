@@ -27,6 +27,28 @@ func RenderSpec(spec map[string]any, wf *config.Workflow, runtimeVars map[string
 	return renderMap(spec, ctx)
 }
 
+func RenderSpecWithExtra(spec map[string]any, wf *config.Workflow, runtimeVars map[string]any, ctxData map[string]any, extra map[string]any) (map[string]any, error) {
+	vars := map[string]any{}
+	if wf != nil && wf.Vars != nil {
+		vars = wf.Vars
+	}
+	ctx := map[string]any{
+		"vars":    vars,
+		"context": cloneMap(ctxData),
+		"runtime": runtimeVars,
+	}
+	if ctx["context"] == nil {
+		ctx["context"] = map[string]any{}
+	}
+	for key, value := range extra {
+		ctx[key] = value
+	}
+	if spec == nil {
+		return map[string]any{}, nil
+	}
+	return renderMap(spec, ctx)
+}
+
 func renderMap(input map[string]any, ctx map[string]any) (map[string]any, error) {
 	out := make(map[string]any, len(input))
 	for k, v := range input {

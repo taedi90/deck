@@ -606,6 +606,7 @@ func refreshRepoMetadata(spec map[string]any, format string) error {
 		repoConfigFormatToPackageManager(format),
 		clean,
 		true,
+		packageRepoPolicy{},
 		commandTimeoutWithDefault(spec, defaultPackageCacheTimeout),
 		repoConfigRunTimedCommand,
 		"repo metadata refresh",

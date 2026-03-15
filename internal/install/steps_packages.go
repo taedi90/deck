@@ -80,6 +80,21 @@ func runInstallPackages(ctx context.Context, spec map[string]any) error {
 	}
 
 	args := []string{"install", "-y"}
+	policy := packageRepoPolicyFromSpec(spec)
+	cleanup := func() {}
+	if installer == "apt-get" {
+		repoArgs, repoCleanup, err := aptRepoArgs(policy)
+		if err != nil {
+			return fmt.Errorf("%s: %w", errCodeInstallPkgSourceInvalid, err)
+		}
+		if repoCleanup != nil {
+			cleanup = repoCleanup
+		}
+		args = append(args, repoArgs...)
+	} else {
+		args = append(args, dnfRepoArgs(policy)...)
+	}
+	defer cleanup()
 	args = append(args, pkgs...)
 	if err := runTimedCommandWithContext(ctx, installer, args, commandTimeoutWithDefault(spec, 10*time.Minute)); err != nil {
 		if errors.Is(err, errStepCommandTimeout) || errors.Is(err, context.DeadlineExceeded) {

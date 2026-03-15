@@ -19,7 +19,7 @@ var (
 	tarballWriteToFileFn  = tarball.WriteToFile
 )
 
-func runDownloadImages(ctx context.Context, runner CommandRunner, bundleRoot string, spec map[string]any, opts RunOptions) ([]string, error) {
+func runImageDownload(ctx context.Context, runner CommandRunner, bundleRoot string, spec map[string]any, opts RunOptions) ([]string, error) {
 	_ = runner
 	output := mapValue(spec, "output")
 	dir := stringValue(output, "dir")
@@ -29,7 +29,7 @@ func runDownloadImages(ctx context.Context, runner CommandRunner, bundleRoot str
 
 	images := stringSlice(spec["images"])
 	if len(images) == 0 {
-		return nil, fmt.Errorf("DownloadImages requires images")
+		return nil, fmt.Errorf("image action download requires images")
 	}
 
 	backend := mapValue(spec, "backend")
