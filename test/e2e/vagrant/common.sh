@@ -455,10 +455,11 @@ prepare_shared_bundle_cache() {
   rm -rf "${PREPARED_BUNDLE_WORK_ABS}" "${PREPARED_BUNDLE_STAGE_ABS}"
   mkdir -p "${PREPARED_BUNDLE_WORKFLOW_DIR}" "${PREPARED_BUNDLE_FRAGMENT_DIR}"
   deck_vagrant_prepare_workflow_bundle
-  (cd "${PREPARED_BUNDLE_PACK_ROOT}" && "${host_bin}" prepare --out "${PREPARED_BUNDLE_TAR}" \
+  (cd "${PREPARED_BUNDLE_PACK_ROOT}" && "${host_bin}" prepare --root outputs \
     --var "kubernetesVersion=v1.30.1" \
     --var "arch=${arch}" \
     --var "backendRuntime=${backend_runtime}")
+  (cd "${PREPARED_BUNDLE_PACK_ROOT}" && "${host_bin}" bundle build --root . --out "${PREPARED_BUNDLE_TAR}")
 
   mkdir -p "${PREPARED_BUNDLE_STAGE_ABS}"
   tar -xf "${PREPARED_BUNDLE_TAR}" -C "${PREPARED_BUNDLE_STAGE_ABS}" --strip-components=1
@@ -477,6 +478,7 @@ prepare_rsync_stage_root() {
   local dispatcher_stage_path="${DECK_VAGRANT_VM_DISPATCHER_STAGED_PATH:-test/e2e/vagrant/run-scenario-vm.sh}"
   local dispatcher_scenario_helper_source="${ROOT_DIR}/test/e2e/vagrant/run-scenario-vm-scenario.sh"
   local dispatcher_scenario_helper_stage_path="test/e2e/vagrant/run-scenario-vm-scenario.sh"
+  local include_legacy_workflows="0"
   local rsync_key=""
 
   rsync_key="$(python3 - <<'PY' "${ROOT_DIR}" "${deck_bin_source}" "${DECK_VAGRANT_VM_SCENARIO_SCRIPT}" "${dispatcher_source}" "${dispatcher_scenario_helper_source}" "${PREPARED_BUNDLE_ABS}"

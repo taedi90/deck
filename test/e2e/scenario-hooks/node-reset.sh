@@ -90,7 +90,7 @@ node_reset_apply_worker_join_once() {
   local server_no_scheme="$4"
   local log_path="$5"
   clear_install_state
-  sudo -n "${DECK_BIN}" apply --file "${workflow_url}" --phase install \
+  sudo -n "${DECK_BIN}" apply --file "${workflow_url}" \
     --var "serverURL=${server_no_scheme}" \
     --var "registryHost=${server_no_scheme}" \
     --var "release=${release}" \
@@ -138,7 +138,7 @@ node_reset_apply_worker_lifecycle() {
   node_reset_apply_worker_join_once "${workflow_url}" "${release}" "${os_family}" "${server_no_scheme}" "${CASE_DIR}/05-apply-${ROLE}.log"
   printf '%s\n' "ok" > "${ART_DIR}/${ROLE}-apply-done.txt"
   clear_install_state
-  sudo -n "${DECK_BIN}" apply --file "${node_reset_url}" --phase install \
+  sudo -n "${DECK_BIN}" apply --file "${node_reset_url}" \
     --var "allowDestructive=true" \
     --var "resetReason=${reset_reason}" \
     --var "resetStatePath=${REPORT_DIR}/reset-state.txt" > "${CASE_DIR}/05-reset-${ROLE}.log" 2>&1

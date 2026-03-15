@@ -1148,8 +1148,8 @@ func TestRun_KubeadmRealModeSupportsImagePullAndConfigWrite(t *testing.T) {
 	if !strings.Contains(logText, "config images pull --kubernetes-version v1.30.14 --cri-socket unix:///run/containerd/containerd.sock") {
 		t.Fatalf("expected kubeadm image pull invocation, got %q", logText)
 	}
-	if !strings.Contains(logText, "init --config "+configPath+" --apiserver-advertise-address 10.20.30.40 --pod-network-cidr 10.244.0.0/16 --cri-socket unix:///run/containerd/containerd.sock --kubernetes-version v1.30.14 --ignore-preflight-errors Swap --skip-phases=addon/kube-proxy") {
-		t.Fatalf("expected kubeadm init args with first-class fields, got %q", logText)
+	if !strings.Contains(logText, "init --config "+configPath+" --ignore-preflight-errors Swap --skip-phases=addon/kube-proxy") {
+		t.Fatalf("expected kubeadm init args with config file only, got %q", logText)
 	}
 }
 

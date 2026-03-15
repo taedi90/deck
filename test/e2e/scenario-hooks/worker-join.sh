@@ -7,7 +7,7 @@ worker_join_apply_once() {
   local server_no_scheme="$4"
   local log_path="$5"
   clear_install_state
-  sudo -n "${DECK_BIN}" apply --file "${workflow_url}" --phase install \
+  sudo -n "${DECK_BIN}" apply --file "${workflow_url}" \
     --var "serverURL=${server_no_scheme}" \
     --var "registryHost=${server_no_scheme}" \
     --var "release=${release}" \

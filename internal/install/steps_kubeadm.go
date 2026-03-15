@@ -135,18 +135,19 @@ func runKubeadmInitReal(parent context.Context, spec map[string]any) error {
 	args := []string{"init"}
 	if configFile != "" {
 		args = append(args, "--config", configFile)
-	}
-	if advertiseAddress != "" {
-		args = append(args, "--apiserver-advertise-address", advertiseAddress)
-	}
-	if podCIDR := stringValue(spec, "podNetworkCIDR"); podCIDR != "" {
-		args = append(args, "--pod-network-cidr", podCIDR)
-	}
-	if criSocket != "" {
-		args = append(args, "--cri-socket", criSocket)
-	}
-	if kubernetesVersion != "" {
-		args = append(args, "--kubernetes-version", kubernetesVersion)
+	} else {
+		if advertiseAddress != "" {
+			args = append(args, "--apiserver-advertise-address", advertiseAddress)
+		}
+		if podCIDR := stringValue(spec, "podNetworkCIDR"); podCIDR != "" {
+			args = append(args, "--pod-network-cidr", podCIDR)
+		}
+		if criSocket != "" {
+			args = append(args, "--cri-socket", criSocket)
+		}
+		if kubernetesVersion != "" {
+			args = append(args, "--kubernetes-version", kubernetesVersion)
+		}
 	}
 	if ignore := stringSlice(spec["ignorePreflightErrors"]); len(ignore) > 0 {
 		args = append(args, "--ignore-preflight-errors", strings.Join(ignore, ","))

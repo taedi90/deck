@@ -317,7 +317,7 @@ apply_control_plane_workflow() {
   CONTROL_PLANE_WORKFLOW_URL="${SERVER_URL}/workflows/scenarios/control-plane-bootstrap.yaml"
   local server_no_scheme="${SERVER_URL#http://}"
   server_no_scheme="${server_no_scheme#https://}"
-  sudo -n "${DECK_BIN}" apply --file "${CONTROL_PLANE_WORKFLOW_URL}" --phase install \
+  sudo -n "${DECK_BIN}" apply --file "${CONTROL_PLANE_WORKFLOW_URL}" \
     --var "serverURL=${server_no_scheme}" \
     --var "registryHost=${server_no_scheme}" \
     --var "release=${OFFLINE_RELEASE_CONTROL_PLANE}" \
@@ -448,7 +448,7 @@ apply_worker_join_once() {
   local server_no_scheme="$4"
   local log_path="$5"
   clear_install_state
-  sudo -n "${DECK_BIN}" apply --file "${workflow_url}" --phase install \
+  sudo -n "${DECK_BIN}" apply --file "${workflow_url}" \
     --var "serverURL=${server_no_scheme}" \
     --var "registryHost=${server_no_scheme}" \
     --var "release=${release}" \
@@ -504,7 +504,7 @@ apply_node_reset_worker_lifecycle() {
   printf '%s\n' "ok" > "${ART_DIR}/${ROLE}-apply-done.txt"
 
   clear_install_state
-  sudo -n "${DECK_BIN}" apply --file "${node_reset_url}" --phase install \
+  sudo -n "${DECK_BIN}" apply --file "${node_reset_url}" \
     --var "allowDestructive=true" \
     --var "resetReason=${reset_reason}" \
     --var "resetStatePath=${REPORT_DIR}/reset-state.txt" > "${CASE_DIR}/05-reset-${ROLE}.log" 2>&1
@@ -615,9 +615,9 @@ scenario_action_prepare() {
   require_supported_scenario
   source_scenario_vm_helper
   case "${E2E_SCENARIO}" in
-    k8s-control-plane-bootstrap) bootstrap_prepare ;;
-    k8s-worker-join) worker_join_prepare ;;
-    k8s-node-reset) node_reset_prepare ;;
+    control-plane-bootstrap|k8s-control-plane-bootstrap) bootstrap_prepare ;;
+    worker-join|k8s-worker-join) worker_join_prepare ;;
+    node-reset|k8s-node-reset) node_reset_prepare ;;
   esac
 }
 
@@ -625,9 +625,9 @@ scenario_action_apply() {
   require_supported_scenario
   source_scenario_vm_helper
   case "${E2E_SCENARIO}" in
-    k8s-control-plane-bootstrap) bootstrap_apply ;;
-    k8s-worker-join) worker_join_apply ;;
-    k8s-node-reset) node_reset_apply ;;
+    control-plane-bootstrap|k8s-control-plane-bootstrap) bootstrap_apply ;;
+    worker-join|k8s-worker-join) worker_join_apply ;;
+    node-reset|k8s-node-reset) node_reset_apply ;;
   esac
 }
 
@@ -637,8 +637,8 @@ scenario_action_verify() {
   local stage
   stage="$(resolve_verify_stage "${1:-}")"
   case "${E2E_SCENARIO}" in
-    k8s-control-plane-bootstrap) bootstrap_verify "${stage}" ;;
-    k8s-worker-join) worker_join_verify "${stage}" ;;
-    k8s-node-reset) node_reset_verify "${stage}" ;;
+    control-plane-bootstrap|k8s-control-plane-bootstrap) bootstrap_verify "${stage}" ;;
+    worker-join|k8s-worker-join) worker_join_verify "${stage}" ;;
+    node-reset|k8s-node-reset) node_reset_verify "${stage}" ;;
   esac
 }
