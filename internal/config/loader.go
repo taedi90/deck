@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -75,7 +76,7 @@ func loadWorkflowWithImports(ctx context.Context, workflowBytes []byte, origin w
 	defer delete(visiting, originKey)
 
 	var wf Workflow
-	if err := yaml.Unmarshal(workflowBytes, &wf); err != nil {
+	if err := unmarshalYAMLStrict(workflowBytes, &wf); err != nil {
 		return nil, nil, fmt.Errorf("parse yaml: %w", err)
 	}
 	if workflowHasMultipleModes(&wf) {
@@ -90,31 +91,11 @@ func loadWorkflowWithImports(ctx context.Context, workflowBytes []byte, origin w
 		return nil, nil, err
 	}
 
-	aggregated := &Workflow{}
-	for _, importRef := range wf.Imports {
-		importBytes, importOrigin, err := loadComponentImportSource(ctx, origin, importRef)
-		if err != nil {
-			return nil, nil, err
-		}
-		importedWorkflow, _, err := loadWorkflowWithImports(ctx, importBytes, importOrigin, visiting)
-		if err != nil {
-			return nil, nil, err
-		}
-		if err := mergeWorkflow(aggregated, importedWorkflow, fmt.Sprintf("import %q", importRef)); err != nil {
-			return nil, nil, err
-		}
-	}
-
-	wf.Imports = nil
-	if err := mergeWorkflow(aggregated, &wf, "workflow"); err != nil {
-		return nil, nil, err
-	}
-
-	resolvedBytes, err := canonicalWorkflowBytes(aggregated)
+	resolvedBytes, err := canonicalWorkflowBytes(&wf)
 	if err != nil {
 		return nil, nil, err
 	}
-	return aggregated, resolvedBytes, nil
+	return &wf, resolvedBytes, nil
 }
 
 func expandPhaseImports(ctx context.Context, wf *Workflow, origin workflowOrigin, visiting map[string]bool) error {
@@ -136,11 +117,7 @@ func expandPhaseImports(ctx context.Context, wf *Workflow, origin workflowOrigin
 			if err != nil {
 				return err
 			}
-			importedWorkflow, _, err := loadWorkflowWithImports(ctx, importBytes, importOrigin, visiting)
-			if err != nil {
-				return err
-			}
-			phaseSteps, err := extractPhaseImportSteps(importedWorkflow, phase.Name, pathRef)
+			phaseSteps, err := loadComponentFragment(ctx, importBytes, importOrigin, visiting, pathRef)
 			if err != nil {
 				return err
 			}
@@ -155,32 +132,26 @@ func expandPhaseImports(ctx context.Context, wf *Workflow, origin workflowOrigin
 	return nil
 }
 
-func extractPhaseImportSteps(imported *Workflow, targetPhaseName string, sourceRef string) ([]Step, error) {
-	if imported == nil {
-		return nil, fmt.Errorf("phase import %q is nil", sourceRef)
+type componentFragment struct {
+	Steps []Step `yaml:"steps"`
+}
+
+func loadComponentFragment(ctx context.Context, workflowBytes []byte, origin workflowOrigin, visiting map[string]bool, sourceRef string) ([]Step, error) {
+	originKey := workflowOriginKey(origin)
+	if visiting[originKey] {
+		return nil, fmt.Errorf("workflow import cycle detected at %s", originKey)
 	}
-	if len(imported.Steps) > 0 {
-		steps := append([]Step(nil), imported.Steps...)
-		return steps, nil
+	visiting[originKey] = true
+	defer delete(visiting, originKey)
+
+	var fragment componentFragment
+	if err := unmarshalYAMLStrict(workflowBytes, &fragment); err != nil {
+		return nil, fmt.Errorf("parse component fragment %q: %w", sourceRef, err)
 	}
-	if len(imported.Phases) == 0 {
+	if len(fragment.Steps) == 0 {
 		return nil, fmt.Errorf("phase import %q does not contain steps", sourceRef)
 	}
-
-	matched := make([]Step, 0)
-	for _, p := range imported.Phases {
-		if p.Name == targetPhaseName {
-			matched = append(matched, p.Steps...)
-		}
-	}
-	if len(matched) > 0 {
-		return matched, nil
-	}
-	if len(imported.Phases) == 1 {
-		steps := append([]Step(nil), imported.Phases[0].Steps...)
-		return steps, nil
-	}
-	return nil, fmt.Errorf("phase import %q has phases but none match %q", sourceRef, targetPhaseName)
+	return append([]Step(nil), fragment.Steps...), nil
 }
 
 func combineWhen(outer string, inner string) string {
@@ -195,84 +166,10 @@ func combineWhen(outer string, inner string) string {
 	return fmt.Sprintf("(%s) && (%s)", outer, inner)
 }
 
-func mergeWorkflow(target *Workflow, src *Workflow, sourceLabel string) error {
-	if target == nil || src == nil {
-		return nil
-	}
-
-	srcRole := strings.TrimSpace(src.Role)
-	if srcRole != "" {
-		targetRole := strings.TrimSpace(target.Role)
-		if targetRole == "" {
-			target.Role = srcRole
-		} else if targetRole != srcRole {
-			return fmt.Errorf("workflow role mismatch in %s: expected %s, got %s", sourceLabel, targetRole, srcRole)
-		}
-	}
-
-	srcVersion := strings.TrimSpace(src.Version)
-	if srcVersion != "" {
-		targetVersion := strings.TrimSpace(target.Version)
-		if targetVersion == "" {
-			target.Version = srcVersion
-		} else if targetVersion != srcVersion {
-			return fmt.Errorf("workflow version mismatch in %s: expected %s, got %s", sourceLabel, targetVersion, srcVersion)
-		}
-	}
-
-	hasSrcPhases := len(src.Phases) > 0
-	hasSrcSteps := len(src.Steps) > 0
-	hasSrcArtifacts := src.Artifacts != nil && (len(src.Artifacts.Files) > 0 || len(src.Artifacts.Images) > 0 || len(src.Artifacts.Packages) > 0)
-	if modeCount(hasSrcArtifacts, hasSrcPhases, hasSrcSteps) > 1 {
-		return fmt.Errorf("workflow cannot set both phases and steps in %s", sourceLabel)
-	}
-	if hasSrcArtifacts && (len(target.Phases) > 0 || len(target.Steps) > 0) {
-		return fmt.Errorf("workflow phase/step mode mismatch in %s: cannot merge artifacts into steps workflow", sourceLabel)
-	}
-	if hasSrcPhases && len(target.Steps) > 0 {
-		return fmt.Errorf("workflow phase/step mode mismatch in %s: cannot merge phases into steps workflow", sourceLabel)
-	}
-	if hasSrcSteps && len(target.Phases) > 0 {
-		return fmt.Errorf("workflow phase/step mode mismatch in %s: cannot merge steps into phases workflow", sourceLabel)
-	}
-	if hasSrcPhases && target.Artifacts != nil {
-		return fmt.Errorf("workflow phase/step mode mismatch in %s: cannot merge phases into artifacts workflow", sourceLabel)
-	}
-	if hasSrcSteps && target.Artifacts != nil {
-		return fmt.Errorf("workflow phase/step mode mismatch in %s: cannot merge steps into artifacts workflow", sourceLabel)
-	}
-	if hasSrcArtifacts {
-		if target.Artifacts == nil {
-			target.Artifacts = &ArtifactsSpec{}
-		}
-		target.Artifacts.Files = append(target.Artifacts.Files, src.Artifacts.Files...)
-		target.Artifacts.Images = append(target.Artifacts.Images, src.Artifacts.Images...)
-		target.Artifacts.Packages = append(target.Artifacts.Packages, src.Artifacts.Packages...)
-	}
-	if hasSrcPhases {
-		for _, srcPhase := range src.Phases {
-			merged := false
-			for i := range target.Phases {
-				if target.Phases[i].Name == srcPhase.Name {
-					target.Phases[i].Steps = append(target.Phases[i].Steps, srcPhase.Steps...)
-					merged = true
-					break
-				}
-			}
-			if !merged {
-				target.Phases = append(target.Phases, srcPhase)
-			}
-		}
-	}
-	if hasSrcSteps {
-		target.Steps = append(target.Steps, src.Steps...)
-	}
-
-	if target.Vars == nil {
-		target.Vars = map[string]any{}
-	}
-	mergeVars(target.Vars, src.Vars)
-	return nil
+func unmarshalYAMLStrict(content []byte, target any) error {
+	dec := yaml.NewDecoder(bytes.NewReader(content))
+	dec.KnownFields(true)
+	return dec.Decode(target)
 }
 
 func workflowOriginKey(origin workflowOrigin) string {

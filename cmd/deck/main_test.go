@@ -1051,10 +1051,7 @@ func TestInit(t *testing.T) {
 			filepath.Join("workflows", "scenarios", "prepare.yaml"): strings.Join([]string{
 				"role: prepare",
 				"version: v1alpha1",
-				"phases:",
-				"  - name: prepare",
-				"    imports:",
-				"      - path: example-prepare.yaml",
+				"artifacts: {}",
 				"",
 			}, "\n"),
 			filepath.Join("workflows", "scenarios", "apply.yaml"): strings.Join([]string{
@@ -1066,8 +1063,7 @@ func TestInit(t *testing.T) {
 				"      - path: example-apply.yaml",
 				"",
 			}, "\n"),
-			filepath.Join("workflows", "components", "example-prepare.yaml"): "role: prepare\nversion: v1alpha1\nsteps: []\n",
-			filepath.Join("workflows", "components", "example-apply.yaml"):   "role: apply\nversion: v1alpha1\nsteps: []\n",
+			filepath.Join("workflows", "components", "example-apply.yaml"): "steps: []\n",
 			".gitignore":  strings.Join([]string{"/.deck/", "/deck", "/outputs/", "*.tar", ""}, "\n"),
 			".deckignore": strings.Join([]string{".git/", ".gitignore", ".deckignore", "/*.tar", ""}, "\n"),
 			filepath.Join("outputs", "files", ".keep"):    "",

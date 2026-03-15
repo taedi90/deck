@@ -1,5 +1,3 @@
-role: apply
-version: v1alpha1
 steps:
   - id: bootstrap-reset-preflight
     kind: Kubeadm

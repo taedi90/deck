@@ -1,24 +1,20 @@
-role: apply
-version: v1alpha1
-phases:
-  - name: install
-    steps:
-      - id: apply-offline-repo-config-rhel
-        kind: Repository
-        spec:
-          action: configure
-          format: yum
-          path: /etc/yum.repos.d/deck-offline.repo
-          replaceExisting: true
-          repositories:
-            - id: deck-os
-              name: deck-os
-              baseurl: http://{{ .vars.serverURL  }}/packages/yum/{{ .vars.release  }}
-              enabled: true
-              gpgcheck: false
-      - id: refresh-dnf-package-cache
-        kind: PackageCache
-        spec:
-          manager: dnf
-          clean: true
-          update: true
+steps:
+  - id: apply-offline-repo-config-rhel
+    kind: Repository
+    spec:
+      action: configure
+      format: yum
+      path: /etc/yum.repos.d/deck-offline.repo
+      replaceExisting: true
+      repositories:
+        - id: deck-os
+          name: deck-os
+          baseurl: http://{{ .vars.serverURL  }}/packages/yum/{{ .vars.release  }}
+          enabled: true
+          gpgcheck: false
+  - id: refresh-dnf-package-cache
+    kind: PackageCache
+    spec:
+      manager: dnf
+      clean: true
+      update: true

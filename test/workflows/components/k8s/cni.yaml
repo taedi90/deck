@@ -1,54 +1,50 @@
-role: apply
-version: v1alpha1
-phases:
-  - name: install
-    steps:
-      - id: setup-basic-cni
-        kind: Directory
-        spec:
-          path: /etc/cni/net.d
-      - id: write-basic-cni-config
-        kind: File
-        spec:
-          action: install
-          path: /etc/cni/net.d/10-deck-bridge.conflist
-          content: |
+steps:
+  - id: setup-basic-cni
+    kind: Directory
+    spec:
+      path: /etc/cni/net.d
+  - id: write-basic-cni-config
+    kind: File
+    spec:
+      action: install
+      path: /etc/cni/net.d/10-deck-bridge.conflist
+      content: |
+        {
+          "cniVersion": "0.4.0",
+          "name": "deck-bridge",
+          "plugins": [
             {
-              "cniVersion": "0.4.0",
-              "name": "deck-bridge",
-              "plugins": [
-                {
-                  "type": "bridge",
-                  "bridge": "cni0",
-                  "isGateway": true,
-                  "ipMasq": true,
-                  "promiscMode": true,
-                  "ipam": {
-                    "type": "host-local",
-                    "subnet": "10.244.0.0/16",
-                    "routes": [{"dst": "0.0.0.0/0"}]
-                  }
-                },
-                 {
-                   "type": "portmap",
-                   "capabilities": {"portMappings": true}
-                 }
-               ]
+              "type": "bridge",
+              "bridge": "cni0",
+              "isGateway": true,
+              "ipMasq": true,
+              "promiscMode": true,
+              "ipam": {
+                "type": "host-local",
+                "subnet": "10.244.0.0/16",
+                "routes": [{"dst": "0.0.0.0/0"}]
+              }
+            },
+             {
+               "type": "portmap",
+               "capabilities": {"portMappings": true}
              }
-      - id: ensure-cni-bin-path
-        kind: Command
-        spec:
-          command:
-            - bash
-            - -lc
-            - |
-              set -euo pipefail
-              if [[ -d /usr/lib/cni ]] && [[ ! -e /opt/cni/bin ]]; then
-                mkdir -p /opt/cni
-                ln -s /usr/lib/cni /opt/cni/bin
-              fi
-      - id: restart-kubelet-after-cni
-        kind: Service
-        spec:
-          name: kubelet
-          state: restarted
+           ]
+         }
+  - id: ensure-cni-bin-path
+    kind: Command
+    spec:
+      command:
+        - bash
+        - -lc
+        - |
+          set -euo pipefail
+          if [[ -d /usr/lib/cni ]] && [[ ! -e /opt/cni/bin ]]; then
+            mkdir -p /opt/cni
+            ln -s /usr/lib/cni /opt/cni/bin
+          fi
+  - id: restart-kubelet-after-cni
+    kind: Service
+    spec:
+      name: kubelet
+      state: restarted

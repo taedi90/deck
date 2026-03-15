@@ -74,7 +74,7 @@ deck apply --session session-1
 
 - `prepare` expects a workflow tree rooted at `workflows/` with entrypoints under `workflows/scenarios/`.
 - scenario entrypoints live under `workflows/scenarios/`
-- workflow imports resolve from `workflows/components/` using component-relative paths
+- phase imports resolve from `workflows/components/` using component-relative paths
 - `apply` runs all phases by default when phases are used; `--phase` narrows execution to one phase.
 - `bundle build` archives the canonical workspace bundle inputs: `deck`, `workflows/`, `outputs/`, and `.deck/manifest.json`, and respects `.deckignore` within those paths.
 - Help text is shown on stdout only when you request it with `--help` or `help`.

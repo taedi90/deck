@@ -7,7 +7,6 @@
 - `role`: required, either `prepare` or `apply`
 - `version`: currently `v1alpha1`
 - `vars`: optional variable map
-- `imports`: optional workflow imports
 - `artifacts`: declarative prepare artifact inventory for `role: prepare`
 - `steps`: top-level step list
 - `phases`: named phase list for more structured execution
@@ -17,9 +16,10 @@ The schema allows one execution mode at a time:
 - `artifacts` for declarative prepare workflows
 - top-level `steps`
 - named `phases`
-- imported workflow fragments that resolve to one of those modes
 
-Workflow imports and phase imports resolve from `workflows/components/`. Write component-relative paths such as `k8s/prereq.yaml`, not `../components/k8s/prereq.yaml`.
+Phase imports resolve from `workflows/components/`. Write component-relative paths such as `k8s/prereq.yaml`, not `../components/k8s/prereq.yaml`.
+
+`workflows/components/` files are step fragments. They contain only `steps:` and may reference shared `vars.*`, but shared defaults should stay in `workflows/vars.yaml` or the importing scenario `vars:` block.
 
 ## Minimal workflow
 

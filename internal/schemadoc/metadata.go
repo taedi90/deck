@@ -541,7 +541,6 @@ func WorkflowMeta() PageMetadata {
 		FieldDocs: map[string]FieldDoc{
 			"role":             {Description: "Workflow role. `prepare` builds offline artifacts; `apply` changes the local node.", Example: "apply"},
 			"artifacts":        {Description: "Declarative prepare inventory that replaces legacy prepare download steps.", Example: "{files:[...],images:[...],packages:[...]}"},
-			"imports":          {Description: "Scenario or component imports resolved relative to the workflow/component model.", Example: "[common/base.yaml]"},
 			"phases":           {Description: "Ordered execution phases. Each phase can contain imports, steps, or both.", Example: "[{name:install,steps:[...]}]"},
 			"steps":            {Description: "Flat step list for workflows that do not need named phases.", Example: "[{id:configure-runtime,kind:Containerd,spec:{...}}]"},
 			"steps[].kind":     {Description: "Typed step kind selected from the shipped public step inventory.", Example: "File"},
@@ -551,11 +550,12 @@ func WorkflowMeta() PageMetadata {
 			"steps[].timeout":  {Description: "Maximum duration for the step. Accepts Go duration strings.", Example: "5m"},
 			"steps[].register": {Description: "Map of variable names to step output keys. Exported values are available to later steps as runtime vars.", Example: "{joinCmd: joinCommand}"},
 			"phases[].name":    {Description: "Stable phase name used for ordering and selective execution.", Example: "install"},
-			"phases[].imports": {Description: "Imports that expand into this phase before step execution.", Example: "[{path:k8s/containerd-kubelet.yaml}]"},
+			"phases[].imports": {Description: "Component fragment imports that expand into this phase before step execution.", Example: "[{path:k8s/containerd-kubelet.yaml}]"},
 		},
 		Notes: []string{
-			"A workflow must define at least one of `artifacts`, `imports`, `phases`, or `steps`.",
+			"A workflow must define at least one of `artifacts`, `phases`, or `steps`.",
 			"A workflow cannot define both top-level `phases` and top-level `steps` at the same time.",
+			"Imports are only supported under `phases[].imports` and resolve from `workflows/components/`.",
 			"Each step still validates against its own kind-specific schema after the top-level workflow schema passes.",
 		},
 	}

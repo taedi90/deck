@@ -5,6 +5,7 @@
 ## Entry points
 
 - `../../schemas/deck-workflow.schema.json`: top-level workflow schema
+- `../../schemas/deck-component-fragment.schema.json`: component fragment schema
 - `../../schemas/deck-tooldefinition.schema.json`: tool definition schema
 - `../../schemas/tools/*.schema.json`: per-step-kind schemas
 
@@ -14,9 +15,17 @@ The workflow schema currently enforces:
 
 - required `role` and `version`
 - `role` must be `prepare` or `apply`
-- either `artifacts`, `steps`, `phases`, or `imports` must be present
+- either `artifacts`, `steps`, or `phases` must be present
 - a step must include `id`, `kind`, and `spec`
 - optional `when`, `retry`, `timeout`, and `register`
+
+## Component fragment schema highlights
+
+The component fragment schema enforces:
+
+- `steps` is required
+- `role`, `version`, `vars`, `phases`, `artifacts`, and top-level `imports` are not allowed
+- component fragments are imported only through `phases[].imports`
 
 ## Supported step schemas
 

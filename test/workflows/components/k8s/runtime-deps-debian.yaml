@@ -1,94 +1,90 @@
-role: apply
-version: v1alpha1
-phases:
-  - name: install
-    steps:
-      - id: install-runtime-deps-debian
-        kind: Artifacts
-        timeout: 20m
-        spec:
-          artifacts:
-            - source:
-                amd64:
-                  url: http://{{ .vars.serverURL }}/files/bin/linux/amd64/containerd.tar.gz
-                arm64:
-                  url: http://{{ .vars.serverURL }}/files/bin/linux/arm64/containerd.tar.gz
-              skipIfPresent:
-                path: /usr/local/bin/containerd
-                executable: true
-              extract:
-                destination: /usr/local
-            - source:
-                amd64:
-                  path: /usr/local/bin/containerd
-                arm64:
-                  path: /usr/local/bin/containerd
-              install:
-                path: /usr/bin/containerd
-                mode: "0755"
-            - source:
-                amd64:
-                  path: /usr/local/bin/ctr
-                arm64:
-                  path: /usr/local/bin/ctr
-              install:
-                path: /usr/bin/ctr
-                mode: "0755"
-            - source:
-                amd64:
-                  path: /usr/local/bin/containerd-shim-runc-v2
-                arm64:
-                  path: /usr/local/bin/containerd-shim-runc-v2
-              install:
-                path: /usr/bin/containerd-shim-runc-v2
-                mode: "0755"
-            - source:
-                amd64:
-                  url: http://{{ .vars.serverURL }}/files/bin/linux/amd64/runc
-                arm64:
-                  url: http://{{ .vars.serverURL }}/files/bin/linux/arm64/runc
-              skipIfPresent:
-                path: /usr/local/sbin/runc
-                executable: true
-              install:
-                path: /usr/local/sbin/runc
-                mode: "0755"
-            - source:
-                amd64:
-                  url: http://{{ .vars.serverURL }}/files/bin/linux/amd64/cni-plugins.tgz
-                arm64:
-                  url: http://{{ .vars.serverURL }}/files/bin/linux/arm64/cni-plugins.tgz
-              extract:
-                destination: /opt/cni/bin
-      - id: symlink-runc-debian
-        kind: Symlink
-        spec:
-          path: /usr/bin/runc
-          target: /usr/local/sbin/runc
-          force: true
-      - id: write-containerd-unit-debian
-        kind: SystemdUnit
-        spec:
-          path: /etc/systemd/system/containerd.service
-          mode: "0644"
-          content: |
-            [Unit]
-            Description=containerd container runtime
-            Documentation=https://containerd.io
-            After=network.target local-fs.target
+steps:
+  - id: install-runtime-deps-debian
+    kind: Artifacts
+    timeout: 20m
+    spec:
+      artifacts:
+        - source:
+            amd64:
+              url: http://{{ .vars.serverURL }}/files/bin/linux/amd64/containerd.tar.gz
+            arm64:
+              url: http://{{ .vars.serverURL }}/files/bin/linux/arm64/containerd.tar.gz
+          skipIfPresent:
+            path: /usr/local/bin/containerd
+            executable: true
+          extract:
+            destination: /usr/local
+        - source:
+            amd64:
+              path: /usr/local/bin/containerd
+            arm64:
+              path: /usr/local/bin/containerd
+          install:
+            path: /usr/bin/containerd
+            mode: "0755"
+        - source:
+            amd64:
+              path: /usr/local/bin/ctr
+            arm64:
+              path: /usr/local/bin/ctr
+          install:
+            path: /usr/bin/ctr
+            mode: "0755"
+        - source:
+            amd64:
+              path: /usr/local/bin/containerd-shim-runc-v2
+            arm64:
+              path: /usr/local/bin/containerd-shim-runc-v2
+          install:
+            path: /usr/bin/containerd-shim-runc-v2
+            mode: "0755"
+        - source:
+            amd64:
+              url: http://{{ .vars.serverURL }}/files/bin/linux/amd64/runc
+            arm64:
+              url: http://{{ .vars.serverURL }}/files/bin/linux/arm64/runc
+          skipIfPresent:
+            path: /usr/local/sbin/runc
+            executable: true
+          install:
+            path: /usr/local/sbin/runc
+            mode: "0755"
+        - source:
+            amd64:
+              url: http://{{ .vars.serverURL }}/files/bin/linux/amd64/cni-plugins.tgz
+            arm64:
+              url: http://{{ .vars.serverURL }}/files/bin/linux/arm64/cni-plugins.tgz
+          extract:
+            destination: /opt/cni/bin
+  - id: symlink-runc-debian
+    kind: Symlink
+    spec:
+      path: /usr/bin/runc
+      target: /usr/local/sbin/runc
+      force: true
+  - id: write-containerd-unit-debian
+    kind: SystemdUnit
+    spec:
+      path: /etc/systemd/system/containerd.service
+      mode: "0644"
+      content: |
+        [Unit]
+        Description=containerd container runtime
+        Documentation=https://containerd.io
+        After=network.target local-fs.target
 
-            [Service]
-            ExecStart=/usr/local/bin/containerd
-            Type=notify
-            Delegate=yes
-            KillMode=process
-            Restart=always
-            RestartSec=5
-            LimitNPROC=infinity
-            LimitCORE=infinity
-            LimitNOFILE=infinity
-            TasksMax=infinity
-            OOMScoreAdjust=-999
+        [Service]
+        ExecStart=/usr/local/bin/containerd
+        Type=notify
+        Delegate=yes
+        KillMode=process
+        Restart=always
+        RestartSec=5
+        LimitNPROC=infinity
+        LimitCORE=infinity
+        LimitNOFILE=infinity
+        TasksMax=infinity
+        OOMScoreAdjust=-999
 
-            [Install]
-            WantedBy=multi-user.target
+        [Install]
+        WantedBy=multi-user.target

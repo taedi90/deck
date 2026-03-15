@@ -17,11 +17,6 @@
       "required": [
         "steps"
       ]
-    },
-    {
-      "required": [
-        "imports"
-      ]
     }
   ],
   "description": "Top-level workflow schema for deck workflows.",
@@ -302,15 +297,6 @@
         }
       },
       "type": "object"
-    },
-    "imports": {
-      "items": {
-        "minLength": 1,
-        "type": "string"
-      },
-      "minItems": 1,
-      "type": "array",
-      "uniqueItems": true
     },
     "phases": {
       "items": {

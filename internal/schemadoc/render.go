@@ -309,7 +309,11 @@ func ExtractRules(node map[string]any, prefix string) []string {
 			}
 		}
 		if len(requiredGroups) > 0 && prefix == "" {
-			rules = append(rules, "At least one of the top-level groups `artifacts`, `imports`, `phases`, or `steps` must be present.")
+			groups := make([]string, 0, len(requiredGroups))
+			for _, group := range requiredGroups {
+				groups = append(groups, "`"+group+"`")
+			}
+			rules = append(rules, "At least one of the top-level groups "+joinWithFinalConjunction(groups, "or")+" must be present.")
 		}
 		for _, raw := range anyOf {
 			entry, _ := raw.(map[string]any)
@@ -371,6 +375,19 @@ func ExtractRules(node map[string]any, prefix string) []string {
 		}
 	}
 	return dedupeStrings(rules)
+}
+
+func joinWithFinalConjunction(values []string, conjunction string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	if len(values) == 1 {
+		return values[0]
+	}
+	if len(values) == 2 {
+		return values[0] + " " + conjunction + " " + values[1]
+	}
+	return strings.Join(values[:len(values)-1], ", ") + ", " + conjunction + " " + values[len(values)-1]
 }
 
 func minimalToolExample(in PageInput) string {
