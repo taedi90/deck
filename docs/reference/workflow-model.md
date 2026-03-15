@@ -31,7 +31,7 @@ version: v1alpha1
 steps:
   - id: prepare-state-dir
     apiVersion: deck/v1alpha1
-    kind: EnsureDir
+    kind: Directory
     spec:
       path: /var/lib/deck
       mode: "0755"
@@ -74,17 +74,24 @@ They make the workflow easier to scan, easier to validate, and easier to evolve 
 
 Supported step kinds include:
 
-- `CheckHost`
-- `DownloadPackages`
-- `DownloadK8sPackages`
-- `DownloadImages`
-- `DownloadFile`
-- `InstallPackages`
-- `WriteFile`
-- `EditFile`
-- `CopyFile`
+- `Artifacts`
+- `Command`
+- `Containerd`
+- `Directory`
+- `File`
+- `Image`
+- `Inspection`
+- `KernelModule`
+- `Kubeadm`
+- `PackageCache`
+- `Packages`
+- `Repository`
+- `Service`
+- `Swap`
+- `Symlink`
 - `Sysctl`
-- `Modprobe`
+- `SystemdUnit`
+- `Wait`
 - `Service`
 - `EnsureDir`
 - `InstallFile`

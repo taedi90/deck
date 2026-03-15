@@ -1,9 +1,6 @@
 package workflowexec
 
-import (
-	"sort"
-	"strings"
-)
+import "sort"
 
 type StepContract struct {
 	Kind       string
@@ -63,31 +60,6 @@ var stepContracts = map[string]StepContract{
 	}),
 }
 
-var legacyStepKindAliases = map[string]string{
-	"CheckHost":           "Inspection",
-	"DownloadFile":        "File",
-	"DownloadImages":      "Image",
-	"DownloadPackages":    "Packages",
-	"DownloadK8sPackages": "Packages",
-	"InstallArtifacts":    "Artifacts",
-	"InstallPackages":     "Packages",
-	"WriteFile":           "File",
-	"EditFile":            "File",
-	"CopyFile":            "File",
-	"EnsureDir":           "Directory",
-	"InstallFile":         "File",
-	"TemplateFile":        "File",
-	"RepoConfig":          "Repository",
-	"ContainerdConfig":    "Containerd",
-	"Modprobe":            "KernelModule",
-	"RunCommand":          "Command",
-	"VerifyImages":        "Image",
-	"KubeadmInit":         "Kubeadm",
-	"KubeadmJoin":         "Kubeadm",
-	"KubeadmReset":        "Kubeadm",
-	"WaitPath":            "Wait",
-}
-
 func simpleStep(schema string, roles map[string]bool, outputs map[string]bool) StepContract {
 	return StepContract{SchemaFile: schema, Roles: roles, Outputs: outputs}
 }
@@ -97,9 +69,6 @@ func familyStep(schema string, roles map[string]bool, actions map[string]ActionC
 }
 
 func StepSchemaFile(kind string) (string, bool) {
-	if canonical, ok := legacyStepKindAliases[kind]; ok {
-		kind = canonical
-	}
 	contract, ok := stepContracts[kind]
 	if !ok || contract.SchemaFile == "" {
 		return "", false
@@ -117,7 +86,6 @@ func StepKinds() []string {
 }
 
 func StepAllowedForRole(role, kind string, spec map[string]any) bool {
-	kind, spec = normalizeLegacyKindSpec(kind, spec)
 	contract, ok := stepContracts[kind]
 	if !ok {
 		return false
@@ -150,7 +118,6 @@ func StepAllowedForRole(role, kind string, spec map[string]any) bool {
 }
 
 func StepHasOutput(kind string, spec map[string]any, output string) bool {
-	kind, spec = normalizeLegacyKindSpec(kind, spec)
 	contract, ok := stepContracts[kind]
 	if !ok {
 		return false
@@ -223,63 +190,6 @@ func inferContractAction(kind string, spec map[string]any) string {
 	default:
 		return ""
 	}
-}
-
-func normalizeLegacyKindSpec(kind string, spec map[string]any) (string, map[string]any) {
-	canonical, ok := legacyStepKindAliases[kind]
-	if !ok {
-		return kind, spec
-	}
-	if spec == nil {
-		spec = map[string]any{}
-	} else {
-		cloned := make(map[string]any, len(spec)+1)
-		for k, v := range spec {
-			cloned[k] = v
-		}
-		spec = cloned
-	}
-	switch kind {
-	case "DownloadFile":
-		spec["action"] = "download"
-	case "DownloadImages":
-		spec["action"] = "download"
-	case "DownloadPackages":
-		spec["action"] = "download"
-	case "DownloadK8sPackages":
-		spec["action"] = "download"
-	case "InstallPackages":
-		spec["action"] = "install"
-	case "WriteFile", "InstallFile", "TemplateFile":
-		spec["action"] = "install"
-	case "EditFile":
-		spec["action"] = "edit"
-	case "CopyFile":
-		spec["action"] = "copy"
-	case "RepoConfig":
-		spec["action"] = "configure"
-	case "VerifyImages":
-		spec["action"] = "present"
-	case "KubeadmInit":
-		spec["action"] = "init"
-	case "KubeadmJoin":
-		spec["action"] = "join"
-	case "KubeadmReset":
-		spec["action"] = "reset"
-	case "WaitPath":
-		if action, _ := spec["action"].(string); strings.TrimSpace(action) == "" {
-			if state, _ := spec["state"].(string); state == "absent" {
-				spec["action"] = "fileAbsent"
-			} else {
-				spec["action"] = "fileExists"
-			}
-		}
-	}
-	return canonical, spec
-}
-
-func NormalizeLegacyKindSpec(kind string, spec map[string]any) (string, map[string]any) {
-	return normalizeLegacyKindSpec(kind, spec)
 }
 
 func setOf(values ...string) map[string]bool {

@@ -53,45 +53,6 @@ func executeStep(ctx context.Context, kind string, spec map[string]any, bundleRo
 		return runWait(ctx, spec)
 	case "Inspection":
 		return fmt.Errorf("%s: unsupported step kind %s for apply", errCodeInstallKindUnsupported, kind)
-	case "DownloadFile":
-		_, err := runFileDownload(ctx, bundleRoot, spec)
-		return err
-	case "InstallArtifacts":
-		return runInstallArtifacts(ctx, spec)
-	case "InstallPackages":
-		return runInstallPackages(ctx, spec)
-	case "WriteFile":
-		return runWriteFile(spec)
-	case "EditFile":
-		return runEditFile(spec)
-	case "CopyFile":
-		return runCopyFile(spec)
-	case "EnsureDir":
-		return runEnsureDir(spec)
-	case "InstallFile":
-		return runInstallFile(spec)
-	case "TemplateFile":
-		return runTemplateFile(spec)
-	case "RepoConfig":
-		return runRepoConfig(spec)
-	case "ContainerdConfig":
-		return runContainerdConfig(ctx, spec)
-	case "Modprobe":
-		return runModprobe(spec)
-	case "SysctlApply":
-		return runSysctlApply(spec)
-	case "RunCommand":
-		return runCommand(ctx, spec)
-	case "VerifyImages":
-		return runVerifyImages(ctx, spec)
-	case "KubeadmInit":
-		return runKubeadmInit(ctx, spec)
-	case "KubeadmJoin":
-		return runKubeadmJoin(ctx, spec)
-	case "KubeadmReset":
-		return runKubeadmReset(ctx, spec)
-	case "WaitPath":
-		return runWaitPath(ctx, spec)
 	default:
 		return fmt.Errorf("%s: unsupported step kind %s", errCodeInstallKindUnsupported, kind)
 	}

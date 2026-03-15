@@ -147,3 +147,48 @@ func firstNonEmpty(values ...string) string {
 	}
 	return ""
 }
+
+func waitPathConditionMet(path, state, pathType string, nonEmpty bool) (bool, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return state == "absent", nil
+		}
+		return false, err
+	}
+	if state == "absent" {
+		return false, nil
+	}
+	switch pathType {
+	case "any":
+	case "file":
+		if info.IsDir() {
+			return false, nil
+		}
+	case "dir":
+		if !info.IsDir() {
+			return false, nil
+		}
+	default:
+		return false, fmt.Errorf("invalid Wait type %q", pathType)
+	}
+	if nonEmpty && info.Size() == 0 {
+		return false, nil
+	}
+	return true, nil
+}
+
+func waitPathExpectedCondition(path, state, pathType string, nonEmpty bool) string {
+	condition := "exist"
+	if state == "absent" {
+		condition = "be absent"
+	} else if pathType == "file" {
+		condition = "exist as a file"
+	} else if pathType == "dir" {
+		condition = "exist as a directory"
+	}
+	if nonEmpty {
+		condition += " and be non-empty"
+	}
+	return fmt.Sprintf("%s to %s", path, condition)
+}

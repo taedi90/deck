@@ -59,8 +59,9 @@ version: v1alpha1
 steps:
   - id: write-repo-config
     apiVersion: deck/v1alpha1
-    kind: WriteFile
+    kind: File
     spec:
+      action: install
       path: /etc/example.repo
       content: |
         [offline-base]

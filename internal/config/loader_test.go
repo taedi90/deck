@@ -108,7 +108,7 @@ phases:
     steps: []
 steps:
   - id: step-a
-    kind: RunCommand
+    kind: Command
     spec: {}
 `)
 	if err := os.WriteFile(workflowPath, content, 0o644); err != nil {
@@ -210,7 +210,7 @@ vars:
   importedOnly: true
 steps:
   - id: imported-step
-    kind: RunCommand
+    kind: Command
     spec:
       command: ["true"]
 `)
@@ -226,7 +226,7 @@ vars:
   imageRepo: from-root
 steps:
   - id: root-step
-    kind: RunCommand
+    kind: Command
     spec:
       command: ["true"]
 `)
@@ -264,7 +264,7 @@ imports:
   - ./b.yaml
 steps:
   - id: a-step
-    kind: RunCommand
+    kind: Command
     spec:
       command: ["true"]
 `)
@@ -274,7 +274,7 @@ imports:
   - ./a.yaml
 steps:
   - id: b-step
-    kind: RunCommand
+    kind: Command
     spec:
       command: ["true"]
 `)
@@ -304,7 +304,7 @@ imports:
   - ./fragments/common.yaml
 steps:
   - id: root-step
-    kind: RunCommand
+    kind: Command
     spec:
       command: ["true"]
 `))
@@ -313,7 +313,7 @@ steps:
 version: v1alpha1
 steps:
   - id: imported-step
-    kind: RunCommand
+    kind: Command
     spec:
       command: ["true"]
 `))
@@ -351,7 +351,7 @@ phases:
   - name: install
     steps:
       - id: imported-step
-        kind: RunCommand
+        kind: Command
         spec:
           command: ["true"]
 `)
@@ -367,7 +367,7 @@ phases:
   - name: install
     steps:
       - id: root-step
-        kind: RunCommand
+        kind: Command
         spec:
           command: ["true"]
 `)
@@ -399,12 +399,12 @@ func TestLoadWithPhaseImports_CombinesWhenAndSteps(t *testing.T) {
 version: v1alpha1
 steps:
   - id: imported-a
-    kind: RunCommand
+    kind: Command
     when: vars.enableCommon == true
     spec:
       command: ["true"]
   - id: imported-b
-    kind: RunCommand
+    kind: Command
     spec:
       command: ["true"]
 `)
@@ -421,7 +421,7 @@ phases:
         when: vars.osFamily == "rhel"
     steps:
       - id: root-step
-        kind: RunCommand
+        kind: Command
         spec:
           command: ["true"]
 `)
@@ -473,7 +473,7 @@ vars:
   region: kr
 steps:
   - id: root-step
-    kind: RunCommand
+    kind: Command
     spec:
       command: ["true"]
 `)

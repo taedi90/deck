@@ -330,8 +330,7 @@ func validateWorkflowMode(wf *config.Workflow) error {
 
 func validateToolSchemas(wf *config.Workflow) error {
 	for _, step := range workflowSteps(wf) {
-		canonicalKind, normalizedSpec := workflowexec.NormalizeLegacyKindSpec(step.Kind, step.Spec)
-		schemaFile, ok := workflowexec.StepSchemaFile(canonicalKind)
+		schemaFile, ok := workflowexec.StepSchemaFile(step.Kind)
 		if !ok {
 			continue
 		}
@@ -341,8 +340,6 @@ func validateToolSchemas(wf *config.Workflow) error {
 		}
 
 		stepForSchema := step
-		stepForSchema.Kind = canonicalKind
-		stepForSchema.Spec = normalizedSpec
 		if strings.TrimSpace(stepForSchema.APIVersion) == "" {
 			stepForSchema.APIVersion = "deck/v1alpha1"
 		}
@@ -388,7 +385,6 @@ func validateSchema(name string, content []byte) error {
 	if err != nil {
 		return fmt.Errorf("normalize workflow for schema validation: %w", err)
 	}
-	normalizeWorkflowSchemaKinds(normalized)
 
 	raw, err := json.Marshal(normalized)
 	if err != nil {
@@ -584,26 +580,5 @@ func normalizeYAMLForJSON(value any) (any, error) {
 		return out, nil
 	default:
 		return typed, nil
-	}
-}
-
-func normalizeWorkflowSchemaKinds(value any) {
-	switch typed := value.(type) {
-	case map[string]any:
-		if rawKind, ok := typed["kind"].(string); ok {
-			spec, _ := typed["spec"].(map[string]any)
-			canonicalKind, normalizedSpec := workflowexec.NormalizeLegacyKindSpec(rawKind, spec)
-			typed["kind"] = canonicalKind
-			if normalizedSpec != nil {
-				typed["spec"] = normalizedSpec
-			}
-		}
-		for _, nested := range typed {
-			normalizeWorkflowSchemaKinds(nested)
-		}
-	case []any:
-		for _, nested := range typed {
-			normalizeWorkflowSchemaKinds(nested)
-		}
 	}
 }

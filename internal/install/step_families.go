@@ -31,6 +31,10 @@ func runPackages(ctx context.Context, spec map[string]any) error {
 	}
 }
 
+func runContainerd(ctx context.Context, spec map[string]any) error {
+	return runContainerdConfigure(ctx, spec)
+}
+
 func runRepository(spec map[string]any) error {
 	switch repositoryAction(spec) {
 	case "configure":

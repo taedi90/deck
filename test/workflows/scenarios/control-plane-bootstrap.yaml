@@ -18,7 +18,7 @@ phases:
     steps:
       - id: bootstrap-report
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: Command
         spec:
           timeout: 10m
           command:

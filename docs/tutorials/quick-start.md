@@ -41,8 +41,9 @@ version: v1alpha1
 steps:
   - id: write-motd
     apiVersion: deck/v1alpha1
-    kind: WriteFile
+    kind: File
     spec:
+      action: install
       path: /etc/motd
       content: |
         deck maintenance session in progress

@@ -5,7 +5,7 @@ phases:
     steps:
       - id: apply-offline-repo-config-debian
         apiVersion: deck/v1alpha1
-        kind: RepoConfig
+        kind: Repository
         spec:
           format: apt
           path: /etc/apt/sources.list.d/offline.list

@@ -586,7 +586,7 @@ func newApplyCommand() *cobra.Command {
 	cmd.Flags().String("session", "", "site session id for assisted mode")
 	cmd.Flags().String("api-token", "", "bearer token for assisted site APIs (defaults to saved token)")
 	cmd.Flags().String("phase", "install", "phase name to execute")
-	cmd.Flags().Bool("prefetch", false, "execute DownloadFile steps before other steps")
+	cmd.Flags().Bool("prefetch", false, "execute File download steps before other steps")
 	cmd.Flags().Bool("dry-run", false, "print apply plan without executing steps")
 	cmd.Flags().Var(vars, "var", "set variable override (key=value), repeatable")
 	return cmd
@@ -767,7 +767,8 @@ func buildApplyPrefetchWorkflow(wf *config.Workflow) *config.Workflow {
 	prefetchSteps := make([]config.Step, 0)
 	for _, phase := range wf.Phases {
 		for _, step := range phase.Steps {
-			if step.Kind == "DownloadFile" {
+			action, _ := step.Spec["action"].(string)
+			if step.Kind == "File" && strings.TrimSpace(action) == "download" {
 				prefetchSteps = append(prefetchSteps, step)
 			}
 		}

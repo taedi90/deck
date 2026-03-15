@@ -3,7 +3,7 @@ version: v1alpha1
 steps:
   - id: bin-kubelet-amd64
     apiVersion: deck/v1alpha1
-    kind: DownloadFile
+    kind: File
     spec:
       source:
         url: https://dl.k8s.io/release/{{ .vars.kubernetesVersion }}/bin/linux/amd64/kubelet
@@ -12,7 +12,7 @@ steps:
         chmod: "0755"
   - id: bin-kubeadm-amd64
     apiVersion: deck/v1alpha1
-    kind: DownloadFile
+    kind: File
     spec:
       source:
         url: https://dl.k8s.io/release/{{ .vars.kubernetesVersion }}/bin/linux/amd64/kubeadm
@@ -21,7 +21,7 @@ steps:
         chmod: "0755"
   - id: bin-kubectl-amd64
     apiVersion: deck/v1alpha1
-    kind: DownloadFile
+    kind: File
     spec:
       source:
         url: https://dl.k8s.io/release/{{ .vars.kubernetesVersion }}/bin/linux/amd64/kubectl
@@ -30,7 +30,7 @@ steps:
         chmod: "0755"
   - id: bin-crictl-amd64
     apiVersion: deck/v1alpha1
-    kind: DownloadFile
+    kind: File
     spec:
       source:
         url: https://github.com/kubernetes-sigs/cri-tools/releases/download/v1.30.0/crictl-v1.30.0-linux-amd64.tar.gz
@@ -38,7 +38,7 @@ steps:
         path: files/bin/linux/amd64/crictl.tar.gz
   - id: bin-containerd-amd64
     apiVersion: deck/v1alpha1
-    kind: DownloadFile
+    kind: File
     spec:
       source:
         url: https://github.com/containerd/containerd/releases/download/v1.7.18/containerd-1.7.18-linux-amd64.tar.gz
@@ -46,7 +46,7 @@ steps:
         path: files/bin/linux/amd64/containerd.tar.gz
   - id: bin-runc-amd64
     apiVersion: deck/v1alpha1
-    kind: DownloadFile
+    kind: File
     spec:
       source:
         url: https://github.com/opencontainers/runc/releases/download/v1.1.13/runc.amd64
@@ -55,7 +55,7 @@ steps:
         chmod: "0755"
   - id: bin-cni-plugins-amd64
     apiVersion: deck/v1alpha1
-    kind: DownloadFile
+    kind: File
     spec:
       source:
         url: https://github.com/containernetworking/plugins/releases/download/v1.5.1/cni-plugins-linux-amd64-v1.5.1.tgz
@@ -63,7 +63,7 @@ steps:
         path: files/bin/linux/amd64/cni-plugins.tgz
   - id: bin-kubelet-arm64
     apiVersion: deck/v1alpha1
-    kind: DownloadFile
+    kind: File
     spec:
       source:
         url: https://dl.k8s.io/release/{{ .vars.kubernetesVersion }}/bin/linux/arm64/kubelet
@@ -72,7 +72,7 @@ steps:
         chmod: "0755"
   - id: bin-kubeadm-arm64
     apiVersion: deck/v1alpha1
-    kind: DownloadFile
+    kind: File
     spec:
       source:
         url: https://dl.k8s.io/release/{{ .vars.kubernetesVersion }}/bin/linux/arm64/kubeadm
@@ -81,7 +81,7 @@ steps:
         chmod: "0755"
   - id: bin-kubectl-arm64
     apiVersion: deck/v1alpha1
-    kind: DownloadFile
+    kind: File
     spec:
       source:
         url: https://dl.k8s.io/release/{{ .vars.kubernetesVersion }}/bin/linux/arm64/kubectl
@@ -90,7 +90,7 @@ steps:
         chmod: "0755"
   - id: bin-crictl-arm64
     apiVersion: deck/v1alpha1
-    kind: DownloadFile
+    kind: File
     spec:
       source:
         url: https://github.com/kubernetes-sigs/cri-tools/releases/download/v1.30.0/crictl-v1.30.0-linux-arm64.tar.gz
@@ -98,7 +98,7 @@ steps:
         path: files/bin/linux/arm64/crictl.tar.gz
   - id: bin-containerd-arm64
     apiVersion: deck/v1alpha1
-    kind: DownloadFile
+    kind: File
     spec:
       source:
         url: https://github.com/containerd/containerd/releases/download/v1.7.18/containerd-1.7.18-linux-arm64.tar.gz
@@ -106,7 +106,7 @@ steps:
         path: files/bin/linux/arm64/containerd.tar.gz
   - id: bin-runc-arm64
     apiVersion: deck/v1alpha1
-    kind: DownloadFile
+    kind: File
     spec:
       source:
         url: https://github.com/opencontainers/runc/releases/download/v1.1.13/runc.arm64
@@ -115,7 +115,7 @@ steps:
         chmod: "0755"
   - id: bin-cni-plugins-arm64
     apiVersion: deck/v1alpha1
-    kind: DownloadFile
+    kind: File
     spec:
       source:
         url: https://github.com/containernetworking/plugins/releases/download/v1.5.1/cni-plugins-linux-arm64-v1.5.1.tgz

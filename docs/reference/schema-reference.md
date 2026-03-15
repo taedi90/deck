@@ -48,7 +48,7 @@ Supports both apt and yum repository definitions, plus file placement and refres
 ```yaml
 - id: configure-offline-repo
   apiVersion: deck/v1alpha1
-  kind: RepoConfig
+  kind: Repository
   spec:
     format: apt
     replaceExisting: true
@@ -82,7 +82,7 @@ Supports `path`, `configPath`, `systemdCgroup`, `createDefault`, and per-registr
 ```yaml
 - id: configure-containerd
   apiVersion: deck/v1alpha1
-  kind: ContainerdConfig
+  kind: Containerd
   spec:
     path: /etc/containerd/config.toml
     configPath: /etc/containerd/certs.d
@@ -145,7 +145,7 @@ Installs or extracts per-architecture artifacts. Each entry requires `source.amd
 ```yaml
 - id: install-k8s-binaries
   apiVersion: deck/v1alpha1
-  kind: InstallArtifacts
+  kind: Artifacts
   spec:
     artifacts:
       - source:
@@ -168,7 +168,7 @@ Runs `kubeadm init` with either `configFile` or `configTemplate`, plus bootstrap
 ```yaml
 - id: bootstrap-init
   apiVersion: deck/v1alpha1
-  kind: KubeadmInit
+  kind: Kubeadm
   spec:
     mode: real
     timeout: 20m
@@ -188,7 +188,7 @@ Wraps `kubeadm reset` and related cleanup with `force`, `ignoreErrors`, `stopKub
 ```yaml
 - id: bootstrap-reset-preflight
   apiVersion: deck/v1alpha1
-  kind: KubeadmReset
+  kind: Kubeadm
   spec:
     force: true
     ignoreErrors: true
@@ -211,7 +211,7 @@ Waits for a path to become `exists` or `absent`. The step also supports `type`, 
 ```yaml
 - id: wait-admin-conf
   apiVersion: deck/v1alpha1
-  kind: WaitPath
+  kind: Wait
   spec:
     path: /etc/kubernetes/admin.conf
     state: exists

@@ -3,7 +3,7 @@ version: v1alpha1
 steps:
   - id: runtime-deps-rocky9
     apiVersion: deck/v1alpha1
-    kind: DownloadPackages
+    kind: Packages
     spec:
       distro:
         family: rhel

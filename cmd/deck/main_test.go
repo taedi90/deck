@@ -446,7 +446,7 @@ func TestAssistedApplyUsesSavedServerToken(t *testing.T) {
 
 	logPath := filepath.Join(t.TempDir(), "assisted-saved-token.log")
 	bundleFilePath := filepath.Join(assistedRoot, "releases", "release-1", "bundle", "outputs", "files", "seed.txt")
-	workflowBody := fmt.Sprintf("role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: assisted-apply\n        kind: RunCommand\n        spec:\n          command: [\"sh\", \"-c\", \"test -f %s && echo assisted >> %s\"]\n", strings.ReplaceAll(bundleFilePath, "\\", "\\\\"), strings.ReplaceAll(logPath, "\\", "\\\\"))
+	workflowBody := fmt.Sprintf("role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: assisted-apply\n        kind: Command\n        spec:\n          command: [\"sh\", \"-c\", \"test -f %s && echo assisted >> %s\"]\n", strings.ReplaceAll(bundleFilePath, "\\", "\\\\"), strings.ReplaceAll(logPath, "\\", "\\\\"))
 	seedContent := []byte("seed\n")
 	seedSum := sha256.Sum256(seedContent)
 	manifestBody := fmt.Sprintf("{\n  \"entries\": [\n    {\"path\": %q, \"sha256\": %q, \"size\": %d}\n  ]\n}\n", "outputs/files/seed.txt", hex.EncodeToString(seedSum[:]), len(seedContent))
@@ -533,7 +533,7 @@ func TestDoctor(t *testing.T) {
 	defer srv.Close()
 
 	wfPath := filepath.Join(t.TempDir(), "apply.yaml")
-	writeWorkflowYAML(t, wfPath, fmt.Sprintf("role: apply\nversion: v1alpha1\nvars:\n  localRepo: %q\n  httpRepo: %q\nphases:\n  - name: install\n    steps:\n      - id: check-sources\n        apiVersion: deck/v1alpha1\n        kind: DownloadFile\n        spec:\n          source:\n            path: dummy.txt\n          fetch:\n            sources:\n              - type: local\n                path: \"{{ .vars.localRepo }}\"\n              - type: repo\n                url: \"{{ .vars.httpRepo }}\"\n          output:\n            path: files/dummy.txt\n", localRepo, srv.URL+"/packages"))
+	writeWorkflowYAML(t, wfPath, fmt.Sprintf("role: apply\nversion: v1alpha1\nvars:\n  localRepo: %q\n  httpRepo: %q\nphases:\n  - name: install\n    steps:\n      - id: check-sources\n        apiVersion: deck/v1alpha1\n        kind: File\n        spec:\n          source:\n            path: dummy.txt\n          fetch:\n            sources:\n              - type: local\n                path: \"{{ .vars.localRepo }}\"\n              - type: repo\n                url: \"{{ .vars.httpRepo }}\"\n          output:\n            path: files/dummy.txt\n", localRepo, srv.URL+"/packages"))
 
 	t.Run("ok", func(t *testing.T) {
 		reportPath := filepath.Join(t.TempDir(), "doctor.json")
@@ -1211,7 +1211,7 @@ func TestRunWorkflowRunDryRunPrintsPlan(t *testing.T) {
 	if !strings.Contains(out, "PHASE=install") {
 		t.Fatalf("expected phase line in output, got %q", out)
 	}
-	if !strings.Contains(out, "run-true RunCommand PLAN") {
+	if !strings.Contains(out, "run-true Command PLAN") {
 		t.Fatalf("expected step plan line in output, got %q", out)
 	}
 }
@@ -1241,7 +1241,7 @@ phases:
   - name: prepare
     steps:
       - id: p1
-        kind: DownloadFile
+        kind: File
         spec:
           source:
             path: files/source.bin
@@ -1400,7 +1400,7 @@ phases:
   - name: prepare
     steps:
       - id: p1
-        kind: DownloadFile
+        kind: File
         spec:
           source:
             path: files/source.bin
@@ -1472,7 +1472,7 @@ phases:
   - name: install
     steps:
       - id: run-with-vars
-        kind: RunCommand
+        kind: Command
         when: vars.run == "yes"
         spec:
           command: ["true"]
@@ -1489,7 +1489,7 @@ phases:
 	if err != nil {
 		t.Fatalf("expected success, got %v", err)
 	}
-	if !strings.Contains(out, "run-with-vars RunCommand PLAN") {
+	if !strings.Contains(out, "run-with-vars Command PLAN") {
 		t.Fatalf("expected PLAN status, got %q", out)
 	}
 }
@@ -1517,13 +1517,13 @@ phases:
   - name: install
     steps:
       - id: install-step
-        kind: RunCommand
+        kind: Command
         spec:
           command: ["sh", "-c", "echo install >> %s"]
   - name: post
     steps:
       - id: post-step
-        kind: RunCommand
+        kind: Command
         spec:
           command: ["sh", "-c", "echo post >> %s"]
 `, strings.ReplaceAll(installLogPath, "\\", "\\\\"), strings.ReplaceAll(postLogPath, "\\", "\\\\"))
@@ -1544,7 +1544,7 @@ phases:
 	if !strings.Contains(dryRunOut, "PHASE=post") {
 		t.Fatalf("expected post phase line in dry-run output, got %q", dryRunOut)
 	}
-	if !strings.Contains(dryRunOut, "post-step RunCommand SKIP (completed)") {
+	if !strings.Contains(dryRunOut, "post-step Command SKIP (completed)") {
 		t.Fatalf("expected completed skip in dry-run output, got %q", dryRunOut)
 	}
 	if strings.Contains(dryRunOut, "install-step") {
@@ -1603,15 +1603,16 @@ phases:
   - name: install
     steps:
       - id: requires-prefetch
-        kind: RunCommand
+        kind: Command
         spec:
           command:
             - sh
             - -c
             - 'test -f %s'
       - id: download-file
-        kind: DownloadFile
+        kind: File
         spec:
+          action: download
           source:
             url: '%s'
           output:
@@ -1692,7 +1693,7 @@ phases:
   - name: install
     steps:
       - id: remote-step
-        kind: RunCommand
+        kind: Command
         spec:
           command: ["sh", "-c", "echo hit >> %s"]
 `, strings.ReplaceAll(logPath, "\\", "\\\\"))
@@ -1778,7 +1779,7 @@ phases:
   - name: install
     steps:
       - id: remote-step
-        kind: RunCommand
+        kind: Command
         spec:
           command: ["sh", "-c", "echo hit >> %s"]
 `, strings.ReplaceAll(logPath, "\\", "\\\\"))
@@ -1836,7 +1837,7 @@ phases:
 func TestPlan(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	wfPath := filepath.Join(t.TempDir(), "apply.yaml")
-	writeWorkflowYAML(t, wfPath, "role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: step-1\n        apiVersion: deck/v1alpha1\n        kind: RunCommand\n        spec:\n          command: [\"true\"]\n")
+	writeWorkflowYAML(t, wfPath, "role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: step-1\n        apiVersion: deck/v1alpha1\n        kind: Command\n        spec:\n          command: [\"true\"]\n")
 
 	before, err := runWithCapturedStdout([]string{"plan", "--file", wfPath})
 	if err != nil {
@@ -1885,7 +1886,7 @@ func TestAssistedApplyUsesLocalEngine(t *testing.T) {
 
 	logPath := filepath.Join(t.TempDir(), "assisted-apply.log")
 	bundleFilePath := filepath.Join(assistedRoot, "releases", "release-1", "bundle", "outputs", "files", "seed.txt")
-	workflowBody := fmt.Sprintf("role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: assisted-apply\n        kind: RunCommand\n        spec:\n          command: [\"sh\", \"-c\", \"test -f %s && echo assisted >> %s\"]\n", strings.ReplaceAll(bundleFilePath, "\\", "\\\\"), strings.ReplaceAll(logPath, "\\", "\\\\"))
+	workflowBody := fmt.Sprintf("role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: assisted-apply\n        kind: Command\n        spec:\n          command: [\"sh\", \"-c\", \"test -f %s && echo assisted >> %s\"]\n", strings.ReplaceAll(bundleFilePath, "\\", "\\\\"), strings.ReplaceAll(logPath, "\\", "\\\\"))
 	seedContent := []byte("seed\n")
 	seedSum := sha256.Sum256(seedContent)
 	manifestBody := fmt.Sprintf("{\n  \"entries\": [\n    {\"path\": %q, \"sha256\": %q, \"size\": %d}\n  ]\n}\n", "outputs/files/seed.txt", hex.EncodeToString(seedSum[:]), len(seedContent))
@@ -1950,7 +1951,7 @@ func TestAssistedDiffUsesLocalEngine(t *testing.T) {
 	_ = os.MkdirAll(filepath.Dir(operatorPath), 0o755)
 	_ = os.WriteFile(operatorPath, []byte("node-1\n"), 0o644)
 
-	workflowBody := "role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: assisted-diff\n        kind: RunCommand\n        spec:\n          command: [\"true\"]\n"
+	workflowBody := "role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: assisted-diff\n        kind: Command\n        spec:\n          command: [\"true\"]\n"
 	manifestBody := "{\n  \"entries\": []\n}\n"
 	uploaded := false
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1998,7 +1999,7 @@ func TestAssistedDoctorUsesLocalEngine(t *testing.T) {
 
 	localRepo := t.TempDir()
 	reportPath := filepath.Join(t.TempDir(), "doctor-assist.json")
-	workflowBody := "role: apply\nversion: v1alpha1\nvarImports:\n  - ../vars.yaml\nphases:\n  - name: install\n    steps:\n      - id: doctor-check\n        kind: DownloadFile\n        spec:\n          source:\n            path: files/dummy.txt\n          fetch:\n            sources:\n              - type: local\n                path: \"{{ .vars.localRepo }}\"\n          output:\n            path: files/dummy.txt\n"
+	workflowBody := "role: apply\nversion: v1alpha1\nvarImports:\n  - ../vars.yaml\nphases:\n  - name: install\n    steps:\n      - id: doctor-check\n        kind: File\n        spec:\n          source:\n            path: files/dummy.txt\n          fetch:\n            sources:\n              - type: local\n                path: \"{{ .vars.localRepo }}\"\n          output:\n            path: files/dummy.txt\n"
 	varsBody := fmt.Sprintf("localRepo: %q\n", localRepo)
 	manifestBody := "{\n  \"entries\": []\n}\n"
 	uploaded := false
@@ -2090,7 +2091,7 @@ func TestAssistedApplyServerDownAfterAssignment(t *testing.T) {
 
 	logPath := filepath.Join(t.TempDir(), "assisted-upload-fail.log")
 	bundleFilePath := filepath.Join(assistedRoot, "releases", "release-1", "bundle", "outputs", "files", "seed.txt")
-	workflowBody := fmt.Sprintf("role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: assisted-apply\n        kind: RunCommand\n        spec:\n          command: [\"sh\", \"-c\", \"test -f %s && echo assisted >> %s\"]\n", strings.ReplaceAll(bundleFilePath, "\\", "\\\\"), strings.ReplaceAll(logPath, "\\", "\\\\"))
+	workflowBody := fmt.Sprintf("role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: assisted-apply\n        kind: Command\n        spec:\n          command: [\"sh\", \"-c\", \"test -f %s && echo assisted >> %s\"]\n", strings.ReplaceAll(bundleFilePath, "\\", "\\\\"), strings.ReplaceAll(logPath, "\\", "\\\\"))
 	seedContent := []byte("seed\n")
 	seedSum := sha256.Sum256(seedContent)
 	manifestBody := fmt.Sprintf("{\n  \"entries\": [\n    {\"path\": %q, \"sha256\": %q, \"size\": %d}\n  ]\n}\n", "outputs/files/seed.txt", hex.EncodeToString(seedSum[:]), len(seedContent))
@@ -2147,7 +2148,7 @@ func TestRunApplyPhaseNotFound(t *testing.T) {
 	}
 
 	workflowPath := filepath.Join(t.TempDir(), "apply.yaml")
-	workflowBody := "role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: step-one\n        kind: RunCommand\n        spec:\n          command: [\"true\"]\n"
+	workflowBody := "role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: step-one\n        kind: Command\n        spec:\n          command: [\"true\"]\n"
 	if err := os.WriteFile(workflowPath, []byte(workflowBody), 0o644); err != nil {
 		t.Fatalf("write workflow: %v", err)
 	}
@@ -2239,7 +2240,7 @@ func TestApplyDryRunExitCodeViaBinary(t *testing.T) {
 		t.Fatalf("mkdir workflows: %v", err)
 	}
 	workflowPath := filepath.Join(root, "apply.yaml")
-	workflowBody := "role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: dry-run-step\n        kind: RunCommand\n        spec:\n          command: [\"true\"]\n"
+	workflowBody := "role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: dry-run-step\n        kind: Command\n        spec:\n          command: [\"true\"]\n"
 	if err := os.WriteFile(workflowPath, []byte(workflowBody), 0o644); err != nil {
 		t.Fatalf("write workflow: %v", err)
 	}
@@ -2498,7 +2499,7 @@ phases:
   - name: prepare
     steps:
       - id: seed-file
-        kind: DownloadFile
+        kind: File
         spec:
           source:
             path: files/source.bin
@@ -2519,7 +2520,7 @@ phases:
   - name: install
     steps:
       - id: apply-step
-        kind: RunCommand
+        kind: Command
         spec:
           command: ["sh", "-c", "echo hit >> %s"]
 `, strings.ReplaceAll(applyLogPath, "\\", "\\\\"))
@@ -2774,7 +2775,7 @@ func writeWorkflowYAML(t *testing.T, path string, content string) {
 func writeInstallTrueWorkflowFixture(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "install-true.yaml")
-	content := "role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: run-true\n        kind: RunCommand\n        spec:\n          command: [\"true\"]\n"
+	content := "role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: run-true\n        kind: Command\n        spec:\n          command: [\"true\"]\n"
 	writeWorkflowYAML(t, path, content)
 	return path
 }
@@ -2782,7 +2783,7 @@ func writeInstallTrueWorkflowFixture(t *testing.T) string {
 func writeValidateWorkflowFixture(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "validate-workflow.yaml")
-	content := "role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: validate-run\n        apiVersion: deck/v1alpha1\n        kind: RunCommand\n        spec:\n          command: [\"true\"]\n"
+	content := "role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: validate-run\n        apiVersion: deck/v1alpha1\n        kind: Command\n        spec:\n          command: [\"true\"]\n"
 	writeWorkflowYAML(t, path, content)
 	return path
 }

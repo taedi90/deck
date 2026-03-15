@@ -33,23 +33,6 @@ func runSysctl(spec map[string]any) error {
 	return os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644)
 }
 
-func runModprobe(spec map[string]any) error {
-	persistPath := stringValue(spec, "persistFile")
-	if persistPath == "" {
-		return nil
-	}
-
-	mods := stringSlice(spec["modules"])
-	if len(mods) == 0 {
-		return fmt.Errorf("%s: Modprobe requires modules", errCodeInstallModulesMissing)
-	}
-
-	if err := os.MkdirAll(filepath.Dir(persistPath), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(persistPath, []byte(strings.Join(mods, "\n")+"\n"), 0o644)
-}
-
 func runService(spec map[string]any) error {
 	name := stringValue(spec, "name")
 	names := stringSlice(spec["names"])

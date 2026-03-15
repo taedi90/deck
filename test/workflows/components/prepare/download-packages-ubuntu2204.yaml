@@ -3,7 +3,7 @@ version: v1alpha1
 steps:
   - id: runtime-deps-ubuntu2204
     apiVersion: deck/v1alpha1
-    kind: DownloadPackages
+    kind: Packages
     spec:
       distro:
         family: debian

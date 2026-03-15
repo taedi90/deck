@@ -8,19 +8,19 @@ import (
 func stepOutputs(kind string, rendered map[string]any) map[string]any {
 	outputs := map[string]any{}
 	switch kind {
-	case "DownloadFile":
+	case "File":
+		if stringValue(rendered, "action") == "copy" {
+			if dest := stringValue(rendered, "dest"); dest != "" {
+				outputs["dest"] = dest
+			}
+			break
+		}
 		if path := stringValue(mapValue(rendered, "output"), "path"); path != "" {
 			outputs["path"] = path
-		}
-	case "WriteFile":
-		if path := stringValue(rendered, "path"); path != "" {
+		} else if path := stringValue(rendered, "path"); path != "" {
 			outputs["path"] = path
 		}
-	case "CopyFile":
-		if dest := stringValue(rendered, "dest"); dest != "" {
-			outputs["dest"] = dest
-		}
-	case "EnsureDir", "Symlink", "InstallFile", "TemplateFile", "SystemdUnit", "RepoConfig", "ContainerdConfig":
+	case "Directory", "Symlink", "SystemdUnit", "Repository", "Containerd":
 		if path := stringValue(rendered, "path"); path != "" {
 			outputs["path"] = path
 		}
@@ -32,7 +32,7 @@ func stepOutputs(kind string, rendered map[string]any) map[string]any {
 		if name := stringValue(rendered, "name"); name != "" {
 			outputs["name"] = name
 		}
-	case "KubeadmInit":
+	case "Kubeadm":
 		if joinFile := stringValue(rendered, "outputJoinFile"); joinFile != "" {
 			outputs["joinFile"] = joinFile
 		}

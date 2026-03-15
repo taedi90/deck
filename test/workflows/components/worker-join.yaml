@@ -3,7 +3,7 @@ version: v1alpha1
 steps:
   - id: fetch-join-file
     apiVersion: deck/v1alpha1
-    kind: DownloadFile
+    kind: File
     spec:
       source:
         url: http://{{ .vars.serverURL }}/files/cluster/join.txt
@@ -11,7 +11,7 @@ steps:
         path: "{{ .vars.joinFile }}"
   - id: join-worker
     apiVersion: deck/v1alpha1
-    kind: KubeadmJoin
+    kind: Kubeadm
     spec:
       mode: real
       joinFile: "{{ .vars.joinFile }}"
