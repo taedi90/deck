@@ -3,12 +3,13 @@ package askconfig
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
 func TestSaveStoredAndLoadStored(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "config"))
-	settings := Settings{Provider: "openrouter", Model: "anthropic/claude-3.5-sonnet", APIKey: "secret-token", Endpoint: "https://example.invalid/v1"}
+	settings := Settings{Provider: "openrouter", Model: "anthropic/claude-3.5-sonnet", APIKey: "secret-token", Endpoint: "https://example.invalid/v1", MCP: MCP{Enabled: true, Servers: []MCPServer{{Name: "web-search", Command: "node", Args: []string{"mcp.js"}}}}, LSP: LSP{Enabled: true, YAML: LSPEntry{Command: "yaml-language-server", Args: []string{"--stdio"}}}}
 	if err := SaveStored(settings); err != nil {
 		t.Fatalf("save stored: %v", err)
 	}
@@ -16,7 +17,7 @@ func TestSaveStoredAndLoadStored(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load stored: %v", err)
 	}
-	if loaded != settings {
+	if !reflect.DeepEqual(loaded, settings) {
 		t.Fatalf("unexpected settings: %#v", loaded)
 	}
 	path, err := ConfigPath()
@@ -34,7 +35,14 @@ func TestSaveStoredAndLoadStored(t *testing.T) {
 
 func TestResolveEffectivePrecedence(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "config"))
-	if err := SaveStored(Settings{Provider: "openai", Model: "stored-model", APIKey: "stored-key", Endpoint: "https://stored.invalid/v1"}); err != nil {
+	if err := SaveStored(Settings{
+		Provider: "openai",
+		Model:    "stored-model",
+		APIKey:   "stored-key",
+		Endpoint: "https://stored.invalid/v1",
+		MCP:      MCP{Enabled: true, Servers: []MCPServer{{Name: "context7", Command: "context7-mcp"}}},
+		LSP:      LSP{Enabled: true, YAML: LSPEntry{Command: "yaml-language-server", Args: []string{"--stdio"}}},
+	}); err != nil {
 		t.Fatalf("save stored: %v", err)
 	}
 	t.Setenv(envEndpoint, "https://env.invalid/v1")
@@ -57,6 +65,12 @@ func TestResolveEffectivePrecedence(t *testing.T) {
 	if effective.Endpoint != "https://flag.invalid/v1" || effective.EndpointSource != "flag" {
 		t.Fatalf("unexpected endpoint resolution: %#v", effective)
 	}
+	if !effective.MCP.Enabled || len(effective.MCP.Servers) != 1 {
+		t.Fatalf("expected stored mcp config in effective settings: %#v", effective)
+	}
+	if !effective.LSP.Enabled || effective.LSP.YAML.Command != "yaml-language-server" {
+		t.Fatalf("expected stored lsp config in effective settings: %#v", effective)
+	}
 }
 
 func TestClearStored(t *testing.T) {
@@ -71,7 +85,7 @@ func TestClearStored(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load stored: %v", err)
 	}
-	if loaded != (Settings{}) {
+	if !reflect.DeepEqual(loaded, Settings{}) {
 		t.Fatalf("expected cleared settings, got %#v", loaded)
 	}
 }

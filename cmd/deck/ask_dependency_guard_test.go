@@ -7,7 +7,9 @@ import (
 	"testing"
 )
 
-func TestAskDependencyGuardRestrictsGollmImports(t *testing.T) {
+func TestAskDependencyGuardRemovesLegacyProviderImports(t *testing.T) {
+	legacyImport := "github.com/teilo" + "millet/" + "gol" + "lm"
+	legacyToken := "gol" + "lm"
 	repoRoot := filepath.Join("..", "..")
 	err := filepath.Walk(repoRoot, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -30,16 +32,14 @@ func TestAskDependencyGuardRestrictsGollmImports(t *testing.T) {
 		if strings.HasSuffix(filepath.ToSlash(path), "/cmd/deck/ask_dependency_guard_test.go") {
 			return nil
 		}
-		if !strings.Contains(string(raw), "github.com/teilomillet/gollm") {
+		if !strings.Contains(string(raw), legacyImport) && !strings.Contains(string(raw), legacyToken) {
 			return nil
 		}
 		rel, relErr := filepath.Rel(repoRoot, path)
 		if relErr != nil {
 			return relErr
 		}
-		if filepath.ToSlash(rel) != "internal/askprovider/gollm/client.go" {
-			t.Fatalf("gollm import is only allowed in internal/askprovider/gollm/client.go, found %s", filepath.ToSlash(rel))
-		}
+		t.Fatalf("legacy provider reference found in %s", filepath.ToSlash(rel))
 		return nil
 	})
 	if err != nil {

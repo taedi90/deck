@@ -11,11 +11,11 @@ import (
 	"github.com/taedi90/deck/internal/askcli"
 	"github.com/taedi90/deck/internal/askconfig"
 	"github.com/taedi90/deck/internal/askprovider"
-	gollmprovider "github.com/taedi90/deck/internal/askprovider/gollm"
+	openaiprovider "github.com/taedi90/deck/internal/askprovider/openai"
 )
 
 var newAskBackend = func() askprovider.Client {
-	return gollmprovider.New()
+	return openaiprovider.New()
 }
 
 func newAskCommand() *cobra.Command {
@@ -100,7 +100,11 @@ func newAskAuthSetCommand() *cobra.Command {
 			if value := strings.TrimSpace(endpoint); value != "" {
 				updated.Endpoint = value
 			}
-			if updated == settings {
+			changed := settings.Provider != updated.Provider ||
+				settings.Model != updated.Model ||
+				settings.APIKey != updated.APIKey ||
+				settings.Endpoint != updated.Endpoint
+			if !changed {
 				return fmt.Errorf("ask auth set requires at least one of --api-key, --provider, --model, or --endpoint")
 			}
 			if err := askconfig.SaveStored(updated); err != nil {
@@ -142,6 +146,12 @@ func newAskAuthShowCommand() *cobra.Command {
 				return err
 			}
 			if err := stdoutPrintf("endpointSource=%s\n", effective.EndpointSource); err != nil {
+				return err
+			}
+			if err := stdoutPrintf("mcpEnabled=%t\n", effective.MCP.Enabled); err != nil {
+				return err
+			}
+			if err := stdoutPrintf("lspEnabled=%t\n", effective.LSP.Enabled); err != nil {
 				return err
 			}
 			if err := stdoutPrintf("apiKey=%s\n", askconfig.MaskAPIKey(effective.APIKey)); err != nil {

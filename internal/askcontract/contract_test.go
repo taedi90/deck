@@ -19,3 +19,17 @@ func TestParseGeneration(t *testing.T) {
 		t.Fatalf("expected one file, got %d", len(resp.Files))
 	}
 }
+
+func TestParseClassification(t *testing.T) {
+	raw := `{"route":"explain","confidence":0.82,"reason":"analysis request","target":{"kind":"scenario","path":"workflows/scenarios/apply.yaml","name":"apply"},"generationAllowed":false}`
+	resp, err := ParseClassification(raw)
+	if err != nil {
+		t.Fatalf("parse classification: %v", err)
+	}
+	if resp.Route != "explain" {
+		t.Fatalf("unexpected route: %s", resp.Route)
+	}
+	if resp.Target.Path != "workflows/scenarios/apply.yaml" {
+		t.Fatalf("unexpected target: %#v", resp.Target)
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/taedi90/deck/internal/askconfig"
 	"github.com/taedi90/deck/internal/askprovider"
 )
 
@@ -41,7 +42,7 @@ func TestAskAuthCommands(t *testing.T) {
 	if err != nil {
 		t.Fatalf("auth show: %v", err)
 	}
-	for _, want := range []string{"provider=openrouter", "model=anthropic/claude-3.5-sonnet", "endpoint=https://openrouter.ai/api/v1", "endpointSource=config", "apiKey=secr****oken", "apiKeySource=config"} {
+	for _, want := range []string{"provider=openrouter", "model=anthropic/claude-3.5-sonnet", "endpoint=https://openrouter.ai/api/v1", "endpointSource=config", "mcpEnabled=false", "lspEnabled=false", "apiKey=secr****oken", "apiKeySource=config"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("expected %q in auth show output, got %q", want, out)
 		}
@@ -52,6 +53,28 @@ func TestAskAuthCommands(t *testing.T) {
 	}
 	if !strings.Contains(out, "ask auth cleared") {
 		t.Fatalf("unexpected auth unset output: %q", out)
+	}
+}
+
+func TestAskAuthShowIncludesStoredAugmentSettings(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "config"))
+	if err := askconfig.SaveStored(askconfig.Settings{
+		Provider: "openai",
+		Model:    "gpt-5.4",
+		APIKey:   "secret-token",
+		MCP:      askconfig.MCP{Enabled: true, Servers: []askconfig.MCPServer{{Name: "context7", Command: "context7-mcp"}}},
+		LSP:      askconfig.LSP{Enabled: true, YAML: askconfig.LSPEntry{Command: "yaml-language-server", Args: []string{"--stdio"}}},
+	}); err != nil {
+		t.Fatalf("save stored config: %v", err)
+	}
+	out, err := runWithCapturedStdout([]string{"ask", "auth", "show"})
+	if err != nil {
+		t.Fatalf("auth show: %v", err)
+	}
+	for _, want := range []string{"mcpEnabled=true", "lspEnabled=true"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected %q in auth show output, got %q", want, out)
+		}
 	}
 }
 
@@ -70,7 +93,7 @@ func TestAskPreviewAndWrite(t *testing.T) {
 
 	originalFactory := newAskBackend
 	newAskBackend = func() askprovider.Client {
-		return &mockAskClient{responses: []string{validAskJSON()}}
+		return &mockAskClient{responses: []string{validClassificationDraft(), validAskJSON()}}
 	}
 	defer func() { newAskBackend = originalFactory }()
 
@@ -101,6 +124,8 @@ func TestAskPreviewAndWrite(t *testing.T) {
 }
 
 func TestAskClarifyDoesNotGenerate(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "config"))
+	t.Setenv("DECK_ASK_API_KEY", "env-key")
 	root := t.TempDir()
 	oldWD, err := os.Getwd()
 	if err != nil {
@@ -111,7 +136,7 @@ func TestAskClarifyDoesNotGenerate(t *testing.T) {
 	}
 	defer func() { _ = os.Chdir(oldWD) }()
 
-	client := &mockAskClient{responses: []string{validAskJSON()}}
+	client := &mockAskClient{responses: []string{`{"route":"clarify","confidence":0.9,"reason":"prompt is ambiguous","target":{"kind":"unknown"},"generationAllowed":false}`, `{"summary":"Need clarification","answer":"Please provide a concrete action for ask to perform.","suggestions":["explain workflows/scenarios/apply.yaml","review current apply scenario"]}`}}
 	originalFactory := newAskBackend
 	newAskBackend = func() askprovider.Client {
 		return client
@@ -122,11 +147,11 @@ func TestAskClarifyDoesNotGenerate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ask clarify: %v", err)
 	}
-	if !strings.Contains(out, "too ambiguous") {
+	if !strings.Contains(out, "clarification") && !strings.Contains(out, "Need clarification") {
 		t.Fatalf("expected clarification output, got %q", out)
 	}
-	if client.calls != 0 {
-		t.Fatalf("clarify route must not call backend; calls=%d", client.calls)
+	if client.calls == 0 {
+		t.Fatalf("clarify route should use llm when available")
 	}
 }
 
@@ -144,7 +169,7 @@ func TestAskRepairLoop(t *testing.T) {
 
 	originalFactory := newAskBackend
 	newAskBackend = func() askprovider.Client {
-		return &mockAskClient{responses: []string{`{"summary":"bad","files":[{"path":"workflows/scenarios/apply.yaml","content":"role: apply\nversion: v1alpha1\nsteps: ["}]}`, validAskJSON()}}
+		return &mockAskClient{responses: []string{validClassificationDraft(), `{"summary":"bad","files":[{"path":"workflows/scenarios/apply.yaml","content":"role: apply\nversion: v1alpha1\nsteps: ["}]}`, validAskJSON()}}
 	}
 	defer func() { newAskBackend = originalFactory }()
 
@@ -178,7 +203,7 @@ func TestAskReviewMode(t *testing.T) {
 	}
 	defer func() { _ = os.Chdir(oldWD) }()
 
-	client := &mockAskClient{responses: []string{`{"summary":"reviewed workspace","review":["Replace generic Command usage with typed steps where possible."],"files":[]}`}}
+	client := &mockAskClient{responses: []string{validClassificationReview(), `{"summary":"reviewed workspace","answer":"The apply scenario currently uses a Command step and would benefit from typed steps.","suggestions":["Replace generic Command usage with typed steps where possible."]}`}}
 	originalFactory := newAskBackend
 	newAskBackend = func() askprovider.Client { return client }
 	defer func() { newAskBackend = originalFactory }()
@@ -187,14 +212,22 @@ func TestAskReviewMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ask review: %v", err)
 	}
-	if !strings.Contains(out, "Workspace review") || !strings.Contains(out, "local-findings:") {
+	if !strings.Contains(out, "reviewed workspace") || !strings.Contains(out, "local-findings:") {
 		t.Fatalf("unexpected review output: %q", out)
 	}
-	if client.calls != 0 {
-		t.Fatalf("review route should complete locally for default review request")
+	if client.calls == 0 {
+		t.Fatalf("review route should use llm when available")
 	}
 }
 
 func validAskJSON() string {
 	return `{"summary":"generated starter workflows","review":["Prefer typed steps where possible."],"files":[{"path":"workflows/vars.yaml","content":"{}\n"},{"path":"workflows/scenarios/prepare.yaml","content":"role: prepare\nversion: v1alpha1\nartifacts: {}\n"},{"path":"workflows/scenarios/apply.yaml","content":"role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    imports:\n      - path: example-apply.yaml\n"},{"path":"workflows/components/example-apply.yaml","content":"steps:\n  - id: wait-runtime\n    kind: Wait\n    spec:\n      action: fileExists\n      path: /etc/containerd/config.toml\n      interval: 1s\n      timeout: 5s\n"}]}`
+}
+
+func validClassificationDraft() string {
+	return `{"route":"draft","confidence":0.92,"reason":"user asked to create a scenario","target":{"kind":"workspace"},"generationAllowed":true}`
+}
+
+func validClassificationReview() string {
+	return `{"route":"review","confidence":0.94,"reason":"user explicitly requested review","target":{"kind":"workspace"},"generationAllowed":false}`
 }

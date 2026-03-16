@@ -92,9 +92,10 @@ func InspectWorkspace(root string) (WorkspaceSummary, error) {
 	return out, nil
 }
 
-func Retrieve(route askintent.Route, prompt string, workspace WorkspaceSummary, state askstate.Context) RetrievalResult {
+func Retrieve(route askintent.Route, prompt string, target askintent.Target, workspace WorkspaceSummary, state askstate.Context, external []Chunk) RetrievalResult {
 	budget, maxChunks := routeBudget(route)
 	lowerPrompt := strings.ToLower(strings.TrimSpace(prompt))
+	related := relatedWorkspaceTargets(workspace, target)
 	chunks := make([]Chunk, 0, 32)
 	workflowMeta := schemadoc.WorkflowMeta()
 	chunks = append(chunks, Chunk{
@@ -136,6 +137,15 @@ func Retrieve(route askintent.Route, prompt string, workspace WorkspaceSummary, 
 			continue
 		}
 		score := 30
+		if target.Path != "" && filepath.ToSlash(file.Path) == filepath.ToSlash(target.Path) {
+			score += 50
+		}
+		if related[filepath.ToSlash(file.Path)] {
+			score += 35
+		}
+		if target.Name != "" && strings.Contains(strings.ToLower(filepath.Base(file.Path)), strings.ToLower(target.Name)) {
+			score += 25
+		}
 		if strings.Contains(lowerPrompt, strings.ToLower(filepath.Base(file.Path))) {
 			score += 30
 		}
@@ -158,6 +168,12 @@ func Retrieve(route askintent.Route, prompt string, workspace WorkspaceSummary, 
 			Content: state.LastLint,
 			Score:   20,
 		})
+	}
+	for _, chunk := range external {
+		if strings.TrimSpace(chunk.Content) == "" {
+			continue
+		}
+		chunks = append(chunks, chunk)
 	}
 
 	sort.Slice(chunks, func(i, j int) bool {
@@ -185,6 +201,48 @@ func Retrieve(route askintent.Route, prompt string, workspace WorkspaceSummary, 
 	}
 
 	return RetrievalResult{Chunks: selected, Dropped: dropped, MaxBytes: budget}
+}
+
+func relatedWorkspaceTargets(workspace WorkspaceSummary, target askintent.Target) map[string]bool {
+	if target.Path == "" {
+		return nil
+	}
+	targetPath := filepath.ToSlash(target.Path)
+	fileByPath := make(map[string]WorkspaceFile, len(workspace.Files))
+	for _, file := range workspace.Files {
+		fileByPath[filepath.ToSlash(file.Path)] = file
+	}
+	current, ok := fileByPath[targetPath]
+	if !ok {
+		return nil
+	}
+	related := map[string]bool{targetPath: true}
+	if !strings.HasPrefix(targetPath, "workflows/scenarios/") {
+		return related
+	}
+	for _, importPath := range importPaths(current.Content) {
+		resolved := filepath.ToSlash(filepath.Join("workflows/components", importPath))
+		if _, exists := fileByPath[resolved]; exists {
+			related[resolved] = true
+		}
+	}
+	return related
+}
+
+func importPaths(content string) []string {
+	paths := make([]string, 0)
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "- path:") {
+			continue
+		}
+		value := strings.TrimSpace(strings.TrimPrefix(trimmed, "- path:"))
+		value = strings.Trim(value, `"'`)
+		if value != "" {
+			paths = append(paths, filepath.ToSlash(value))
+		}
+	}
+	return paths
 }
 
 func BuildChunkText(retrieval RetrievalResult) string {

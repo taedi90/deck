@@ -18,12 +18,19 @@ type Context struct {
 	LastRoute           string    `json:"lastRoute,omitempty"`
 	LastConfidence      float64   `json:"lastConfidence,omitempty"`
 	LastReason          string    `json:"lastReason,omitempty"`
+	LastTargetKind      string    `json:"lastTargetKind,omitempty"`
+	LastTargetPath      string    `json:"lastTargetPath,omitempty"`
+	LastTargetName      string    `json:"lastTargetName,omitempty"`
 	LastPrompt          string    `json:"lastPrompt,omitempty"`
 	LastFiles           []string  `json:"lastFiles,omitempty"`
 	LastLint            string    `json:"lastLint,omitempty"`
 	LastLLMUsed         bool      `json:"lastLlmUsed,omitempty"`
+	LastClassifierLLM   bool      `json:"lastClassifierLlmUsed,omitempty"`
 	LastChunkIDs        []string  `json:"lastChunkIds,omitempty"`
 	LastDroppedChunkIDs []string  `json:"lastDroppedChunkIds,omitempty"`
+	LastAugmentEvents   []string  `json:"lastAugmentEvents,omitempty"`
+	LastMCPChunkIDs     []string  `json:"lastMcpChunkIds,omitempty"`
+	LastLSPChunkIDs     []string  `json:"lastLspChunkIds,omitempty"`
 	LastRetries         int       `json:"lastRetries,omitempty"`
 	LastTermination     string    `json:"lastTermination,omitempty"`
 	LastUpdatedAt       time.Time `json:"lastUpdatedAt,omitempty"`

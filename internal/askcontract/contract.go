@@ -25,6 +25,21 @@ type InfoResponse struct {
 	SuggestedChange []string `json:"suggestedChanges"`
 }
 
+type ClassificationResponse struct {
+	Route             string               `json:"route"`
+	Confidence        float64              `json:"confidence"`
+	Reason            string               `json:"reason"`
+	Target            ClassificationTarget `json:"target"`
+	GenerationAllowed *bool                `json:"generationAllowed,omitempty"`
+	ReviewStyle       string               `json:"reviewStyle,omitempty"`
+}
+
+type ClassificationTarget struct {
+	Kind string `json:"kind,omitempty"`
+	Path string `json:"path,omitempty"`
+	Name string `json:"name,omitempty"`
+}
+
 func ParseGeneration(raw string) (GenerationResponse, error) {
 	cleaned := clean(raw)
 	if cleaned == "" {
@@ -57,6 +72,29 @@ func ParseInfo(raw string) InfoResponse {
 		resp.Answer = strings.TrimSpace(raw)
 	}
 	return resp
+}
+
+func ParseClassification(raw string) (ClassificationResponse, error) {
+	cleaned := clean(raw)
+	if cleaned == "" {
+		return ClassificationResponse{}, fmt.Errorf("classification response is empty")
+	}
+	var resp ClassificationResponse
+	if err := json.Unmarshal([]byte(cleaned), &resp); err != nil {
+		return ClassificationResponse{}, fmt.Errorf("parse classification response: %w", err)
+	}
+	resp.Route = strings.TrimSpace(resp.Route)
+	resp.Reason = strings.TrimSpace(resp.Reason)
+	resp.Target.Kind = strings.TrimSpace(resp.Target.Kind)
+	resp.Target.Path = strings.TrimSpace(resp.Target.Path)
+	resp.Target.Name = strings.TrimSpace(resp.Target.Name)
+	if resp.Confidence < 0 {
+		resp.Confidence = 0
+	}
+	if resp.Confidence > 1 {
+		resp.Confidence = 1
+	}
+	return resp, nil
 }
 
 func clean(response string) string {

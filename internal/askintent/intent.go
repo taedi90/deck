@@ -33,10 +33,17 @@ type Decision struct {
 	Route           Route
 	Confidence      float64
 	Reason          string
+	Target          Target
 	AllowGeneration bool
 	AllowRetry      bool
 	RequiresLint    bool
 	LLMPolicy       LLMPolicy
+}
+
+type Target struct {
+	Kind string
+	Path string
+	Name string
 }
 
 func Classify(input Input) Decision {
@@ -45,6 +52,7 @@ func Classify(input Input) Decision {
 			Route:           RouteReview,
 			Confidence:      1.0,
 			Reason:          "explicit --review flag",
+			Target:          Target{Kind: "workspace"},
 			AllowGeneration: false,
 			AllowRetry:      false,
 			RequiresLint:    false,
@@ -60,34 +68,69 @@ func Classify(input Input) Decision {
 		return clarify("low-information prompt")
 	}
 	if hasAny(prompt, reviewTokens) {
-		return Decision{Route: RouteReview, Confidence: 0.9, Reason: "review intent tokens", AllowGeneration: false, AllowRetry: false, RequiresLint: false, LLMPolicy: LLMOptional}
+		return Decision{Route: RouteReview, Confidence: 0.9, Reason: "review intent tokens", Target: inferTarget(prompt), AllowGeneration: false, AllowRetry: false, RequiresLint: false, LLMPolicy: LLMOptional}
 	}
 	if hasAny(prompt, explainTokens) {
-		return Decision{Route: RouteExplain, Confidence: 0.85, Reason: "explain intent tokens", AllowGeneration: false, AllowRetry: false, RequiresLint: false, LLMPolicy: LLMOptional}
+		return Decision{Route: RouteExplain, Confidence: 0.85, Reason: "explain intent tokens", Target: inferTarget(prompt), AllowGeneration: false, AllowRetry: false, RequiresLint: false, LLMPolicy: LLMOptional}
 	}
 	if hasAny(prompt, questionTokens) {
-		return Decision{Route: RouteQuestion, Confidence: 0.8, Reason: "question intent tokens", AllowGeneration: false, AllowRetry: false, RequiresLint: false, LLMPolicy: LLMOptional}
+		return Decision{Route: RouteQuestion, Confidence: 0.8, Reason: "question intent tokens", Target: inferTarget(prompt), AllowGeneration: false, AllowRetry: false, RequiresLint: false, LLMPolicy: LLMOptional}
 	}
 	if hasAny(prompt, refineTokens) {
 		if input.HasWorkflowTree || input.HasPrepare || input.HasApply {
-			return Decision{Route: RouteRefine, Confidence: 0.86, Reason: "refinement tokens with existing workflow", AllowGeneration: true, AllowRetry: true, RequiresLint: true, LLMPolicy: LLMRequired}
+			return Decision{Route: RouteRefine, Confidence: 0.86, Reason: "refinement tokens with existing workflow", Target: inferTarget(prompt), AllowGeneration: true, AllowRetry: true, RequiresLint: true, LLMPolicy: LLMRequired}
 		}
-		return Decision{Route: RouteDraft, Confidence: 0.72, Reason: "refinement tokens without existing workflow", AllowGeneration: true, AllowRetry: true, RequiresLint: true, LLMPolicy: LLMRequired}
+		return Decision{Route: RouteDraft, Confidence: 0.72, Reason: "refinement tokens without existing workflow", Target: inferTarget(prompt), AllowGeneration: true, AllowRetry: true, RequiresLint: true, LLMPolicy: LLMRequired}
 	}
 	if hasAny(prompt, draftTokens) {
 		if input.HasWorkflowTree {
-			return Decision{Route: RouteRefine, Confidence: 0.7, Reason: "authoring tokens with existing workflow", AllowGeneration: true, AllowRetry: true, RequiresLint: true, LLMPolicy: LLMRequired}
+			return Decision{Route: RouteRefine, Confidence: 0.7, Reason: "authoring tokens with existing workflow", Target: inferTarget(prompt), AllowGeneration: true, AllowRetry: true, RequiresLint: true, LLMPolicy: LLMRequired}
 		}
-		return Decision{Route: RouteDraft, Confidence: 0.86, Reason: "authoring tokens", AllowGeneration: true, AllowRetry: true, RequiresLint: true, LLMPolicy: LLMRequired}
+		return Decision{Route: RouteDraft, Confidence: 0.86, Reason: "authoring tokens", Target: inferTarget(prompt), AllowGeneration: true, AllowRetry: true, RequiresLint: true, LLMPolicy: LLMRequired}
 	}
 	if input.HasWorkflowTree {
-		return Decision{Route: RouteExplain, Confidence: 0.52, Reason: "default to explain for ambiguous prompt", AllowGeneration: false, AllowRetry: false, RequiresLint: false, LLMPolicy: LLMOptional}
+		return Decision{Route: RouteExplain, Confidence: 0.52, Reason: "default to explain for ambiguous prompt", Target: Target{Kind: "workspace"}, AllowGeneration: false, AllowRetry: false, RequiresLint: false, LLMPolicy: LLMOptional}
 	}
 	return clarify("ambiguous prompt")
 }
 
 func clarify(reason string) Decision {
-	return Decision{Route: RouteClarify, Confidence: 0.95, Reason: reason, AllowGeneration: false, AllowRetry: false, RequiresLint: false, LLMPolicy: LLMDisallowed}
+	return Decision{Route: RouteClarify, Confidence: 0.95, Reason: reason, Target: Target{Kind: "unknown"}, AllowGeneration: false, AllowRetry: false, RequiresLint: false, LLMPolicy: LLMDisallowed}
+}
+
+func ParseRoute(value string) Route {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case string(RouteClarify):
+		return RouteClarify
+	case string(RouteQuestion):
+		return RouteQuestion
+	case string(RouteExplain):
+		return RouteExplain
+	case string(RouteReview):
+		return RouteReview
+	case string(RouteRefine):
+		return RouteRefine
+	case string(RouteDraft):
+		return RouteDraft
+	default:
+		return RouteClarify
+	}
+}
+
+func inferTarget(prompt string) Target {
+	if strings.Contains(prompt, "apply") {
+		return Target{Kind: "scenario", Name: "apply", Path: "workflows/scenarios/apply.yaml"}
+	}
+	if strings.Contains(prompt, "prepare") {
+		return Target{Kind: "scenario", Name: "prepare", Path: "workflows/scenarios/prepare.yaml"}
+	}
+	if strings.Contains(prompt, "component") {
+		return Target{Kind: "component"}
+	}
+	if strings.Contains(prompt, "vars") {
+		return Target{Kind: "vars", Path: "workflows/vars.yaml"}
+	}
+	return Target{Kind: "workspace"}
 }
 
 func hasAny(prompt string, tokens []string) bool {

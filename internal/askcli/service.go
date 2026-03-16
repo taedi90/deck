@@ -11,6 +11,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	lspaugment "github.com/taedi90/deck/internal/askaugment/lsp"
+	mcpaugment "github.com/taedi90/deck/internal/askaugment/mcp"
 	"github.com/taedi90/deck/internal/askconfig"
 	"github.com/taedi90/deck/internal/askcontract"
 	"github.com/taedi90/deck/internal/askhooks"
@@ -40,6 +42,7 @@ type Options struct {
 
 type runResult struct {
 	Route         askintent.Route
+	Target        askintent.Target
 	Confidence    float64
 	Reason        string
 	Summary       string
@@ -51,9 +54,11 @@ type runResult struct {
 	WroteFiles    bool
 	RetriesUsed   int
 	LLMUsed       bool
+	ClassifierLLM bool
 	Termination   string
 	Chunks        []askretrieve.Chunk
 	DroppedChunks []string
+	AugmentEvents []string
 	ConfigSource  askconfig.EffectiveSettings
 }
 
@@ -82,7 +87,7 @@ func Execute(ctx context.Context, opts Options, client askprovider.Client) error
 	if err != nil {
 		return err
 	}
-	decision := hooks.PostClassify(askintent.Classify(askintent.Input{
+	heuristic := hooks.PostClassify(askintent.Classify(askintent.Input{
 		Prompt:          requestText,
 		ReviewFlag:      opts.Review,
 		HasWorkflowTree: workspace.HasWorkflowTree,
@@ -93,62 +98,55 @@ func Execute(ctx context.Context, opts Options, client askprovider.Client) error
 	if err != nil {
 		return err
 	}
-	retrieval := askretrieve.Retrieve(decision.Route, requestText, workspace, state)
+	decision := heuristic
+	classifierLLM := false
+	if canUseLLM(effective) {
+		classified, classifyErr := classifyWithLLM(ctx, client, effective, requestText, opts.Review, workspace)
+		if classifyErr == nil {
+			decision = classified
+			classifierLLM = true
+		}
+	}
+
+	mcpChunks, mcpEvents := mcpaugment.Gather(ctx, effective.MCP, decision.Route, requestText)
+	lspChunks, lspEvents := lspaugment.Gather(ctx, effective.LSP, decision.Target, workspace)
+	externalChunks := append(append([]askretrieve.Chunk{}, mcpChunks...), lspChunks...)
+	retrieval := askretrieve.Retrieve(decision.Route, requestText, decision.Target, workspace, state, externalChunks)
 	result := runResult{
 		Route:         decision.Route,
+		Target:        decision.Target,
 		Confidence:    decision.Confidence,
 		Reason:        decision.Reason,
 		RetriesUsed:   0,
 		Chunks:        retrieval.Chunks,
 		DroppedChunks: retrieval.Dropped,
 		ConfigSource:  effective,
+		ClassifierLLM: classifierLLM,
+		AugmentEvents: append(mcpEvents, lspEvents...),
 	}
 
-	if decision.LLMPolicy == askintent.LLMRequired && askconfig.NeedsAPIKey(effective.Provider) && strings.TrimSpace(effective.APIKey) == "" {
+	if decision.LLMPolicy == askintent.LLMRequired && !canUseLLM(effective) {
 		return fmt.Errorf("missing ask api key for provider %q; set %s or run `deck ask auth set --api-key ...`", effective.Provider, "DECK_ASK_API_KEY")
 	}
 
 	switch decision.Route {
-	case askintent.RouteClarify:
-		result.Summary, result.Answer, result.ReviewLines = localClarify(requestText), "", clarificationSuggestions()
-		result.Termination = "clarified"
-	case askintent.RouteExplain:
-		result.Summary, result.Answer = localExplain(workspace, requestText)
-		if shouldUseLLMForInfo(decision.Route, requestText, effective) {
-			augmentWithLLM(ctx, client, effective, retrieval, requestText, decision.Route, &result)
-		}
-		result.Termination = "answered-locally"
-	case askintent.RouteQuestion:
-		if shouldUseLLMForInfo(decision.Route, requestText, effective) {
-			augmentWithLLM(ctx, client, effective, retrieval, requestText, decision.Route, &result)
-			result.Termination = "answered-with-llm"
-		} else {
-			result.Summary = "Question received"
-			result.Answer = "I need either more context from your workspace or an API key for deeper question answering."
-			result.ReviewLines = clarificationSuggestions()
-			result.Termination = "answered-locally"
-		}
-	case askintent.RouteReview:
-		result.Summary = "Workspace review"
-		result.LocalFindings = askreview.Workspace(resolvedRoot)
-		result.ReviewLines = findingsToLines(result.LocalFindings)
-		if shouldUseLLMForInfo(decision.Route, requestText, effective) {
-			augmentWithLLM(ctx, client, effective, retrieval, requestText, decision.Route, &result)
-		}
-		result.Termination = "reviewed"
 	case askintent.RouteDraft, askintent.RouteRefine:
-		attempts := generationAttempts(opts.MaxIterations, decision)
-		gen, lintSummary, retriesUsed, err := generateWithValidation(ctx, client, askprovider.Request{
+		if !canUseLLM(effective) {
+			return fmt.Errorf("route %s requires model access; configure provider credentials first", decision.Route)
+		}
+		attempts := generationAttempts(opts.MaxIterations, decision, requestText)
+		gen, lintSummary, retriesUsed, genErr := generateWithValidation(ctx, client, askprovider.Request{
+			Kind:         "generate",
 			Provider:     effective.Provider,
 			Model:        effective.Model,
 			APIKey:       effective.APIKey,
 			Endpoint:     effective.Endpoint,
-			SystemPrompt: generationSystemPrompt(decision.Route, retrieval),
+			SystemPrompt: generationSystemPrompt(decision.Route, decision.Target, retrieval),
 			Prompt:       generationUserPrompt(workspace, state, requestText, strings.TrimSpace(opts.FromPath), decision.Route),
 			MaxRetries:   attempts,
 		}, resolvedRoot, attempts)
-		if err != nil {
-			return err
+		if genErr != nil {
+			return genErr
 		}
 		result.LLMUsed = true
 		result.RetriesUsed = retriesUsed
@@ -169,9 +167,29 @@ func Execute(ctx context.Context, opts Options, client askprovider.Client) error
 			result.Termination = "generated"
 		}
 	default:
-		result.Summary = localClarify(requestText)
-		result.ReviewLines = clarificationSuggestions()
-		result.Termination = "clarified"
+		if decision.Route == askintent.RouteReview {
+			result.LocalFindings = askreview.Workspace(resolvedRoot)
+			result.ReviewLines = append(result.ReviewLines, findingsToLines(result.LocalFindings)...)
+		}
+		if canUseLLM(effective) {
+			info, infoErr := answerWithLLM(ctx, client, effective, decision, retrieval, requestText)
+			if infoErr == nil {
+				result.LLMUsed = true
+				result.Summary = info.Summary
+				result.Answer = info.Answer
+				result.ReviewLines = append(result.ReviewLines, info.Suggestions...)
+				result.ReviewLines = append(result.ReviewLines, info.Findings...)
+				result.ReviewLines = append(result.ReviewLines, info.SuggestedChange...)
+			} else {
+				result.ReviewLines = append(result.ReviewLines, "LLM response failed; using local fallback: "+infoErr.Error())
+				applyLocalFallback(&result, resolvedRoot, workspace, requestText)
+			}
+		} else {
+			applyLocalFallback(&result, resolvedRoot, workspace, requestText)
+		}
+		if result.Termination == "" {
+			result.Termination = "answered"
+		}
 	}
 
 	if err := askstate.Save(resolvedRoot, askstate.Context{
@@ -179,12 +197,19 @@ func Execute(ctx context.Context, opts Options, client askprovider.Client) error
 		LastRoute:           string(result.Route),
 		LastConfidence:      result.Confidence,
 		LastReason:          result.Reason,
+		LastTargetKind:      result.Target.Kind,
+		LastTargetPath:      result.Target.Path,
+		LastTargetName:      result.Target.Name,
 		LastPrompt:          strings.TrimSpace(requestText),
 		LastFiles:           filePaths(result.Files),
 		LastLint:            result.LintSummary,
 		LastLLMUsed:         result.LLMUsed,
+		LastClassifierLLM:   result.ClassifierLLM,
 		LastChunkIDs:        chunkIDs(result.Chunks),
 		LastDroppedChunkIDs: append([]string(nil), result.DroppedChunks...),
+		LastAugmentEvents:   append([]string(nil), result.AugmentEvents...),
+		LastMCPChunkIDs:     chunkIDsBySource(result.Chunks, "mcp"),
+		LastLSPChunkIDs:     chunkIDsBySource(result.Chunks, "lsp"),
 		LastRetries:         result.RetriesUsed,
 		LastTermination:     result.Termination,
 	}, requestText, resultToMarkdown(result)); err != nil {
@@ -194,70 +219,125 @@ func Execute(ctx context.Context, opts Options, client askprovider.Client) error
 	return render(opts.Stdout, opts.Stderr, result)
 }
 
-func shouldUseLLMForInfo(route askintent.Route, prompt string, cfg askconfig.EffectiveSettings) bool {
-	if askconfig.NeedsAPIKey(cfg.Provider) && strings.TrimSpace(cfg.APIKey) == "" {
-		return false
+func canUseLLM(cfg askconfig.EffectiveSettings) bool {
+	return !askconfig.NeedsAPIKey(cfg.Provider) || strings.TrimSpace(cfg.APIKey) != ""
+}
+
+func classifyWithLLM(ctx context.Context, client askprovider.Client, cfg askconfig.EffectiveSettings, prompt string, reviewFlag bool, workspace askretrieve.WorkspaceSummary) (askintent.Decision, error) {
+	request := askprovider.Request{
+		Kind:         "classify",
+		Provider:     cfg.Provider,
+		Model:        cfg.Model,
+		APIKey:       cfg.APIKey,
+		Endpoint:     cfg.Endpoint,
+		SystemPrompt: classifierSystemPrompt(),
+		Prompt:       classifierUserPrompt(prompt, reviewFlag, workspace),
+		MaxRetries:   1,
 	}
-	prompt = strings.TrimSpace(prompt)
+	var parsed askcontract.ClassificationResponse
+	for attempt := 0; attempt < 2; attempt++ {
+		resp, err := client.Generate(ctx, request)
+		if err != nil {
+			return askintent.Decision{}, err
+		}
+		parsed, err = askcontract.ParseClassification(resp.Content)
+		if err == nil {
+			break
+		}
+		if attempt == 1 {
+			return askintent.Decision{}, err
+		}
+	}
+	route := askintent.ParseRoute(parsed.Route)
+	decision := routeDefaults(route)
+	decision.Confidence = parsed.Confidence
+	if decision.Confidence == 0 {
+		decision.Confidence = 0.6
+	}
+	if strings.TrimSpace(parsed.Reason) != "" {
+		decision.Reason = parsed.Reason
+	}
+	decision.Target = askintent.Target{Kind: parsed.Target.Kind, Path: parsed.Target.Path, Name: parsed.Target.Name}
+	if decision.Target.Kind == "" {
+		decision.Target = askintent.Target{Kind: "workspace"}
+	}
+	if parsed.GenerationAllowed != nil && !*parsed.GenerationAllowed {
+		decision.AllowGeneration = false
+		decision.AllowRetry = false
+		decision.RequiresLint = false
+		decision.LLMPolicy = askintent.LLMOptional
+	}
+	return decision, nil
+}
+
+func routeDefaults(route askintent.Route) askintent.Decision {
 	switch route {
-	case askintent.RouteQuestion:
-		return true
+	case askintent.RouteDraft:
+		return askintent.Decision{Route: route, Confidence: 0.8, Reason: "draft route", Target: askintent.Target{Kind: "workspace"}, AllowGeneration: true, AllowRetry: true, RequiresLint: true, LLMPolicy: askintent.LLMRequired}
+	case askintent.RouteRefine:
+		return askintent.Decision{Route: route, Confidence: 0.8, Reason: "refine route", Target: askintent.Target{Kind: "workspace"}, AllowGeneration: true, AllowRetry: true, RequiresLint: true, LLMPolicy: askintent.LLMRequired}
 	case askintent.RouteReview:
-		return strings.Contains(strings.ToLower(prompt), "detail") || strings.Contains(strings.ToLower(prompt), "style")
+		return askintent.Decision{Route: route, Confidence: 0.75, Reason: "review route", Target: askintent.Target{Kind: "workspace"}, AllowGeneration: false, AllowRetry: false, RequiresLint: false, LLMPolicy: askintent.LLMOptional}
 	case askintent.RouteExplain:
-		return len(prompt) > 48
+		return askintent.Decision{Route: route, Confidence: 0.75, Reason: "explain route", Target: askintent.Target{Kind: "workspace"}, AllowGeneration: false, AllowRetry: false, RequiresLint: false, LLMPolicy: askintent.LLMOptional}
+	case askintent.RouteQuestion:
+		return askintent.Decision{Route: route, Confidence: 0.75, Reason: "question route", Target: askintent.Target{Kind: "workspace"}, AllowGeneration: false, AllowRetry: false, RequiresLint: false, LLMPolicy: askintent.LLMOptional}
 	default:
-		return false
+		return askintent.Decision{Route: askintent.RouteClarify, Confidence: 0.8, Reason: "clarify route", Target: askintent.Target{Kind: "unknown"}, AllowGeneration: false, AllowRetry: false, RequiresLint: false, LLMPolicy: askintent.LLMOptional}
 	}
 }
 
-func generationAttempts(requested int, decision askintent.Decision) int {
+func answerWithLLM(ctx context.Context, client askprovider.Client, cfg askconfig.EffectiveSettings, decision askintent.Decision, retrieval askretrieve.RetrievalResult, prompt string) (askcontract.InfoResponse, error) {
+	systemPrompt, userPrompt := infoPrompts(decision.Route, decision.Target, retrieval, prompt)
+	resp, err := client.Generate(ctx, askprovider.Request{
+		Kind:         string(decision.Route),
+		Provider:     cfg.Provider,
+		Model:        cfg.Model,
+		APIKey:       cfg.APIKey,
+		Endpoint:     cfg.Endpoint,
+		SystemPrompt: systemPrompt,
+		Prompt:       userPrompt,
+		MaxRetries:   1,
+	})
+	if err != nil {
+		return askcontract.InfoResponse{}, err
+	}
+	return askcontract.ParseInfo(resp.Content), nil
+}
+
+func applyLocalFallback(result *runResult, root string, workspace askretrieve.WorkspaceSummary, prompt string) {
+	switch result.Route {
+	case askintent.RouteReview:
+		result.Summary = "Workspace review"
+		result.LocalFindings = askreview.Workspace(root)
+		result.ReviewLines = append(result.ReviewLines, findingsToLines(result.LocalFindings)...)
+		result.Termination = "reviewed-locally"
+	case askintent.RouteExplain:
+		result.Summary, result.Answer = localExplain(workspace, prompt, result.Target)
+		result.Termination = "explained-locally"
+	case askintent.RouteQuestion:
+		result.Summary = "Question received"
+		result.Answer = "I need model access for a complete answer."
+		result.ReviewLines = append(result.ReviewLines, clarificationSuggestions()...)
+		result.Termination = "answered-locally"
+	default:
+		result.Summary = localClarify(prompt)
+		result.ReviewLines = append(result.ReviewLines, clarificationSuggestions()...)
+		result.Termination = "clarified"
+	}
+}
+
+func generationAttempts(requested int, decision askintent.Decision, prompt string) int {
 	if !decision.AllowRetry {
+		return 1
+	}
+	if !requestSpecificEnough(prompt) {
 		return 1
 	}
 	if requested > 0 {
 		return requested
 	}
 	return 1
-}
-
-func augmentWithLLM(ctx context.Context, client askprovider.Client, cfg askconfig.EffectiveSettings, retrieval askretrieve.RetrievalResult, prompt string, route askintent.Route, result *runResult) {
-	resp, err := client.Generate(ctx, askprovider.Request{
-		Provider:     cfg.Provider,
-		Model:        cfg.Model,
-		APIKey:       cfg.APIKey,
-		Endpoint:     cfg.Endpoint,
-		SystemPrompt: infoSystemPrompt(route, retrieval),
-		Prompt:       infoUserPrompt(prompt, route),
-		MaxRetries:   1,
-	})
-	if err != nil {
-		result.ReviewLines = append(result.ReviewLines, "LLM augmentation skipped: "+err.Error())
-		return
-	}
-	info := askcontract.ParseInfo(resp.Content)
-	result.LLMUsed = true
-	if strings.TrimSpace(info.Summary) != "" {
-		result.Summary = info.Summary
-	}
-	if strings.TrimSpace(info.Answer) != "" {
-		result.Answer = info.Answer
-	}
-	for _, line := range info.Suggestions {
-		if strings.TrimSpace(line) != "" {
-			result.ReviewLines = append(result.ReviewLines, line)
-		}
-	}
-	for _, line := range info.Findings {
-		if strings.TrimSpace(line) != "" {
-			result.ReviewLines = append(result.ReviewLines, line)
-		}
-	}
-	for _, line := range info.SuggestedChange {
-		if strings.TrimSpace(line) != "" {
-			result.ReviewLines = append(result.ReviewLines, line)
-		}
-	}
 }
 
 func generateWithValidation(ctx context.Context, client askprovider.Client, req askprovider.Request, root string, attempts int) (askcontract.GenerationResponse, string, int, error) {
@@ -268,6 +348,7 @@ func generateWithValidation(ctx context.Context, client askprovider.Client, req 
 			currentPrompt += "\n\nLocal validation failed. Fix the response and return full JSON again. Errors:\n" + lastValidation
 		}
 		resp, err := client.Generate(ctx, askprovider.Request{
+			Kind:         req.Kind,
 			Provider:     req.Provider,
 			Model:        req.Model,
 			APIKey:       req.APIKey,
@@ -282,18 +363,40 @@ func generateWithValidation(ctx context.Context, client askprovider.Client, req 
 		gen, err := askcontract.ParseGeneration(resp.Content)
 		if err != nil {
 			lastValidation = err.Error()
-			continue
+			return askcontract.GenerationResponse{}, lastValidation, attempt - 1, fmt.Errorf("ask generation returned invalid JSON: %s", lastValidation)
 		}
 		lintSummary, err := validateGeneration(root, gen)
 		if err == nil {
 			return gen, lintSummary, attempt - 1, nil
 		}
 		lastValidation = err.Error()
+		if !repairableValidationError(lastValidation) {
+			return askcontract.GenerationResponse{}, lastValidation, attempt - 1, fmt.Errorf("ask generation stopped without repair: %s", lastValidation)
+		}
 	}
 	if lastValidation == "" {
 		lastValidation = "generation failed without a parseable response"
 	}
 	return askcontract.GenerationResponse{}, lastValidation, attempts - 1, fmt.Errorf("ask generation did not validate after %d attempts: %s", attempts, lastValidation)
+}
+
+func repairableValidationError(message string) bool {
+	message = strings.ToLower(strings.TrimSpace(message))
+	if message == "" {
+		return false
+	}
+	nonRepairable := []string{
+		"response did not include any files",
+		"generated file path is empty",
+		"generated file path is not allowed",
+		"generated file path escapes workspace",
+	}
+	for _, token := range nonRepairable {
+		if strings.Contains(message, token) {
+			return false
+		}
+	}
+	return true
 }
 
 func validateGeneration(root string, gen askcontract.GenerationResponse) (string, error) {
@@ -325,12 +428,50 @@ func validateGeneration(root string, gen askcontract.GenerationResponse) (string
 	return fmt.Sprintf("lint ok (%d workflows)", len(validated)), nil
 }
 
-func generationSystemPrompt(route askintent.Route, retrieval askretrieve.RetrievalResult) string {
+func classifierSystemPrompt() string {
+	return strings.Join([]string{
+		"You are a classifier for deck ask.",
+		"Return strict JSON only.",
+		"Valid route values: clarify, question, explain, review, refine, draft.",
+		"Only choose draft/refine when user clearly asks to create or modify workflow files.",
+		"When user asks analyze/explain/summarize existing scenario, choose explain or review.",
+		"Include target.kind (workspace|scenario|component|vars|unknown) and optional target.path/name when inferable.",
+		"JSON shape: {\"route\":string,\"confidence\":number,\"reason\":string,\"target\":{\"kind\":string,\"path\":string,\"name\":string},\"generationAllowed\":boolean}",
+	}, "\n")
+}
+
+func classifierUserPrompt(prompt string, reviewFlag bool, workspace askretrieve.WorkspaceSummary) string {
+	b := &strings.Builder{}
+	b.WriteString("User prompt:\n")
+	b.WriteString(strings.TrimSpace(prompt))
+	b.WriteString("\n")
+	_, _ = fmt.Fprintf(b, "review flag: %t\n", reviewFlag)
+	_, _ = fmt.Fprintf(b, "has workflow tree: %t\n", workspace.HasWorkflowTree)
+	_, _ = fmt.Fprintf(b, "has prepare scenario: %t\n", workspace.HasPrepare)
+	_, _ = fmt.Fprintf(b, "has apply scenario: %t\n", workspace.HasApply)
+	b.WriteString("workspace files:\n")
+	for _, file := range workspace.Files {
+		b.WriteString("- ")
+		b.WriteString(file.Path)
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+func generationSystemPrompt(route askintent.Route, target askintent.Target, retrieval askretrieve.RetrievalResult) string {
 	b := &strings.Builder{}
 	b.WriteString("You are deck ask, a workflow authoring assistant.\n")
 	b.WriteString("Route: ")
 	b.WriteString(string(route))
 	b.WriteString("\n")
+	b.WriteString("Target kind: ")
+	b.WriteString(target.Kind)
+	b.WriteString("\n")
+	if target.Path != "" {
+		b.WriteString("Target path: ")
+		b.WriteString(target.Path)
+		b.WriteString("\n")
+	}
 	b.WriteString("Rules:\n")
 	b.WriteString("- Produce only strict JSON.\n")
 	b.WriteString("- JSON shape: {\"summary\":string,\"review\":[]string,\"files\":[{\"path\":string,\"content\":string}]}.\n")
@@ -340,6 +481,19 @@ func generationSystemPrompt(route askintent.Route, retrieval askretrieve.Retriev
 	b.WriteString("Retrieved context follows.\n")
 	b.WriteString(askretrieve.BuildChunkText(retrieval))
 	return b.String()
+}
+
+func infoPrompts(route askintent.Route, target askintent.Target, retrieval askretrieve.RetrievalResult, prompt string) (string, string) {
+	switch route {
+	case askintent.RouteExplain:
+		return explainSystemPrompt(target, retrieval), explainUserPrompt(prompt, target)
+	case askintent.RouteReview:
+		return reviewSystemPrompt(target, retrieval), reviewUserPrompt(prompt, target)
+	case askintent.RouteQuestion:
+		return questionSystemPrompt(target, retrieval), questionUserPrompt(prompt, target)
+	default:
+		return infoSystemPrompt(route, target, retrieval), infoUserPrompt(prompt, route, target)
+	}
 }
 
 func generationUserPrompt(workspace askretrieve.WorkspaceSummary, state askstate.Context, prompt string, fromLabel string, route askintent.Route) string {
@@ -370,20 +524,122 @@ func generationUserPrompt(workspace askretrieve.WorkspaceSummary, state askstate
 	return b.String()
 }
 
-func infoSystemPrompt(route askintent.Route, retrieval askretrieve.RetrievalResult) string {
+func infoSystemPrompt(route askintent.Route, target askintent.Target, retrieval askretrieve.RetrievalResult) string {
 	b := &strings.Builder{}
 	b.WriteString("You are deck ask.\n")
 	b.WriteString("Route: ")
 	b.WriteString(string(route))
 	b.WriteString("\n")
-	b.WriteString("Return strict JSON with shape {\"summary\":string,\"answer\":string,\"suggestions\":[]string}.\n")
+	b.WriteString("Target kind: ")
+	b.WriteString(target.Kind)
+	b.WriteString("\n")
+	if target.Path != "" {
+		b.WriteString("Target path: ")
+		b.WriteString(target.Path)
+		b.WriteString("\n")
+	}
+	b.WriteString("Return strict JSON with shape {\"summary\":string,\"answer\":string,\"suggestions\":[]string,\"findings\":[]string,\"suggestedChanges\":[]string}.\n")
 	b.WriteString("Do not return file content for this route.\n")
 	b.WriteString(askretrieve.BuildChunkText(retrieval))
 	return b.String()
 }
 
-func infoUserPrompt(prompt string, route askintent.Route) string {
-	return "Route: " + string(route) + "\nUser request:\n" + strings.TrimSpace(prompt)
+func questionSystemPrompt(target askintent.Target, retrieval askretrieve.RetrievalResult) string {
+	b := &strings.Builder{}
+	b.WriteString("You are deck ask answering a workflow question.\n")
+	b.WriteString("Answer the user's question directly and use retrieved evidence.\n")
+	b.WriteString("Keep the answer concise but specific.\n")
+	b.WriteString("Return strict JSON with shape {\"summary\":string,\"answer\":string,\"suggestions\":[]string}.\n")
+	b.WriteString("If evidence is incomplete, say what is known from the workspace and avoid speculation.\n")
+	if target.Path != "" {
+		b.WriteString("Target path: ")
+		b.WriteString(target.Path)
+		b.WriteString("\n")
+	}
+	b.WriteString(askretrieve.BuildChunkText(retrieval))
+	return b.String()
+}
+
+func explainSystemPrompt(target askintent.Target, retrieval askretrieve.RetrievalResult) string {
+	b := &strings.Builder{}
+	b.WriteString("You are deck ask explaining an existing deck workspace file or workflow.\n")
+	b.WriteString("Explain what the target does, how it fits into the workflow, and call out imports, phases, major step kinds, and Command usage when present.\n")
+	b.WriteString("Do not give a shallow file count summary.\n")
+	b.WriteString("Return strict JSON with shape {\"summary\":string,\"answer\":string,\"suggestions\":[]string}.\n")
+	if target.Path != "" {
+		b.WriteString("Target path: ")
+		b.WriteString(target.Path)
+		b.WriteString("\n")
+	}
+	b.WriteString(askretrieve.BuildChunkText(retrieval))
+	return b.String()
+}
+
+func reviewSystemPrompt(target askintent.Target, retrieval askretrieve.RetrievalResult) string {
+	b := &strings.Builder{}
+	b.WriteString("You are deck ask reviewing an existing deck workspace.\n")
+	b.WriteString("Use the retrieved evidence and any local findings to produce a scoped review with practical concerns and suggested changes.\n")
+	b.WriteString("Narrate the findings instead of only repeating raw warnings.\n")
+	b.WriteString("Return strict JSON with shape {\"summary\":string,\"answer\":string,\"findings\":[]string,\"suggestedChanges\":[]string}.\n")
+	if target.Path != "" {
+		b.WriteString("Target path: ")
+		b.WriteString(target.Path)
+		b.WriteString("\n")
+	}
+	b.WriteString(askretrieve.BuildChunkText(retrieval))
+	return b.String()
+}
+
+func infoUserPrompt(prompt string, route askintent.Route, target askintent.Target) string {
+	b := &strings.Builder{}
+	b.WriteString("Route: ")
+	b.WriteString(string(route))
+	b.WriteString("\n")
+	if target.Path != "" {
+		b.WriteString("Target path: ")
+		b.WriteString(target.Path)
+		b.WriteString("\n")
+	}
+	b.WriteString("User request:\n")
+	b.WriteString(strings.TrimSpace(prompt))
+	return b.String()
+}
+
+func questionUserPrompt(prompt string, target askintent.Target) string {
+	b := &strings.Builder{}
+	if target.Path != "" {
+		b.WriteString("Target path: ")
+		b.WriteString(target.Path)
+		b.WriteString("\n")
+	}
+	b.WriteString("User question:\n")
+	b.WriteString(strings.TrimSpace(prompt))
+	return b.String()
+}
+
+func explainUserPrompt(prompt string, target askintent.Target) string {
+	b := &strings.Builder{}
+	if target.Path != "" {
+		b.WriteString("Explain target: ")
+		b.WriteString(target.Path)
+		b.WriteString("\n")
+	}
+	b.WriteString("User request:\n")
+	b.WriteString(strings.TrimSpace(prompt))
+	return b.String()
+}
+
+func reviewUserPrompt(prompt string, target askintent.Target) string {
+	b := &strings.Builder{}
+	if target.Path != "" {
+		b.WriteString("Review target: ")
+		b.WriteString(target.Path)
+		b.WriteString("\n")
+	}
+	b.WriteString("User request:\n")
+	b.WriteString(strings.TrimSpace(prompt))
+	b.WriteString("\nProvide a scoped review with concrete suggested changes.")
+	return b.String()
 }
 
 func localClarify(prompt string) string {
@@ -401,17 +657,292 @@ func clarificationSuggestions() []string {
 	}
 }
 
-func localExplain(workspace askretrieve.WorkspaceSummary, prompt string) (string, string) {
+func localExplain(workspace askretrieve.WorkspaceSummary, prompt string, target askintent.Target) (string, string) {
+	resolved := resolveExplainTarget(workspace, target, prompt)
+	if resolved.Path != "" {
+		if summary, answer := explainWorkspaceFile(workspace, resolved); strings.TrimSpace(answer) != "" {
+			return summary, answer
+		}
+	}
 	b := &strings.Builder{}
 	b.WriteString("Workspace summary:\n")
 	_, _ = fmt.Fprintf(b, "- workflow tree: %t\n", workspace.HasWorkflowTree)
 	_, _ = fmt.Fprintf(b, "- prepare scenario: %t\n", workspace.HasPrepare)
 	_, _ = fmt.Fprintf(b, "- apply scenario: %t\n", workspace.HasApply)
 	_, _ = fmt.Fprintf(b, "- relevant files: %d\n", len(workspace.Files))
+	if resolved.Path != "" {
+		b.WriteString("Target: ")
+		b.WriteString(resolved.Path)
+		b.WriteString("\n")
+	}
 	if strings.TrimSpace(prompt) != "" {
 		b.WriteString("Prompt interpreted as explain request for current workspace.\n")
 	}
 	return "Workspace explanation", strings.TrimSpace(b.String())
+}
+
+func resolveExplainTarget(workspace askretrieve.WorkspaceSummary, target askintent.Target, prompt string) askintent.Target {
+	if target.Path != "" {
+		return target
+	}
+	lowerPrompt := strings.ToLower(strings.TrimSpace(prompt))
+	for _, file := range workspace.Files {
+		lowerPath := strings.ToLower(file.Path)
+		base := strings.ToLower(filepath.Base(file.Path))
+		name := strings.TrimSuffix(base, filepath.Ext(base))
+		if strings.Contains(lowerPrompt, lowerPath) || strings.Contains(lowerPrompt, base) || (name != "" && strings.Contains(lowerPrompt, name)) {
+			kind := "component"
+			switch {
+			case strings.HasPrefix(filepath.ToSlash(file.Path), "workflows/scenarios/"):
+				kind = "scenario"
+			case filepath.ToSlash(file.Path) == "workflows/vars.yaml":
+				kind = "vars"
+			}
+			return askintent.Target{Kind: kind, Path: file.Path, Name: name}
+		}
+	}
+	return target
+}
+
+func explainWorkspaceFile(workspace askretrieve.WorkspaceSummary, target askintent.Target) (string, string) {
+	for _, file := range workspace.Files {
+		if filepath.ToSlash(file.Path) != filepath.ToSlash(target.Path) {
+			continue
+		}
+		return describeWorkspaceFile(workspace, file)
+	}
+	return "", ""
+}
+
+func describeWorkspaceFile(workspace askretrieve.WorkspaceSummary, file askretrieve.WorkspaceFile) (string, string) {
+	cleanPath := filepath.ToSlash(file.Path)
+	if cleanPath == "workflows/vars.yaml" {
+		return describeVarsFile(file)
+	}
+	var doc map[string]any
+	if err := yaml.Unmarshal([]byte(file.Content), &doc); err != nil {
+		return filepath.Base(file.Path) + " explanation", fmt.Sprintf("%s exists, but it could not be parsed locally: %v", file.Path, err)
+	}
+	if strings.HasPrefix(cleanPath, "workflows/scenarios/") {
+		return describeScenarioFile(workspace, file, doc)
+	}
+	if strings.HasPrefix(cleanPath, "workflows/components/") {
+		return describeComponentFile(file, doc)
+	}
+	return filepath.Base(file.Path) + " explanation", fmt.Sprintf("%s is present in the workspace.", file.Path)
+}
+
+func describeVarsFile(file askretrieve.WorkspaceFile) (string, string) {
+	var vars map[string]any
+	if err := yaml.Unmarshal([]byte(file.Content), &vars); err != nil {
+		return "Vars explanation", fmt.Sprintf("%s stores workspace variables, but it could not be parsed locally: %v", file.Path, err)
+	}
+	keys := make([]string, 0, len(vars))
+	for key := range vars {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	b := &strings.Builder{}
+	_, _ = fmt.Fprintf(b, "%s defines %d workspace variables.", file.Path, len(keys))
+	if len(keys) > 0 {
+		b.WriteString(" Keys: ")
+		b.WriteString(strings.Join(keys, ", "))
+		b.WriteString(".")
+	}
+	return "Vars explanation", strings.TrimSpace(b.String())
+}
+
+func describeScenarioFile(workspace askretrieve.WorkspaceSummary, file askretrieve.WorkspaceFile, doc map[string]any) (string, string) {
+	role, _ := doc["role"].(string)
+	version, _ := doc["version"].(string)
+	phaseNames := make([]string, 0)
+	imports := make([]string, 0)
+	stepKinds := make(map[string]int)
+	commandCount := 0
+	if phases, ok := doc["phases"].([]any); ok {
+		for _, rawPhase := range phases {
+			phase, ok := rawPhase.(map[string]any)
+			if !ok {
+				continue
+			}
+			if name, _ := phase["name"].(string); strings.TrimSpace(name) != "" {
+				phaseNames = append(phaseNames, name)
+			}
+			imports = append(imports, collectImports(phase)...)
+			stepKinds, commandCount = collectStepKinds(phase, stepKinds, commandCount)
+		}
+	}
+	b := &strings.Builder{}
+	_, _ = fmt.Fprintf(b, "%s is a scenario workflow", file.Path)
+	if role != "" {
+		_, _ = fmt.Fprintf(b, " with role %q", role)
+	}
+	if version != "" {
+		_, _ = fmt.Fprintf(b, " and version %q", version)
+	}
+	b.WriteString(". ")
+	if len(phaseNames) > 0 {
+		b.WriteString("It defines phases: ")
+		b.WriteString(strings.Join(phaseNames, ", "))
+		b.WriteString(". ")
+	}
+	if len(imports) > 0 {
+		b.WriteString("It imports components: ")
+		b.WriteString(strings.Join(dedupe(imports), ", "))
+		b.WriteString(". ")
+	}
+	stepSummary := formatStepKinds(stepKinds)
+	if stepSummary != "" {
+		b.WriteString("Inline steps use: ")
+		b.WriteString(stepSummary)
+		b.WriteString(". ")
+	}
+	if commandCount > 0 {
+		_, _ = fmt.Fprintf(b, "There are %d inline Command step(s), which may deserve extra review for shell complexity. ", commandCount)
+	}
+	switch role {
+	case "apply":
+		b.WriteString("This file fits into the apply path for executing host changes in phase order. ")
+	case "prepare":
+		b.WriteString("This file fits into the prepare path for assembling offline artifacts and package inputs. ")
+	}
+	for _, importPath := range dedupe(imports) {
+		resolved := "workflows/components/" + strings.TrimPrefix(filepath.ToSlash(importPath), "./")
+		for _, related := range workspace.Files {
+			if filepath.ToSlash(related.Path) == resolved {
+				b.WriteString("Related component available: ")
+				b.WriteString(resolved)
+				b.WriteString(". ")
+				break
+			}
+		}
+	}
+	return filepath.Base(file.Path) + " explanation", strings.TrimSpace(b.String())
+}
+
+func describeComponentFile(file askretrieve.WorkspaceFile, doc map[string]any) (string, string) {
+	stepKinds := make(map[string]int)
+	commandCount := 0
+	stepIDs := make([]string, 0)
+	if steps, ok := doc["steps"].([]any); ok {
+		for _, rawStep := range steps {
+			step, ok := rawStep.(map[string]any)
+			if !ok {
+				continue
+			}
+			if id, _ := step["id"].(string); strings.TrimSpace(id) != "" {
+				stepIDs = append(stepIDs, id)
+			}
+			stepKinds, commandCount = collectStepKinds(step, stepKinds, commandCount)
+		}
+	}
+	b := &strings.Builder{}
+	_, _ = fmt.Fprintf(b, "%s is a reusable component with %d step(s). ", file.Path, len(stepIDs))
+	if len(stepIDs) > 0 {
+		b.WriteString("Step ids: ")
+		b.WriteString(strings.Join(stepIDs, ", "))
+		b.WriteString(". ")
+	}
+	if stepSummary := formatStepKinds(stepKinds); stepSummary != "" {
+		b.WriteString("Step kinds: ")
+		b.WriteString(stepSummary)
+		b.WriteString(". ")
+	}
+	if commandCount > 0 {
+		_, _ = fmt.Fprintf(b, "It contains %d Command step(s). ", commandCount)
+	}
+	return filepath.Base(file.Path) + " explanation", strings.TrimSpace(b.String())
+}
+
+func collectImports(phase map[string]any) []string {
+	imports := make([]string, 0)
+	rawImports, ok := phase["imports"].([]any)
+	if !ok {
+		return imports
+	}
+	for _, rawImport := range rawImports {
+		entry, ok := rawImport.(map[string]any)
+		if !ok {
+			continue
+		}
+		path, _ := entry["path"].(string)
+		if strings.TrimSpace(path) != "" {
+			imports = append(imports, filepath.ToSlash(path))
+		}
+	}
+	return imports
+}
+
+func collectStepKinds(scope map[string]any, stepKinds map[string]int, commandCount int) (map[string]int, int) {
+	rawSteps, ok := scope["steps"].([]any)
+	if !ok {
+		return stepKinds, commandCount
+	}
+	for _, rawStep := range rawSteps {
+		step, ok := rawStep.(map[string]any)
+		if !ok {
+			continue
+		}
+		kind, _ := step["kind"].(string)
+		kind = strings.TrimSpace(kind)
+		if kind == "" {
+			kind = "unknown"
+		}
+		stepKinds[kind]++
+		if kind == "Command" {
+			commandCount++
+		}
+	}
+	return stepKinds, commandCount
+}
+
+func formatStepKinds(stepKinds map[string]int) string {
+	if len(stepKinds) == 0 {
+		return ""
+	}
+	kinds := make([]string, 0, len(stepKinds))
+	for kind := range stepKinds {
+		kinds = append(kinds, kind)
+	}
+	sort.Strings(kinds)
+	parts := make([]string, 0, len(kinds))
+	for _, kind := range kinds {
+		parts = append(parts, fmt.Sprintf("%s x%d", kind, stepKinds[kind]))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func requestSpecificEnough(prompt string) bool {
+	prompt = strings.TrimSpace(prompt)
+	if prompt == "" {
+		return false
+	}
+	if strings.Contains(prompt, "workflows/") {
+		return true
+	}
+	words := strings.Fields(prompt)
+	if len(words) >= 4 {
+		return true
+	}
+	lower := strings.ToLower(prompt)
+	keywords := []string{"apply", "prepare", "component", "vars", "scenario", "workflow", "cluster", "kubeadm", "improve", "refine", "draft"}
+	for _, keyword := range keywords {
+		if strings.Contains(lower, keyword) {
+			return true
+		}
+	}
+	return false
+}
+
+func chunkIDsBySource(chunks []askretrieve.Chunk, source string) []string {
+	ids := make([]string, 0)
+	for _, chunk := range chunks {
+		if chunk.Source == source {
+			ids = append(ids, chunk.ID)
+		}
+	}
+	sort.Strings(ids)
+	return ids
 }
 
 func findingsToLines(findings []askreview.Finding) []string {
@@ -438,6 +969,11 @@ func resultToMarkdown(result runResult) string {
 	b.WriteString("- termination: ")
 	b.WriteString(result.Termination)
 	b.WriteString("\n")
+	if result.Target.Path != "" {
+		b.WriteString("- target: ")
+		b.WriteString(result.Target.Path)
+		b.WriteString("\n")
+	}
 	b.WriteString("\n")
 	b.WriteString(result.Answer)
 	b.WriteString("\n")
@@ -456,6 +992,11 @@ func render(stdout io.Writer, stderr io.Writer, result runResult) error {
 	}
 	if _, err := fmt.Fprintf(stdout, "route: %s (confidence %.2f)\n", result.Route, result.Confidence); err != nil {
 		return err
+	}
+	if result.Target.Path != "" {
+		if _, err := fmt.Fprintf(stdout, "target: %s\n", result.Target.Path); err != nil {
+			return err
+		}
 	}
 	if result.Answer != "" {
 		if _, err := fmt.Fprintf(stdout, "answer: %s\n", result.Answer); err != nil {
@@ -487,6 +1028,16 @@ func render(stdout io.Writer, stderr io.Writer, result runResult) error {
 			}
 		}
 	}
+	if len(result.AugmentEvents) > 0 {
+		if _, err := io.WriteString(stdout, "augment:\n"); err != nil {
+			return err
+		}
+		for _, event := range result.AugmentEvents {
+			if _, err := fmt.Fprintf(stdout, "- %s\n", event); err != nil {
+				return err
+			}
+		}
+	}
 	if len(result.Files) > 0 {
 		label := "preview"
 		if result.WroteFiles {
@@ -511,7 +1062,7 @@ func render(stdout io.Writer, stderr io.Writer, result runResult) error {
 			return err
 		}
 	}
-	if _, err := fmt.Fprintf(stderr, "deck ask route=%s reason=%s llmUsed=%t retries=%d termination=%s\n", result.Route, result.Reason, result.LLMUsed, result.RetriesUsed, result.Termination); err != nil {
+	if _, err := fmt.Fprintf(stderr, "deck ask route=%s reason=%s target=%s classifierLlmUsed=%t llmUsed=%t retries=%d termination=%s\n", result.Route, result.Reason, result.Target.Path, result.ClassifierLLM, result.LLMUsed, result.RetriesUsed, result.Termination); err != nil {
 		return err
 	}
 	if result.ConfigSource.APIKeySource != "unset" {

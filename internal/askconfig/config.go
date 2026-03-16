@@ -26,6 +26,29 @@ type Settings struct {
 	Model    string `json:"model,omitempty"`
 	APIKey   string `json:"apiKey,omitempty"`
 	Endpoint string `json:"endpoint,omitempty"`
+	MCP      MCP    `json:"mcp,omitempty"`
+	LSP      LSP    `json:"lsp,omitempty"`
+}
+
+type MCP struct {
+	Enabled bool        `json:"enabled,omitempty"`
+	Servers []MCPServer `json:"servers,omitempty"`
+}
+
+type MCPServer struct {
+	Name    string   `json:"name,omitempty"`
+	Command string   `json:"command,omitempty"`
+	Args    []string `json:"args,omitempty"`
+}
+
+type LSP struct {
+	Enabled bool     `json:"enabled,omitempty"`
+	YAML    LSPEntry `json:"yaml,omitempty"`
+}
+
+type LSPEntry struct {
+	Command string   `json:"command,omitempty"`
+	Args    []string `json:"args,omitempty"`
 }
 
 type fileConfig struct {
@@ -118,6 +141,8 @@ func ResolveEffective(cli Settings) (EffectiveSettings, error) {
 			Model:    defaultModel,
 			APIKey:   "",
 			Endpoint: "",
+			MCP:      stored.MCP,
+			LSP:      stored.LSP,
 		},
 		ProviderSource: "default",
 		ModelSource:    "default",
@@ -201,6 +226,25 @@ func normalize(settings Settings) Settings {
 	settings.Model = strings.TrimSpace(settings.Model)
 	settings.APIKey = strings.TrimSpace(settings.APIKey)
 	settings.Endpoint = strings.TrimSpace(settings.Endpoint)
+	for i := range settings.MCP.Servers {
+		settings.MCP.Servers[i].Name = strings.TrimSpace(settings.MCP.Servers[i].Name)
+		settings.MCP.Servers[i].Command = strings.TrimSpace(settings.MCP.Servers[i].Command)
+		trimmed := make([]string, 0, len(settings.MCP.Servers[i].Args))
+		for _, arg := range settings.MCP.Servers[i].Args {
+			if value := strings.TrimSpace(arg); value != "" {
+				trimmed = append(trimmed, value)
+			}
+		}
+		settings.MCP.Servers[i].Args = trimmed
+	}
+	settings.LSP.YAML.Command = strings.TrimSpace(settings.LSP.YAML.Command)
+	trimmedLSP := make([]string, 0, len(settings.LSP.YAML.Args))
+	for _, arg := range settings.LSP.YAML.Args {
+		if value := strings.TrimSpace(arg); value != "" {
+			trimmedLSP = append(trimmedLSP, value)
+		}
+	}
+	settings.LSP.YAML.Args = trimmedLSP
 	return settings
 }
 
@@ -240,5 +284,13 @@ func writeFileConfig(path string, cfg fileConfig) error {
 }
 
 func isEmptyConfig(cfg fileConfig) bool {
-	return cfg.Ask == (Settings{})
+	return cfg.Ask.Provider == "" &&
+		cfg.Ask.Model == "" &&
+		cfg.Ask.APIKey == "" &&
+		cfg.Ask.Endpoint == "" &&
+		!cfg.Ask.MCP.Enabled &&
+		len(cfg.Ask.MCP.Servers) == 0 &&
+		!cfg.Ask.LSP.Enabled &&
+		cfg.Ask.LSP.YAML.Command == "" &&
+		len(cfg.Ask.LSP.YAML.Args) == 0
 }

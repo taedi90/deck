@@ -33,7 +33,17 @@ It supports a simple operator flow: author the workflow, lint it, prepare bundle
 
 `ask` is available only in AI-ready builds. Lite builds keep the command surface but return a clear unsupported-feature error.
 
-`ask` first classifies user intent. Simple questions, explanations, and low-information prompts can return clarification or local workspace analysis without forcing workflow generation.
+`ask` uses LLM-first intent classification and route-specific prompts. Workflow generation only runs for authoring routes (`draft`/`refine`), while explain/review/question routes return answer-oriented responses.
+
+When model access is unavailable, `ask` degrades explicitly instead of silently pretending to answer with full reasoning. `explain` falls back to a local structural summary of the target file, `review` falls back to local findings, and generation routes fail fast because local validation cannot replace model output.
+
+OpenAI-compatible provider support currently targets:
+
+- `openai`
+- `openrouter`
+- `gemini`
+
+You can override `provider`, `model`, and `endpoint` per run, or save defaults with `ask auth set`.
 
 These commands are additive. They do not replace the default local execution path.
 
@@ -81,8 +91,37 @@ deck plan --scenario apply --source server
 
 deck ask auth set --provider openai --model gpt-5.4 --endpoint https://api.openai.com/v1 --api-key "$DECK_ASK_API_KEY"
 deck ask "rhel9 single-node kubeadm cluster scenario"
+deck ask "explain what workflows/scenarios/apply.yaml does"
 deck ask --review
 deck ask --write --from ./request.md
+```
+
+Optional ask augmentation config example:
+
+```json
+{
+  "ask": {
+    "provider": "openai",
+    "model": "gpt-5.4",
+    "mcp": {
+      "enabled": true,
+      "servers": [
+        {
+          "name": "context7",
+          "command": "context7-mcp",
+          "args": []
+        }
+      ]
+    },
+    "lsp": {
+      "enabled": true,
+      "yaml": {
+        "command": "yaml-language-server",
+        "args": ["--stdio"]
+      }
+    }
+  }
+}
 ```
 
 ## Notes
@@ -93,6 +132,8 @@ deck ask --write --from ./request.md
 - `--source` controls whether `--scenario` resolves from the local workspace or the saved remote source.
 - workspace-local metadata stays under `./.deck/`, while user-global config, state, cache, and run history use standard XDG locations.
 - `ask` workspace context lives under `./.deck/ask/`, while saved ask auth/defaults live under `~/.config/deck/config.json` as the top-level `ask` object.
+- optional augmentation config can be defined under `ask.mcp` and `ask.lsp` in the same config file.
+- optional MCP and LSP augmentation is disabled by default and degrades gracefully when configured tools are unavailable.
 - phase imports resolve from `workflows/components/` using component-relative paths
 - `apply` runs all phases by default when phases are used; `--phase` narrows execution to one phase.
 - `bundle build` archives the canonical workspace bundle inputs: `deck`, `workflows/`, `outputs/`, and `.deck/manifest.json`, and respects `.deckignore` within those paths.

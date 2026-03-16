@@ -3,6 +3,7 @@ package askprovider
 import "context"
 
 type Request struct {
+	Kind         string
 	Provider     string
 	Model        string
 	APIKey       string
