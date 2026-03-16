@@ -6,6 +6,7 @@
 
 - New to `deck`: `tutorials/quick-start.md`
 - Why the tool exists: `concepts/why-deck.md`
+- System architecture: `concepts/architecture.md`
 - Workflow structure: `reference/workflow-model.md`
 - Commands: `reference/cli.md`
 - Bundle contents: `reference/bundle-layout.md`
@@ -14,6 +15,7 @@
 ## Guides
 
 - `concepts/why-deck.md`: the problem deck solves and how it approaches it
+- `concepts/architecture.md`: system boundaries, execution flow, and trust model
 - `development/go-style-guide.md`: Go coding conventions for the `deck` repository
 - `tutorials/quick-start.md`: create, lint, prepare, and run a workflow
 - `tutorials/offline-kubernetes.md`: deck for offline Kubernetes maintenance
