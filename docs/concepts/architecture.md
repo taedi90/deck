@@ -44,50 +44,69 @@ That is why the architecture emphasizes:
 - reviewable workflows
 - explicit bundle handoff
 - node-local execution
-- site-local coordination state
 - optional helpers instead of a mandatory control plane
 
 ## Single-node flow
 
-The simplest `deck` workflow prepares a bundle in a connected environment, moves it into the site, and runs it directly on one target node.
+The simplest `deck` workflow is just `prepare -> bundle -> apply`.
 
 ```mermaid
-flowchart LR
+flowchart TD
     subgraph Online[Connected environment]
-        A[Author workflow] --> B[Prepare artifacts]
-        B --> C[Build bundle]
+        A[Prepare artifacts]
+        B[Build bundle]
+        A --> B
     end
-    C --> D[Transfer bundle]
+    B --> C[Transfer bundle]
     subgraph Offline[Air-gapped site]
-        D --> E[Apply on node]
+        D[Apply on node]
     end
+    C --> D
 ```
+
+- In the connected environment, the operator prepares the artifacts the workflow will need at run time.
+- The prepared outputs, workflow files, manifest, and `deck` binary are packaged into a bundle.
+- The bundle is transferred across the offline boundary into the target site.
+- On the target node, the bundle is unpacked and `deck apply` runs locally.
+- Validation, linting, and review normally happen before this flow, but they are omitted from the diagram so the main `prepare -> bundle -> apply` path stays clear.
 
 This is the default path the rest of the architecture is built around: one prepared bundle, one local binary, and one target machine applying a typed workflow.
 
 ## Multi-node flow
 
-When a site needs to coordinate work across multiple nodes, `deck` can add a site-local release and assignment flow. The model is still local execution, but the site can use shared bundle state and local coordination state.
+For multi-node work, the core shape is still `prepare -> bundle -> apply`. The difference is that one node in the site can run the server role, and the other nodes pull what they need from it before running locally.
+
+In practice, that server can act as a local web or file server for the `deck` binary, workflows, and prepared files, and it can also expose a pull-only container registry for prepared images. That keeps the overall model the same while making offline distribution easier inside the site.
 
 ```mermaid
-flowchart LR
+flowchart TD
     subgraph Online[Connected environment]
-        A[Author workflow] --> B[Prepare artifacts]
-        B --> C[Build bundle]
+        A[Prepare artifacts]
+        B[Build bundle]
+        A --> B
     end
-    C --> D[Transfer bundle]
+    B --> C[Transfer bundle]
     subgraph Offline[Air-gapped site]
-        D --> E[Import release]
-        E --> F[Create session]
-        F --> G[Assign nodes]
-        G --> H[Optional local server]
-        H --> I[Nodes fetch work]
-        I --> J[Local apply or doctor]
-        J --> K[Store reports]
+        subgraph ServerNode[Server node]
+            D[Run server]
+        end
+        subgraph ClientNodes[Client nodes]
+            E[Pull deck]
+            F[Apply]
+            E --> F
+        end
+        D --> E
     end
+    C --> D
 ```
 
-Even here, `deck` is not acting as a central reconciliation controller. The server and site store help distribute prepared content and track local coordination state, but each node still executes its assigned workflow locally.
+- In the connected environment, the operator prepares artifacts and builds the bundle in the same way as the single-node flow.
+- After the bundle crosses into the site, one node can take the server role and run `deck server`.
+- That server can distribute the `deck` binary, workflow files, prepared files, and prepared images inside the air gap through its local web or file serving path and pull-only registry support.
+- Client nodes pull what they need from the server, then run locally on each node.
+- Site-local coordination such as releases, sessions, assignments, and reports can exist around this flow, but those details are omitted from the diagram so the main offline distribution path stays easy to read.
+
+Even here, `deck` is not acting as a central reconciliation controller. The server only helps distribute prepared bundle content inside the site. Each node still executes locally.
 
 ## Why the bundle is the handoff unit
 
