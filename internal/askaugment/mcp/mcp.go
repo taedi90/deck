@@ -56,7 +56,7 @@ func queryServer(parent context.Context, server askconfig.MCPServer, route askin
 	if err != nil {
 		return nil, fmt.Sprintf("mcp:%s list tools failed: %v", server.Name, err)
 	}
-	toolName := pickToolName(server.Name, route, tools)
+	toolName := pickToolName(server.Name, route, prompt, tools)
 	if toolName == "" {
 		return nil, fmt.Sprintf("mcp:%s no known tool for route %s", server.Name, route)
 	}
@@ -64,6 +64,9 @@ func queryServer(parent context.Context, server askconfig.MCPServer, route askin
 	result, err := c.CallTool(ctx, mcp.CallToolRequest{Params: mcp.CallToolParams{Name: toolName, Arguments: args}})
 	if err != nil {
 		return nil, fmt.Sprintf("mcp:%s call %s failed: %v", server.Name, toolName, err)
+	}
+	if result != nil && result.IsError {
+		return nil, fmt.Sprintf("mcp:%s call %s returned tool error", server.Name, toolName)
 	}
 	if result == nil || len(result.Content) == 0 {
 		return nil, fmt.Sprintf("mcp:%s call %s returned empty", server.Name, toolName)
@@ -90,13 +93,13 @@ func queryServer(parent context.Context, server askconfig.MCPServer, route askin
 	}, fmt.Sprintf("mcp:%s call %s ok", server.Name, toolName)
 }
 
-func pickToolName(serverName string, route askintent.Route, tools *mcp.ListToolsResult) string {
+func pickToolName(serverName string, route askintent.Route, prompt string, tools *mcp.ListToolsResult) string {
 	if tools == nil {
 		return ""
 	}
 	ordered := []string{"search", "web-search", "web_search", "resolve-library-id", "get-library-docs"}
 	if strings.Contains(strings.ToLower(serverName), "context7") {
-		ordered = []string{"resolve-library-id", "get-library-docs", "search"}
+		ordered = context7ToolOrder(prompt)
 	}
 	allowed := routeAllowedTools(route)
 	for _, candidate := range ordered {
@@ -110,6 +113,20 @@ func pickToolName(serverName string, route askintent.Route, tools *mcp.ListTools
 		}
 	}
 	return ""
+}
+
+func context7ToolOrder(prompt string) []string {
+	prompt = strings.ToLower(strings.TrimSpace(prompt))
+	if prompt == "" {
+		return []string{"search", "web-search", "web_search"}
+	}
+	libraryHints := []string{"library", "package", "module", "sdk", "api", "golang.org/", "github.com/", "npm", "pip", "crate"}
+	for _, hint := range libraryHints {
+		if strings.Contains(prompt, hint) {
+			return []string{"resolve-library-id", "get-library-docs", "search", "web-search", "web_search"}
+		}
+	}
+	return []string{"search", "web-search", "web_search", "get-library-docs"}
 }
 
 func routeAllowedTools(route askintent.Route) map[string]bool {

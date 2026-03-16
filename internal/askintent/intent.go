@@ -23,6 +23,7 @@ const (
 
 type Input struct {
 	Prompt          string
+	WriteFlag       bool
 	ReviewFlag      bool
 	HasWorkflowTree bool
 	HasPrepare      bool
@@ -87,6 +88,12 @@ func Classify(input Input) Decision {
 			return Decision{Route: RouteRefine, Confidence: 0.7, Reason: "authoring tokens with existing workflow", Target: inferTarget(prompt), AllowGeneration: true, AllowRetry: true, RequiresLint: true, LLMPolicy: LLMRequired}
 		}
 		return Decision{Route: RouteDraft, Confidence: 0.86, Reason: "authoring tokens", Target: inferTarget(prompt), AllowGeneration: true, AllowRetry: true, RequiresLint: true, LLMPolicy: LLMRequired}
+	}
+	if input.WriteFlag {
+		if input.HasWorkflowTree {
+			return Decision{Route: RouteRefine, Confidence: 0.76, Reason: "explicit --write flag with existing workflow", Target: inferTarget(prompt), AllowGeneration: true, AllowRetry: true, RequiresLint: true, LLMPolicy: LLMRequired}
+		}
+		return Decision{Route: RouteDraft, Confidence: 0.76, Reason: "explicit --write flag", Target: inferTarget(prompt), AllowGeneration: true, AllowRetry: true, RequiresLint: true, LLMPolicy: LLMRequired}
 	}
 	if input.HasWorkflowTree {
 		return Decision{Route: RouteExplain, Confidence: 0.52, Reason: "default to explain for ambiguous prompt", Target: Target{Kind: "workspace"}, AllowGeneration: false, AllowRetry: false, RequiresLint: false, LLMPolicy: LLMOptional}

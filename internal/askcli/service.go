@@ -71,6 +71,44 @@ type promptTrace struct {
 	UserPrompt   string
 }
 
+type askLogger struct {
+	writer io.Writer
+	level  string
+}
+
+func newAskLogger(writer io.Writer, level string) askLogger {
+	if writer == nil {
+		writer = io.Discard
+	}
+	return askLogger{writer: writer, level: askconfigLogLevel(level)}
+}
+
+func (l askLogger) enabled(required string) bool {
+	return shouldLogAsk(l.level, required)
+}
+
+func (l askLogger) logf(required string, format string, args ...any) {
+	if !l.enabled(required) {
+		return
+	}
+	_, _ = fmt.Fprintf(l.writer, format, args...)
+}
+
+func (l askLogger) prompt(label string, systemPrompt string, userPrompt string) {
+	if !l.enabled("trace") {
+		return
+	}
+	l.logf("trace", "deck ask %s system-prompt:\n%s\n", label, strings.TrimSpace(systemPrompt))
+	l.logf("trace", "deck ask %s user-prompt:\n%s\n", label, strings.TrimSpace(userPrompt))
+}
+
+func (l askLogger) response(label string, content string) {
+	if !l.enabled("trace") {
+		return
+	}
+	l.logf("trace", "deck ask %s raw-response:\n%s\n", label, strings.TrimSpace(content))
+}
+
 func Execute(ctx context.Context, opts Options, client askprovider.Client) error {
 	if client == nil {
 		return fmt.Errorf("ask backend is not configured")
@@ -98,6 +136,7 @@ func Execute(ctx context.Context, opts Options, client askprovider.Client) error
 	}
 	heuristic := hooks.PostClassify(askintent.Classify(askintent.Input{
 		Prompt:          requestText,
+		WriteFlag:       opts.Write,
 		ReviewFlag:      opts.Review,
 		HasWorkflowTree: workspace.HasWorkflowTree,
 		HasPrepare:      workspace.HasPrepare,
@@ -107,16 +146,32 @@ func Execute(ctx context.Context, opts Options, client askprovider.Client) error
 	if err != nil {
 		return err
 	}
+	logger := newAskLogger(opts.Stderr, effective.LogLevel)
+	logger.logf("basic", "deck ask phase=request routeCandidate=%s write=%t review=%t\n", heuristic.Route, opts.Write, opts.Review)
+	logger.logf("basic", "deck ask using provider=%s model=%s endpoint=%s apiKeySource=%s logLevel=%s\n", effective.Provider, effective.Model, effective.Endpoint, effective.APIKeySource, effective.LogLevel)
+	logger.logf("debug", "deck ask command=%s\n", renderUserCommand(opts))
+	logger.logf("trace", "deck ask user-request:\n%s\n", strings.TrimSpace(requestText))
 	decision := heuristic
 	classifierLLM := false
 	classifierSystem := classifierSystemPrompt()
 	classifierUser := classifierUserPrompt(requestText, opts.Review, workspace)
 	if canUseLLM(effective) {
-		classified, classifyErr := classifyWithLLM(ctx, client, effective, classifierSystem, classifierUser)
+		logger.logf("debug", "deck ask phase=classify provider=%s model=%s\n", effective.Provider, effective.Model)
+		classified, classifyErr := classifyWithLLM(ctx, client, effective, classifierSystem, classifierUser, logger)
 		if classifyErr == nil {
 			decision = classified
 			classifierLLM = true
+			logger.logf("basic", "deck ask phase=classify-complete route=%s confidence=%.2f reason=%s\n", decision.Route, decision.Confidence, decision.Reason)
+		} else {
+			logger.logf("debug", "deck ask phase=classify-fallback error=%v\n", classifyErr)
 		}
+	} else {
+		logger.logf("debug", "deck ask phase=classify-skip reason=no-llm-credentials\n")
+	}
+	if opts.Write && !decision.AllowGeneration && heuristic.AllowGeneration {
+		logger.logf("debug", "deck ask phase=classify-override from=%s to=%s reason=write-flag\n", decision.Route, heuristic.Route)
+		decision = heuristic
+		decision.Reason = "write flag overrides non-generation classification"
 	}
 
 	mcpChunks, mcpEvents := mcpaugment.Gather(ctx, effective.MCP, decision.Route, requestText)
@@ -140,6 +195,18 @@ func Execute(ctx context.Context, opts Options, client askprovider.Client) error
 		result.PromptTraces = append(result.PromptTraces, promptTrace{Label: "classifier", SystemPrompt: classifierSystem, UserPrompt: classifierUser})
 	}
 
+	logger.logf("debug", "deck ask phase=augment-start mcp=%t lsp=%t\n", effective.MCP.Enabled, effective.LSP.Enabled)
+	for _, event := range result.AugmentEvents {
+		prefix := "augment"
+		if strings.HasPrefix(event, "mcp:") {
+			prefix = "mcp"
+		} else if strings.HasPrefix(event, "lsp") {
+			prefix = "lsp"
+		}
+		logger.logf("debug", "deck ask %s=%s\n", prefix, event)
+	}
+	logger.logf("debug", "deck ask phase=retrieval chunks=%d dropped=%d\n", len(result.Chunks), len(result.DroppedChunks))
+
 	if decision.LLMPolicy == askintent.LLMRequired && !canUseLLM(effective) {
 		return fmt.Errorf("missing ask api key for provider %q; set %s or run `deck ask auth set --api-key ...`", effective.Provider, "DECK_ASK_API_KEY")
 	}
@@ -161,10 +228,12 @@ func Execute(ctx context.Context, opts Options, client askprovider.Client) error
 			MaxRetries:   attempts,
 		}
 		result.PromptTraces = append(result.PromptTraces, promptTrace{Label: "generation", SystemPrompt: generationRequest.SystemPrompt, UserPrompt: generationRequest.Prompt})
-		gen, lintSummary, retriesUsed, genErr := generateWithValidation(ctx, client, generationRequest, resolvedRoot, attempts)
+		logger.logf("basic", "deck ask phase=generation-start route=%s attempts=%d\n", decision.Route, attempts)
+		gen, lintSummary, retriesUsed, genErr := generateWithValidation(ctx, client, generationRequest, resolvedRoot, attempts, logger)
 		if genErr != nil {
 			return genErr
 		}
+		logger.logf("basic", "deck ask phase=generation-complete files=%d lint=%s\n", len(gen.Files), lintSummary)
 		result.LLMUsed = true
 		result.RetriesUsed = retriesUsed
 		result.Files = gen.Files
@@ -191,7 +260,8 @@ func Execute(ctx context.Context, opts Options, client askprovider.Client) error
 		if canUseLLM(effective) {
 			systemPrompt, userPrompt := infoPrompts(decision.Route, decision.Target, retrieval, requestText)
 			result.PromptTraces = append(result.PromptTraces, promptTrace{Label: string(decision.Route), SystemPrompt: systemPrompt, UserPrompt: userPrompt})
-			info, infoErr := answerWithLLM(ctx, client, effective, decision, retrieval, requestText)
+			logger.logf("basic", "deck ask phase=answer-start route=%s\n", decision.Route)
+			info, infoErr := answerWithLLM(ctx, client, effective, decision, retrieval, requestText, logger)
 			if infoErr == nil {
 				result.LLMUsed = true
 				result.Summary = info.Summary
@@ -199,8 +269,10 @@ func Execute(ctx context.Context, opts Options, client askprovider.Client) error
 				result.ReviewLines = append(result.ReviewLines, info.Suggestions...)
 				result.ReviewLines = append(result.ReviewLines, info.Findings...)
 				result.ReviewLines = append(result.ReviewLines, info.SuggestedChange...)
+				logger.logf("basic", "deck ask phase=answer-complete route=%s\n", decision.Route)
 			} else {
 				result.ReviewLines = append(result.ReviewLines, "LLM response failed; using local fallback: "+infoErr.Error())
+				logger.logf("debug", "deck ask phase=answer-fallback error=%v\n", infoErr)
 				applyLocalFallback(&result, resolvedRoot, workspace, requestText)
 			}
 		} else {
@@ -242,7 +314,8 @@ func canUseLLM(cfg askconfig.EffectiveSettings) bool {
 	return !askconfig.NeedsAPIKey(cfg.Provider) || strings.TrimSpace(cfg.APIKey) != ""
 }
 
-func classifyWithLLM(ctx context.Context, client askprovider.Client, cfg askconfig.EffectiveSettings, systemPrompt string, userPrompt string) (askintent.Decision, error) {
+func classifyWithLLM(ctx context.Context, client askprovider.Client, cfg askconfig.EffectiveSettings, systemPrompt string, userPrompt string, logger askLogger) (askintent.Decision, error) {
+	logger.prompt("classifier", systemPrompt, userPrompt)
 	request := askprovider.Request{
 		Kind:         "classify",
 		Provider:     cfg.Provider,
@@ -259,6 +332,7 @@ func classifyWithLLM(ctx context.Context, client askprovider.Client, cfg askconf
 		if err != nil {
 			return askintent.Decision{}, err
 		}
+		logger.response("classifier", resp.Content)
 		parsed, err = askcontract.ParseClassification(resp.Content)
 		if err == nil {
 			break
@@ -306,8 +380,9 @@ func routeDefaults(route askintent.Route) askintent.Decision {
 	}
 }
 
-func answerWithLLM(ctx context.Context, client askprovider.Client, cfg askconfig.EffectiveSettings, decision askintent.Decision, retrieval askretrieve.RetrievalResult, prompt string) (askcontract.InfoResponse, error) {
+func answerWithLLM(ctx context.Context, client askprovider.Client, cfg askconfig.EffectiveSettings, decision askintent.Decision, retrieval askretrieve.RetrievalResult, prompt string, logger askLogger) (askcontract.InfoResponse, error) {
 	systemPrompt, userPrompt := infoPrompts(decision.Route, decision.Target, retrieval, prompt)
+	logger.prompt(string(decision.Route), systemPrompt, userPrompt)
 	resp, err := client.Generate(ctx, askprovider.Request{
 		Kind:         string(decision.Route),
 		Provider:     cfg.Provider,
@@ -321,6 +396,7 @@ func answerWithLLM(ctx context.Context, client askprovider.Client, cfg askconfig
 	if err != nil {
 		return askcontract.InfoResponse{}, err
 	}
+	logger.response(string(decision.Route), resp.Content)
 	return askcontract.ParseInfo(resp.Content), nil
 }
 
@@ -356,16 +432,18 @@ func generationAttempts(requested int, decision askintent.Decision, prompt strin
 	if requested > 0 {
 		return requested
 	}
-	return 1
+	return 2
 }
 
-func generateWithValidation(ctx context.Context, client askprovider.Client, req askprovider.Request, root string, attempts int) (askcontract.GenerationResponse, string, int, error) {
+func generateWithValidation(ctx context.Context, client askprovider.Client, req askprovider.Request, root string, attempts int, logger askLogger) (askcontract.GenerationResponse, string, int, error) {
 	var lastValidation string
 	for attempt := 1; attempt <= attempts; attempt++ {
 		currentPrompt := req.Prompt
 		if attempt > 1 && lastValidation != "" {
 			currentPrompt += "\n\nLocal validation failed. Fix the response and return full JSON again. Errors:\n" + lastValidation
 		}
+		logger.logf("basic", "deck ask phase=generation-attempt attempt=%d/%d\n", attempt, attempts)
+		logger.prompt("generation", req.SystemPrompt, currentPrompt)
 		resp, err := client.Generate(ctx, askprovider.Request{
 			Kind:         req.Kind,
 			Provider:     req.Provider,
@@ -379,9 +457,11 @@ func generateWithValidation(ctx context.Context, client askprovider.Client, req 
 		if err != nil {
 			return askcontract.GenerationResponse{}, lastValidation, attempt - 1, err
 		}
+		logger.response("generation", resp.Content)
 		gen, err := askcontract.ParseGeneration(resp.Content)
 		if err != nil {
 			lastValidation = err.Error()
+			logger.logf("debug", "deck ask phase=generation-parse-error error=%s\n", lastValidation)
 			return askcontract.GenerationResponse{}, lastValidation, attempt - 1, fmt.Errorf("ask generation returned invalid JSON: %s", lastValidation)
 		}
 		lintSummary, err := validateGeneration(root, gen)
@@ -389,6 +469,7 @@ func generateWithValidation(ctx context.Context, client askprovider.Client, req 
 			return gen, lintSummary, attempt - 1, nil
 		}
 		lastValidation = err.Error()
+		logger.logf("debug", "deck ask phase=generation-validation-error error=%s\n", lastValidation)
 		if !repairableValidationError(lastValidation) {
 			return askcontract.GenerationResponse{}, lastValidation, attempt - 1, fmt.Errorf("ask generation stopped without repair: %s", lastValidation)
 		}
@@ -495,7 +576,14 @@ func generationSystemPrompt(route askintent.Route, target askintent.Target, retr
 	b.WriteString("- Produce only strict JSON.\n")
 	b.WriteString("- JSON shape: {\"summary\":string,\"review\":[]string,\"files\":[{\"path\":string,\"content\":string}]}.\n")
 	b.WriteString("- Allowed paths: workflows/scenarios/*.yaml, workflows/components/*.yaml, workflows/vars.yaml.\n")
+	b.WriteString("- Every workflow YAML must be schema-valid. Scenario files need top-level role and version.\n")
+	b.WriteString("- Use version: v1alpha1 for generated workflow files unless the workspace clearly uses something else.\n")
+	b.WriteString("- A workflow must define at least one of artifacts, phases, or steps.\n")
+	b.WriteString("- Each step must contain id, kind, and spec. Command steps must use spec.command as a YAML list of arguments.\n")
+	b.WriteString("- Never place summary, description, or review fields inside workflow YAML content.\n")
+	b.WriteString("- For a new workspace draft, prefer creating workflows/scenarios/apply.yaml and workflows/vars.yaml only when needed.\n")
 	b.WriteString("- Prefer typed steps over Command.\n")
+	b.WriteString("- If the request is simply to print text in the terminal, a minimal valid apply scenario with one Command step is acceptable.\n")
 	b.WriteString("- Do not invent unsupported fields.\n")
 	b.WriteString("Retrieved context follows.\n")
 	b.WriteString(askretrieve.BuildChunkText(retrieval))
@@ -539,6 +627,10 @@ func generationUserPrompt(workspace askretrieve.WorkspaceSummary, state askstate
 	b.WriteString("User request:\n")
 	b.WriteString(strings.TrimSpace(prompt))
 	b.WriteString("\n")
+	if !workspace.HasWorkflowTree && route == askintent.RouteDraft {
+		b.WriteString("This is an empty workspace. Return the minimum valid starter workflow files needed to satisfy the request.\n")
+		b.WriteString("At minimum, the result should usually include a valid workflows/scenarios/apply.yaml file.\n")
+	}
 	b.WriteString("Return the minimum complete file set needed for this request.\n")
 	return b.String()
 }
@@ -1082,39 +1174,8 @@ func render(stdout io.Writer, stderr io.Writer, result runResult) error {
 		}
 	}
 	if shouldLogAsk(result.ConfigSource.LogLevel, "basic") {
-		if _, err := fmt.Fprintf(stderr, "deck ask route=%s reason=%s target=%s classifierLlmUsed=%t llmUsed=%t retries=%d termination=%s\n", result.Route, result.Reason, result.Target.Path, result.ClassifierLLM, result.LLMUsed, result.RetriesUsed, result.Termination); err != nil {
+		if _, err := fmt.Fprintf(stderr, "deck ask phase=done route=%s reason=%s target=%s classifierLlmUsed=%t llmUsed=%t retries=%d termination=%s\n", result.Route, result.Reason, result.Target.Path, result.ClassifierLLM, result.LLMUsed, result.RetriesUsed, result.Termination); err != nil {
 			return err
-		}
-		if result.ConfigSource.APIKeySource != "unset" {
-			if _, err := fmt.Fprintf(stderr, "deck ask using provider=%s model=%s endpoint=%s apiKeySource=%s logLevel=%s\n", result.ConfigSource.Provider, result.ConfigSource.Model, result.ConfigSource.Endpoint, result.ConfigSource.APIKeySource, result.ConfigSource.LogLevel); err != nil {
-				return err
-			}
-		}
-	}
-	if shouldLogAsk(result.ConfigSource.LogLevel, "debug") {
-		if _, err := fmt.Fprintf(stderr, "deck ask command=%s\n", result.UserCommand); err != nil {
-			return err
-		}
-		for _, event := range result.AugmentEvents {
-			prefix := "augment"
-			if strings.HasPrefix(event, "mcp:") {
-				prefix = "mcp"
-			} else if strings.HasPrefix(event, "lsp") {
-				prefix = "lsp"
-			}
-			if _, err := fmt.Fprintf(stderr, "deck ask %s=%s\n", prefix, event); err != nil {
-				return err
-			}
-		}
-	}
-	if shouldLogAsk(result.ConfigSource.LogLevel, "trace") {
-		for _, trace := range result.PromptTraces {
-			if _, err := fmt.Fprintf(stderr, "deck ask %s system-prompt:\n%s\n", trace.Label, strings.TrimSpace(trace.SystemPrompt)); err != nil {
-				return err
-			}
-			if _, err := fmt.Fprintf(stderr, "deck ask %s user-prompt:\n%s\n", trace.Label, strings.TrimSpace(trace.UserPrompt)); err != nil {
-				return err
-			}
 		}
 	}
 	return nil

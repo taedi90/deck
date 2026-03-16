@@ -37,7 +37,8 @@ func (c *Client) Generate(ctx context.Context, req askprovider.Request) (askprov
 			{Role: openai.ChatMessageRoleSystem, Content: strings.TrimSpace(req.SystemPrompt)},
 			{Role: openai.ChatMessageRoleUser, Content: strings.TrimSpace(req.Prompt)},
 		},
-		Temperature: 0.1,
+		Temperature:    0.1,
+		ResponseFormat: &openai.ChatCompletionResponseFormat{Type: openai.ChatCompletionResponseFormatTypeJSONObject},
 	}
 	if request.Model == "" {
 		request.Model = defaultModel(provider)
