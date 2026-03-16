@@ -33,6 +33,8 @@ It supports a simple operator flow: author the workflow, lint it, prepare bundle
 
 `ask` is available only in AI-ready builds. Lite builds keep the command surface but return a clear unsupported-feature error.
 
+`ask` first classifies user intent. Simple questions, explanations, and low-information prompts can return clarification or local workspace analysis without forcing workflow generation.
+
 These commands are additive. They do not replace the default local execution path.
 
 ## Shell completion
@@ -99,3 +101,4 @@ deck ask --write --from ./request.md
 - Prefer typed step kinds for common host changes.
 - Keep `Command` for cases where the clearer typed form does not exist yet.
 - `deck ask` previews changes by default and only writes workflow files when `--write` is present.
+- `--max-iterations` applies to generation routes (`draft`/`refine`) only; non-generation routes do not run repair loops.

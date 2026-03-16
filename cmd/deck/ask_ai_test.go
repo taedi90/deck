@@ -15,9 +15,11 @@ import (
 type mockAskClient struct {
 	responses []string
 	index     int
+	calls     int
 }
 
 func (m *mockAskClient) Generate(_ context.Context, _ askprovider.Request) (askprovider.Response, error) {
+	m.calls++
 	if m.index >= len(m.responses) {
 		return askprovider.Response{Content: m.responses[len(m.responses)-1]}, nil
 	}
@@ -98,6 +100,36 @@ func TestAskPreviewAndWrite(t *testing.T) {
 	}
 }
 
+func TestAskClarifyDoesNotGenerate(t *testing.T) {
+	root := t.TempDir()
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(oldWD) }()
+
+	client := &mockAskClient{responses: []string{validAskJSON()}}
+	originalFactory := newAskBackend
+	newAskBackend = func() askprovider.Client {
+		return client
+	}
+	defer func() { newAskBackend = originalFactory }()
+
+	out, err := runWithCapturedStdout([]string{"ask", "test"})
+	if err != nil {
+		t.Fatalf("ask clarify: %v", err)
+	}
+	if !strings.Contains(out, "too ambiguous") {
+		t.Fatalf("expected clarification output, got %q", out)
+	}
+	if client.calls != 0 {
+		t.Fatalf("clarify route must not call backend; calls=%d", client.calls)
+	}
+}
+
 func TestAskRepairLoop(t *testing.T) {
 	t.Setenv("DECK_ASK_API_KEY", "env-key")
 	root := t.TempDir()
@@ -116,7 +148,7 @@ func TestAskRepairLoop(t *testing.T) {
 	}
 	defer func() { newAskBackend = originalFactory }()
 
-	out, err := runWithCapturedStdout([]string{"ask", "--write", "repair test"})
+	out, err := runWithCapturedStdout([]string{"ask", "--write", "--max-iterations", "2", "repair test scenario"})
 	if err != nil {
 		t.Fatalf("ask write with repair: %v", err)
 	}
@@ -146,18 +178,20 @@ func TestAskReviewMode(t *testing.T) {
 	}
 	defer func() { _ = os.Chdir(oldWD) }()
 
+	client := &mockAskClient{responses: []string{`{"summary":"reviewed workspace","review":["Replace generic Command usage with typed steps where possible."],"files":[]}`}}
 	originalFactory := newAskBackend
-	newAskBackend = func() askprovider.Client {
-		return &mockAskClient{responses: []string{`{"summary":"reviewed workspace","review":["Replace generic Command usage with typed steps where possible."],"files":[]}`}}
-	}
+	newAskBackend = func() askprovider.Client { return client }
 	defer func() { newAskBackend = originalFactory }()
 
 	out, err := runWithCapturedStdout([]string{"ask", "--review"})
 	if err != nil {
 		t.Fatalf("ask review: %v", err)
 	}
-	if !strings.Contains(out, "reviewed workspace") || !strings.Contains(out, "local-findings:") {
+	if !strings.Contains(out, "Workspace review") || !strings.Contains(out, "local-findings:") {
 		t.Fatalf("unexpected review output: %q", out)
+	}
+	if client.calls != 0 {
+		t.Fatalf("review route should complete locally for default review request")
 	}
 }
 

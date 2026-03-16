@@ -21,20 +21,26 @@ func New() *Client {
 
 func (c *Client) Generate(ctx context.Context, req askprovider.Request) (askprovider.Response, error) {
 	provider := normalizeProvider(req.Provider)
-	llm, err := gollm.NewLLM(
+	options := []gollm.ConfigOption{
 		gollm.SetProvider(provider),
 		gollm.SetModel(strings.TrimSpace(req.Model)),
 		gollm.SetAPIKey(strings.TrimSpace(req.APIKey)),
 		gollm.SetMaxRetries(req.MaxRetries),
-		gollm.SetRetryDelay(2*time.Second),
+		gollm.SetRetryDelay(2 * time.Second),
 		gollm.SetMaxTokens(2400),
 		gollm.SetTemperature(0.1),
 		gollm.SetLogLevel(gollm.LogLevelWarn),
+	}
+	if endpoint := strings.TrimSpace(req.Endpoint); endpoint != "" && provider != "ollama" {
+		options = append(options, gollm.SetExtraHeaders(map[string]string{"azure_endpoint": endpoint}))
+	}
+	llm, err := gollm.NewLLM(
+		options...,
 	)
 	if err != nil {
 		return askprovider.Response{}, fmt.Errorf("configure ask backend: %w", err)
 	}
-	if endpoint := strings.TrimSpace(req.Endpoint); endpoint != "" {
+	if endpoint := strings.TrimSpace(req.Endpoint); endpoint != "" && provider == "ollama" {
 		if err := llm.SetOllamaEndpoint(endpoint); err != nil {
 			return askprovider.Response{}, fmt.Errorf("configure ask endpoint: %w", err)
 		}

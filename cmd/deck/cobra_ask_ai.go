@@ -51,7 +51,7 @@ func newAskCommand() *cobra.Command {
 	cmd.Flags().StringVar(&fromPath, "from", "", "load additional request details from a text or markdown file")
 	cmd.Flags().BoolVar(&write, "write", false, "write generated workflow changes into the current workspace")
 	cmd.Flags().BoolVar(&review, "review", false, "review the current workspace without writing files")
-	cmd.Flags().IntVar(&maxIterations, "max-iterations", 3, "maximum lint-repair attempts")
+	cmd.Flags().IntVar(&maxIterations, "max-iterations", 0, "max repair attempts for draft/refine routes (0 uses route default)")
 	cmd.Flags().StringVar(&provider, "provider", "", "override the configured ask provider for this run")
 	cmd.Flags().StringVar(&model, "model", "", "override the configured ask model for this run")
 	cmd.Flags().StringVar(&endpoint, "endpoint", "", "override the configured ask provider endpoint for this run")

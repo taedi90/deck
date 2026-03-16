@@ -2,7 +2,6 @@ package askcli
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -13,8 +12,11 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/taedi90/deck/internal/askconfig"
-	"github.com/taedi90/deck/internal/askcontext"
+	"github.com/taedi90/deck/internal/askcontract"
+	"github.com/taedi90/deck/internal/askhooks"
+	"github.com/taedi90/deck/internal/askintent"
 	"github.com/taedi90/deck/internal/askprovider"
+	"github.com/taedi90/deck/internal/askretrieve"
 	"github.com/taedi90/deck/internal/askreview"
 	"github.com/taedi90/deck/internal/askstate"
 	"github.com/taedi90/deck/internal/fsutil"
@@ -36,21 +38,30 @@ type Options struct {
 	Stderr        io.Writer
 }
 
-type generatedResponse struct {
-	Summary string          `json:"summary"`
-	Review  []string        `json:"review"`
-	Files   []generatedFile `json:"files"`
-}
-
-type generatedFile struct {
-	Path    string `json:"path"`
-	Content string `json:"content"`
+type runResult struct {
+	Route         askintent.Route
+	Confidence    float64
+	Reason        string
+	Summary       string
+	Answer        string
+	ReviewLines   []string
+	LintSummary   string
+	LocalFindings []askreview.Finding
+	Files         []askcontract.GeneratedFile
+	WroteFiles    bool
+	RetriesUsed   int
+	LLMUsed       bool
+	Termination   string
+	Chunks        []askretrieve.Chunk
+	DroppedChunks []string
+	ConfigSource  askconfig.EffectiveSettings
 }
 
 func Execute(ctx context.Context, opts Options, client askprovider.Client) error {
 	if client == nil {
 		return fmt.Errorf("ask backend is not configured")
 	}
+	hooks := askhooks.Default()
 	resolvedRoot, err := filepath.Abs(strings.TrimSpace(opts.Root))
 	if err != nil {
 		return fmt.Errorf("resolve workspace root: %w", err)
@@ -59,136 +70,243 @@ func Execute(ctx context.Context, opts Options, client askprovider.Client) error
 	if err != nil {
 		return err
 	}
-	if strings.TrimSpace(requestText) == "" && !opts.Review {
+	requestText = strings.TrimSpace(hooks.PreClassify(requestText))
+	if requestText == "" && !opts.Review {
 		return fmt.Errorf("ask request is required")
 	}
 	state, err := askstate.Load(resolvedRoot)
 	if err != nil {
 		return err
 	}
+	workspace, err := askretrieve.InspectWorkspace(resolvedRoot)
+	if err != nil {
+		return err
+	}
+	decision := hooks.PostClassify(askintent.Classify(askintent.Input{
+		Prompt:          requestText,
+		ReviewFlag:      opts.Review,
+		HasWorkflowTree: workspace.HasWorkflowTree,
+		HasPrepare:      workspace.HasPrepare,
+		HasApply:        workspace.HasApply,
+	}))
 	effective, err := askconfig.ResolveEffective(askconfig.Settings{Provider: opts.Provider, Model: opts.Model, Endpoint: opts.Endpoint})
 	if err != nil {
 		return err
 	}
-	if askconfig.NeedsAPIKey(effective.Provider) && strings.TrimSpace(effective.APIKey) == "" {
+	retrieval := askretrieve.Retrieve(decision.Route, requestText, workspace, state)
+	result := runResult{
+		Route:         decision.Route,
+		Confidence:    decision.Confidence,
+		Reason:        decision.Reason,
+		RetriesUsed:   0,
+		Chunks:        retrieval.Chunks,
+		DroppedChunks: retrieval.Dropped,
+		ConfigSource:  effective,
+	}
+
+	if decision.LLMPolicy == askintent.LLMRequired && askconfig.NeedsAPIKey(effective.Provider) && strings.TrimSpace(effective.APIKey) == "" {
 		return fmt.Errorf("missing ask api key for provider %q; set %s or run `deck ask auth set --api-key ...`", effective.Provider, "DECK_ASK_API_KEY")
 	}
-	maxIterations := opts.MaxIterations
-	if maxIterations <= 0 {
-		maxIterations = 3
-	}
-	built, err := askcontext.Build(askcontext.BuildInput{
-		Root:      resolvedRoot,
-		Prompt:    requestText,
-		Review:    opts.Review,
-		State:     state,
-		FromLabel: strings.TrimSpace(opts.FromPath),
-	})
-	if err != nil {
-		return err
-	}
-	candidate, lintSummary, lastRaw, err := generateCandidate(ctx, client, askprovider.Request{
-		Provider:     effective.Provider,
-		Model:        effective.Model,
-		APIKey:       effective.APIKey,
-		Endpoint:     effective.Endpoint,
-		SystemPrompt: built.SystemPrompt,
-		Prompt:       built.Prompt,
-		MaxRetries:   maxIterations,
-	}, resolvedRoot, built.Mode, maxIterations)
-	if err != nil {
-		return err
-	}
-	localFindings := localFindings(resolvedRoot, built.Mode, candidate)
-	if err := askstate.Save(resolvedRoot, askstate.Context{
-		LastMode:   string(built.Mode),
-		LastPrompt: strings.TrimSpace(requestText),
-		LastFiles:  filePaths(candidate.Files),
-		LastLint:   lintSummary,
-	}, requestText, lastRaw); err != nil {
-		return err
-	}
-	if opts.Write && built.Mode != askcontext.ModeReview {
-		if err := writeFiles(resolvedRoot, candidate.Files); err != nil {
+
+	switch decision.Route {
+	case askintent.RouteClarify:
+		result.Summary, result.Answer, result.ReviewLines = localClarify(requestText), "", clarificationSuggestions()
+		result.Termination = "clarified"
+	case askintent.RouteExplain:
+		result.Summary, result.Answer = localExplain(workspace, requestText)
+		if shouldUseLLMForInfo(decision.Route, requestText, effective) {
+			augmentWithLLM(ctx, client, effective, retrieval, requestText, decision.Route, &result)
+		}
+		result.Termination = "answered-locally"
+	case askintent.RouteQuestion:
+		if shouldUseLLMForInfo(decision.Route, requestText, effective) {
+			augmentWithLLM(ctx, client, effective, retrieval, requestText, decision.Route, &result)
+			result.Termination = "answered-with-llm"
+		} else {
+			result.Summary = "Question received"
+			result.Answer = "I need either more context from your workspace or an API key for deeper question answering."
+			result.ReviewLines = clarificationSuggestions()
+			result.Termination = "answered-locally"
+		}
+	case askintent.RouteReview:
+		result.Summary = "Workspace review"
+		result.LocalFindings = askreview.Workspace(resolvedRoot)
+		result.ReviewLines = findingsToLines(result.LocalFindings)
+		if shouldUseLLMForInfo(decision.Route, requestText, effective) {
+			augmentWithLLM(ctx, client, effective, retrieval, requestText, decision.Route, &result)
+		}
+		result.Termination = "reviewed"
+	case askintent.RouteDraft, askintent.RouteRefine:
+		attempts := generationAttempts(opts.MaxIterations, decision)
+		gen, lintSummary, retriesUsed, err := generateWithValidation(ctx, client, askprovider.Request{
+			Provider:     effective.Provider,
+			Model:        effective.Model,
+			APIKey:       effective.APIKey,
+			Endpoint:     effective.Endpoint,
+			SystemPrompt: generationSystemPrompt(decision.Route, retrieval),
+			Prompt:       generationUserPrompt(workspace, state, requestText, strings.TrimSpace(opts.FromPath), decision.Route),
+			MaxRetries:   attempts,
+		}, resolvedRoot, attempts)
+		if err != nil {
 			return err
 		}
+		result.LLMUsed = true
+		result.RetriesUsed = retriesUsed
+		result.Files = gen.Files
+		result.Summary = gen.Summary
+		result.ReviewLines = append(result.ReviewLines, gen.Review...)
+		result.LintSummary = lintSummary
+		result.LocalFindings = localFindings(result.Files)
+		if opts.Write {
+			if err := writeFiles(resolvedRoot, result.Files); err != nil {
+				return err
+			}
+			result.WroteFiles = true
+		}
+		if retriesUsed > 0 {
+			result.Termination = "generated-after-repair"
+		} else {
+			result.Termination = "generated"
+		}
+	default:
+		result.Summary = localClarify(requestText)
+		result.ReviewLines = clarificationSuggestions()
+		result.Termination = "clarified"
 	}
-	return render(opts.Stdout, opts.Stderr, renderInput{
-		Mode:         built.Mode,
-		Candidate:    candidate,
-		LintSummary:  lintSummary,
-		LocalReview:  localFindings,
-		WroteFiles:   opts.Write && built.Mode != askcontext.ModeReview,
-		ConfigSource: effective,
-	})
+
+	if err := askstate.Save(resolvedRoot, askstate.Context{
+		LastMode:            string(result.Route),
+		LastRoute:           string(result.Route),
+		LastConfidence:      result.Confidence,
+		LastReason:          result.Reason,
+		LastPrompt:          strings.TrimSpace(requestText),
+		LastFiles:           filePaths(result.Files),
+		LastLint:            result.LintSummary,
+		LastLLMUsed:         result.LLMUsed,
+		LastChunkIDs:        chunkIDs(result.Chunks),
+		LastDroppedChunkIDs: append([]string(nil), result.DroppedChunks...),
+		LastRetries:         result.RetriesUsed,
+		LastTermination:     result.Termination,
+	}, requestText, resultToMarkdown(result)); err != nil {
+		return err
+	}
+
+	return render(opts.Stdout, opts.Stderr, result)
 }
 
-func generateCandidate(ctx context.Context, client askprovider.Client, req askprovider.Request, root string, mode askcontext.Mode, maxIterations int) (generatedResponse, string, string, error) {
+func shouldUseLLMForInfo(route askintent.Route, prompt string, cfg askconfig.EffectiveSettings) bool {
+	if askconfig.NeedsAPIKey(cfg.Provider) && strings.TrimSpace(cfg.APIKey) == "" {
+		return false
+	}
+	prompt = strings.TrimSpace(prompt)
+	switch route {
+	case askintent.RouteQuestion:
+		return true
+	case askintent.RouteReview:
+		return strings.Contains(strings.ToLower(prompt), "detail") || strings.Contains(strings.ToLower(prompt), "style")
+	case askintent.RouteExplain:
+		return len(prompt) > 48
+	default:
+		return false
+	}
+}
+
+func generationAttempts(requested int, decision askintent.Decision) int {
+	if !decision.AllowRetry {
+		return 1
+	}
+	if requested > 0 {
+		return requested
+	}
+	return 1
+}
+
+func augmentWithLLM(ctx context.Context, client askprovider.Client, cfg askconfig.EffectiveSettings, retrieval askretrieve.RetrievalResult, prompt string, route askintent.Route, result *runResult) {
+	resp, err := client.Generate(ctx, askprovider.Request{
+		Provider:     cfg.Provider,
+		Model:        cfg.Model,
+		APIKey:       cfg.APIKey,
+		Endpoint:     cfg.Endpoint,
+		SystemPrompt: infoSystemPrompt(route, retrieval),
+		Prompt:       infoUserPrompt(prompt, route),
+		MaxRetries:   1,
+	})
+	if err != nil {
+		result.ReviewLines = append(result.ReviewLines, "LLM augmentation skipped: "+err.Error())
+		return
+	}
+	info := askcontract.ParseInfo(resp.Content)
+	result.LLMUsed = true
+	if strings.TrimSpace(info.Summary) != "" {
+		result.Summary = info.Summary
+	}
+	if strings.TrimSpace(info.Answer) != "" {
+		result.Answer = info.Answer
+	}
+	for _, line := range info.Suggestions {
+		if strings.TrimSpace(line) != "" {
+			result.ReviewLines = append(result.ReviewLines, line)
+		}
+	}
+	for _, line := range info.Findings {
+		if strings.TrimSpace(line) != "" {
+			result.ReviewLines = append(result.ReviewLines, line)
+		}
+	}
+	for _, line := range info.SuggestedChange {
+		if strings.TrimSpace(line) != "" {
+			result.ReviewLines = append(result.ReviewLines, line)
+		}
+	}
+}
+
+func generateWithValidation(ctx context.Context, client askprovider.Client, req askprovider.Request, root string, attempts int) (askcontract.GenerationResponse, string, int, error) {
 	var lastValidation string
-	var lastRaw string
-	for attempt := 1; attempt <= maxIterations; attempt++ {
+	for attempt := 1; attempt <= attempts; attempt++ {
 		currentPrompt := req.Prompt
 		if attempt > 1 && lastValidation != "" {
-			currentPrompt = currentPrompt + "\n\nLocal validation failed. Fix the response and return full JSON again. Errors:\n" + lastValidation
+			currentPrompt += "\n\nLocal validation failed. Fix the response and return full JSON again. Errors:\n" + lastValidation
 		}
 		resp, err := client.Generate(ctx, askprovider.Request{
 			Provider:     req.Provider,
 			Model:        req.Model,
 			APIKey:       req.APIKey,
+			Endpoint:     req.Endpoint,
 			SystemPrompt: req.SystemPrompt,
 			Prompt:       currentPrompt,
-			MaxRetries:   req.MaxRetries,
+			MaxRetries:   1,
 		})
 		if err != nil {
-			return generatedResponse{}, lastValidation, lastRaw, err
+			return askcontract.GenerationResponse{}, lastValidation, attempt - 1, err
 		}
-		lastRaw = resp.Content
-		candidate, err := parseGeneratedResponse(resp.Content)
+		gen, err := askcontract.ParseGeneration(resp.Content)
 		if err != nil {
 			lastValidation = err.Error()
 			continue
 		}
-		lintSummary, err := validateCandidate(root, mode, candidate)
+		lintSummary, err := validateGeneration(root, gen)
 		if err == nil {
-			return candidate, lintSummary, lastRaw, nil
+			return gen, lintSummary, attempt - 1, nil
 		}
 		lastValidation = err.Error()
 	}
 	if lastValidation == "" {
-		lastValidation = "ask generation failed without a parseable response"
+		lastValidation = "generation failed without a parseable response"
 	}
-	return generatedResponse{}, lastValidation, lastRaw, fmt.Errorf("ask generation did not validate after %d attempts: %s", maxIterations, lastValidation)
+	return askcontract.GenerationResponse{}, lastValidation, attempts - 1, fmt.Errorf("ask generation did not validate after %d attempts: %s", attempts, lastValidation)
 }
 
-func parseGeneratedResponse(raw string) (generatedResponse, error) {
-	cleaned := strings.TrimSpace(cleanResponse(raw))
-	if cleaned == "" {
-		return generatedResponse{}, fmt.Errorf("model returned empty response")
-	}
-	var candidate generatedResponse
-	if err := json.Unmarshal([]byte(cleaned), &candidate); err != nil {
-		return generatedResponse{}, fmt.Errorf("parse ask response json: %w", err)
-	}
-	if strings.TrimSpace(candidate.Summary) == "" {
-		candidate.Summary = "No summary provided."
-	}
-	return candidate, nil
-}
-
-func validateCandidate(root string, mode askcontext.Mode, candidate generatedResponse) (string, error) {
-	if mode != askcontext.ModeReview && len(candidate.Files) == 0 {
+func validateGeneration(root string, gen askcontract.GenerationResponse) (string, error) {
+	if len(gen.Files) == 0 {
 		return "", fmt.Errorf("response did not include any files")
 	}
-	staged, err := stageWorkspace(root, candidate.Files)
+	staged, err := stageWorkspace(root, gen.Files)
 	if err != nil {
 		return "", err
 	}
 	defer func() { _ = os.RemoveAll(staged) }()
-	if mode == askcontext.ModeReview {
-		return "review only", nil
-	}
-	paths := make([]string, 0, len(candidate.Files))
-	for _, file := range candidate.Files {
+	paths := make([]string, 0, len(gen.Files))
+	for _, file := range gen.Files {
 		if err := validateGeneratedFile(staged, file); err != nil {
 			return "", err
 		}
@@ -203,14 +321,223 @@ func validateCandidate(root string, mode askcontext.Mode, candidate generatedRes
 		}
 		validated = append(validated, files...)
 	}
-	if len(entrypoints) == 0 {
-		return "file validation only", nil
-	}
 	validated = dedupe(validated)
 	return fmt.Sprintf("lint ok (%d workflows)", len(validated)), nil
 }
 
-func validateGeneratedFile(root string, file generatedFile) error {
+func generationSystemPrompt(route askintent.Route, retrieval askretrieve.RetrievalResult) string {
+	b := &strings.Builder{}
+	b.WriteString("You are deck ask, a workflow authoring assistant.\n")
+	b.WriteString("Route: ")
+	b.WriteString(string(route))
+	b.WriteString("\n")
+	b.WriteString("Rules:\n")
+	b.WriteString("- Produce only strict JSON.\n")
+	b.WriteString("- JSON shape: {\"summary\":string,\"review\":[]string,\"files\":[{\"path\":string,\"content\":string}]}.\n")
+	b.WriteString("- Allowed paths: workflows/scenarios/*.yaml, workflows/components/*.yaml, workflows/vars.yaml.\n")
+	b.WriteString("- Prefer typed steps over Command.\n")
+	b.WriteString("- Do not invent unsupported fields.\n")
+	b.WriteString("Retrieved context follows.\n")
+	b.WriteString(askretrieve.BuildChunkText(retrieval))
+	return b.String()
+}
+
+func generationUserPrompt(workspace askretrieve.WorkspaceSummary, state askstate.Context, prompt string, fromLabel string, route askintent.Route) string {
+	b := &strings.Builder{}
+	b.WriteString("Workspace root: ")
+	b.WriteString(workspace.Root)
+	b.WriteString("\n")
+	_, _ = fmt.Fprintf(b, "Has workflow tree: %t\n", workspace.HasWorkflowTree)
+	_, _ = fmt.Fprintf(b, "Has prepare scenario: %t\n", workspace.HasPrepare)
+	_, _ = fmt.Fprintf(b, "Has apply scenario: %t\n", workspace.HasApply)
+	b.WriteString("Route: ")
+	b.WriteString(string(route))
+	b.WriteString("\n")
+	if state.LastLint != "" {
+		b.WriteString("Last lint summary: ")
+		b.WriteString(state.LastLint)
+		b.WriteString("\n")
+	}
+	if fromLabel != "" {
+		b.WriteString("Attached request source: ")
+		b.WriteString(fromLabel)
+		b.WriteString("\n")
+	}
+	b.WriteString("User request:\n")
+	b.WriteString(strings.TrimSpace(prompt))
+	b.WriteString("\n")
+	b.WriteString("Return the minimum complete file set needed for this request.\n")
+	return b.String()
+}
+
+func infoSystemPrompt(route askintent.Route, retrieval askretrieve.RetrievalResult) string {
+	b := &strings.Builder{}
+	b.WriteString("You are deck ask.\n")
+	b.WriteString("Route: ")
+	b.WriteString(string(route))
+	b.WriteString("\n")
+	b.WriteString("Return strict JSON with shape {\"summary\":string,\"answer\":string,\"suggestions\":[]string}.\n")
+	b.WriteString("Do not return file content for this route.\n")
+	b.WriteString(askretrieve.BuildChunkText(retrieval))
+	return b.String()
+}
+
+func infoUserPrompt(prompt string, route askintent.Route) string {
+	return "Route: " + string(route) + "\nUser request:\n" + strings.TrimSpace(prompt)
+}
+
+func localClarify(prompt string) string {
+	if strings.TrimSpace(prompt) == "" {
+		return "Your request is empty. Please describe what you want to do."
+	}
+	return "Your request is too ambiguous to start workflow generation."
+}
+
+func clarificationSuggestions() []string {
+	return []string{
+		"Try: deck ask \"rhel9 single-node kubeadm cluster scenario\"",
+		"Try: deck ask --review",
+		"Try: deck ask \"explain what workflows/scenarios/apply.yaml does\"",
+	}
+}
+
+func localExplain(workspace askretrieve.WorkspaceSummary, prompt string) (string, string) {
+	b := &strings.Builder{}
+	b.WriteString("Workspace summary:\n")
+	_, _ = fmt.Fprintf(b, "- workflow tree: %t\n", workspace.HasWorkflowTree)
+	_, _ = fmt.Fprintf(b, "- prepare scenario: %t\n", workspace.HasPrepare)
+	_, _ = fmt.Fprintf(b, "- apply scenario: %t\n", workspace.HasApply)
+	_, _ = fmt.Fprintf(b, "- relevant files: %d\n", len(workspace.Files))
+	if strings.TrimSpace(prompt) != "" {
+		b.WriteString("Prompt interpreted as explain request for current workspace.\n")
+	}
+	return "Workspace explanation", strings.TrimSpace(b.String())
+}
+
+func findingsToLines(findings []askreview.Finding) []string {
+	if len(findings) == 0 {
+		return []string{"No local style findings detected."}
+	}
+	out := make([]string, 0, len(findings))
+	for _, finding := range findings {
+		out = append(out, fmt.Sprintf("[%s] %s", finding.Severity, finding.Message))
+	}
+	return out
+}
+
+func resultToMarkdown(result runResult) string {
+	b := &strings.Builder{}
+	b.WriteString("# ask result\n\n")
+	b.WriteString("- route: ")
+	b.WriteString(string(result.Route))
+	b.WriteString("\n")
+	_, _ = fmt.Fprintf(b, "- confidence: %.2f\n", result.Confidence)
+	b.WriteString("- reason: ")
+	b.WriteString(result.Reason)
+	b.WriteString("\n")
+	b.WriteString("- termination: ")
+	b.WriteString(result.Termination)
+	b.WriteString("\n")
+	b.WriteString("\n")
+	b.WriteString(result.Answer)
+	b.WriteString("\n")
+	return b.String()
+}
+
+func render(stdout io.Writer, stderr io.Writer, result runResult) error {
+	if stdout == nil {
+		stdout = io.Discard
+	}
+	if stderr == nil {
+		stderr = io.Discard
+	}
+	if _, err := fmt.Fprintf(stdout, "ask: %s\n", result.Summary); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(stdout, "route: %s (confidence %.2f)\n", result.Route, result.Confidence); err != nil {
+		return err
+	}
+	if result.Answer != "" {
+		if _, err := fmt.Fprintf(stdout, "answer: %s\n", result.Answer); err != nil {
+			return err
+		}
+	}
+	if result.LintSummary != "" {
+		if _, err := fmt.Fprintf(stdout, "lint: %s\n", result.LintSummary); err != nil {
+			return err
+		}
+	}
+	if len(result.ReviewLines) > 0 {
+		if _, err := io.WriteString(stdout, "notes:\n"); err != nil {
+			return err
+		}
+		for _, line := range result.ReviewLines {
+			if _, err := fmt.Fprintf(stdout, "- %s\n", line); err != nil {
+				return err
+			}
+		}
+	}
+	if len(result.LocalFindings) > 0 {
+		if _, err := io.WriteString(stdout, "local-findings:\n"); err != nil {
+			return err
+		}
+		for _, finding := range result.LocalFindings {
+			if _, err := fmt.Fprintf(stdout, "- [%s] %s\n", finding.Severity, finding.Message); err != nil {
+				return err
+			}
+		}
+	}
+	if len(result.Files) > 0 {
+		label := "preview"
+		if result.WroteFiles {
+			label = "wrote"
+		}
+		if _, err := fmt.Fprintf(stdout, "%s:\n", label); err != nil {
+			return err
+		}
+		for _, file := range result.Files {
+			if _, err := fmt.Fprintf(stdout, "--- %s\n%s", file.Path, file.Content); err != nil {
+				return err
+			}
+			if !strings.HasSuffix(file.Content, "\n") {
+				if _, err := io.WriteString(stdout, "\n"); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	if result.WroteFiles {
+		if _, err := io.WriteString(stdout, "ask write: ok\n"); err != nil {
+			return err
+		}
+	}
+	if _, err := fmt.Fprintf(stderr, "deck ask route=%s reason=%s llmUsed=%t retries=%d termination=%s\n", result.Route, result.Reason, result.LLMUsed, result.RetriesUsed, result.Termination); err != nil {
+		return err
+	}
+	if result.ConfigSource.APIKeySource != "unset" {
+		if _, err := fmt.Fprintf(stderr, "deck ask using provider=%s model=%s endpoint=%s apiKeySource=%s\n", result.ConfigSource.Provider, result.ConfigSource.Model, result.ConfigSource.Endpoint, result.ConfigSource.APIKeySource); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateGeneratedPath(path string) error {
+	clean := filepath.ToSlash(strings.TrimSpace(path))
+	if clean == "" {
+		return fmt.Errorf("generated file path is empty")
+	}
+	allowed := strings.HasPrefix(clean, "workflows/scenarios/") || strings.HasPrefix(clean, "workflows/components/") || clean == "workflows/vars.yaml"
+	if !allowed {
+		return fmt.Errorf("generated file path is not allowed: %s", clean)
+	}
+	if strings.Contains(clean, "..") {
+		return fmt.Errorf("generated file path escapes workspace: %s", clean)
+	}
+	return nil
+}
+
+func validateGeneratedFile(root string, file askcontract.GeneratedFile) error {
 	if err := validateGeneratedPath(file.Path); err != nil {
 		return err
 	}
@@ -233,7 +560,7 @@ func validateGeneratedFile(root string, file generatedFile) error {
 	return nil
 }
 
-func writeFiles(root string, files []generatedFile) error {
+func writeFiles(root string, files []askcontract.GeneratedFile) error {
 	if err := ensureScaffold(root); err != nil {
 		return err
 	}
@@ -255,40 +582,7 @@ func writeFiles(root string, files []generatedFile) error {
 	return nil
 }
 
-func loadRequestText(prompt string, fromPath string) (string, error) {
-	prompt = strings.TrimSpace(prompt)
-	fromPath = strings.TrimSpace(fromPath)
-	if fromPath == "" {
-		return prompt, nil
-	}
-	//nolint:gosec // The user explicitly chose the request file path.
-	raw, err := os.ReadFile(fromPath)
-	if err != nil {
-		return "", fmt.Errorf("read ask request file: %w", err)
-	}
-	fromText := strings.TrimSpace(string(raw))
-	if prompt == "" {
-		return fromText, nil
-	}
-	return prompt + "\n\nAttached request details:\n" + fromText, nil
-}
-
-func validateGeneratedPath(path string) error {
-	clean := filepath.ToSlash(strings.TrimSpace(path))
-	if clean == "" {
-		return fmt.Errorf("generated file path is empty")
-	}
-	allowed := strings.HasPrefix(clean, "workflows/scenarios/") || strings.HasPrefix(clean, "workflows/components/") || clean == "workflows/vars.yaml"
-	if !allowed {
-		return fmt.Errorf("generated file path is not allowed: %s", clean)
-	}
-	if strings.Contains(clean, "..") {
-		return fmt.Errorf("generated file path escapes workspace: %s", clean)
-	}
-	return nil
-}
-
-func stageWorkspace(root string, files []generatedFile) (string, error) {
+func stageWorkspace(root string, files []askcontract.GeneratedFile) (string, error) {
 	tempRoot, err := os.MkdirTemp("", "deck-ask-workspace-")
 	if err != nil {
 		return "", fmt.Errorf("create ask staging workspace: %w", err)
@@ -353,91 +647,12 @@ func scenarioPaths(root string, candidatePaths []string) []string {
 	return paths
 }
 
-func localFindings(root string, mode askcontext.Mode, candidate generatedResponse) []askreview.Finding {
-	if mode == askcontext.ModeReview {
-		return askreview.Workspace(root)
+func localFindings(files []askcontract.GeneratedFile) []askreview.Finding {
+	content := make(map[string]string, len(files))
+	for _, file := range files {
+		content[file.Path] = file.Content
 	}
-	files := make(map[string]string, len(candidate.Files))
-	for _, file := range candidate.Files {
-		files[file.Path] = file.Content
-	}
-	return askreview.Candidate(files)
-}
-
-type renderInput struct {
-	Mode         askcontext.Mode
-	Candidate    generatedResponse
-	LintSummary  string
-	LocalReview  []askreview.Finding
-	WroteFiles   bool
-	ConfigSource askconfig.EffectiveSettings
-}
-
-func render(stdout io.Writer, stderr io.Writer, input renderInput) error {
-	if stdout == nil {
-		stdout = io.Discard
-	}
-	if stderr == nil {
-		stderr = io.Discard
-	}
-	if _, err := fmt.Fprintf(stdout, "ask: %s\n", input.Candidate.Summary); err != nil {
-		return err
-	}
-	if input.LintSummary != "" {
-		if _, err := fmt.Fprintf(stdout, "lint: %s\n", input.LintSummary); err != nil {
-			return err
-		}
-	}
-	if len(input.Candidate.Review) > 0 {
-		if _, err := io.WriteString(stdout, "review:\n"); err != nil {
-			return err
-		}
-		for _, line := range input.Candidate.Review {
-			if _, err := fmt.Fprintf(stdout, "- %s\n", line); err != nil {
-				return err
-			}
-		}
-	}
-	if len(input.LocalReview) > 0 {
-		if _, err := io.WriteString(stdout, "local-findings:\n"); err != nil {
-			return err
-		}
-		for _, finding := range input.LocalReview {
-			if _, err := fmt.Fprintf(stdout, "- [%s] %s\n", finding.Severity, finding.Message); err != nil {
-				return err
-			}
-		}
-	}
-	if len(input.Candidate.Files) > 0 {
-		label := "preview"
-		if input.WroteFiles {
-			label = "wrote"
-		}
-		if _, err := fmt.Fprintf(stdout, "%s:\n", label); err != nil {
-			return err
-		}
-		for _, file := range input.Candidate.Files {
-			if _, err := fmt.Fprintf(stdout, "--- %s\n%s", file.Path, file.Content); err != nil {
-				return err
-			}
-			if !strings.HasSuffix(file.Content, "\n") {
-				if _, err := io.WriteString(stdout, "\n"); err != nil {
-					return err
-				}
-			}
-		}
-	}
-	if input.WroteFiles {
-		if _, err := io.WriteString(stdout, "ask write: ok\n"); err != nil {
-			return err
-		}
-	}
-	if input.ConfigSource.APIKeySource != "unset" {
-		if _, err := fmt.Fprintf(stderr, "deck ask using provider=%s model=%s apiKeySource=%s\n", input.ConfigSource.Provider, input.ConfigSource.Model, input.ConfigSource.APIKeySource); err != nil {
-			return err
-		}
-	}
-	return nil
+	return askreview.Candidate(content)
 }
 
 func ensureScaffold(root string) error {
@@ -486,29 +701,53 @@ func copyTree(src string, dst string) error {
 		if info.IsDir() {
 			return os.MkdirAll(target, 0o750)
 		}
-		//nolint:gosec // Paths come from walking the already-selected workspace tree.
-		raw, err := os.ReadFile(path)
+		raw, err := os.ReadFile(path) //nolint:gosec // Paths come from walking selected workspace tree.
 		if err != nil {
 			return err
 		}
 		if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
 			return err
 		}
-		//nolint:gosec // Target remains under the temporary staging workspace.
-		return os.WriteFile(target, raw, 0o600)
+		return os.WriteFile(target, raw, 0o600) //nolint:gosec // Target stays inside staging root.
 	})
+}
+
+func loadRequestText(prompt string, fromPath string) (string, error) {
+	prompt = strings.TrimSpace(prompt)
+	fromPath = strings.TrimSpace(fromPath)
+	if fromPath == "" {
+		return prompt, nil
+	}
+	raw, err := os.ReadFile(fromPath) //nolint:gosec // User-selected request file path.
+	if err != nil {
+		return "", fmt.Errorf("read ask request file: %w", err)
+	}
+	fromText := strings.TrimSpace(string(raw))
+	if prompt == "" {
+		return fromText, nil
+	}
+	return prompt + "\n\nAttached request details:\n" + fromText, nil
 }
 
 func isVarsPath(path string) bool {
 	return filepath.ToSlash(strings.TrimSpace(path)) == "workflows/vars.yaml"
 }
 
-func filePaths(files []generatedFile) []string {
+func filePaths(files []askcontract.GeneratedFile) []string {
 	paths := make([]string, 0, len(files))
 	for _, file := range files {
 		paths = append(paths, file.Path)
 	}
+	sort.Strings(paths)
 	return paths
+}
+
+func chunkIDs(chunks []askretrieve.Chunk) []string {
+	ids := make([]string, 0, len(chunks))
+	for _, chunk := range chunks {
+		ids = append(ids, chunk.ID)
+	}
+	return ids
 }
 
 func dedupe(values []string) []string {
@@ -523,18 +762,4 @@ func dedupe(values []string) []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-func cleanResponse(response string) string {
-	response = strings.TrimSpace(response)
-	response = strings.TrimPrefix(response, "```json")
-	response = strings.TrimPrefix(response, "```")
-	response = strings.TrimSuffix(response, "```")
-	response = strings.TrimSpace(response)
-	start := strings.Index(response, "{")
-	end := strings.LastIndex(response, "}")
-	if start >= 0 && end > start {
-		response = response[start : end+1]
-	}
-	return strings.TrimSpace(response)
 }

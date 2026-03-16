@@ -14,11 +14,19 @@ import (
 const dirName = ".deck/ask"
 
 type Context struct {
-	LastMode      string    `json:"lastMode,omitempty"`
-	LastPrompt    string    `json:"lastPrompt,omitempty"`
-	LastFiles     []string  `json:"lastFiles,omitempty"`
-	LastLint      string    `json:"lastLint,omitempty"`
-	LastUpdatedAt time.Time `json:"lastUpdatedAt,omitempty"`
+	LastMode            string    `json:"lastMode,omitempty"`
+	LastRoute           string    `json:"lastRoute,omitempty"`
+	LastConfidence      float64   `json:"lastConfidence,omitempty"`
+	LastReason          string    `json:"lastReason,omitempty"`
+	LastPrompt          string    `json:"lastPrompt,omitempty"`
+	LastFiles           []string  `json:"lastFiles,omitempty"`
+	LastLint            string    `json:"lastLint,omitempty"`
+	LastLLMUsed         bool      `json:"lastLlmUsed,omitempty"`
+	LastChunkIDs        []string  `json:"lastChunkIds,omitempty"`
+	LastDroppedChunkIDs []string  `json:"lastDroppedChunkIds,omitempty"`
+	LastRetries         int       `json:"lastRetries,omitempty"`
+	LastTermination     string    `json:"lastTermination,omitempty"`
+	LastUpdatedAt       time.Time `json:"lastUpdatedAt,omitempty"`
 }
 
 func Dir(root string) (string, error) {
