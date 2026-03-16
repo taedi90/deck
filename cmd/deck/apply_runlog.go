@@ -73,7 +73,7 @@ func newApplyRunLogger(workflowPath, workflowSource, scenario, bundleRoot, selec
 	if err := filemode.EnsureParentPrivateDir(eventsPath); err != nil {
 		return nil, fmt.Errorf("create run log directory: %w", err)
 	}
-	eventsFile, err := os.OpenFile(eventsPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	eventsFile, err := filemode.OpenFile(eventsPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, filemode.PrivateState)
 	if err != nil {
 		return nil, fmt.Errorf("open run event log: %w", err)
 	}
@@ -127,7 +127,9 @@ func (l *applyRunLogger) EventSink() install.StepEventSink {
 		return nil
 	}
 	return func(event install.StepEvent) {
-		_ = l.writeEvent(event)
+		if err := l.writeEvent(event); err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "deck: write run event log: %v\n", err)
+		}
 	}
 }
 

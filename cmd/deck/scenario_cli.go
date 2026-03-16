@@ -93,11 +93,12 @@ func discoverScenarioEntries(source string) ([]scenarioEntry, error) {
 
 	if source == scenarioSourceServer || source == scenarioSourceAll {
 		serverURL, _, err := resolveSourceURL("")
-		if err != nil {
+		switch {
+		case err != nil:
 			if source != scenarioSourceAll {
 				return nil, err
 			}
-		} else if strings.TrimSpace(serverURL) != "" {
+		case strings.TrimSpace(serverURL) != "":
 			serverEntries, err := discoverServerScenarioEntries(serverURL)
 			if err != nil {
 				if source != scenarioSourceAll {
@@ -106,7 +107,7 @@ func discoverScenarioEntries(source string) ([]scenarioEntry, error) {
 			} else {
 				entries = append(entries, serverEntries...)
 			}
-		} else if source == scenarioSourceServer {
+		case source == scenarioSourceServer:
 			return nil, errors.New("saved source is required; set one with \"deck source set <url>\"")
 		}
 	}

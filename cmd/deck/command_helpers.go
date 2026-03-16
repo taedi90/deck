@@ -78,19 +78,3 @@ func stdoutPrintln(args ...any) error {
 func closeSilently(closer io.Closer) {
 	_ = closer.Close()
 }
-
-func dedupeStrings(values []string) []string {
-	if len(values) == 0 {
-		return values
-	}
-	out := make([]string, 0, len(values))
-	seen := map[string]bool{}
-	for _, v := range values {
-		if seen[v] {
-			continue
-		}
-		seen[v] = true
-		out = append(out, v)
-	}
-	return out
-}
