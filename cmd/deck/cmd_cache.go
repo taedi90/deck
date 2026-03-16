@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/taedi90/deck/internal/userdirs"
 )
 
 type cacheEntry struct {
@@ -73,11 +75,25 @@ func executeCacheClean(olderThan string, dryRun bool) error {
 }
 
 func defaultDeckCacheRoot() (string, error) {
-	home, err := os.UserHomeDir()
+	root, err := userdirs.CacheRoot()
 	if err != nil {
-		return "", fmt.Errorf("resolve user home directory: %w", err)
+		return "", err
 	}
-	return filepath.Join(home, ".deck", "cache"), nil
+	if _, err := os.Stat(root); err == nil {
+		return root, nil
+	} else if err != nil && !os.IsNotExist(err) {
+		return "", fmt.Errorf("stat cache root: %w", err)
+	}
+	legacyRoot, err := userdirs.LegacyCacheRoot()
+	if err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(legacyRoot); err == nil {
+		return legacyRoot, nil
+	} else if err != nil && !os.IsNotExist(err) {
+		return "", fmt.Errorf("stat legacy cache root: %w", err)
+	}
+	return root, nil
 }
 
 func listCacheEntries(root string) ([]cacheEntry, error) {

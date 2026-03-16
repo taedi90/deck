@@ -15,6 +15,37 @@ import (
 )
 
 func runWithCapturedStdout(args []string) (string, error) {
+	for _, name := range []string{"DECK_SERVER", "DECK_API_TOKEN"} {
+		oldValue, hadOldValue := os.LookupEnv(name)
+		if err := os.Setenv(name, ""); err != nil {
+			return "", err
+		}
+		defer func(name, value string, hadValue bool) {
+			if hadValue {
+				_ = os.Setenv(name, value)
+			} else {
+				_ = os.Unsetenv(name)
+			}
+		}(name, oldValue, hadOldValue)
+	}
+
+	configPath := ""
+	if os.Getenv("DECK_SERVER_CONFIG_PATH") == "" {
+		configPath = filepath.Join(os.TempDir(), "deck-test-server-config.json")
+		oldValue, hadOldValue := os.LookupEnv("DECK_SERVER_CONFIG_PATH")
+		if err := os.Setenv("DECK_SERVER_CONFIG_PATH", configPath); err != nil {
+			return "", err
+		}
+		defer func() {
+			if hadOldValue {
+				_ = os.Setenv("DECK_SERVER_CONFIG_PATH", oldValue)
+			} else {
+				_ = os.Unsetenv("DECK_SERVER_CONFIG_PATH")
+			}
+		}()
+		_ = os.Remove(configPath)
+	}
+
 	oldStdout := os.Stdout
 	r, w, err := os.Pipe()
 	if err != nil {
@@ -56,6 +87,19 @@ func runDeckBinary(t *testing.T, binaryPath string, args ...string) deckBinaryRe
 	t.Helper()
 	cmd := exec.Command(binaryPath, args...)
 	cmd.Dir = filepath.Join("..", "..")
+	cmd.Env = os.Environ()
+	if os.Getenv("XDG_CONFIG_HOME") == "" {
+		cmd.Env = append(cmd.Env, "XDG_CONFIG_HOME="+filepath.Join(t.TempDir(), "config"))
+	}
+	if os.Getenv("XDG_STATE_HOME") == "" {
+		cmd.Env = append(cmd.Env, "XDG_STATE_HOME="+filepath.Join(t.TempDir(), "state"))
+	}
+	if os.Getenv("XDG_CACHE_HOME") == "" {
+		cmd.Env = append(cmd.Env, "XDG_CACHE_HOME="+filepath.Join(t.TempDir(), "cache"))
+	}
+	if os.Getenv("DECK_SERVER_CONFIG_PATH") == "" {
+		cmd.Env = append(cmd.Env, "DECK_SERVER_CONFIG_PATH="+filepath.Join(t.TempDir(), "server.json"))
+	}
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &stdout

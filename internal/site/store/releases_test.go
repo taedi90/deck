@@ -96,7 +96,7 @@ func TestSiteStoreSeparateFromInstallState(t *testing.T) {
 		t.Fatalf("expected site metadata under .deck/site: %v", err)
 	}
 
-	installStatePath := filepath.Join(home, ".deck", "state")
+	installStatePath := filepath.Join(home, ".local", "state", "deck", "state")
 	if _, err := os.Stat(installStatePath); !os.IsNotExist(err) {
 		t.Fatalf("expected no writes to local install-state path %q, got err=%v", installStatePath, err)
 	}

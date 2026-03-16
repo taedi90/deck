@@ -5,103 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	sitestore "github.com/taedi90/deck/internal/site/store"
 )
-
-func TestNodeIDCLIShowSetInit(t *testing.T) {
-	root := t.TempDir()
-	operatorPath := filepath.Join(root, "etc", "deck", "node-id")
-	generatedPath := filepath.Join(root, "var", "lib", "deck", "node-id")
-	t.Setenv("DECK_NODE_ID_OPERATOR_PATH", operatorPath)
-	t.Setenv("DECK_NODE_ID_GENERATED_PATH", generatedPath)
-
-	initOut, err := runWithCapturedStdout([]string{"node", "id", "init"})
-	if err != nil {
-		t.Fatalf("node id init failed: %v", err)
-	}
-	if !strings.Contains(initOut, "node id init: created generated node-id") {
-		t.Fatalf("expected init create output, got %q", initOut)
-	}
-	if !strings.Contains(initOut, "source=generated") && !strings.Contains(initOut, "source=generated-new") {
-		t.Fatalf("expected generated source after init, got %q", initOut)
-	}
-
-	showOut, err := runWithCapturedStdout([]string{"node", "id", "show"})
-	if err != nil {
-		t.Fatalf("node id show failed: %v", err)
-	}
-	if !strings.Contains(showOut, "node-id=node-") {
-		t.Fatalf("expected generated node id in show output, got %q", showOut)
-	}
-	if !strings.Contains(showOut, "source=generated") {
-		t.Fatalf("expected source=generated, got %q", showOut)
-	}
-	if !strings.Contains(showOut, "hostname=") {
-		t.Fatalf("expected hostname output, got %q", showOut)
-	}
-
-	_, err = runWithCapturedStdout([]string{"node", "id", "set", "INVALID_UPPERCASE"})
-	if err == nil || !strings.Contains(err.Error(), "node-id must match") {
-		t.Fatalf("expected invalid node-id validation error, got %v", err)
-	}
-
-	setOut, err := runWithCapturedStdout([]string{"node", "id", "set", "operator-1"})
-	if err != nil {
-		t.Fatalf("node id set failed: %v", err)
-	}
-	if !strings.Contains(setOut, "node id set: operator-1") {
-		t.Fatalf("expected set output, got %q", setOut)
-	}
-
-	showOut, err = runWithCapturedStdout([]string{"node", "id", "show"})
-	if err != nil {
-		t.Fatalf("node id show failed after set: %v", err)
-	}
-	if !strings.Contains(showOut, "node-id=operator-1") {
-		t.Fatalf("expected operator node-id after set, got %q", showOut)
-	}
-	if !strings.Contains(showOut, "source=operator") {
-		t.Fatalf("expected operator source after set, got %q", showOut)
-	}
-	if !strings.Contains(showOut, "mismatch=true") {
-		t.Fatalf("expected mismatch output when both files differ, got %q", showOut)
-	}
-}
-
-func TestNodeAssignmentShow(t *testing.T) {
-	root := t.TempDir()
-	operatorPath := filepath.Join(t.TempDir(), "etc", "deck", "node-id")
-	t.Setenv("DECK_NODE_ID_OPERATOR_PATH", operatorPath)
-	t.Setenv("DECK_NODE_ID_GENERATED_PATH", filepath.Join(t.TempDir(), "var", "lib", "deck", "node-id"))
-	if err := os.MkdirAll(filepath.Dir(operatorPath), 0o755); err != nil {
-		t.Fatalf("mkdir operator path: %v", err)
-	}
-	if err := os.WriteFile(operatorPath, []byte("node-1\n"), 0o644); err != nil {
-		t.Fatalf("write operator node id: %v", err)
-	}
-
-	st, err := sitestore.New(root)
-	if err != nil {
-		t.Fatalf("new site store: %v", err)
-	}
-	if err := st.CreateSession(sitestore.Session{ID: "session-1", ReleaseID: "rel-1", Status: "open"}); err != nil {
-		t.Fatalf("create session: %v", err)
-	}
-	if err := st.SaveAssignment("session-1", sitestore.Assignment{ID: "assign-1", SessionID: "session-1", NodeID: "node-1", Role: "apply", Workflow: "workflows/scenarios/apply.yaml"}); err != nil {
-		t.Fatalf("save assignment: %v", err)
-	}
-
-	out, err := runWithCapturedStdout([]string{"node", "assignment", "show", "--root", root, "--session", "session-1"})
-	if err != nil {
-		t.Fatalf("node assignment show failed: %v", err)
-	}
-	for _, want := range []string{"session=session-1", "node-id=node-1", "assignment=assign-1", "role=apply", "workflow=workflows/scenarios/apply.yaml"} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("expected %q in output, got %q", want, out)
-		}
-	}
-}
 
 func TestRunWorkflowRunInstallLocalSuccess(t *testing.T) {
 	wf := writeInstallTrueWorkflowFixture(t)
@@ -111,7 +15,7 @@ func TestRunWorkflowRunInstallLocalSuccess(t *testing.T) {
 		t.Fatalf("mkdir bundle workflows: %v", err)
 	}
 
-	out, err := runWithCapturedStdout([]string{"apply", "--file", wf, bundle})
+	out, err := runWithCapturedStdout([]string{"apply", "--workflow", wf, bundle})
 	if err != nil {
 		t.Fatalf("expected success, got %v", err)
 	}
@@ -300,7 +204,7 @@ func TestRunWorkflowRunDryRunPrintsPlan(t *testing.T) {
 
 	wf := writeInstallTrueWorkflowFixture(t)
 
-	out, err := runWithCapturedStdout([]string{"apply", "--file", wf, "--dry-run", bundle})
+	out, err := runWithCapturedStdout([]string{"apply", "--workflow", wf, "--dry-run", bundle})
 	if err != nil {
 		t.Fatalf("expected success, got %v", err)
 	}
@@ -325,7 +229,7 @@ func TestRunWorkflowRunDryRunWithNonInstallPhaseName(t *testing.T) {
 
 	wf := writeApplyTrueWorkflowFixture(t, "bootstrap")
 
-	out, err := runWithCapturedStdout([]string{"apply", "--file", wf, "--dry-run", bundle})
+	out, err := runWithCapturedStdout([]string{"apply", "--workflow", wf, "--dry-run", bundle})
 	if err != nil {
 		t.Fatalf("expected success, got %v", err)
 	}
@@ -336,7 +240,7 @@ func TestRunWorkflowRunDryRunWithNonInstallPhaseName(t *testing.T) {
 		t.Fatalf("expected step plan line in output, got %q", out)
 	}
 
-	planOut, err := runWithCapturedStdout([]string{"plan", "--file", wf})
+	planOut, err := runWithCapturedStdout([]string{"plan", "--workflow", wf})
 	if err != nil {
 		t.Fatalf("expected plan success, got %v", err)
 	}

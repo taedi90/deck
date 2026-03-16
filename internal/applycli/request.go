@@ -20,6 +20,7 @@ import (
 	"github.com/taedi90/deck/internal/filemode"
 	"github.com/taedi90/deck/internal/fsutil"
 	"github.com/taedi90/deck/internal/install"
+	"github.com/taedi90/deck/internal/userdirs"
 	"github.com/taedi90/deck/internal/validate"
 )
 
@@ -131,6 +132,10 @@ func ResolveExecutionRequest(ctx context.Context, opts ExecutionRequestOptions) 
 
 func LoadInstallDryRunState(wf *config.Workflow) (*install.State, error) {
 	statePath, err := ResolveInstallStatePath(wf)
+	if err != nil {
+		return nil, err
+	}
+	statePath, err = install.ResolveStateReadPathForWorkflow(wf, statePath)
 	if err != nil {
 		return nil, err
 	}
@@ -348,11 +353,11 @@ func extractBundleArchive(archivePath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("hash bundle archive: %w", err)
 	}
-	home, err := os.UserHomeDir()
+	cacheRoot, err := userdirs.CacheRoot()
 	if err != nil {
-		return "", fmt.Errorf("resolve user home directory: %w", err)
+		return "", err
 	}
-	extractRoot := filepath.Join(home, ".deck", "extract", sum)
+	extractRoot := filepath.Join(cacheRoot, "extract", sum)
 	bundleRoot, err := fsutil.NewBundleRoot(filepath.Join(extractRoot, "bundle"))
 	if err != nil {
 		return "", err

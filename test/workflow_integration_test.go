@@ -240,7 +240,7 @@ func runWorkflowApplyExpectError(t *testing.T, repoRoot, workflowPath string, va
 	if err := os.MkdirAll(filepath.Join(bundleRoot, "workflows"), 0o755); err != nil {
 		t.Fatalf("mkdir bundle workflows: %v", err)
 	}
-	args := []string{"run", "./cmd/deck", "apply", "--file", workflowPath, "--phase", "install"}
+	args := []string{"run", "./cmd/deck", "apply", "--workflow", workflowPath, "--phase", "install"}
 	for _, item := range vars {
 		args = append(args, "--var", item)
 	}
@@ -288,7 +288,7 @@ func runWorkflowApplyDryRun(t *testing.T, repoRoot, workflowPath string, vars ..
 		t.Fatalf("mkdir bundle workflows: %v", err)
 	}
 
-	args := []string{"run", "./cmd/deck", "apply", "--file", workflowPath, "--dry-run"}
+	args := []string{"run", "./cmd/deck", "apply", "--workflow", workflowPath, "--dry-run"}
 	for _, item := range vars {
 		args = append(args, "--var", item)
 	}

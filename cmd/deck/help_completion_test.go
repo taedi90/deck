@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -27,7 +28,7 @@ func TestRunUsageShowsTopLevelAxes(t *testing.T) {
 			}
 
 			msg := res.stdout
-			for _, cmd := range []string{"init", "lint", "prepare", "bundle", "apply", "server", "plan", "doctor", "completion", "cache", "node", "site"} {
+			for _, cmd := range []string{"init", "list", "lint", "prepare", "bundle", "plan", "apply", "server", "completion", "cache"} {
 				if !strings.Contains(msg, cmd) {
 					t.Fatalf("usage must include %q, got %q", cmd, msg)
 				}
@@ -40,20 +41,17 @@ func TestRunUsageShowsTopLevelAxes(t *testing.T) {
 			if strings.Index(msg, "Core Commands\n") > strings.Index(msg, "Additional Commands\n") {
 				t.Fatalf("core commands section must appear before additional commands: %q", msg)
 			}
-			coreCommands := []string{"init", "lint", "prepare", "bundle", "apply"}
+			coreCommands := []string{"init", "list", "lint", "prepare", "bundle", "plan", "apply"}
 			for i := 0; i < len(coreCommands)-1; i++ {
 				if strings.Index(msg, coreCommands[i]) > strings.Index(msg, coreCommands[i+1]) {
 					t.Fatalf("core commands must keep registration order: %q appeared after %q in %q", coreCommands[i], coreCommands[i+1], msg)
 				}
 			}
-			additionalCommands := []string{"server", "plan", "doctor", "completion", "cache", "node", "site"}
+			additionalCommands := []string{"server", "completion", "cache"}
 			for i := 0; i < len(additionalCommands)-1; i++ {
 				if strings.Index(msg, additionalCommands[i]) > strings.Index(msg, additionalCommands[i+1]) {
 					t.Fatalf("additional commands must keep registration order: %q appeared after %q in %q", additionalCommands[i], additionalCommands[i+1], msg)
 				}
-			}
-			if strings.Index(msg, "server") > strings.Index(msg, "site") {
-				t.Fatalf("additional commands must keep registration order: %q", msg)
 			}
 			for _, legacy := range []string{"strategy", "control"} {
 				if strings.Contains(msg, legacy) {
@@ -102,6 +100,47 @@ func TestCompletionCommands(t *testing.T) {
 	}
 }
 
+func TestScenarioFlagCompletion(t *testing.T) {
+	t.Run("source values", func(t *testing.T) {
+		res := execute([]string{"__complete", "apply", "--source", "l"})
+		if res.err != nil {
+			t.Fatalf("expected completion success, got %v", res.err)
+		}
+		for _, want := range []string{"local", "server", ":4"} {
+			if !strings.Contains(res.stdout, want) {
+				t.Fatalf("expected %q in completion output, got %q", want, res.stdout)
+			}
+		}
+	})
+
+	t.Run("local scenario names", func(t *testing.T) {
+		root := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(root, "workflows", "scenarios"), 0o755); err != nil {
+			t.Fatalf("mkdir scenarios: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "apply.yaml"), []byte("role: apply\nversion: v1alpha1\nsteps: []\n"), 0o644); err != nil {
+			t.Fatalf("write scenario: %v", err)
+		}
+
+		oldWD, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("getwd: %v", err)
+		}
+		if err := os.Chdir(root); err != nil {
+			t.Fatalf("chdir: %v", err)
+		}
+		defer func() { _ = os.Chdir(oldWD) }()
+
+		res := execute([]string{"__complete", "apply", "--source", "local", "--scenario", "a"})
+		if res.err != nil {
+			t.Fatalf("expected completion success, got %v", res.err)
+		}
+		if !strings.Contains(res.stdout, "apply") {
+			t.Fatalf("expected scenario completion, got %q", res.stdout)
+		}
+	})
+}
+
 func TestRunTopLevelStubUsage(t *testing.T) {
 	t.Run("prepare missing workflow root", func(t *testing.T) {
 		root := t.TempDir()
@@ -140,8 +179,6 @@ func TestNestedHelpRoutesToStdout(t *testing.T) {
 		want string
 	}{
 		{args: []string{"help", "prepare"}, want: "deck prepare [flags]"},
-		{args: []string{"site", "release", "--help"}, want: "deck site release [command]"},
-		{args: []string{"node", "id", "--help"}, want: "deck node id [command]"},
 		{args: []string{"server", "--help"}, want: "deck server [command]"},
 	}
 

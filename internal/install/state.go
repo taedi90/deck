@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/taedi90/deck/internal/config"
 	"github.com/taedi90/deck/internal/filemode"
 	"github.com/taedi90/deck/internal/fsutil"
+	"github.com/taedi90/deck/internal/userdirs"
 )
 
 type State struct {
@@ -74,9 +74,48 @@ func DefaultStatePath(wf *config.Workflow) (string, error) {
 	if stateKey == "" {
 		return "", fmt.Errorf("workflow state key is empty")
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve user home directory: %w", err)
+	return userdirs.StateFile(stateKey + ".json")
+}
+
+func LegacyStatePath(wf *config.Workflow) (string, error) {
+	if wf == nil {
+		return "", fmt.Errorf("workflow is nil")
 	}
-	return filepath.Join(home, ".deck", "state", stateKey+".json"), nil
+	stateKey := strings.TrimSpace(wf.StateKey)
+	if stateKey == "" {
+		return "", fmt.Errorf("workflow state key is empty")
+	}
+	return userdirs.LegacyStateFile(stateKey + ".json")
+}
+
+func resolveStateReadPath(wf *config.Workflow, preferredPath string) (string, error) {
+	resolved := strings.TrimSpace(preferredPath)
+	if resolved == "" {
+		return preferredPath, nil
+	}
+	if _, err := os.Stat(resolved); err == nil {
+		return resolved, nil
+	} else if err != nil && !os.IsNotExist(err) {
+		return "", fmt.Errorf("stat state file: %w", err)
+	}
+	if wf == nil || strings.TrimSpace(wf.StateKey) == "" {
+		return resolved, nil
+	}
+	legacyPath, err := LegacyStatePath(wf)
+	if err != nil {
+		return "", err
+	}
+	if legacyPath == resolved {
+		return resolved, nil
+	}
+	if _, err := os.Stat(legacyPath); err == nil {
+		return legacyPath, nil
+	} else if err != nil && !os.IsNotExist(err) {
+		return "", fmt.Errorf("stat legacy state file: %w", err)
+	}
+	return resolved, nil
+}
+
+func ResolveStateReadPathForWorkflow(wf *config.Workflow, preferredPath string) (string, error) {
+	return resolveStateReadPath(wf, preferredPath)
 }

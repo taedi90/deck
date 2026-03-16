@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/taedi90/deck/internal/filemode"
 	"github.com/taedi90/deck/internal/fsutil"
+	"github.com/taedi90/deck/internal/userdirs"
 )
 
 type serverDefaults struct {
@@ -22,11 +22,11 @@ func serverDefaultsPath() (string, error) {
 	if raw := strings.TrimSpace(os.Getenv("DECK_SERVER_CONFIG_PATH")); raw != "" {
 		return raw, nil
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve user home directory: %w", err)
-	}
-	return filepath.Join(home, ".deck", "server.json"), nil
+	return userdirs.ConfigFile("server.json")
+}
+
+func legacyServerDefaultsPath() (string, error) {
+	return userdirs.LegacyConfigFile("server.json")
 }
 
 func resolveServerURL(explicit string) (string, string, error) {
@@ -91,9 +91,23 @@ func loadServerDefaults() (serverDefaults, error) {
 	raw, err := fsutil.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return serverDefaults{}, nil
+			if strings.TrimSpace(os.Getenv("DECK_SERVER_CONFIG_PATH")) != "" {
+				return serverDefaults{}, nil
+			}
+			legacyPath, legacyErr := legacyServerDefaultsPath()
+			if legacyErr != nil {
+				return serverDefaults{}, legacyErr
+			}
+			raw, err = fsutil.ReadFile(legacyPath)
+			if err != nil {
+				if os.IsNotExist(err) {
+					return serverDefaults{}, nil
+				}
+				return serverDefaults{}, fmt.Errorf("read legacy server defaults: %w", err)
+			}
+		} else {
+			return serverDefaults{}, fmt.Errorf("read server defaults: %w", err)
 		}
-		return serverDefaults{}, fmt.Errorf("read server defaults: %w", err)
 	}
 	disk := map[string]string{}
 	if err := json.Unmarshal(raw, &disk); err != nil {

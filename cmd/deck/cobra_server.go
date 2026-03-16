@@ -27,7 +27,6 @@ func newServerCommand() *cobra.Command {
 		newServerSetCommand(),
 		newServerShowCommand(),
 		newServerUnsetCommand(),
-		newServerScenariosCommand(),
 		newServerUpCommand(),
 		newServerDownCommand(),
 		newServerHealthCommand(),
@@ -42,15 +41,10 @@ func newServerSetCommand() *cobra.Command {
 		Use:   "set <url>",
 		Short: "Save the default server profile",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			apiToken, err := cmdFlagValue(cmd, "api-token")
-			if err != nil {
-				return err
-			}
-			return executeServerSet(args[0], apiToken)
+		RunE: func(_ *cobra.Command, args []string) error {
+			return executeServerSet(args[0])
 		},
 	}
-	cmd.Flags().String("api-token", "", "default API token for assisted site APIs")
 	return cmd
 }
 
@@ -157,28 +151,6 @@ func newServerUpCommand() *cobra.Command {
 	return cmd
 }
 
-func newServerScenariosCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "scenarios",
-		Short: "List available scenarios from a server",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			server, err := cmdFlagValue(cmd, "server")
-			if err != nil {
-				return err
-			}
-			output, err := cmdFlagValue(cmd, "output")
-			if err != nil {
-				return err
-			}
-			return executeListScenarios(server, output)
-		},
-	}
-	cmd.Flags().SetInterspersed(false)
-	cmd.Flags().String("server", "", "server URL for index (defaults to saved server)")
-	cmd.Flags().StringP("output", "o", "text", "output format (text|json)")
-	return cmd
-}
-
 func newServerDownCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "down",
@@ -250,18 +222,15 @@ func newServerLogsCommand() *cobra.Command {
 	return cmd
 }
 
-func executeServerSet(rawURL string, apiToken string) error {
+func executeServerSet(rawURL string) error {
 	resolved := strings.TrimRight(strings.TrimSpace(rawURL), "/")
 	if err := validateServerURL(resolved); err != nil {
 		return err
 	}
-	if err := saveServerDefaults(serverDefaults{URL: resolved, AuthToken: strings.TrimSpace(apiToken)}); err != nil {
+	if err := saveServerDefaults(serverDefaults{URL: resolved}); err != nil {
 		return err
 	}
-	if strings.TrimSpace(apiToken) == "" {
-		return stdoutPrintf("server default set: %s\n", resolved)
-	}
-	return stdoutPrintf("server default set: %s (api-token saved)\n", resolved)
+	return stdoutPrintf("server default set: %s\n", resolved)
 }
 
 func executeServerShow() error {
@@ -269,29 +238,14 @@ func executeServerShow() error {
 	if err != nil {
 		return err
 	}
-	apiToken, apiTokenSource, err := resolveServerAuthToken("")
-	if err != nil {
-		return err
-	}
 	if resolved == "" {
 		if err := stdoutPrintln("server="); err != nil {
-			return err
-		}
-		if err := stdoutPrintf("api-token-set=%t\n", strings.TrimSpace(apiToken) != ""); err != nil {
 			return err
 		}
 		return stdoutPrintln("source=none")
 	}
 	if err := stdoutPrintf("server=%s\n", resolved); err != nil {
 		return err
-	}
-	if err := stdoutPrintf("api-token-set=%t\n", strings.TrimSpace(apiToken) != ""); err != nil {
-		return err
-	}
-	if strings.TrimSpace(apiTokenSource) != "" {
-		if err := stdoutPrintf("api-token-source=%s\n", apiTokenSource); err != nil {
-			return err
-		}
 	}
 	if err := stdoutPrintf("source=%s\n", source); err != nil {
 		return err

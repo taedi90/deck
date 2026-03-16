@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -84,15 +82,15 @@ func TestServerDefaultCommands(t *testing.T) {
 	if err != nil {
 		t.Fatalf("server show failed: %v", err)
 	}
-	if out != "server=\napi-token-set=false\nsource=none\n" {
+	if out != "server=\nsource=none\n" {
 		t.Fatalf("unexpected empty server show output: %q", out)
 	}
 
-	out, err = runWithCapturedStdout([]string{"server", "set", "http://127.0.0.1:8080/", "--api-token", "token-1"})
+	out, err = runWithCapturedStdout([]string{"server", "set", "http://127.0.0.1:8080/"})
 	if err != nil {
 		t.Fatalf("server set failed: %v", err)
 	}
-	if out != "server default set: http://127.0.0.1:8080 (api-token saved)\n" {
+	if out != "server default set: http://127.0.0.1:8080\n" {
 		t.Fatalf("unexpected server set output: %q", out)
 	}
 
@@ -100,7 +98,7 @@ func TestServerDefaultCommands(t *testing.T) {
 	if err != nil {
 		t.Fatalf("server show after set failed: %v", err)
 	}
-	if out != "server=http://127.0.0.1:8080\napi-token-set=true\napi-token-source=config\nsource=config\n" {
+	if out != "server=http://127.0.0.1:8080\nsource=config\n" {
 		t.Fatalf("unexpected saved server show output: %q", out)
 	}
 
@@ -116,6 +114,27 @@ func TestServerDefaultCommands(t *testing.T) {
 	}
 }
 
+func TestServerDefaultsReadLegacyHomePath(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	legacyPath := filepath.Join(home, ".deck", "server.json")
+	if err := os.MkdirAll(filepath.Dir(legacyPath), 0o755); err != nil {
+		t.Fatalf("mkdir legacy config dir: %v", err)
+	}
+	if err := os.WriteFile(legacyPath, []byte("{\n  \"url\": \"http://127.0.0.1:9090\"\n}\n"), 0o600); err != nil {
+		t.Fatalf("write legacy server defaults: %v", err)
+	}
+
+	resolved, source, err := resolveServerURL("")
+	if err != nil {
+		t.Fatalf("resolveServerURL failed: %v", err)
+	}
+	if resolved != "http://127.0.0.1:9090" || source != "config" {
+		t.Fatalf("unexpected legacy server defaults resolution: resolved=%q source=%q", resolved, source)
+	}
+}
+
 func TestHealthUsesSavedDefaultServer(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "server.json")
 	t.Setenv("DECK_SERVER_CONFIG_PATH", configPath)
@@ -127,7 +146,7 @@ func TestHealthUsesSavedDefaultServer(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	if _, err := runWithCapturedStdout([]string{"server", "set", srv.URL, "--api-token", "token-1"}); err != nil {
+	if _, err := runWithCapturedStdout([]string{"server", "set", srv.URL}); err != nil {
 		t.Fatalf("server set failed: %v", err)
 	}
 
@@ -141,111 +160,12 @@ func TestHealthUsesSavedDefaultServer(t *testing.T) {
 	}
 }
 
-func TestServerScenariosUsesSavedDefaultServer(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "server.json")
-	t.Setenv("DECK_SERVER_CONFIG_PATH", configPath)
-	items := []string{"prepare", "apply"}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/workflows/index.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(items)
-	}))
-	defer srv.Close()
-
-	if _, err := runWithCapturedStdout([]string{"server", "set", srv.URL}); err != nil {
-		t.Fatalf("server set failed: %v", err)
-	}
-
-	out, err := runWithCapturedStdout([]string{"server", "scenarios"})
-	if err != nil {
-		t.Fatalf("server scenarios with saved default failed: %v", err)
-	}
-	expected := strings.Join(items, "\n") + "\n"
-	if out != expected {
-		t.Fatalf("unexpected output\nwant: %q\ngot : %q", expected, out)
-	}
-}
-
-func TestServerScenariosWithoutSavedServerReportsClearGuidance(t *testing.T) {
-	t.Setenv("DECK_SERVER_CONFIG_PATH", filepath.Join(t.TempDir(), "server.json"))
-	_, err := runWithCapturedStdout([]string{"server", "scenarios"})
-	if err == nil {
-		t.Fatalf("expected error")
-	}
-	if !strings.Contains(err.Error(), "--server is required or set a default with \"deck server set <url>\"") {
-		t.Fatalf("expected server set guidance, got %v", err)
-	}
-}
-
-func TestAssistedApplyUsesSavedServerToken(t *testing.T) {
-	assistedRoot := t.TempDir()
-	t.Setenv("DECK_ASSISTED_ROOT", assistedRoot)
-	t.Setenv("DECK_SERVER_CONFIG_PATH", filepath.Join(t.TempDir(), "server.json"))
-	operatorPath := filepath.Join(t.TempDir(), "etc", "deck", "node-id")
-	t.Setenv("DECK_NODE_ID_OPERATOR_PATH", operatorPath)
-	t.Setenv("DECK_NODE_ID_GENERATED_PATH", filepath.Join(t.TempDir(), "var", "lib", "deck", "node-id"))
-	_ = os.MkdirAll(filepath.Dir(operatorPath), 0o755)
-	_ = os.WriteFile(operatorPath, []byte("node-1\n"), 0o644)
-
-	logPath := filepath.Join(t.TempDir(), "assisted-saved-token.log")
-	bundleFilePath := filepath.Join(assistedRoot, "releases", "release-1", "bundle", "outputs", "files", "seed.txt")
-	workflowBody := fmt.Sprintf("role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: assisted-apply\n        kind: Command\n        spec:\n          command: [\"sh\", \"-c\", \"test -f %s && echo assisted >> %s\"]\n", strings.ReplaceAll(bundleFilePath, "\\", "\\\\"), strings.ReplaceAll(logPath, "\\", "\\\\"))
-	seedContent := []byte("seed\n")
-	seedSum := sha256.Sum256(seedContent)
-	manifestBody := fmt.Sprintf("{\n  \"entries\": [\n    {\"path\": %q, \"sha256\": %q, \"size\": %d}\n  ]\n}\n", "outputs/files/seed.txt", hex.EncodeToString(seedSum[:]), len(seedContent))
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/api/site/v1/") && r.Header.Get("Authorization") != "Bearer token-1" {
-			w.WriteHeader(http.StatusUnauthorized)
-			_, _ = w.Write([]byte(`{"error":"unauthorized"}`))
-			return
-		}
-		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/api/site/v1/sessions/session-1":
-			_, _ = w.Write([]byte(`{"id":"session-1","release_id":"release-1","status":"open"}`))
-		case r.Method == http.MethodGet && r.URL.Path == "/api/site/v1/sessions/session-1/assignment":
-			_, _ = w.Write([]byte(`{"id":"assign-1","session_id":"session-1","node_id":"node-1","role":"apply","workflow":"workflows/scenarios/apply.yaml"}`))
-		case r.Method == http.MethodPost && r.URL.Path == "/api/site/v1/sessions/session-1/reports":
-			w.WriteHeader(http.StatusAccepted)
-			_, _ = w.Write([]byte(`{"status":"accepted"}`))
-		case r.Method == http.MethodGet && r.URL.Path == "/site/releases/release-1/bundle/.deck/manifest.json":
-			_, _ = w.Write([]byte(manifestBody))
-		case r.Method == http.MethodGet && r.URL.Path == "/site/releases/release-1/bundle/workflows/scenarios/apply.yaml":
-			_, _ = w.Write([]byte(workflowBody))
-		case r.Method == http.MethodGet && r.URL.Path == "/site/releases/release-1/bundle/workflows/vars.yaml":
-			_, _ = w.Write([]byte("{}\n"))
-		case r.Method == http.MethodGet && r.URL.Path == "/site/releases/release-1/bundle/outputs/files/seed.txt":
-			_, _ = w.Write(seedContent)
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer srv.Close()
-
-	if _, err := runWithCapturedStdout([]string{"server", "set", srv.URL, "--api-token", "token-1"}); err != nil {
-		t.Fatalf("server set failed: %v", err)
-	}
-
-	out, err := runWithCapturedStdout([]string{"apply", "--session", "session-1"})
-	if err != nil {
-		t.Fatalf("assisted apply with saved token failed: %v", err)
-	}
-	if out != "apply: ok\n" {
-		t.Fatalf("unexpected apply output: %q", out)
-	}
-	if raw, readErr := os.ReadFile(logPath); readErr != nil || !strings.Contains(string(raw), "assisted") {
-		t.Fatalf("expected local engine execution log, err=%v raw=%q", readErr, string(raw))
-	}
-}
-
 func TestMigratedLeafHelpContracts(t *testing.T) {
 	tests := []struct {
 		args []string
 		want string
 	}{
-		{args: []string{"help", "server", "scenarios"}, want: "deck server scenarios [flags]"},
+		{args: []string{"help", "list"}, want: "deck list [flags]"},
 		{args: []string{"help", "lint"}, want: "deck lint [scenario] [flags]"},
 		{args: []string{"help", "server", "health"}, want: "deck server health [flags]"},
 	}
@@ -259,75 +179,6 @@ func TestMigratedLeafHelpContracts(t *testing.T) {
 			t.Fatalf("expected %q in output for %v, got %q", tc.want, tc.args, out)
 		}
 	}
-}
-
-func TestDoctor(t *testing.T) {
-	localRepo := filepath.Join(t.TempDir(), "repo")
-	if err := os.MkdirAll(localRepo, 0o755); err != nil {
-		t.Fatalf("mkdir local repo: %v", err)
-	}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodHead {
-			t.Fatalf("unexpected method: %s", r.Method)
-		}
-		if r.URL.Path != "/packages" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer srv.Close()
-
-	wfPath := filepath.Join(t.TempDir(), "apply.yaml")
-	writeWorkflowYAML(t, wfPath, fmt.Sprintf("role: apply\nversion: v1alpha1\nvars:\n  localRepo: %q\n  httpRepo: %q\nphases:\n  - name: install\n    steps:\n      - id: check-sources\n        apiVersion: deck/v1alpha1\n        kind: File\n        spec:\n          source:\n            path: dummy.txt\n          fetch:\n            sources:\n              - type: local\n                path: \"{{ .vars.localRepo }}\"\n              - type: repo\n                url: \"{{ .vars.httpRepo }}\"\n          output:\n            path: files/dummy.txt\n", localRepo, srv.URL+"/packages"))
-
-	t.Run("ok", func(t *testing.T) {
-		reportPath := filepath.Join(t.TempDir(), "doctor.json")
-		_, err := runWithCapturedStdout([]string{"doctor", "--file", wfPath, "--out", reportPath})
-		if err != nil {
-			t.Fatalf("expected success, got %v", err)
-		}
-		raw, err := os.ReadFile(reportPath)
-		if err != nil {
-			t.Fatalf("read report: %v", err)
-		}
-		var report struct {
-			Summary struct {
-				Passed int `json:"passed"`
-				Failed int `json:"failed"`
-			} `json:"summary"`
-			Checks []struct {
-				Name   string `json:"name"`
-				Status string `json:"status"`
-			} `json:"checks"`
-		}
-		if err := json.Unmarshal(raw, &report); err != nil {
-			t.Fatalf("decode report: %v", err)
-		}
-		if report.Summary.Failed != 0 {
-			t.Fatalf("expected no failures, got %+v", report.Summary)
-		}
-		got := map[string]string{}
-		for _, c := range report.Checks {
-			got[c.Name] = c.Status
-		}
-		if got["vars.localRepo"] != "passed" {
-			t.Fatalf("expected vars.localRepo passed, got %q", got["vars.localRepo"])
-		}
-		if got["vars.httpRepo"] != "passed" {
-			t.Fatalf("expected vars.httpRepo passed, got %q", got["vars.httpRepo"])
-		}
-	})
-
-	t.Run("missing path fails", func(t *testing.T) {
-		reportPath := filepath.Join(t.TempDir(), "doctor-failed.json")
-		_, err := runWithCapturedStdout([]string{"doctor", "--file", wfPath, "--out", reportPath, "--var", "localRepo=/no-such-path"})
-		if err == nil {
-			t.Fatalf("expected failure")
-		}
-		if _, statErr := os.Stat(reportPath); statErr != nil {
-			t.Fatalf("expected report file, got stat error: %v", statErr)
-		}
-	})
 }
 
 func TestLogs(t *testing.T) {
@@ -371,7 +222,7 @@ func TestLogs(t *testing.T) {
 func TestCache(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	cacheRoot := filepath.Join(home, ".deck", "cache")
+	cacheRoot := filepath.Join(home, ".cache", "deck")
 	packagesDir := filepath.Join(cacheRoot, "packages")
 	stateDir := filepath.Join(cacheRoot, "state")
 	if err := os.MkdirAll(packagesDir, 0o755); err != nil {
@@ -437,7 +288,7 @@ func TestRunServerAuditRotationFlagValidation(t *testing.T) {
 }
 
 func TestRunLegacyTopLevelCommandsAreRemoved(t *testing.T) {
-	for _, cmd := range []string{"run", "resume", "diagnose", "agent", "workflow", "control", "strategy", "source", "service", "list", "serve", "health", "logs"} {
+	for _, cmd := range []string{"run", "resume", "diagnose", "agent", "workflow", "control", "strategy", "source", "service", "serve", "health", "logs"} {
 		t.Run(cmd, func(t *testing.T) {
 			err := run([]string{cmd})
 			if err == nil {
@@ -576,28 +427,6 @@ func TestRunWorkflowLintAndLegacyValidateMigration(t *testing.T) {
 	})
 }
 
-func TestServerScenariosIgnoresLegacyPositionalArgShape(t *testing.T) {
-	t.Setenv("DECK_SERVER_CONFIG_PATH", filepath.Join(t.TempDir(), "server.json"))
-	_, err := runWithCapturedStdout([]string{"server", "scenarios", "extra"})
-	if err == nil {
-		t.Fatalf("expected missing server error")
-	}
-	if !strings.Contains(err.Error(), "--server is required") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestServerScenariosExtraPositionalStopsFlagParsingLikeLegacy(t *testing.T) {
-	t.Setenv("DECK_SERVER_CONFIG_PATH", filepath.Join(t.TempDir(), "server.json"))
-	_, err := runWithCapturedStdout([]string{"server", "scenarios", "extra", "--output", "invalid"})
-	if err == nil {
-		t.Fatalf("expected missing server error")
-	}
-	if !strings.Contains(err.Error(), "--server is required") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
 func TestRunWorkflowBundleVerifySuccess(t *testing.T) {
 	bundleDir := t.TempDir()
 	createValidBundleManifest(t, bundleDir)
@@ -670,20 +499,10 @@ func TestRunWorkflowBundleInspectIsRemoved(t *testing.T) {
 	}
 }
 
-func TestNodeIDSetArgShapeRejectsMissingArg(t *testing.T) {
-	_, err := runWithCapturedStdout([]string{"node", "id", "set"})
-	if err == nil {
-		t.Fatalf("expected arg validation error")
-	}
-	if err.Error() != "accepts 1 arg(s), received 0" {
-		t.Fatalf("unexpected error: %q", err.Error())
-	}
-}
-
 func TestCacheCleanIgnoresLegacyPositionalArgShape(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	cacheRoot := filepath.Join(home, ".deck", "cache")
+	cacheRoot := filepath.Join(home, ".cache", "deck")
 	if err := os.MkdirAll(filepath.Join(cacheRoot, "packages"), 0o755); err != nil {
 		t.Fatalf("mkdir packages dir: %v", err)
 	}
@@ -725,21 +544,11 @@ func TestPackExtraPositionalStopsFlagParsingLikeLegacy(t *testing.T) {
 }
 
 func TestPlanExtraPositionalStopsFlagParsingLikeLegacy(t *testing.T) {
-	_, err := runWithCapturedStdout([]string{"plan", "extra", "--file", "/no/such.yaml"})
+	_, err := runWithCapturedStdout([]string{"plan", "extra", "--workflow", "/no/such.yaml"})
 	if err == nil {
 		t.Fatalf("expected missing file error")
 	}
-	if err.Error() != "--file (or -f) is required" {
-		t.Fatalf("unexpected error: %q", err.Error())
-	}
-}
-
-func TestDoctorExtraPositionalStopsFlagParsingLikeLegacy(t *testing.T) {
-	_, err := runWithCapturedStdout([]string{"doctor", "extra", "--out", filepath.Join(t.TempDir(), "doctor.json")})
-	if err == nil {
-		t.Fatalf("expected missing out error")
-	}
-	if err.Error() != "--out is required" {
+	if !strings.Contains(err.Error(), "workflow directory not found") {
 		t.Fatalf("unexpected error: %q", err.Error())
 	}
 }

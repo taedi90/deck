@@ -14,6 +14,7 @@ import (
 	"github.com/taedi90/deck/internal/config"
 	"github.com/taedi90/deck/internal/filemode"
 	"github.com/taedi90/deck/internal/fsutil"
+	"github.com/taedi90/deck/internal/userdirs"
 )
 
 const (
@@ -98,20 +99,42 @@ func defaultPackCacheStatePath(workflowSHA string) (string, error) {
 	if strings.TrimSpace(workflowSHA) == "" {
 		return "", fmt.Errorf("workflow sha256 is empty")
 	}
-	home, err := os.UserHomeDir()
+	cacheRoot, err := userdirs.CacheRoot()
 	if err != nil {
-		return "", fmt.Errorf("resolve user home directory: %w", err)
+		return "", err
 	}
-	return filepath.Join(home, ".deck", "cache", "state", workflowSHA+".json"), nil
+	return filepath.Join(cacheRoot, "state", workflowSHA+".json"), nil
+}
+
+func legacyPackCacheStatePath(workflowSHA string) (string, error) {
+	legacyRoot, err := userdirs.LegacyCacheRoot()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(legacyRoot, "state", workflowSHA+".json"), nil
 }
 
 func loadPackCacheState(path string) (packCacheState, error) {
 	raw, err := fsutil.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return packCacheState{Artifacts: []packCacheArtifactState{}}, nil
+			legacyPath := ""
+			base := filepath.Base(path)
+			workflowSHA := strings.TrimSuffix(base, filepath.Ext(base))
+			legacyPath, err = legacyPackCacheStatePath(workflowSHA)
+			if err != nil {
+				return packCacheState{}, err
+			}
+			raw, err = fsutil.ReadFile(legacyPath)
+			if err != nil {
+				if os.IsNotExist(err) {
+					return packCacheState{Artifacts: []packCacheArtifactState{}}, nil
+				}
+				return packCacheState{}, fmt.Errorf("read legacy pack cache state: %w", err)
+			}
+		} else {
+			return packCacheState{}, fmt.Errorf("read pack cache state: %w", err)
 		}
-		return packCacheState{}, fmt.Errorf("read pack cache state: %w", err)
 	}
 
 	var st packCacheState

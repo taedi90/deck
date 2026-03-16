@@ -52,7 +52,7 @@ func TestPackCacheInvalidation(t *testing.T) {
 		t.Fatalf("first Run failed: %v", err)
 	}
 
-	statePath := filepath.Join(home, ".deck", "cache", "state", workflowSHA+".json")
+	statePath := filepath.Join(home, ".cache", "deck", "state", workflowSHA+".json")
 	if _, err := os.Stat(statePath); err != nil {
 		t.Fatalf("expected pack cache state file: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestRun_PackCacheRoleGate(t *testing.T) {
 			t.Fatalf("Run failed: %v", err)
 		}
 
-		statePath := filepath.Join(home, ".deck", "cache", "state", workflowSHA+".json")
+		statePath := filepath.Join(home, ".cache", "deck", "state", workflowSHA+".json")
 		if _, err := os.Stat(statePath); !os.IsNotExist(err) {
 			t.Fatalf("pack cache state must not be written for apply role, err=%v", err)
 		}
@@ -146,7 +146,7 @@ func TestRun_PackCacheRoleGate(t *testing.T) {
 			t.Fatalf("Run failed: %v", err)
 		}
 
-		statePath := filepath.Join(home, ".deck", "cache", "state", workflowSHA+".json")
+		statePath := filepath.Join(home, ".cache", "deck", "state", workflowSHA+".json")
 		if _, err := os.Stat(statePath); !os.IsNotExist(err) {
 			t.Fatalf("pack cache state must not be written for empty role, err=%v", err)
 		}

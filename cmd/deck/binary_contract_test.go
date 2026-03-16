@@ -36,7 +36,7 @@ func TestApplyDryRunExitCodeViaBinary(t *testing.T) {
 
 	cmd := exec.Command(binaryPath,
 		"apply",
-		"--file", workflowPath,
+		"--workflow", workflowPath,
 		"--dry-run",
 		bundle,
 	)
@@ -137,19 +137,13 @@ func TestCLIContractUsesSingleErrorLineWithoutAutoUsage(t *testing.T) {
 }
 
 func TestCLIContractHelpTokenIsNotHijackedFromFlagValues(t *testing.T) {
-	root := t.TempDir()
-	bundlePath := filepath.Join(t.TempDir(), "site-release.tar")
-	writeSiteReleaseBundleTarFixture(t, bundlePath)
+	t.Setenv("DECK_SERVER_CONFIG_PATH", filepath.Join(t.TempDir(), "server.json"))
 
-	if _, err := runWithCapturedStdout([]string{"site", "release", "import", "--root", root, "--id", "release-1", "--bundle", bundlePath}); err != nil {
-		t.Fatalf("site release import failed: %v", err)
-	}
-
-	out, err := runWithCapturedStdout([]string{"site", "session", "create", "--root", root, "--id", "help", "--release", "release-1"})
+	out, err := runWithCapturedStdout([]string{"server", "set", "http://127.0.0.1:8080/help"})
 	if err != nil {
-		t.Fatalf("expected session create success, got %v", err)
+		t.Fatalf("expected server set success, got %v", err)
 	}
-	if !strings.Contains(out, "site session create: ok (session=help release=release-1)") {
+	if !strings.Contains(out, "server default set: http://127.0.0.1:8080/help") {
 		t.Fatalf("unexpected output: %q", out)
 	}
 }
@@ -192,8 +186,7 @@ func TestCLIContractHelpRoutesViaBinary(t *testing.T) {
 	}{
 		{name: "root help flag", args: []string{"--help"}, wantStdout: "deck [command]"},
 		{name: "help bundle", args: []string{"help", "bundle"}, wantStdout: "deck bundle [command]"},
-		{name: "nested site help", args: []string{"site", "release", "--help"}, wantStdout: "deck site release [command]"},
-		{name: "nested node help", args: []string{"node", "id", "--help"}, wantStdout: "deck node id [command]"},
+		{name: "nested server help", args: []string{"server", "health", "--help"}, wantStdout: "deck server health [flags]"},
 	}
 
 	for _, tc := range tests {
@@ -222,8 +215,7 @@ func TestCLIContractGroupedParentsRejectUnknownSubcommandsViaBinary(t *testing.T
 	}{
 		{name: "bundle", args: []string{"bundle", "wat"}, wantStderr: "Error: unknown command \"wat\" for \"deck bundle\""},
 		{name: "cache", args: []string{"cache", "wat"}, wantStderr: "Error: unknown command \"wat\" for \"deck cache\""},
-		{name: "node", args: []string{"node", "id", "wat"}, wantStderr: "Error: unknown command \"wat\" for \"deck node id\""},
-		{name: "site", args: []string{"site", "release", "wat"}, wantStderr: "Error: unknown command \"wat\" for \"deck site release\""},
+		{name: "server", args: []string{"server", "wat"}, wantStderr: "Error: unknown command \"wat\" for \"deck server\""},
 	}
 
 	for _, tc := range tests {

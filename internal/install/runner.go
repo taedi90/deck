@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/taedi90/deck/internal/bundle"
 	"github.com/taedi90/deck/internal/config"
@@ -13,6 +14,7 @@ import (
 type RunOptions struct {
 	BundleRoot string
 	StatePath  string
+	EventSink  StepEventSink
 }
 
 const (
@@ -102,8 +104,12 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 		}
 		statePath = resolvedStatePath
 	}
+	stateReadPath, err := resolveStateReadPath(wf, statePath)
+	if err != nil {
+		return err
+	}
 
-	st, err := LoadState(statePath)
+	st, err := LoadState(stateReadPath)
 	if err != nil {
 		return err
 	}
@@ -127,6 +133,7 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 		st.Phase = phase.Name
 		for _, step := range phase.Steps {
 			if completed[step.ID] {
+				emitStepEvent(opts.EventSink, StepEvent{StepID: step.ID, Kind: step.Kind, Phase: phase.Name, Status: "skipped", Reason: "completed"})
 				continue
 			}
 
@@ -141,6 +148,7 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 			}
 			if !ok {
 				skipped[step.ID] = true
+				emitStepEvent(opts.EventSink, StepEvent{StepID: step.ID, Kind: step.Kind, Phase: phase.Name, Status: "skipped", Reason: "when"})
 				st.RuntimeVars = runtimeVars
 				st.SkippedSteps = sortedStepIDs(skipped)
 				if err := SaveState(statePath, st); err != nil {
@@ -159,9 +167,12 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 					execErr = err
 					break
 				}
+				startedAt := time.Now().UTC().Format(time.RFC3339Nano)
+				emitStepEvent(opts.EventSink, StepEvent{StepID: step.ID, Kind: step.Kind, Phase: phase.Name, Status: "started", Attempt: i + 1, StartedAt: startedAt})
 				rendered, renderErr := workflowexec.RenderSpec(step.Spec, wf, runtimeVars, ctxData)
 				if renderErr != nil {
 					execErr = fmt.Errorf("render spec template: %w", renderErr)
+					emitStepEvent(opts.EventSink, StepEvent{StepID: step.ID, Kind: step.Kind, Phase: phase.Name, Status: "failed", Attempt: i + 1, StartedAt: startedAt, EndedAt: time.Now().UTC().Format(time.RFC3339Nano), Error: execErr.Error()})
 					break
 				}
 				if strings.TrimSpace(step.Timeout) != "" {
@@ -174,6 +185,12 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 					if err := applyRegister(step, rendered, runtimeVars); err != nil {
 						execErr = err
 					}
+				}
+				endedAt := time.Now().UTC().Format(time.RFC3339Nano)
+				if execErr != nil {
+					emitStepEvent(opts.EventSink, StepEvent{StepID: step.ID, Kind: step.Kind, Phase: phase.Name, Status: "failed", Attempt: i + 1, StartedAt: startedAt, EndedAt: endedAt, Error: execErr.Error()})
+				} else {
+					emitStepEvent(opts.EventSink, StepEvent{StepID: step.ID, Kind: step.Kind, Phase: phase.Name, Status: "succeeded", Attempt: i + 1, StartedAt: startedAt, EndedAt: endedAt})
 				}
 				if execErr == nil {
 					break

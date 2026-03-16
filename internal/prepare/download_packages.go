@@ -13,6 +13,7 @@ import (
 
 	"github.com/taedi90/deck/internal/filemode"
 	"github.com/taedi90/deck/internal/fsutil"
+	"github.com/taedi90/deck/internal/userdirs"
 )
 
 type packageCacheMeta struct {
@@ -399,11 +400,26 @@ func packageDownloadCacheKey(spec map[string]any, family string, artifactRoot st
 }
 
 func preparePackageCacheMounts(family string, cacheKey string) ([]packageCacheMount, error) {
-	home, err := os.UserHomeDir()
+	cacheRoot, err := userdirs.CacheRoot()
 	if err != nil {
-		return nil, fmt.Errorf("resolve user home directory: %w", err)
+		return nil, err
 	}
-	root := filepath.Join(home, ".deck", "cache", "packages", cacheKey)
+	root := filepath.Join(cacheRoot, "packages", cacheKey)
+	if _, err := os.Stat(root); err != nil {
+		if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("stat package cache root: %w", err)
+		}
+		legacyRoot, legacyErr := userdirs.LegacyCacheRoot()
+		if legacyErr != nil {
+			return nil, legacyErr
+		}
+		legacyPath := filepath.Join(legacyRoot, "packages", cacheKey)
+		if _, legacyStatErr := os.Stat(legacyPath); legacyStatErr == nil {
+			root = legacyPath
+		} else if legacyStatErr != nil && !os.IsNotExist(legacyStatErr) {
+			return nil, fmt.Errorf("stat legacy package cache root: %w", legacyStatErr)
+		}
+	}
 	if strings.TrimSpace(family) == "rhel" {
 		dnfRoot := filepath.Join(root, "dnf")
 		if err := filemode.EnsureDir(dnfRoot, filemode.PublishedArtifact); err != nil {

@@ -161,7 +161,7 @@ The CLI follows the same simplification goal.
 - prepare artifacts and bundle inputs
 - build and verify the bundle
 - execute locally on the target node
-- optionally coordinate site-local distribution and reporting
+- optionally expose site-local bundle distribution helpers
 
 The intent is to avoid a tool shape where several commands appear to solve the same problem with slightly different assumptions. A smaller command model makes the default path clearer and keeps help text, examples, and documentation aligned.
 
@@ -202,19 +202,9 @@ This is intentionally a pipeline rather than three independently maintained desc
 
 Some documentation metadata is layered on top so examples and field descriptions stay useful, but the structural contract should still flow from the typed Go model into schema and then into docs.
 
-## Site-local coordination model
+## Site-local helper model
 
-When the optional site-local workflow is used, `deck` keeps coordination state in a local store rather than an external control plane.
-
-That state includes:
-
-- **releases**: imported or prepared bundle versions available at the site
-- **sessions**: maintenance windows or rollout instances tied to a release
-- **assignments**: per-node work selection for a session and action
-- **execution reports**: node-reported outcomes stored locally for inspection
-- **audit logs**: server-side lifecycle and request records
-
-This keeps coordination local to the site and consistent with the manual-first operating model.
+When a site needs a shared local source inside the air gap, `deck server` can expose prepared bundle content and audit what it serves. That helper remains secondary to the core local execution path.
 
 ## Safety and trust boundaries
 
@@ -274,7 +264,6 @@ The code layout roughly follows these boundaries:
 - `internal/prepare` and `internal/preparecli`: connected-side preparation logic
 - `internal/install`: target-side host mutation and apply behavior
 - `internal/bundle`: bundle collection, import, merge, and verify logic
-- `internal/site/store`: site-local coordination state
 - `internal/server`: optional site-local HTTP server
 - `internal/fsutil`, `internal/filemode`, `internal/hostfs`, `internal/executil`: safety-oriented helper boundaries
 
