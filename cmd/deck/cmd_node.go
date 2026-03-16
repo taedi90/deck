@@ -33,7 +33,7 @@ func executeNodeIDInit() error {
 	if err != nil {
 		return err
 	}
-	if result.GeneratedCreated {
+	if result.GeneratedIDNew {
 		if err := stdoutPrintln("node id init: created generated node-id"); err != nil {
 			return err
 		}

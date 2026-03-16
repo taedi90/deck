@@ -57,7 +57,7 @@ func runInstallPackages(ctx context.Context, spec map[string]any) error {
 			args := []string{"install", "-y"}
 			args = append(args, artifacts...)
 			if err := runTimedCommandWithContext(ctx, "apt-get", args, commandTimeoutWithDefault(spec, 10*time.Minute)); err != nil {
-				if errors.Is(err, errStepCommandTimeout) || errors.Is(err, context.DeadlineExceeded) {
+				if errors.Is(err, ErrStepCommandTimeout) || errors.Is(err, context.DeadlineExceeded) {
 					return fmt.Errorf("%s: package installation timed out: %w", errCodeInstallPkgFailed, err)
 				}
 				return fmt.Errorf("%s: package installation failed: %w", errCodeInstallPkgFailed, err)
@@ -72,7 +72,7 @@ func runInstallPackages(ctx context.Context, spec map[string]any) error {
 		args := []string{"install", "-y"}
 		args = append(args, artifacts...)
 		if err := runTimedCommandWithContext(ctx, "dnf", args, commandTimeoutWithDefault(spec, 10*time.Minute)); err != nil {
-			if errors.Is(err, errStepCommandTimeout) || errors.Is(err, context.DeadlineExceeded) {
+			if errors.Is(err, ErrStepCommandTimeout) || errors.Is(err, context.DeadlineExceeded) {
 				return fmt.Errorf("%s: package installation timed out: %w", errCodeInstallPkgFailed, err)
 			}
 			return fmt.Errorf("%s: package installation failed: %w", errCodeInstallPkgFailed, err)
@@ -98,7 +98,7 @@ func runInstallPackages(ctx context.Context, spec map[string]any) error {
 	defer cleanup()
 	args = append(args, pkgs...)
 	if err := runTimedCommandWithContext(ctx, installer, args, commandTimeoutWithDefault(spec, 10*time.Minute)); err != nil {
-		if errors.Is(err, errStepCommandTimeout) || errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, ErrStepCommandTimeout) || errors.Is(err, context.DeadlineExceeded) {
 			return fmt.Errorf("%s: package installation timed out: %w", errCodeInstallPkgFailed, err)
 		}
 		return fmt.Errorf("%s: package installation failed: %w", errCodeInstallPkgFailed, err)

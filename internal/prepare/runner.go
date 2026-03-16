@@ -41,20 +41,18 @@ func (o osCommandRunner) LookPath(file string) (string, error) {
 }
 
 const (
-	errCodePrepareRuntimeMissing        = "E_PREPARE_RUNTIME_NOT_FOUND"
-	errCodePrepareRuntimeUnsupported    = "E_PREPARE_RUNTIME_UNSUPPORTED"
-	errCodePrepareEngineUnsupported     = "E_PREPARE_ENGINE_UNSUPPORTED"
-	errCodePrepareArtifactsEmpty        = "E_PREPARE_NO_ARTIFACTS"
-	errCodeArtifactSourceNotFound       = "E_PREPARE_SOURCE_NOT_FOUND"
-	errCodePrepareSourceNotFound        = errCodeArtifactSourceNotFound
-	errCodePrepareChecksumMismatch      = "E_PREPARE_CHECKSUM_MISMATCH"
-	errCodePrepareOfflinePolicyBlock    = "E_PREPARE_OFFLINE_POLICY_BLOCK"
-	errCodePrepareConditionEval         = "E_CONDITION_EVAL"
-	errCodePrepareRegisterMissing       = "E_REGISTER_OUTPUT_NOT_FOUND"
-	errCodePrepareInspectionCheckFailed = "E_PREPARE_CHECKHOST_FAILED"
-	errCodePrepareCheckHostFailed       = errCodePrepareInspectionCheckFailed
-	errCodePrepareKindUnsupported       = "E_PREPARE_KIND_UNSUPPORTED"
-	packageCacheMetaFile                = ".deck-cache-packages.json"
+	errCodePrepareRuntimeMissing     = "E_PREPARE_RUNTIME_NOT_FOUND"
+	errCodePrepareRuntimeUnsupported = "E_PREPARE_RUNTIME_UNSUPPORTED"
+	errCodePrepareEngineUnsupported  = "E_PREPARE_ENGINE_UNSUPPORTED"
+	errCodePrepareArtifactsEmpty     = "E_PREPARE_NO_ARTIFACTS"
+	errCodeArtifactSourceNotFound    = "E_PREPARE_SOURCE_NOT_FOUND"
+	errCodePrepareChecksumMismatch   = "E_PREPARE_CHECKSUM_MISMATCH"
+	errCodePrepareOfflinePolicyBlock = "E_PREPARE_OFFLINE_POLICY_BLOCK"
+	errCodePrepareConditionEval      = "E_CONDITION_EVAL"
+	errCodePrepareRegisterMissing    = "E_REGISTER_OUTPUT_NOT_FOUND"
+	errCodePrepareChecksFailed       = "E_PREPARE_CHECKHOST_FAILED"
+	errCodePrepareKindUnsupported    = "E_PREPARE_KIND_UNSUPPORTED"
+	packageCacheMetaFile             = ".deck-cache-packages.json"
 )
 
 func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {

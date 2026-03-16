@@ -12,7 +12,7 @@ import (
 	"github.com/taedi90/deck/internal/workflowexec"
 )
 
-var errStepCommandTimeout = errors.New("step command timeout")
+var ErrStepCommandTimeout = errors.New("step command timeout")
 
 type runCommandSpec struct {
 	Command []string `json:"command"`
@@ -34,7 +34,7 @@ func runCommand(ctx context.Context, spec map[string]any) error {
 	if err == nil {
 		return nil
 	}
-	if errors.Is(err, errStepCommandTimeout) {
+	if errors.Is(err, ErrStepCommandTimeout) {
 		return fmt.Errorf("%s: command timed out after %s", errCodeInstallCommandTimeout, timeout)
 	}
 	if executil.IsExitError(err) {
@@ -81,7 +81,7 @@ func runTimedCommandWithContext(parent context.Context, name string, args []stri
 		if parent.Err() != nil {
 			return parent.Err()
 		}
-		return errStepCommandTimeout
+		return ErrStepCommandTimeout
 	}
 	if errors.Is(ctx.Err(), context.Canceled) {
 		if parent.Err() != nil {
@@ -111,7 +111,7 @@ func runCommandOutputWithContext(parent context.Context, cmdArgs []string, timeo
 		if parent.Err() != nil {
 			return "", parent.Err()
 		}
-		return "", errStepCommandTimeout
+		return "", ErrStepCommandTimeout
 	}
 	if errors.Is(ctx.Err(), context.Canceled) {
 		if parent.Err() != nil {

@@ -765,10 +765,10 @@ func TestRun_ChecksStep(t *testing.T) {
 			}},
 		}
 
-		oldRead := readFileFn
-		oldGOOS := goosFn
-		oldGOARCH := goarchFn
-		readFileFn = func(path string) ([]byte, error) {
+		oldRead := readHostFile
+		oldGOOS := currentGOOS
+		oldGOARCH := currentGOARCH
+		readHostFile = func(path string) ([]byte, error) {
 			switch path {
 			case "/etc/os-release":
 				return []byte("ID=ubuntu\nID_LIKE=debian\nVERSION=\"24.04 LTS\"\nVERSION_ID=\"24.04\"\n"), nil
@@ -778,12 +778,12 @@ func TestRun_ChecksStep(t *testing.T) {
 				return os.ReadFile(path)
 			}
 		}
-		goosFn = func() string { return "linux" }
-		goarchFn = func() string { return "arm64" }
+		currentGOOS = func() string { return "linux" }
+		currentGOARCH = func() string { return "arm64" }
 		defer func() {
-			readFileFn = oldRead
-			goosFn = oldGOOS
-			goarchFn = oldGOARCH
+			readHostFile = oldRead
+			currentGOOS = oldGOOS
+			currentGOARCH = oldGOARCH
 		}()
 
 		if err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, CommandRunner: &fakeRunner{}}); err != nil {
@@ -809,10 +809,10 @@ func TestRun_ChecksStep(t *testing.T) {
 			}},
 		}
 
-		oldRead := readFileFn
-		oldGOOS := goosFn
-		oldGOARCH := goarchFn
-		readFileFn = func(path string) ([]byte, error) {
+		oldRead := readHostFile
+		oldGOOS := currentGOOS
+		oldGOARCH := currentGOARCH
+		readHostFile = func(path string) ([]byte, error) {
 			switch path {
 			case "/proc/swaps":
 				return []byte("Filename\tType\tSize\tUsed\tPriority\n/dev/sda file 1 0 -2\n"), nil
@@ -822,12 +822,12 @@ func TestRun_ChecksStep(t *testing.T) {
 				return os.ReadFile(path)
 			}
 		}
-		goosFn = func() string { return "darwin" }
-		goarchFn = func() string { return "386" }
+		currentGOOS = func() string { return "darwin" }
+		currentGOARCH = func() string { return "386" }
 		defer func() {
-			readFileFn = oldRead
-			goosFn = oldGOOS
-			goarchFn = oldGOARCH
+			readHostFile = oldRead
+			currentGOOS = oldGOOS
+			currentGOARCH = oldGOARCH
 		}()
 
 		err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, CommandRunner: &noRuntimeRunner{}})

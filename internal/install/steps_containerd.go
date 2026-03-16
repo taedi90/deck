@@ -33,7 +33,7 @@ func runContainerdConfig(ctx context.Context, spec map[string]any) error {
 		} else {
 			generated, genErr := runCommandOutputWithContext(ctx, []string{"containerd", "config", "default"}, commandTimeoutWithDefault(spec, 30*time.Second))
 			if genErr != nil {
-				if errors.Is(genErr, errStepCommandTimeout) || errors.Is(genErr, context.DeadlineExceeded) {
+				if errors.Is(genErr, ErrStepCommandTimeout) || errors.Is(genErr, context.DeadlineExceeded) {
 					return fmt.Errorf("containerd config default generation timed out: %w", genErr)
 				}
 				return genErr

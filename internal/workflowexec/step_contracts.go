@@ -3,7 +3,6 @@ package workflowexec
 import "sort"
 
 type StepContract struct {
-	Kind       string
 	SchemaFile string
 	Roles      map[string]bool
 	Outputs    map[string]bool

@@ -53,7 +53,7 @@ func TestResolveNodeIDGeneratesFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve node-id: %v", err)
 	}
-	if resolved.ID == "" || !resolved.GeneratedCreated {
+	if resolved.ID == "" || !resolved.GeneratedIDNew {
 		t.Fatalf("expected generated fallback, got %+v", resolved)
 	}
 }

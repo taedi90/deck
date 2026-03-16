@@ -1542,7 +1542,7 @@ func TestCommandOutputWithContext_TimeoutReturnsSentinel(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected timeout error")
 	}
-	if !errors.Is(err, errStepCommandTimeout) {
+	if !errors.Is(err, ErrStepCommandTimeout) {
 		t.Fatalf("expected step timeout sentinel, got %v", err)
 	}
 }

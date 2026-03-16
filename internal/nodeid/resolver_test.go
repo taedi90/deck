@@ -83,11 +83,11 @@ func TestResolveNodeIDGeneratesFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve node id: %v", err)
 	}
-	if resolved.Source != SourceGeneratedInit {
-		t.Fatalf("expected source %q, got %q", SourceGeneratedInit, resolved.Source)
+	if resolved.Source != SourceGeneratedNew {
+		t.Fatalf("expected source %q, got %q", SourceGeneratedNew, resolved.Source)
 	}
-	if !resolved.GeneratedCreated {
-		t.Fatalf("expected GeneratedCreated=true")
+	if !resolved.GeneratedIDNew {
+		t.Fatalf("expected GeneratedIDNew=true")
 	}
 	if !strings.HasPrefix(resolved.ID, "node-") {
 		t.Fatalf("expected generated node-* id, got %q", resolved.ID)

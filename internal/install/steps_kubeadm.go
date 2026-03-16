@@ -150,7 +150,7 @@ func runKubeadmInitReal(parent context.Context, spec kubeadmInitSpec) error {
 			pullArgs = append(pullArgs, "--cri-socket", criSocket)
 		}
 		if err := runTimedCommandWithContext(parent, "kubeadm", pullArgs, timeout); err != nil {
-			if errors.Is(err, errStepCommandTimeout) {
+			if errors.Is(err, ErrStepCommandTimeout) {
 				return fmt.Errorf("%s: kubeadm config images pull timed out: %w", errCodeInstallInitFailed, err)
 			}
 			return fmt.Errorf("%s: kubeadm config images pull failed: %w", errCodeInstallInitFailed, err)
@@ -182,7 +182,7 @@ func runKubeadmInitReal(parent context.Context, spec kubeadmInitSpec) error {
 	}
 
 	if err := runTimedCommandWithContext(parent, "kubeadm", args, timeout); err != nil {
-		if errors.Is(err, errStepCommandTimeout) {
+		if errors.Is(err, ErrStepCommandTimeout) {
 			return fmt.Errorf("%s: kubeadm init timed out: %w", errCodeInstallInitFailed, err)
 		}
 		return fmt.Errorf("%s: kubeadm init failed: %w", errCodeInstallInitFailed, err)
@@ -191,7 +191,7 @@ func runKubeadmInitReal(parent context.Context, spec kubeadmInitSpec) error {
 	joinArgs := []string{"token", "create", "--print-join-command"}
 	joinOut, err := runCommandOutputWithContext(parent, append([]string{"kubeadm"}, joinArgs...), timeout)
 	if err != nil {
-		if errors.Is(err, errStepCommandTimeout) {
+		if errors.Is(err, ErrStepCommandTimeout) {
 			return fmt.Errorf("%s: kubeadm token create timed out", errCodeInstallInitFailed)
 		}
 		return fmt.Errorf("%s: kubeadm token create failed: %w", errCodeInstallInitFailed, err)
@@ -314,7 +314,7 @@ func runKubeadmJoinReal(ctx context.Context, spec kubeadmJoinSpec) error {
 	}
 
 	if err := runTimedCommandWithContext(ctx, args[0], args[1:], parseStepTimeout(spec.Timeout, 5*time.Minute)); err != nil {
-		if errors.Is(err, errStepCommandTimeout) {
+		if errors.Is(err, ErrStepCommandTimeout) {
 			return fmt.Errorf("%s: kubeadm join timed out: %w", errCodeInstallJoinFailed, err)
 		}
 		return fmt.Errorf("%s: kubeadm join failed: %w", errCodeInstallJoinFailed, err)
@@ -350,7 +350,7 @@ func runKubeadmReset(ctx context.Context, spec map[string]any) error {
 
 	resetErr := runTimedCommandWithContext(ctx, "kubeadm", kubeadmArgs, parseStepTimeout(decoded.Timeout, 10*time.Minute))
 	if resetErr != nil && !decoded.IgnoreErrors {
-		if errors.Is(resetErr, errStepCommandTimeout) {
+		if errors.Is(resetErr, ErrStepCommandTimeout) {
 			return fmt.Errorf("%s: kubeadm reset timed out: %w", errCodeInstallResetFailed, resetErr)
 		}
 		return fmt.Errorf("%s: kubeadm reset failed: %w", errCodeInstallResetFailed, resetErr)
@@ -373,7 +373,7 @@ func runKubeadmReset(ctx context.Context, spec map[string]any) error {
 	restartRuntime := strings.TrimSpace(decoded.RestartRuntimeService)
 	if restartRuntime != "" {
 		if err := runTimedCommandWithContext(ctx, "systemctl", []string{"restart", restartRuntime}, parseStepTimeout(decoded.Timeout, 2*time.Minute)); err != nil {
-			if errors.Is(err, errStepCommandTimeout) {
+			if errors.Is(err, ErrStepCommandTimeout) {
 				return fmt.Errorf("%s: restart runtime service %s timed out: %w", errCodeInstallResetFailed, restartRuntime, err)
 			}
 			return fmt.Errorf("%s: restart runtime service %s failed: %w", errCodeInstallResetFailed, restartRuntime, err)

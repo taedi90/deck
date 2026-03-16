@@ -77,7 +77,7 @@ func runPackageCacheCommands(
 		if err == nil {
 			return nil
 		}
-		if errors.Is(err, errStepCommandTimeout) {
+		if errors.Is(err, ErrStepCommandTimeout) {
 			return fmt.Errorf("%s timed out: %w", timeoutContext, err)
 		}
 		return err

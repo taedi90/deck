@@ -38,7 +38,7 @@ func NormalizeAuditRecord(raw map[string]any) LogRecord {
 	if isAuditSchemaV1(raw) {
 		return normalizeSchemaV1(raw)
 	}
-	return normalizeOldAudit(raw)
+	return normalizeLegacyAudit(raw)
 }
 
 func NormalizeJournalRecord(raw map[string]any) LogRecord {
@@ -151,7 +151,7 @@ func normalizeSchemaV1(raw map[string]any) LogRecord {
 	return record
 }
 
-func normalizeOldAudit(raw map[string]any) LogRecord {
+func normalizeLegacyAudit(raw map[string]any) LogRecord {
 	record := LogRecord{
 		TS:     strings.TrimSpace(valueAsString(raw["timestamp"])),
 		Source: "server",
@@ -159,7 +159,7 @@ func normalizeOldAudit(raw map[string]any) LogRecord {
 		JobID:  strings.TrimSpace(valueAsString(raw["job_id"])),
 	}
 
-	if isOldRequestRecord(raw) {
+	if isLegacyRequestRecord(raw) {
 		record.EventType = "http_request"
 		record.Message = "http request handled"
 		record.Extra = pickMap(raw, "method", "path", "status", "remote_addr", "duration_ms")
@@ -190,7 +190,7 @@ func normalizeOldAudit(raw map[string]any) LogRecord {
 	return record
 }
 
-func isOldRequestRecord(raw map[string]any) bool {
+func isLegacyRequestRecord(raw map[string]any) bool {
 	if strings.EqualFold(strings.TrimSpace(valueAsString(raw["event_type"])), "http_request") {
 		return true
 	}
