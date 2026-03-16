@@ -1,14 +1,14 @@
-<table width="100%"><tr><td valign="middle">
-
 # deck
+
+<div style="float: right; margin-left: 10px;">
+  <img src="assets/logo.png" width="120">
+</div>
 
 [Korean README](./README.ko.md) | [Documentation](./docs/README.md)
 
 `deck` is a workflow tool built for air-gapped and operationally constrained environments. Write a YAML workflow, lint it, bundle everything the site needs, carry it in, and run it locally on the target machine.
 
-</td><td align="right" valign="middle">
-<img src="assets/logo.png" alt="deck logo" width="150" />
-</td></tr></table>
+<br clear="right" />
 
 ## Why deck exists
 

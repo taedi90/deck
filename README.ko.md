@@ -1,14 +1,14 @@
-<table width="100%"><tr><td valign="middle">
-
 # deck
+
+<div style="float: right; margin-left: 10px;">
+  <img src="assets/logo.png" width="120">
+</div>
 
 [English README](./README.md) | [문서 홈](./docs/README.md)
 
 `deck`은 air-gapped 환경과 운영 제약이 큰 현장을 위한 워크플로 도구입니다. YAML 워크플로를 작성하고, 검증하고, 필요한 것을 번들로 묶어 반입하고, 현장에서 대상 장비에 로컬로 실행합니다.
 
-</td><td align="right" valign="middle">
-<img src="assets/logo.png" alt="deck logo" width="150" />
-</td></tr></table>
+<br clear="right" />
 
 ## deck이 존재하는 이유
 
