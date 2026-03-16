@@ -2,6 +2,8 @@
 
 `deck` is a workflow tool for air-gapped and operationally constrained environments. Write a workflow, lint it, bundle what the site needs, and run it locally on the target machine.
 
+AI-ready builds also include `deck ask`, a single-shot workflow authoring helper that works against the current workspace and stores its local context under `./.deck/ask/`.
+
 ## Start here
 
 - New to `deck`: `tutorials/quick-start.md`

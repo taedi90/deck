@@ -35,6 +35,7 @@ func newRootCommand() *cobra.Command {
 		withGroup(newApplyCommand(), commandGroupCore),
 		withGroup(newSourceCommand(), commandGroupAdditional),
 		withGroup(newServerCommand(), commandGroupAdditional),
+		withGroup(newAskCommand(), commandGroupAdditional),
 		withGroup(newCompletionCommand(), commandGroupAdditional),
 		withGroup(newCacheCommand(), commandGroupAdditional),
 	)
