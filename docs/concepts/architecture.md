@@ -53,14 +53,14 @@ The simplest `deck` workflow prepares a bundle in a connected environment, moves
 
 ```mermaid
 flowchart LR
-    A[Author workflows] --> B[deck lint]
-    B --> C[deck prepare]
-    C --> D[outputs and manifest]
-    D --> E[deck bundle build]
-    E --> F[Transfer bundle into site]
-    F --> G[Unpack on target node]
-    G --> H[deck apply]
-    H --> I[Local host changes]
+    subgraph Online[Connected environment]
+        A[Author workflow] --> B[Prepare artifacts]
+        B --> C[Build bundle]
+    end
+    C --> D[Transfer bundle]
+    subgraph Offline[Air-gapped site]
+        D --> E[Apply on node]
+    end
 ```
 
 This is the default path the rest of the architecture is built around: one prepared bundle, one local binary, and one target machine applying a typed workflow.
@@ -71,26 +71,20 @@ When a site needs to coordinate work across multiple nodes, `deck` can add a sit
 
 ```mermaid
 flowchart LR
-    A[Author workflows] --> B[deck lint]
-    B --> C[deck prepare]
-    C --> D[deck bundle build]
-    D --> E[Transfer bundle into site]
-    E --> F[Import release into site]
-    F --> G[Create session]
-    G --> H[Assign workflows by role or node]
-    H --> S[Optional deck server up]
-    S --> N1[Node 1]
-    S --> N2[Node 2]
-    S --> N3[Node N]
-    N1 --> A1[Fetch assignment and bundle inputs]
-    N2 --> A2[Fetch assignment and bundle inputs]
-    N3 --> A3[Fetch assignment and bundle inputs]
-    A1 --> R1[Run local apply or doctor]
-    A2 --> R2[Run local apply or doctor]
-    A3 --> R3[Run local apply or doctor]
-    R1 --> T[Store reports in site state]
-    R2 --> T
-    R3 --> T
+    subgraph Online[Connected environment]
+        A[Author workflow] --> B[Prepare artifacts]
+        B --> C[Build bundle]
+    end
+    C --> D[Transfer bundle]
+    subgraph Offline[Air-gapped site]
+        D --> E[Import release]
+        E --> F[Create session]
+        F --> G[Assign nodes]
+        G --> H[Optional local server]
+        H --> I[Nodes fetch work]
+        I --> J[Local apply or doctor]
+        J --> K[Store reports]
+    end
 ```
 
 Even here, `deck` is not acting as a central reconciliation controller. The server and site store help distribute prepared content and track local coordination state, but each node still executes its assigned workflow locally.
