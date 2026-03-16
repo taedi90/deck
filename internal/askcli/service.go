@@ -31,6 +31,7 @@ type Options struct {
 	MaxIterations int
 	Provider      string
 	Model         string
+	Endpoint      string
 	Stdout        io.Writer
 	Stderr        io.Writer
 }
@@ -65,7 +66,7 @@ func Execute(ctx context.Context, opts Options, client askprovider.Client) error
 	if err != nil {
 		return err
 	}
-	effective, err := askconfig.ResolveEffective(askconfig.Settings{Provider: opts.Provider, Model: opts.Model})
+	effective, err := askconfig.ResolveEffective(askconfig.Settings{Provider: opts.Provider, Model: opts.Model, Endpoint: opts.Endpoint})
 	if err != nil {
 		return err
 	}
@@ -90,6 +91,7 @@ func Execute(ctx context.Context, opts Options, client askprovider.Client) error
 		Provider:     effective.Provider,
 		Model:        effective.Model,
 		APIKey:       effective.APIKey,
+		Endpoint:     effective.Endpoint,
 		SystemPrompt: built.SystemPrompt,
 		Prompt:       built.Prompt,
 		MaxRetries:   maxIterations,

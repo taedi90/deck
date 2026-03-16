@@ -6,6 +6,7 @@ type Request struct {
 	Provider     string
 	Model        string
 	APIKey       string
+	Endpoint     string
 	SystemPrompt string
 	Prompt       string
 	MaxRetries   int

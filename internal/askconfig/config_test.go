@@ -8,7 +8,7 @@ import (
 
 func TestSaveStoredAndLoadStored(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "config"))
-	settings := Settings{Provider: "openrouter", Model: "anthropic/claude-3.5-sonnet", APIKey: "secret-token"}
+	settings := Settings{Provider: "openrouter", Model: "anthropic/claude-3.5-sonnet", APIKey: "secret-token", Endpoint: "https://example.invalid/v1"}
 	if err := SaveStored(settings); err != nil {
 		t.Fatalf("save stored: %v", err)
 	}
@@ -34,13 +34,14 @@ func TestSaveStoredAndLoadStored(t *testing.T) {
 
 func TestResolveEffectivePrecedence(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "config"))
-	if err := SaveStored(Settings{Provider: "openai", Model: "stored-model", APIKey: "stored-key"}); err != nil {
+	if err := SaveStored(Settings{Provider: "openai", Model: "stored-model", APIKey: "stored-key", Endpoint: "https://stored.invalid/v1"}); err != nil {
 		t.Fatalf("save stored: %v", err)
 	}
+	t.Setenv(envEndpoint, "https://env.invalid/v1")
 	t.Setenv(envProvider, "env-provider")
 	t.Setenv(envModel, "env-model")
 	t.Setenv(envAPIKey, "env-key")
-	effective, err := ResolveEffective(Settings{Provider: "flag-provider", Model: "flag-model"})
+	effective, err := ResolveEffective(Settings{Provider: "flag-provider", Model: "flag-model", Endpoint: "https://flag.invalid/v1"})
 	if err != nil {
 		t.Fatalf("resolve effective: %v", err)
 	}
@@ -53,11 +54,14 @@ func TestResolveEffectivePrecedence(t *testing.T) {
 	if effective.APIKey != "env-key" || effective.APIKeySource != "env" {
 		t.Fatalf("unexpected api key resolution: %#v", effective)
 	}
+	if effective.Endpoint != "https://flag.invalid/v1" || effective.EndpointSource != "flag" {
+		t.Fatalf("unexpected endpoint resolution: %#v", effective)
+	}
 }
 
 func TestClearStored(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "config"))
-	if err := SaveStored(Settings{Provider: "openai", Model: "gpt-5.4", APIKey: "secret"}); err != nil {
+	if err := SaveStored(Settings{Provider: "openai", Model: "gpt-5.4", APIKey: "secret", Endpoint: "https://example.invalid/v1"}); err != nil {
 		t.Fatalf("save stored: %v", err)
 	}
 	if err := ClearStored(); err != nil {

@@ -27,7 +27,7 @@ It supports a simple operator flow: author the workflow, lint it, prepare bundle
 ## Optional AI-ready authoring helper
 
 - `ask`: draft, refine, or review workflows from the current workspace using an LLM-backed authoring assistant
-- `ask auth set`: save `ask.provider`, `ask.model`, and `ask.apiKey` in XDG config
+- `ask auth set`: save `ask.provider`, `ask.model`, `ask.endpoint`, and `ask.apiKey` in XDG config
 - `ask auth show`: show the effective ask config with a masked api key
 - `ask auth unset`: clear saved ask config
 
@@ -77,7 +77,7 @@ deck server up --root ./bundle --addr :8080
 deck server health --server http://127.0.0.1:8080
 deck plan --scenario apply --source server
 
-deck ask auth set --provider openai --model gpt-5.4 --api-key "$DECK_ASK_API_KEY"
+deck ask auth set --provider openai --model gpt-5.4 --endpoint https://api.openai.com/v1 --api-key "$DECK_ASK_API_KEY"
 deck ask "rhel9 single-node kubeadm cluster scenario"
 deck ask --review
 deck ask --write --from ./request.md

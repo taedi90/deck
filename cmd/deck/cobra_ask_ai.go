@@ -25,6 +25,7 @@ func newAskCommand() *cobra.Command {
 	var maxIterations int
 	var provider string
 	var model string
+	var endpoint string
 
 	cmd := &cobra.Command{
 		Use:   "ask [request]",
@@ -41,6 +42,7 @@ func newAskCommand() *cobra.Command {
 				MaxIterations: maxIterations,
 				Provider:      provider,
 				Model:         model,
+				Endpoint:      endpoint,
 				Stdout:        cmd.OutOrStdout(),
 				Stderr:        cmd.ErrOrStderr(),
 			}, newAskBackend())
@@ -52,6 +54,7 @@ func newAskCommand() *cobra.Command {
 	cmd.Flags().IntVar(&maxIterations, "max-iterations", 3, "maximum lint-repair attempts")
 	cmd.Flags().StringVar(&provider, "provider", "", "override the configured ask provider for this run")
 	cmd.Flags().StringVar(&model, "model", "", "override the configured ask model for this run")
+	cmd.Flags().StringVar(&endpoint, "endpoint", "", "override the configured ask provider endpoint for this run")
 
 	cmd.AddCommand(newAskAuthCommand())
 	return cmd
@@ -74,6 +77,7 @@ func newAskAuthSetCommand() *cobra.Command {
 	var apiKey string
 	var provider string
 	var model string
+	var endpoint string
 	cmd := &cobra.Command{
 		Use:   "set",
 		Short: "Save ask api key and default provider/model",
@@ -93,8 +97,11 @@ func newAskAuthSetCommand() *cobra.Command {
 			if value := strings.TrimSpace(model); value != "" {
 				updated.Model = value
 			}
+			if value := strings.TrimSpace(endpoint); value != "" {
+				updated.Endpoint = value
+			}
 			if updated == settings {
-				return fmt.Errorf("ask auth set requires at least one of --api-key, --provider, or --model")
+				return fmt.Errorf("ask auth set requires at least one of --api-key, --provider, --model, or --endpoint")
 			}
 			if err := askconfig.SaveStored(updated); err != nil {
 				return err
@@ -105,6 +112,7 @@ func newAskAuthSetCommand() *cobra.Command {
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "save the ask api key in XDG config")
 	cmd.Flags().StringVar(&provider, "provider", "", "save the default ask provider")
 	cmd.Flags().StringVar(&model, "model", "", "save the default ask model")
+	cmd.Flags().StringVar(&endpoint, "endpoint", "", "save the default ask provider endpoint")
 	return cmd
 }
 
@@ -128,6 +136,12 @@ func newAskAuthShowCommand() *cobra.Command {
 				return err
 			}
 			if err := stdoutPrintf("modelSource=%s\n", effective.ModelSource); err != nil {
+				return err
+			}
+			if err := stdoutPrintf("endpoint=%s\n", effective.Endpoint); err != nil {
+				return err
+			}
+			if err := stdoutPrintf("endpointSource=%s\n", effective.EndpointSource); err != nil {
 				return err
 			}
 			if err := stdoutPrintf("apiKey=%s\n", askconfig.MaskAPIKey(effective.APIKey)); err != nil {

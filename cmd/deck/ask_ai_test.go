@@ -28,7 +28,7 @@ func (m *mockAskClient) Generate(_ context.Context, _ askprovider.Request) (askp
 
 func TestAskAuthCommands(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "config"))
-	out, err := runWithCapturedStdout([]string{"ask", "auth", "set", "--provider", "openrouter", "--model", "anthropic/claude-3.5-sonnet", "--api-key", "secret-token"})
+	out, err := runWithCapturedStdout([]string{"ask", "auth", "set", "--provider", "openrouter", "--model", "anthropic/claude-3.5-sonnet", "--endpoint", "https://openrouter.ai/api/v1", "--api-key", "secret-token"})
 	if err != nil {
 		t.Fatalf("auth set: %v", err)
 	}
@@ -39,7 +39,7 @@ func TestAskAuthCommands(t *testing.T) {
 	if err != nil {
 		t.Fatalf("auth show: %v", err)
 	}
-	for _, want := range []string{"provider=openrouter", "model=anthropic/claude-3.5-sonnet", "apiKey=secr****oken", "apiKeySource=config"} {
+	for _, want := range []string{"provider=openrouter", "model=anthropic/claude-3.5-sonnet", "endpoint=https://openrouter.ai/api/v1", "endpointSource=config", "apiKey=secr****oken", "apiKeySource=config"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("expected %q in auth show output, got %q", want, out)
 		}

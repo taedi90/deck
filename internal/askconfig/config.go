@@ -16,6 +16,7 @@ const (
 
 	//nolint:gosec // Environment variable names are not credentials.
 	envAPIKey   = "DECK_ASK_API_KEY"
+	envEndpoint = "DECK_ASK_ENDPOINT"
 	envProvider = "DECK_ASK_PROVIDER"
 	envModel    = "DECK_ASK_MODEL"
 )
@@ -24,6 +25,7 @@ type Settings struct {
 	Provider string `json:"provider,omitempty"`
 	Model    string `json:"model,omitempty"`
 	APIKey   string `json:"apiKey,omitempty"`
+	Endpoint string `json:"endpoint,omitempty"`
 }
 
 type fileConfig struct {
@@ -33,6 +35,7 @@ type fileConfig struct {
 type EffectiveSettings struct {
 	Settings
 	APIKeySource   string
+	EndpointSource string
 	ProviderSource string
 	ModelSource    string
 }
@@ -114,10 +117,12 @@ func ResolveEffective(cli Settings) (EffectiveSettings, error) {
 			Provider: defaultProvider,
 			Model:    defaultModel,
 			APIKey:   "",
+			Endpoint: "",
 		},
 		ProviderSource: "default",
 		ModelSource:    "default",
 		APIKeySource:   "unset",
+		EndpointSource: "unset",
 	}
 	if stored.Provider != "" {
 		effective.Provider = stored.Provider
@@ -130,6 +135,14 @@ func ResolveEffective(cli Settings) (EffectiveSettings, error) {
 	if stored.APIKey != "" {
 		effective.APIKey = stored.APIKey
 		effective.APIKeySource = "config"
+	}
+	if stored.Endpoint != "" {
+		effective.Endpoint = stored.Endpoint
+		effective.EndpointSource = "config"
+	}
+	if value := strings.TrimSpace(os.Getenv(envEndpoint)); value != "" {
+		effective.Endpoint = value
+		effective.EndpointSource = "env"
 	}
 	if value := strings.TrimSpace(os.Getenv(envProvider)); value != "" {
 		effective.Provider = value
@@ -154,6 +167,10 @@ func ResolveEffective(cli Settings) (EffectiveSettings, error) {
 	if value := strings.TrimSpace(cli.APIKey); value != "" {
 		effective.APIKey = value
 		effective.APIKeySource = "flag"
+	}
+	if value := strings.TrimSpace(cli.Endpoint); value != "" {
+		effective.Endpoint = value
+		effective.EndpointSource = "flag"
 	}
 	effective.Settings = normalize(effective.Settings)
 	return effective, nil
@@ -183,6 +200,7 @@ func normalize(settings Settings) Settings {
 	settings.Provider = strings.TrimSpace(settings.Provider)
 	settings.Model = strings.TrimSpace(settings.Model)
 	settings.APIKey = strings.TrimSpace(settings.APIKey)
+	settings.Endpoint = strings.TrimSpace(settings.Endpoint)
 	return settings
 }
 

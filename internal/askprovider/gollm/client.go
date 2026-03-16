@@ -34,6 +34,11 @@ func (c *Client) Generate(ctx context.Context, req askprovider.Request) (askprov
 	if err != nil {
 		return askprovider.Response{}, fmt.Errorf("configure ask backend: %w", err)
 	}
+	if endpoint := strings.TrimSpace(req.Endpoint); endpoint != "" {
+		if err := llm.SetOllamaEndpoint(endpoint); err != nil {
+			return askprovider.Response{}, fmt.Errorf("configure ask endpoint: %w", err)
+		}
+	}
 	prompt := gollm.NewPrompt(
 		strings.TrimSpace(req.Prompt),
 		gollm.WithSystemPrompt(strings.TrimSpace(req.SystemPrompt), gollm.CacheTypeEphemeral),
