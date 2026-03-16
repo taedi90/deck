@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -38,8 +37,7 @@ func runCommand(ctx context.Context, spec map[string]any) error {
 	if errors.Is(err, errStepCommandTimeout) {
 		return fmt.Errorf("%s: command timed out after %s", errCodeInstallCommandTimeout, timeout)
 	}
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
+	if executil.IsExitError(err) {
 		return fmt.Errorf("%s: command exited non-zero: %w", errCodeInstallCommandFailed, err)
 	}
 	return err

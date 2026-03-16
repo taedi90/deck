@@ -177,7 +177,7 @@ func executeServerSet(rawURL string, apiToken string) error {
 	if err := validateServerURL(resolved); err != nil {
 		return err
 	}
-	if err := saveServerDefaults(serverDefaults{URL: resolved, APIToken: strings.TrimSpace(apiToken)}); err != nil {
+	if err := saveServerDefaults(serverDefaults{URL: resolved, AuthToken: strings.TrimSpace(apiToken)}); err != nil {
 		return err
 	}
 	if strings.TrimSpace(apiToken) == "" {
@@ -191,7 +191,7 @@ func executeServerShow() error {
 	if err != nil {
 		return err
 	}
-	apiToken, apiTokenSource, err := resolveServerAPIToken("")
+	apiToken, apiTokenSource, err := resolveServerAuthToken("")
 	if err != nil {
 		return err
 	}
@@ -254,7 +254,7 @@ func executeServerUp(opts serverUpOptions) error {
 
 func executeServerDown(unit string) error {
 	resolvedUnit := normalizeServerUnitName(unit)
-	raw, err := executil.CombinedOutput(context.Background(), executil.CmdSystemctl, "stop", resolvedUnit)
+	raw, err := executil.CombinedOutputSystemctl(context.Background(), "stop", resolvedUnit)
 	if err != nil {
 		msg := strings.TrimSpace(string(raw))
 		if msg == "" {
@@ -297,7 +297,7 @@ func runServerDaemon(opts serverUpOptions) error {
 	if opts.tlsSelfSigned {
 		args = append(args, "--tls-self-signed")
 	}
-	raw, err := executil.CombinedOutput(context.Background(), executil.CmdSystemdRun, args...)
+	raw, err := executil.CombinedOutputSystemdRun(context.Background(), args...)
 	if err != nil {
 		msg := strings.TrimSpace(string(raw))
 		if msg == "" {
@@ -335,10 +335,10 @@ func validateServerUpDaemonMode(opts serverUpOptions) error {
 	if !opts.daemon {
 		return nil
 	}
-	if _, err := executil.LookPath(executil.CmdSystemdRun); err != nil {
+	if _, err := executil.LookPathSystemdRun(); err != nil {
 		return errors.New("server up: systemd-run not found")
 	}
-	if _, err := executil.LookPath(executil.CmdSystemctl); err != nil {
+	if _, err := executil.LookPathSystemctl(); err != nil {
 		return errors.New("server up: systemctl not found")
 	}
 	if strings.TrimSpace(opts.unit) == "" {

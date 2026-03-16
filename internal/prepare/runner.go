@@ -69,7 +69,7 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 		bundleRoot = "./bundle"
 	}
 
-	if err := os.MkdirAll(bundleRoot, 0o755); err != nil {
+	if err := filemode.EnsureDir(bundleRoot, filemode.PublishedArtifact); err != nil {
 		return fmt.Errorf("create bundle root: %w", err)
 	}
 

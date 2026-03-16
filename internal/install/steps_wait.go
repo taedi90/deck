@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"time"
 
 	"github.com/taedi90/deck/internal/executil"
@@ -107,11 +106,11 @@ func waitConditionMet(ctx context.Context, action string, spec waitSpec) (bool, 
 		if name == "" {
 			return false, fmt.Errorf("wait action serviceActive requires name")
 		}
-		err := executil.Run(ctx, executil.CmdSystemctl, "is-active", "--quiet", name)
+		err := executil.RunSystemctl(ctx, "is-active", "--quiet", name)
 		if err == nil {
 			return true, nil
 		}
-		if _, ok := err.(*exec.ExitError); ok {
+		if executil.IsExitError(err) {
 			return false, nil
 		}
 		return false, err
@@ -124,7 +123,7 @@ func waitConditionMet(ctx context.Context, action string, spec waitSpec) (bool, 
 		if err == nil {
 			return true, nil
 		}
-		if _, ok := err.(*exec.ExitError); ok {
+		if executil.IsExitError(err) {
 			return false, nil
 		}
 		return false, err

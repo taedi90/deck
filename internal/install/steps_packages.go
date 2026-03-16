@@ -39,9 +39,9 @@ func runInstallPackages(ctx context.Context, spec map[string]any) error {
 	}
 
 	installer := ""
-	if _, err := executil.LookPath(executil.CmdAptGet); err == nil {
+	if _, err := executil.LookPathAptGet(); err == nil {
 		installer = "apt-get"
-	} else if _, err := executil.LookPath(executil.CmdDnf); err == nil {
+	} else if _, err := executil.LookPathDnf(); err == nil {
 		installer = "dnf"
 	}
 	if installer == "" {
