@@ -26,12 +26,12 @@ It supports a simple operator flow: author the workflow, lint it, prepare bundle
 
 ## Optional AI-ready authoring helper
 
-- `ask`: draft, refine, or review workflows from the current workspace using an LLM-backed authoring assistant
+- `ask`: experimental helper to draft, refine, or review workflows from the current workspace using an LLM-backed authoring assistant
 - `ask auth set`: save `ask.provider`, `ask.model`, `ask.endpoint`, and `ask.apiKey` in XDG config
 - `ask auth show`: show the effective ask config with a masked api key
 - `ask auth unset`: clear saved ask config
 
-`ask` is available only in AI-ready builds. Lite builds keep the command surface but return a clear unsupported-feature error.
+`ask` is experimental and available only in AI-ready builds. Lite builds keep the command surface but return a clear unsupported-feature error.
 
 `ask` uses LLM-first intent classification and route-specific prompts. Workflow generation only runs for authoring routes (`draft`/`refine`), while explain/review/question routes return answer-oriented responses.
 

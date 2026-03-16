@@ -29,7 +29,7 @@ func newAskCommand() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "ask [request]",
-		Short: "Draft, refine, or review workflows from the current workspace",
+		Short: "Experimental AI helper for drafting and reviewing workflows",
 		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			request := strings.TrimSpace(strings.Join(args, " "))
