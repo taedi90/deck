@@ -34,7 +34,6 @@ const (
 
 	defaultAuditMaxSizeMB = 50
 	defaultAuditMaxFiles  = 10
-	defaultSiteAPIToken   = "deck-site-v1"
 )
 
 type statusRecorder struct {

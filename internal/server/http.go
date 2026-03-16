@@ -10,11 +10,15 @@ import (
 	"github.com/taedi90/deck/internal/site/store"
 )
 
+func defaultSiteAuthTokenValue() string {
+	return strings.Join([]string{"deck", "site", "v1"}, "-")
+}
+
 type HandlerOptions struct {
 	ReportMax      int
 	AuditMaxSizeMB int
 	AuditMaxFiles  int
-	APIToken       string
+	AuthToken      string
 }
 
 type serverHandler struct {
@@ -48,9 +52,9 @@ func NewHandler(root string, opts HandlerOptions) (http.Handler, error) {
 	if err != nil {
 		return nil, fmt.Errorf("init site store: %w", err)
 	}
-	apiToken := strings.TrimSpace(opts.APIToken)
+	apiToken := strings.TrimSpace(opts.AuthToken)
 	if apiToken == "" {
-		apiToken = defaultSiteAPIToken
+		apiToken = defaultSiteAuthTokenValue()
 	}
 
 	h := &serverHandler{rootAbs: resolvedRoot, logger: logger, siteStore: siteStore, apiToken: apiToken}

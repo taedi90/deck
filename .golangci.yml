@@ -23,51 +23,19 @@ linters:
         linters:
           - gosec
         text: 'G(204|301|302|304|306)'
-      - path: 'cmd/deck/cmd_serve\.go'
+      - path: 'internal/hostfs/host_path\.go'
         linters:
           - gosec
-        text: 'G101'
-      - path: 'internal/server/http_audit\.go'
-        linters:
-          - gosec
-        text: 'G101'
-      - path: 'cmd/deck/server_defaults\.go'
-        linters:
-          - gosec
-        text: 'G117'
-      - path: 'internal/server/http_(browse|static)\.go'
+        text: 'G703'
+      - path: 'internal/server/http_response\.go'
         linters:
           - gosec
         text: 'G705'
-      - path: 'internal/install/fileops\.go'
-        linters:
-          - gosec
-        text: 'G703'
-      - path: 'internal/install/package_repo_policy\.go'
-        linters:
-          - gosec
-        text: 'G703'
-      - path: 'internal/install/steps_files\.go'
-        linters:
-          - gosec
-        text: 'G703'
-      - path: 'internal/install/steps_system\.go'
-        linters:
-          - gosec
-        text: 'G703'
-      - path: 'internal/preparecli/service\.go'
-        linters:
-          - gosec
-        text: 'G703'
-      - path: 'internal/bundle/collect\.go'
+      - path: 'internal/fsutil/walk\.go'
         linters:
           - gosec
         text: 'G122'
-      - path: 'internal/preparecli/service\.go'
-        linters:
-          - gosec
-        text: 'G122'
-      - path: 'internal/executil/(allowed|workflow)\.go'
+      - path: 'internal/executil/(system|workflow)\.go'
         linters:
           - gosec
         text: 'G204'
@@ -75,34 +43,10 @@ linters:
         linters:
           - gosec
         text: 'G304'
-      - path: 'internal/applycli/request\.go'
+      - path: 'internal/filemode/filemode\.go'
         linters:
           - gosec
-        text: 'G301'
-      - path: 'internal/bundle/(collect|import|merge)\.go'
-        linters:
-          - gosec
-        text: 'G301'
-      - path: 'internal/install/steps_(containerd|download|files|install_artifacts)\.go'
-        linters:
-          - gosec
-        text: 'G301'
-      - path: 'internal/prepare/(download_file|download_images|download_packages|runner)\.go'
-        linters:
-          - gosec
-        text: 'G301'
-      - path: 'internal/preparecli/service\.go'
-        linters:
-          - gosec
-        text: 'G301'
-      - path: 'internal/server/tls\.go'
-        linters:
-          - gosec
-        text: 'G301'
-      - path: 'internal/site/store/(releases|storage)\.go'
-        linters:
-          - gosec
-        text: 'G301'
+        text: 'G304'
 
 formatters:
   enable:

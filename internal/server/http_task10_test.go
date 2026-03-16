@@ -17,7 +17,7 @@ func TestAssignmentAPI(t *testing.T) {
 	apiToken := "task10-token"
 	seedTask10Store(t, root)
 
-	h, err := NewHandler(root, HandlerOptions{APIToken: apiToken})
+	h, err := NewHandler(root, HandlerOptions{AuthToken: apiToken})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
@@ -44,7 +44,7 @@ func TestSessionReportAPI(t *testing.T) {
 	apiToken := "task10-token"
 	st := seedTask10Store(t, root)
 
-	h, err := NewHandler(root, HandlerOptions{APIToken: apiToken})
+	h, err := NewHandler(root, HandlerOptions{AuthToken: apiToken})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestSessionStatusAPI(t *testing.T) {
 		t.Fatalf("SaveExecutionReport: %v", err)
 	}
 
-	h, err := NewHandler(root, HandlerOptions{APIToken: apiToken})
+	h, err := NewHandler(root, HandlerOptions{AuthToken: apiToken})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestStatusUsesLatestReport(t *testing.T) {
 		t.Fatalf("SaveExecutionReport older: %v", err)
 	}
 
-	h, err := NewHandler(root, HandlerOptions{APIToken: apiToken})
+	h, err := NewHandler(root, HandlerOptions{AuthToken: apiToken})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
@@ -148,7 +148,7 @@ func TestSiteAPIRejectsMissingToken(t *testing.T) {
 	apiToken := "task10-token"
 	seedTask10Store(t, root)
 
-	h, err := NewHandler(root, HandlerOptions{APIToken: apiToken})
+	h, err := NewHandler(root, HandlerOptions{AuthToken: apiToken})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
@@ -184,7 +184,7 @@ func TestSiteAPIRejectsMissingToken(t *testing.T) {
 func TestReleaseBundleReadOnly(t *testing.T) {
 	root := t.TempDir()
 	seedTask10Store(t, root)
-	h, err := NewHandler(root, HandlerOptions{APIToken: "task10-token"})
+	h, err := NewHandler(root, HandlerOptions{AuthToken: "task10-token"})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}

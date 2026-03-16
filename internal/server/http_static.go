@@ -58,7 +58,7 @@ func (h *serverHandler) handleReleaseBundleRead(w http.ResponseWriter, r *http.R
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(data)
+	writeResponseBody(w, data)
 }
 
 func buildWorkflowIndex(root string) ([]byte, error) {
@@ -201,7 +201,7 @@ func (h *serverHandler) handleStatic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(data)
+	writeResponseBody(w, data)
 }
 
 func setStaticHeaders(h http.Header, category, relPath, etag string, size int, data []byte) {

@@ -18,9 +18,9 @@ import (
 )
 
 type assistedExecutionConfig struct {
-	Server   string
-	Session  string
-	APIToken string
+	Server    string
+	Session   string
+	AuthToken string
 }
 
 type assistedExecutionContext struct {
@@ -53,14 +53,14 @@ func resolveAssistedExecutionConfig(server, session, apiToken string) (assistedE
 	if err != nil {
 		return assistedExecutionConfig{}, false, err
 	}
-	resolvedToken, _, err := resolveServerAPIToken(apiToken)
+	resolvedToken, _, err := resolveServerAuthToken(apiToken)
 	if err != nil {
 		return assistedExecutionConfig{}, false, err
 	}
 	resolved := assistedExecutionConfig{
-		Server:   resolvedServer,
-		Session:  strings.TrimSpace(session),
-		APIToken: resolvedToken,
+		Server:    resolvedServer,
+		Session:   strings.TrimSpace(session),
+		AuthToken: resolvedToken,
 	}
 	assistedEnabled := resolved.Server != "" || resolved.Session != ""
 	if !assistedEnabled {
@@ -69,7 +69,7 @@ func resolveAssistedExecutionConfig(server, session, apiToken string) (assistedE
 	if resolved.Server == "" || resolved.Session == "" {
 		return assistedExecutionConfig{}, false, errors.New("assisted mode requires both --session and a server from --server or \"deck server set <url>\"")
 	}
-	if resolved.APIToken == "" {
+	if resolved.AuthToken == "" {
 		return assistedExecutionConfig{}, false, errors.New("--api-token is required in assisted mode")
 	}
 	return resolved, true, nil
@@ -228,7 +228,7 @@ func uploadAssistedExecutionReport(config assistedExecutionConfig, report sitest
 	if err != nil {
 		return fmt.Errorf("build report request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+config.APIToken)
+	req.Header.Set("Authorization", "Bearer "+config.AuthToken)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -252,7 +252,7 @@ func fetchAssistedSession(config assistedExecutionConfig, sessionID string) (sit
 	if err != nil {
 		return sitestore.Session{}, fmt.Errorf("build request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+config.APIToken)
+	req.Header.Set("Authorization", "Bearer "+config.AuthToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return sitestore.Session{}, err
@@ -275,7 +275,7 @@ func fetchAssistedAssignment(config assistedExecutionConfig, sessionID, nodeID, 
 	if err != nil {
 		return sitestore.Assignment{}, false, fmt.Errorf("build request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+config.APIToken)
+	req.Header.Set("Authorization", "Bearer "+config.AuthToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return sitestore.Assignment{}, false, err
@@ -358,7 +358,7 @@ func fetchAssistedReleaseBundleFile(config assistedExecutionConfig, releaseID, r
 	if err != nil {
 		return nil, fmt.Errorf("build release bundle request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+config.APIToken)
+	req.Header.Set("Authorization", "Bearer "+config.AuthToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
