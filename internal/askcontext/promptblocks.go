@@ -200,9 +200,11 @@ func RelevantStepKindsBlock(prompt string) string {
 		}
 		if step.Kind == "Packages" {
 			b.WriteString("  - spec.packages must stay a real YAML array, not a quoted template string.\n")
+			b.WriteString("  - Do not set spec.packages to `{{ .vars.* }}` or any other whole-value template expression; inline the package list as YAML items instead.\n")
 		}
 		if step.Kind == "Repository" {
 			b.WriteString("  - spec.repositories must stay a real YAML array of repository objects, not a scalar shortcut.\n")
+			b.WriteString("  - Do not set spec.repositories to `{{ .vars.* }}` or any other whole-value template expression; inline repository objects as YAML list items instead.\n")
 		}
 		for _, action := range step.ActionGuides {
 			if !containsAction(step.Actions, action.Action) {

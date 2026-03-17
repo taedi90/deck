@@ -148,6 +148,7 @@ func TestRelevantStepKindsBlockIncludesTypedShapeGuidance(t *testing.T) {
 	for _, want := range []string{
 		"spec.packages",
 		"real YAML array",
+		"{{ .vars.* }}",
 		"spec.repositories",
 		"action install",
 		"action configure",

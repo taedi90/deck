@@ -64,6 +64,7 @@ func generationSystemPrompt(route askintent.Route, target askintent.Target, retr
 	b.WriteString("- Never place summary, description, or review fields inside workflow YAML content.\n")
 	b.WriteString("- For a new workspace draft, prefer creating workflows/scenarios/apply.yaml and workflows/vars.yaml only when needed.\n")
 	b.WriteString("- If the request is simply to print text in the terminal, a minimal valid apply scenario with one Command step is acceptable.\n")
+	b.WriteString("- Do not use whole-value template expressions such as `{{ .vars.dockerPackages }}` for typed fields that expect arrays or objects; inline those YAML arrays or objects directly.\n")
 	b.WriteString("- Detailed topology, component/import guidance, vars guidance, and typed-step references are provided through retrieved context.\n")
 	b.WriteString("- Example valid minimal scenario YAML:\n")
 	b.WriteString("  role: apply\n")

@@ -147,7 +147,7 @@ func TestAskLoggerDebugAndTrace(t *testing.T) {
 
 func TestGenerationSystemPromptIncludesAskContextBlocks(t *testing.T) {
 	prompt := generationSystemPrompt(askintent.RouteDraft, askintent.Target{Kind: "workspace"}, askretrieve.RetrievalResult{})
-	for _, want := range []string{"Workflow invariants:", "Workflow authoring policy:", "Detailed topology, component/import guidance, vars guidance, and typed-step references are provided through retrieved context."} {
+	for _, want := range []string{"Workflow invariants:", "Workflow authoring policy:", "Detailed topology, component/import guidance, vars guidance, and typed-step references are provided through retrieved context.", "Do not use whole-value template expressions such as `{{ .vars.dockerPackages }}`"} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("expected %q in generation prompt, got %q", want, prompt)
 		}
@@ -156,6 +156,16 @@ func TestGenerationSystemPromptIncludesAskContextBlocks(t *testing.T) {
 		if strings.Contains(prompt, avoid) {
 			t.Fatalf("expected generation prompt to avoid duplicated context block %q, got %q", avoid, prompt)
 		}
+	}
+}
+
+func TestRequiredFixesForValidationFlagsTemplatedCollections(t *testing.T) {
+	fixes := requiredFixesForValidation("parse yaml: yaml: invalid map key: map[string]interface {}{\".vars.dockerPackages\":interface {}(nil)}")
+	if len(fixes) < 2 {
+		t.Fatalf("expected extra required fix, got %v", fixes)
+	}
+	if !strings.Contains(fixes[1], "whole-value template expressions") {
+		t.Fatalf("unexpected templated collection fix: %v", fixes)
 	}
 }
 
