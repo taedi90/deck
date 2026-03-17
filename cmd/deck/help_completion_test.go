@@ -28,17 +28,17 @@ func TestRunUsageShowsTopLevelAxes(t *testing.T) {
 			}
 
 			msg := res.stdout
-			for _, cmd := range []string{"init", "list", "lint", "prepare", "bundle", "plan", "apply", "source", "server", "ask", "completion", "cache"} {
+			for _, cmd := range []string{"init", "list", "lint", "prepare", "bundle", "plan", "apply", "source", "server", "completion", "cache"} {
 				if !strings.Contains(msg, cmd) {
 					t.Fatalf("usage must include %q, got %q", cmd, msg)
 				}
 			}
-			for _, section := range []string{"Core Commands\n", "Additional Commands\n"} {
+			for _, section := range []string{"Core Commands:\n", "Additional Commands:\n"} {
 				if !strings.Contains(msg, section) {
 					t.Fatalf("usage must include %q, got %q", section, msg)
 				}
 			}
-			if strings.Index(msg, "Core Commands\n") > strings.Index(msg, "Additional Commands\n") {
+			if strings.Index(msg, "Core Commands:\n") > strings.Index(msg, "Additional Commands:\n") {
 				t.Fatalf("core commands section must appear before additional commands: %q", msg)
 			}
 			coreCommands := []string{"init", "list", "lint", "prepare", "bundle", "plan", "apply"}
@@ -47,7 +47,7 @@ func TestRunUsageShowsTopLevelAxes(t *testing.T) {
 					t.Fatalf("core commands must keep registration order: %q appeared after %q in %q", coreCommands[i], coreCommands[i+1], msg)
 				}
 			}
-			additionalCommands := []string{"source", "server", "ask", "completion", "cache"}
+			additionalCommands := []string{"source", "server", "completion", "cache"}
 			for i := 0; i < len(additionalCommands)-1; i++ {
 				if strings.Index(msg, additionalCommands[i]) > strings.Index(msg, additionalCommands[i+1]) {
 					t.Fatalf("additional commands must keep registration order: %q appeared after %q in %q", additionalCommands[i], additionalCommands[i+1], msg)

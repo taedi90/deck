@@ -2,14 +2,25 @@
 
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
-func TestAskStubReturnsClearError(t *testing.T) {
-	_, err := runWithCapturedStdout([]string{"ask", "draft something"})
-	if err == nil {
-		t.Fatalf("expected ask stub error")
+func TestAskCommandIsHiddenWithoutAITag(t *testing.T) {
+	out, err := runWithCapturedStdout([]string{"--help"})
+	if err != nil {
+		t.Fatalf("expected help success, got %v", err)
 	}
-	if got := err.Error(); got != "ask is not available in this build; rebuild with -tags ai or use the AI-ready binary" {
+	if strings.Contains(out, "ask") {
+		t.Fatalf("expected ask command to be hidden, got %q", out)
+	}
+
+	_, err = runWithCapturedStdout([]string{"ask", "draft something"})
+	if err == nil {
+		t.Fatalf("expected unknown command error")
+	}
+	if got := err.Error(); !strings.Contains(got, "unknown command \"ask\"") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

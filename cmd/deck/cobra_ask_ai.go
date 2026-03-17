@@ -31,7 +31,7 @@ func newAskCommand() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "ask [request]",
-		Short: "Experimental AI helper for drafting and reviewing workflows",
+		Short: "(Experimental) AI helper for drafting and reviewing workflows",
 		Example: strings.Join([]string{
 			`  deck ask "explain what workflows/scenarios/apply.yaml does"`,
 			`  deck ask --write "create an air-gapped rhel9 kubeadm cluster workflow"`,
