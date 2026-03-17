@@ -22,6 +22,8 @@ import (
 	"github.com/taedi90/deck/internal/workspacepaths"
 )
 
+const maxPlanSlugLength = 48
+
 func validateGeneratedPath(path string) error { /* split helper below */
 	clean := filepath.ToSlash(strings.TrimSpace(path))
 	if clean == "" {
@@ -326,8 +328,8 @@ func planSlug(value string) string {
 	if slug == "" {
 		return "plan"
 	}
-	if len(slug) > 48 {
-		slug = strings.Trim(slug[:48], "-")
+	if len(slug) > maxPlanSlugLength {
+		slug = strings.Trim(slug[:maxPlanSlugLength], "-")
 	}
 	if slug == "" {
 		return "plan"

@@ -222,7 +222,7 @@ func Execute(ctx context.Context, opts Options, client askprovider.Client) error
 		}
 		result.PromptTraces = append(result.PromptTraces, promptTrace{Label: "generation", SystemPrompt: generationRequest.SystemPrompt, UserPrompt: generationRequest.Prompt})
 		logger.logf("basic", "\n[ask][phase:generation:start] route=%s attempts=%d\n", decision.Route, attempts)
-		gen, lintSummary, retriesUsed, genErr := generateWithValidation(ctx, client, generationRequest, resolvedRoot, attempts, logger, decision, plan)
+		gen, lintSummary, critic, retriesUsed, genErr := generateWithValidation(ctx, client, generationRequest, resolvedRoot, attempts, logger, decision, plan)
 		if genErr != nil {
 			return genErr
 		}
@@ -234,7 +234,6 @@ func Execute(ctx context.Context, opts Options, client askprovider.Client) error
 		result.ReviewLines = append(result.ReviewLines, gen.Review...)
 		result.LintSummary = lintSummary
 		result.LocalFindings = localFindings(result.Files)
-		critic := semanticCritic(gen, decision, plan)
 		result.Critic = &critic
 		result.ReviewLines = append(result.ReviewLines, critic.Advisory...)
 		if opts.Write {
@@ -409,7 +408,7 @@ func generationAttempts(requested int, decision askintent.Decision, prompt strin
 	return 2
 }
 
-func generateWithValidation(ctx context.Context, client askprovider.Client, req askprovider.Request, root string, attempts int, logger askLogger, decision askintent.Decision, plan askcontract.PlanResponse) (askcontract.GenerationResponse, string, int, error) {
+func generateWithValidation(ctx context.Context, client askprovider.Client, req askprovider.Request, root string, attempts int, logger askLogger, decision askintent.Decision, plan askcontract.PlanResponse) (askcontract.GenerationResponse, string, askcontract.CriticResponse, int, error) {
 	var lastValidation string
 	var lastCritic askcontract.CriticResponse
 	for attempt := 1; attempt <= attempts; attempt++ {
@@ -436,7 +435,7 @@ func generateWithValidation(ctx context.Context, client askprovider.Client, req 
 			MaxRetries:   1,
 		})
 		if err != nil {
-			return askcontract.GenerationResponse{}, lastValidation, attempt - 1, err
+			return askcontract.GenerationResponse{}, lastValidation, lastCritic, attempt - 1, err
 		}
 		logger.response("generation", resp.Content)
 		gen, err := askcontract.ParseGeneration(resp.Content)
@@ -446,24 +445,24 @@ func generateWithValidation(ctx context.Context, client askprovider.Client, req 
 			if attempt < attempts {
 				continue
 			}
-			return askcontract.GenerationResponse{}, lastValidation, attempt - 1, fmt.Errorf("ask generation returned invalid JSON: %s", lastValidation)
+			return askcontract.GenerationResponse{}, lastValidation, lastCritic, attempt - 1, fmt.Errorf("ask generation returned invalid JSON: %s", lastValidation)
 		}
 		logger.logf("debug", "[ask][phase:semantic-validate] attempt=%d/%d\n", attempt, attempts)
 		lintSummary, critic, err := validateGeneration(root, gen, decision, plan)
 		lastCritic = critic
 		if err == nil {
-			return gen, lintSummary, attempt - 1, nil
+			return gen, lintSummary, critic, attempt - 1, nil
 		}
 		lastValidation = err.Error()
 		logger.logf("debug", "[ask][phase:generation:validation-error] error=%s\n", lastValidation)
 		if !repairableValidationError(lastValidation) {
-			return askcontract.GenerationResponse{}, lastValidation, attempt - 1, fmt.Errorf("ask generation stopped without repair: %s", lastValidation)
+			return askcontract.GenerationResponse{}, lastValidation, critic, attempt - 1, fmt.Errorf("ask generation stopped without repair: %s", lastValidation)
 		}
 	}
 	if lastValidation == "" {
 		lastValidation = "generation failed without a parseable response"
 	}
-	return askcontract.GenerationResponse{}, lastValidation, attempts - 1, fmt.Errorf("ask generation did not validate after %d attempts: %s", attempts, lastValidation)
+	return askcontract.GenerationResponse{}, lastValidation, lastCritic, attempts - 1, fmt.Errorf("ask generation did not validate after %d attempts: %s", attempts, lastValidation)
 }
 
 func repairableValidationError(message string) bool {

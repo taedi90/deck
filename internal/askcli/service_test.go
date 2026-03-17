@@ -69,7 +69,7 @@ func TestGenerateWithValidationStopsOnRouteMismatch(t *testing.T) {
 		`{"summary":"wrong route","review":[],"files":[]}`,
 		`{"summary":"should not retry","review":[],"files":[{"path":"workflows/scenarios/apply.yaml","content":"role: apply\nversion: v1alpha1\n"}]}`,
 	}}
-	_, _, _, err := generateWithValidation(context.Background(), client, askprovider.Request{Kind: "generate", Provider: "openai", Model: "gpt-5.4", APIKey: "test-key"}, t.TempDir(), 2, newAskLogger(io.Discard, "trace"), askintent.Decision{Route: askintent.RouteDraft}, askcontract.PlanResponse{})
+	_, _, _, _, err := generateWithValidation(context.Background(), client, askprovider.Request{Kind: "generate", Provider: "openai", Model: "gpt-5.4", APIKey: "test-key"}, t.TempDir(), 2, newAskLogger(io.Discard, "trace"), askintent.Decision{Route: askintent.RouteDraft}, askcontract.PlanResponse{})
 	if err == nil {
 		t.Fatalf("expected generation failure")
 	}
@@ -86,7 +86,7 @@ func TestGenerateWithValidationRetriesParseFailure(t *testing.T) {
 		`not-json`,
 		`{"summary":"ok","review":[],"files":[{"path":"workflows/scenarios/apply.yaml","content":"role: apply\nversion: v1alpha1\nsteps:\n  - id: run\n    kind: Command\n    spec:\n      command: [\"true\"]\n"}]}`,
 	}}
-	gen, _, retries, err := generateWithValidation(context.Background(), client, askprovider.Request{Kind: "generate", Provider: "openai", Model: "gpt-5.4", APIKey: "test-key", Prompt: "generate"}, t.TempDir(), 2, newAskLogger(io.Discard, "trace"), askintent.Decision{Route: askintent.RouteDraft}, askcontract.PlanResponse{})
+	gen, _, _, retries, err := generateWithValidation(context.Background(), client, askprovider.Request{Kind: "generate", Provider: "openai", Model: "gpt-5.4", APIKey: "test-key", Prompt: "generate"}, t.TempDir(), 2, newAskLogger(io.Discard, "trace"), askintent.Decision{Route: askintent.RouteDraft}, askcontract.PlanResponse{})
 	if err != nil {
 		t.Fatalf("expected parse retry success: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestGenerateWithValidationRepairsSemanticFailure(t *testing.T) {
 		`{"summary":"ok","review":[],"files":[{"path":"workflows/scenarios/apply.yaml","content":"role: apply\nversion: v1alpha1\nsteps:\n  - id: run\n    kind: Command\n    spec:\n      command: [\"true\"]\n"},{"path":"workflows/vars.yaml","content":"{}\n"}]}`,
 	}}
 	plan := askcontract.PlanResponse{Files: []askcontract.PlanFile{{Path: "workflows/scenarios/apply.yaml", Action: "create"}, {Path: "workflows/vars.yaml", Action: "create"}}, ValidationChecklist: []string{"vars are defined"}}
-	gen, _, retries, err := generateWithValidation(context.Background(), client, askprovider.Request{Kind: "generate", Provider: "openai", Model: "gpt-5.4", APIKey: "test-key", Prompt: "generate"}, t.TempDir(), 2, newAskLogger(io.Discard, "trace"), askintent.Decision{Route: askintent.RouteDraft}, plan)
+	gen, _, _, retries, err := generateWithValidation(context.Background(), client, askprovider.Request{Kind: "generate", Provider: "openai", Model: "gpt-5.4", APIKey: "test-key", Prompt: "generate"}, t.TempDir(), 2, newAskLogger(io.Discard, "trace"), askintent.Decision{Route: askintent.RouteDraft}, plan)
 	if err != nil {
 		t.Fatalf("expected semantic repair success: %v", err)
 	}

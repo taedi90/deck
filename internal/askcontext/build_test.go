@@ -26,7 +26,7 @@ func TestManifestIncludesAllStepKinds(t *testing.T) {
 }
 
 func TestDocsReferenceCLIIncludesSyncedAskContextBlocks(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("/home/opencode/workspace/deck", "docs", "reference", "cli.md"))
+	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "reference", "cli.md"))
 	if err != nil {
 		t.Fatalf("read docs: %v", err)
 	}

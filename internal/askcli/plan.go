@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/taedi90/deck/internal/askcontext"
 	"github.com/taedi90/deck/internal/askcontract"
 	"github.com/taedi90/deck/internal/askintent"
@@ -360,45 +362,63 @@ func planTarget(plan askcontract.PlanResponse, fallback askintent.Target) askint
 }
 
 func localImportPaths(content string) []string {
+	parsed := parseWorkflowOutline(content)
 	paths := make([]string, 0)
-	for _, line := range strings.Split(content, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if !strings.HasPrefix(trimmed, "- path:") {
-			continue
-		}
-		value := strings.TrimSpace(strings.TrimPrefix(trimmed, "- path:"))
-		value = strings.Trim(value, `"'`)
-		if value != "" {
-			paths = append(paths, filepath.ToSlash(value))
+	for _, phase := range parsed.Phases {
+		for _, imp := range phase.Imports {
+			if strings.TrimSpace(imp.Path) != "" {
+				paths = append(paths, filepath.ToSlash(strings.TrimSpace(imp.Path)))
+			}
 		}
 	}
 	return dedupe(paths)
 }
 
 func localStepKinds(content string) []string {
+	parsed := parseWorkflowOutline(content)
 	kinds := make([]string, 0)
-	for _, line := range strings.Split(content, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if !strings.HasPrefix(trimmed, "kind:") {
-			continue
+	for _, step := range parsed.Steps {
+		if strings.TrimSpace(step.Kind) != "" {
+			kinds = append(kinds, strings.TrimSpace(step.Kind))
 		}
-		value := strings.TrimSpace(strings.TrimPrefix(trimmed, "kind:"))
-		value = strings.Trim(value, `"'`)
-		if value != "" {
-			kinds = append(kinds, value)
+	}
+	for _, phase := range parsed.Phases {
+		for _, step := range phase.Steps {
+			if strings.TrimSpace(step.Kind) != "" {
+				kinds = append(kinds, strings.TrimSpace(step.Kind))
+			}
 		}
 	}
 	return dedupe(kinds)
 }
 
 func localRole(content string) string {
-	for _, line := range strings.Split(content, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if !strings.HasPrefix(trimmed, "role:") {
-			continue
-		}
-		value := strings.TrimSpace(strings.TrimPrefix(trimmed, "role:"))
-		return strings.Trim(value, `"'`)
+	return strings.TrimSpace(parseWorkflowOutline(content).Role)
+}
+
+type workflowOutline struct {
+	Role   string         `yaml:"role"`
+	Steps  []outlineStep  `yaml:"steps"`
+	Phases []outlinePhase `yaml:"phases"`
+}
+
+type outlinePhase struct {
+	Imports []outlineImport `yaml:"imports"`
+	Steps   []outlineStep   `yaml:"steps"`
+}
+
+type outlineImport struct {
+	Path string `yaml:"path"`
+}
+
+type outlineStep struct {
+	Kind string `yaml:"kind"`
+}
+
+func parseWorkflowOutline(content string) workflowOutline {
+	var parsed workflowOutline
+	if err := yaml.Unmarshal([]byte(content), &parsed); err != nil {
+		return workflowOutline{}
 	}
-	return ""
+	return parsed
 }
