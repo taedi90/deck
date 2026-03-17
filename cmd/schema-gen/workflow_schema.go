@@ -176,9 +176,10 @@ func artifactFileGroupSchema() map[string]any {
 		"additionalProperties": false,
 		"required":             []any{"group", "items"},
 		"properties": map[string]any{
-			"group":   map[string]any{"type": "string", "minLength": 1},
-			"targets": map[string]any{"type": "array", "items": artifactTargetSchema()},
-			"items":   map[string]any{"type": "array", "minItems": 1, "items": artifactFileItemSchema()},
+			"group":     map[string]any{"type": "string", "minLength": 1},
+			"targets":   map[string]any{"type": "array", "items": artifactTargetSchema()},
+			"items":     map[string]any{"type": "array", "minItems": 1, "items": artifactFileItemSchema()},
+			"execution": artifactExecutionSchema(),
 		},
 	}
 }
@@ -227,10 +228,11 @@ func artifactImageGroupSchema() map[string]any {
 		"additionalProperties": false,
 		"required":             []any{"group", "items"},
 		"properties": map[string]any{
-			"group":   map[string]any{"type": "string", "minLength": 1},
-			"targets": map[string]any{"type": "array", "items": artifactTargetSchema()},
-			"backend": map[string]any{"type": "object", "additionalProperties": true},
-			"output":  map[string]any{"type": "object", "additionalProperties": true},
+			"group":     map[string]any{"type": "string", "minLength": 1},
+			"targets":   map[string]any{"type": "array", "items": artifactTargetSchema()},
+			"backend":   map[string]any{"type": "object", "additionalProperties": true},
+			"output":    map[string]any{"type": "object", "additionalProperties": true},
+			"execution": artifactExecutionSchema(),
 			"items": map[string]any{"type": "array", "minItems": 1, "items": map[string]any{
 				"type":                 "object",
 				"additionalProperties": false,
@@ -248,16 +250,28 @@ func artifactPackageGroupSchema() map[string]any {
 		"additionalProperties": false,
 		"required":             []any{"group", "targets", "items"},
 		"properties": map[string]any{
-			"group":   map[string]any{"type": "string", "minLength": 1},
-			"targets": map[string]any{"type": "array", "minItems": 1, "items": artifactTargetSchema()},
-			"repo":    map[string]any{"type": "object", "additionalProperties": true},
-			"backend": map[string]any{"type": "object", "additionalProperties": true},
+			"group":     map[string]any{"type": "string", "minLength": 1},
+			"targets":   map[string]any{"type": "array", "minItems": 1, "items": artifactTargetSchema()},
+			"repo":      map[string]any{"type": "object", "additionalProperties": true},
+			"backend":   map[string]any{"type": "object", "additionalProperties": true},
+			"execution": artifactExecutionSchema(),
 			"items": map[string]any{"type": "array", "minItems": 1, "items": map[string]any{
 				"type":                 "object",
 				"additionalProperties": false,
 				"required":             []any{"name"},
 				"properties":           map[string]any{"name": map[string]any{"type": "string", "minLength": 1}},
 			}},
+		},
+	}
+}
+
+func artifactExecutionSchema() map[string]any {
+	return map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"properties": map[string]any{
+			"parallelism": map[string]any{"type": "integer", "minimum": 1},
+			"retry":       map[string]any{"type": "integer", "minimum": 0},
 		},
 	}
 }

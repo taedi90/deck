@@ -43,10 +43,6 @@
           "items": {
             "additionalProperties": false,
             "properties": {
-              "group": {
-                "minLength": 1,
-                "type": "string"
-              },
               "execution": {
                 "additionalProperties": false,
                 "properties": {
@@ -60,6 +56,10 @@
                   }
                 },
                 "type": "object"
+              },
+              "group": {
+                "minLength": 1,
+                "type": "string"
               },
               "items": {
                 "items": {
@@ -180,10 +180,6 @@
                 "additionalProperties": true,
                 "type": "object"
               },
-              "group": {
-                "minLength": 1,
-                "type": "string"
-              },
               "execution": {
                 "additionalProperties": false,
                 "properties": {
@@ -197,6 +193,10 @@
                   }
                 },
                 "type": "object"
+              },
+              "group": {
+                "minLength": 1,
+                "type": "string"
               },
               "items": {
                 "items": {
@@ -262,10 +262,6 @@
                 "additionalProperties": true,
                 "type": "object"
               },
-              "group": {
-                "minLength": 1,
-                "type": "string"
-              },
               "execution": {
                 "additionalProperties": false,
                 "properties": {
@@ -279,6 +275,10 @@
                   }
                 },
                 "type": "object"
+              },
+              "group": {
+                "minLength": 1,
+                "type": "string"
               },
               "items": {
                 "items": {

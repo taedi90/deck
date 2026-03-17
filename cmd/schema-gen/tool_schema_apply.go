@@ -77,12 +77,46 @@ func generateImageToolSchema() map[string]any {
 			"runtime": map[string]any{"type": "object", "additionalProperties": true},
 			"command": stringArraySchema(1, false),
 			"images":  stringArraySchema(1, false),
+			"auth": map[string]any{
+				"type":     "array",
+				"minItems": 1,
+				"items": map[string]any{
+					"type":                 "object",
+					"additionalProperties": false,
+					"required":             []any{"registry", "basic"},
+					"properties": map[string]any{
+						"registry": minLenStringSchema(),
+						"basic": map[string]any{
+							"type":                 "object",
+							"additionalProperties": false,
+							"required":             []any{"username", "password"},
+							"properties": map[string]any{
+								"username": map[string]any{"type": "string"},
+								"password": map[string]any{"type": "string"},
+							},
+						},
+					},
+				},
+			},
 			"backend": map[string]any{"type": "object", "additionalProperties": true},
 			"output":  map[string]any{"type": "object", "additionalProperties": true},
 		},
 		"allOf": []any{
 			conditionalRequired("download", []string{"images"}, nil),
 			conditionalRequired("verify", []string{"images"}, nil),
+			map[string]any{
+				"if": map[string]any{
+					"properties": map[string]any{
+						"action": map[string]any{"const": "verify"},
+					},
+					"required": []any{"action"},
+				},
+				"then": map[string]any{
+					"not": map[string]any{
+						"required": []any{"auth"},
+					},
+				},
+			},
 		},
 	})
 	return root

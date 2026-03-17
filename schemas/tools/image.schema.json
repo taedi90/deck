@@ -116,6 +116,7 @@
                 "type": "object"
               },
               "registry": {
+                "minLength": 1,
                 "type": "string"
               }
             },

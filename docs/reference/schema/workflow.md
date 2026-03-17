@@ -49,6 +49,13 @@ artifacts:
 
 ## Nested Objects
 
+### `artifacts.files[].execution`
+
+| Key | Type | Required | Default | Enum | Description | Example |
+|---|---|---:|---|---|---|---|
+| `artifacts.files[].execution.parallelism` | `integer` | no | `` | `` |  | `1` |
+| `artifacts.files[].execution.retry` | `integer` | no | `` | `` |  | `1` |
+
 ### `artifacts.files[].items[].output`
 
 | Key | Type | Required | Default | Enum | Description | Example |
@@ -64,6 +71,20 @@ artifacts:
 | `artifacts.files[].items[].source.sha256` | `string` | no | `` | `` |  | `example` |
 | `artifacts.files[].items[].source.url` | `string` | no | `` | `` |  | `example` |
 
+### `artifacts.images[].execution`
+
+| Key | Type | Required | Default | Enum | Description | Example |
+|---|---|---:|---|---|---|---|
+| `artifacts.images[].execution.parallelism` | `integer` | no | `` | `` |  | `1` |
+| `artifacts.images[].execution.retry` | `integer` | no | `` | `` |  | `1` |
+
+### `artifacts.packages[].execution`
+
+| Key | Type | Required | Default | Enum | Description | Example |
+|---|---|---:|---|---|---|---|
+| `artifacts.packages[].execution.parallelism` | `integer` | no | `` | `` |  | `1` |
+| `artifacts.packages[].execution.retry` | `integer` | no | `` | `` |  | `1` |
+
 
 ## Validation Rules
 
@@ -75,4 +96,5 @@ artifacts:
 - A workflow must define at least one of `artifacts`, `phases`, or `steps`.
 - A workflow cannot define both top-level `phases` and top-level `steps` at the same time.
 - Imports are only supported under `phases[].imports` and resolve from `workflows/components/`.
+- Artifact execution controls are opt-in and only affect `role: prepare` artifact jobs; they do not introduce general step-level parallelism.
 - Each step still validates against its own kind-specific schema after the top-level workflow schema passes.

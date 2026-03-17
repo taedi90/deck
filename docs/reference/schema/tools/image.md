@@ -57,11 +57,22 @@ spec:
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
 | `spec.action` | `string` | no | `` | `download, verify` | Chooses whether the step downloads images into the bundle or verifies their presence on the node. | `verify` |
+| `spec.auth` | `array<object>` | no | `` | `` | Optional registry authentication entries for `download`. Match each private registry with credentials while leaving public registries to the default keychain. | `[{registry:registry.example.com,basic:{username:robot,password:${REGISTRY_PASSWORD}}}]` |
 | `spec.backend` | `object` | no | `` | `` | Backend-specific settings such as runtime or transport configuration. | `{runtime:containerd}` |
 | `spec.command` | `array<string>` | no | `` | `` | Optional image-listing command used by `verify` when the default runtime command is not appropriate. | `[ctr,-n,k8s.io,images,list,-q]` |
 | `spec.images` | `array<string>` | yes | `` | `` | Fully qualified image references to download or verify. | `[registry.k8s.io/pause:3.9]` |
 | `spec.output` | `object` | no | `` | `` | Bundle output settings used when downloaded image archives are written during prepare. | `{layout:oci-archive,path:images/control-plane.tar}` |
 | `spec.runtime` | `object` | no | `` | `` | Container runtime configuration used when pulling or verifying images. | `{socket:unix:///run/containerd/containerd.sock}` |
+
+## Nested Objects
+
+### `spec.auth[].basic`
+
+| Key | Type | Required | Default | Enum | Description | Example |
+|---|---|---:|---|---|---|---|
+| `spec.auth[].basic.password` | `string` | yes | `` | `` | Registry password or access token paired with `basic.username`. | `${REGISTRY_PASSWORD}` |
+| `spec.auth[].basic.username` | `string` | yes | `` | `` | Registry username used for basic authentication. | `robot` |
+
 
 ## Validation Rules
 
@@ -72,6 +83,7 @@ spec:
 
 - Prefer `Image` over ad-hoc shell commands so workflows keep an explicit list of required images.
 - Use explicit image tags or digests to keep prepared bundles reproducible.
+- `spec.auth` is optional and only applies to `download`; when omitted, deck falls back to the environment's default registry keychain.
 
 ## Actions
 
@@ -100,6 +112,12 @@ spec:
   action: download
   images:
     - registry.k8s.io/kube-apiserver:v1.30.1
+    - registry.example.com/platform/pause:3.9
+  auth:
+    - registry: registry.example.com
+      basic:
+        username: "{{ .vars.registryUser }}"
+        password: "{{ .vars.registryPassword }}"
   output:
     path: images/control-plane.tar
 ```
