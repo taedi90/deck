@@ -31,18 +31,7 @@ func (c *Client) Generate(ctx context.Context, req askprovider.Request) (askprov
 		config.BaseURL = defaultBaseURL(provider, config.BaseURL)
 	}
 	client := openai.NewClientWithConfig(config)
-	request := openai.ChatCompletionRequest{
-		Model: strings.TrimSpace(req.Model),
-		Messages: []openai.ChatCompletionMessage{
-			{Role: openai.ChatMessageRoleSystem, Content: strings.TrimSpace(req.SystemPrompt)},
-			{Role: openai.ChatMessageRoleUser, Content: strings.TrimSpace(req.Prompt)},
-		},
-		Temperature:    0.1,
-		ResponseFormat: &openai.ChatCompletionResponseFormat{Type: openai.ChatCompletionResponseFormatTypeJSONObject},
-	}
-	if request.Model == "" {
-		request.Model = defaultModel(provider)
-	}
+	request := buildRequest(provider, req)
 	resp, err := client.CreateChatCompletion(ctx, request)
 	if err != nil {
 		return askprovider.Response{}, fmt.Errorf("ask provider request failed: %w", err)
@@ -51,6 +40,21 @@ func (c *Client) Generate(ctx context.Context, req askprovider.Request) (askprov
 		return askprovider.Response{}, fmt.Errorf("ask provider returned no choices")
 	}
 	return askprovider.Response{Content: strings.TrimSpace(resp.Choices[0].Message.Content)}, nil
+}
+
+func buildRequest(provider string, req askprovider.Request) openai.ChatCompletionRequest {
+	request := openai.ChatCompletionRequest{
+		Model: strings.TrimSpace(req.Model),
+		Messages: []openai.ChatCompletionMessage{
+			{Role: openai.ChatMessageRoleSystem, Content: strings.TrimSpace(req.SystemPrompt)},
+			{Role: openai.ChatMessageRoleUser, Content: strings.TrimSpace(req.Prompt)},
+		},
+		ResponseFormat: &openai.ChatCompletionResponseFormat{Type: openai.ChatCompletionResponseFormatTypeJSONObject},
+	}
+	if request.Model == "" {
+		request.Model = defaultModel(provider)
+	}
+	return request
 }
 
 func defaultBaseURL(provider string, fallback string) string {

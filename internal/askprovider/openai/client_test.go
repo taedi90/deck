@@ -2,7 +2,11 @@
 
 package openaiprovider
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/taedi90/deck/internal/askprovider"
+)
 
 func TestDefaultBaseURL(t *testing.T) {
 	tests := []struct {
@@ -26,5 +30,21 @@ func TestDefaultModel(t *testing.T) {
 	}
 	if got := defaultModel("openai"); got != "gpt-5.4" {
 		t.Fatalf("unexpected openai default model: %q", got)
+	}
+}
+
+func TestBuildRequestOmitsTemperature(t *testing.T) {
+	request := buildRequest("gemini", askprovider.Request{
+		SystemPrompt: "system",
+		Prompt:       "user",
+	})
+	if request.Temperature != 0 {
+		t.Fatalf("expected temperature to be omitted, got %v", request.Temperature)
+	}
+	if request.Model != "gemini-2.5-flash" {
+		t.Fatalf("unexpected model: %q", request.Model)
+	}
+	if request.ResponseFormat == nil || request.ResponseFormat.Type != "json_object" {
+		t.Fatalf("unexpected response format: %#v", request.ResponseFormat)
 	}
 }
