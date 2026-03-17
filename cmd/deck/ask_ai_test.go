@@ -276,6 +276,8 @@ func TestAskPlanRejectsNonAuthoringRoute(t *testing.T) {
 
 	if _, err := runWithCapturedStdout([]string{"ask", "plan", "what is this workspace"}); err == nil {
 		t.Fatalf("expected non-authoring ask plan to fail")
+	} else if !strings.Contains(err.Error(), "Try `deck ask") {
+		t.Fatalf("expected helpful guidance, got %v", err)
 	}
 }
 
@@ -315,6 +317,35 @@ func TestAskFromPlanPrefersJSONArtifact(t *testing.T) {
 	}
 	if !strings.Contains(out, "preview:") {
 		t.Fatalf("expected generation preview, got %q", out)
+	}
+}
+
+func TestAskOneShotFallsBackToPlanOnlyWhenPlannerBlocks(t *testing.T) {
+	t.Setenv("DECK_ASK_API_KEY", "env-key")
+	root := t.TempDir()
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(oldWD) }()
+
+	originalFactory := newAskBackend
+	newAskBackend = func() askprovider.Client {
+		return &mockAskClient{responses: []string{validClassificationDraft(), `{"version":1,"request":"create cluster workflow","intent":"draft","complexity":"complex","blockers":["missing os image details"],"targetOutcome":"Generate workflows","assumptions":[],"openQuestions":["blocking: choose base image"],"entryScenario":"workflows/scenarios/apply.yaml","files":[{"path":"workflows/scenarios/apply.yaml","kind":"scenario","action":"create","purpose":"entry scenario"}],"validationChecklist":["lint"]}`}}
+	}
+	defer func() { newAskBackend = originalFactory }()
+
+	out, err := runWithCapturedStdout([]string{"ask", "create air-gapped cluster workflow"})
+	if err != nil {
+		t.Fatalf("ask fallback: %v", err)
+	}
+	for _, want := range []string{"plan:", "note: generation stopped because plan has blockers", "blocker: missing os image details"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected %q in fallback output, got %q", want, out)
+		}
 	}
 }
 

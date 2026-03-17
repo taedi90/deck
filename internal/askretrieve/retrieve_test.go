@@ -57,6 +57,21 @@ func TestRetrieveIncludesRelatedImportsForTargetScenario(t *testing.T) {
 	}
 }
 
+func TestRetrieveIncludesExternalPlanAwareChunks(t *testing.T) {
+	workspace := WorkspaceSummary{
+		Root: filepath.ToSlash(t.TempDir()),
+		Files: []WorkspaceFile{
+			{Path: "workflows/scenarios/apply.yaml", Content: "role: apply\nversion: v1alpha1\nsteps:\n  - id: run\n    kind: Command\n    spec:\n      command: [\"true\"]\n"},
+		},
+	}
+	external := []Chunk{{ID: "plan-artifact", Source: "plan", Label: "plan", Content: "Planned files:\n- workflows/scenarios/apply.yaml", Score: 90}}
+	result := Retrieve(askintent.RouteDraft, "create workflow", askintent.Target{Kind: "workspace"}, workspace, askstate.Context{}, external)
+	ids := chunkIDs(result.Chunks)
+	if !contains(ids, "plan-artifact") {
+		t.Fatalf("expected external plan chunk, got %v", ids)
+	}
+}
+
 func chunkIDs(chunks []Chunk) []string {
 	ids := make([]string, 0, len(chunks))
 	for _, chunk := range chunks {

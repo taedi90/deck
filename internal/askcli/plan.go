@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/taedi90/deck/internal/askcontract"
 	"github.com/taedi90/deck/internal/askintent"
 	"github.com/taedi90/deck/internal/askprovider"
 	"github.com/taedi90/deck/internal/askretrieve"
+	"github.com/taedi90/deck/internal/schemadoc"
 )
 
 func isAuthoringRoute(route askintent.Route) bool {
@@ -174,6 +176,16 @@ func renderPlanMarkdown(plan askcontract.PlanResponse, mdPath string) string {
 			b.WriteString("\n")
 		}
 	}
+	b.WriteString("\n## Open questions\n")
+	if len(plan.OpenQuestions) == 0 {
+		b.WriteString("- None\n")
+	} else {
+		for _, line := range plan.OpenQuestions {
+			b.WriteString("- ")
+			b.WriteString(strings.TrimSpace(line))
+			b.WriteString("\n")
+		}
+	}
 	b.WriteString("\n## Planned files\n")
 	for _, file := range plan.Files {
 		b.WriteString("- ")
@@ -227,13 +239,36 @@ func planChunk(plan askcontract.PlanResponse) askretrieve.Chunk {
 func repoMapChunk(workspace askretrieve.WorkspaceSummary) askretrieve.Chunk {
 	b := &strings.Builder{}
 	b.WriteString("Workflow repo map:\n")
+	type repoLine struct {
+		path    string
+		imports []string
+		steps   []string
+		role    string
+	}
+	lines := make([]repoLine, 0, len(workspace.Files))
 	for _, file := range workspace.Files {
 		clean := filepath.ToSlash(file.Path)
 		if !strings.HasPrefix(clean, "workflows/") {
 			continue
 		}
+		lines = append(lines, repoLine{path: clean, imports: localImportPaths(file.Content), steps: localStepKinds(file.Content), role: localRole(file.Content)})
+	}
+	sort.Slice(lines, func(i, j int) bool { return lines[i].path < lines[j].path })
+	for _, line := range lines {
 		b.WriteString("- ")
-		b.WriteString(clean)
+		b.WriteString(line.path)
+		if line.role != "" {
+			b.WriteString(" role=")
+			b.WriteString(line.role)
+		}
+		if len(line.steps) > 0 {
+			b.WriteString(" steps=")
+			b.WriteString(strings.Join(line.steps, ","))
+		}
+		if len(line.imports) > 0 {
+			b.WriteString(" imports=")
+			b.WriteString(strings.Join(line.imports, ","))
+		}
 		b.WriteString("\n")
 	}
 	return askretrieve.Chunk{ID: "workflow-repo-map", Source: "repo-map", Label: "repo-map", Content: b.String(), Score: 60}
@@ -252,6 +287,126 @@ func projectContextChunk(root string) askretrieve.Chunk {
 		b.WriteString(text)
 		b.WriteString("\n")
 	}
+	meta := schemadoc.WorkflowMeta()
+	b.WriteString("Workflow summary: ")
+	b.WriteString(strings.TrimSpace(meta.Summary))
+	b.WriteString("\n")
+	for _, note := range meta.Notes {
+		if strings.TrimSpace(note) == "" {
+			continue
+		}
+		b.WriteString("- ")
+		b.WriteString(strings.TrimSpace(note))
+		b.WriteString("\n")
+	}
 	b.WriteString("Authoring defaults: Prefer typed steps over Command; keep changes surgical and goal-driven.\n")
 	return askretrieve.Chunk{ID: "project-context", Source: "project", Label: "project-context", Content: b.String(), Score: 70}
+}
+
+func renderPlanNotes(plan askcontract.PlanResponse) []string {
+	lines := make([]string, 0, len(plan.Assumptions)+len(plan.Blockers)+len(plan.OpenQuestions))
+	for _, assumption := range plan.Assumptions {
+		if strings.TrimSpace(assumption) != "" {
+			lines = append(lines, "assumption: "+strings.TrimSpace(assumption))
+		}
+	}
+	for _, blocker := range plan.Blockers {
+		if strings.TrimSpace(blocker) != "" {
+			lines = append(lines, "blocker: "+strings.TrimSpace(blocker))
+		}
+	}
+	for _, question := range plan.OpenQuestions {
+		if strings.TrimSpace(question) != "" {
+			lines = append(lines, "open question: "+strings.TrimSpace(question))
+		}
+	}
+	return lines
+}
+
+func planWorkspaceChunks(plan askcontract.PlanResponse, workspace askretrieve.WorkspaceSummary) []askretrieve.Chunk {
+	byPath := make(map[string]askretrieve.WorkspaceFile, len(workspace.Files))
+	for _, file := range workspace.Files {
+		byPath[filepath.ToSlash(file.Path)] = file
+	}
+	chunks := make([]askretrieve.Chunk, 0)
+	seen := map[string]bool{}
+	for _, planned := range plan.Files {
+		path := filepath.ToSlash(strings.TrimSpace(planned.Path))
+		if path == "" {
+			continue
+		}
+		if file, ok := byPath[path]; ok && !seen[path] {
+			seen[path] = true
+			chunks = append(chunks, askretrieve.Chunk{ID: "planned-" + strings.ReplaceAll(path, "/", "_"), Source: "plan-workspace", Label: path, Content: file.Content, Score: 95})
+		}
+		if strings.HasPrefix(path, "workflows/scenarios/") {
+			file, ok := byPath[path]
+			if !ok {
+				continue
+			}
+			for _, importPath := range localImportPaths(file.Content) {
+				resolved := filepath.ToSlash(filepath.Join("workflows/components", importPath))
+				if component, exists := byPath[resolved]; exists && !seen[resolved] {
+					seen[resolved] = true
+					chunks = append(chunks, askretrieve.Chunk{ID: "planned-import-" + strings.ReplaceAll(resolved, "/", "_"), Source: "plan-workspace", Label: resolved, Content: component.Content, Score: 92})
+				}
+			}
+		}
+	}
+	return chunks
+}
+
+func planTarget(plan askcontract.PlanResponse, fallback askintent.Target) askintent.Target {
+	for _, file := range plan.Files {
+		path := filepath.ToSlash(strings.TrimSpace(file.Path))
+		if strings.HasPrefix(path, "workflows/scenarios/") {
+			name := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+			return askintent.Target{Kind: "scenario", Path: path, Name: name}
+		}
+	}
+	return fallback
+}
+
+func localImportPaths(content string) []string {
+	paths := make([]string, 0)
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "- path:") {
+			continue
+		}
+		value := strings.TrimSpace(strings.TrimPrefix(trimmed, "- path:"))
+		value = strings.Trim(value, `"'`)
+		if value != "" {
+			paths = append(paths, filepath.ToSlash(value))
+		}
+	}
+	return dedupe(paths)
+}
+
+func localStepKinds(content string) []string {
+	kinds := make([]string, 0)
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "kind:") {
+			continue
+		}
+		value := strings.TrimSpace(strings.TrimPrefix(trimmed, "kind:"))
+		value = strings.Trim(value, `"'`)
+		if value != "" {
+			kinds = append(kinds, value)
+		}
+	}
+	return dedupe(kinds)
+}
+
+func localRole(content string) string {
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "role:") {
+			continue
+		}
+		value := strings.TrimSpace(strings.TrimPrefix(trimmed, "role:"))
+		return strings.Trim(value, `"'`)
+	}
+	return ""
 }

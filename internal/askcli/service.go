@@ -29,7 +29,7 @@ func Execute(ctx context.Context, opts Options, client askprovider.Client) error
 	if err != nil {
 		return fmt.Errorf("resolve workspace root: %w", err)
 	}
-	requestText, err := loadRequestText(resolvedRoot, strings.TrimSpace(opts.Prompt), strings.TrimSpace(opts.FromPath))
+	requestText, requestSource, err := loadRequestText(resolvedRoot, strings.TrimSpace(opts.Prompt), strings.TrimSpace(opts.FromPath))
 	if err != nil {
 		return err
 	}
@@ -61,6 +61,9 @@ func Execute(ctx context.Context, opts Options, client askprovider.Client) error
 	logger.logf("basic", "deck ask phase=request routeCandidate=%s write=%t review=%t\n", heuristic.Route, opts.Write, opts.Review)
 	logger.logf("basic", "deck ask using provider=%s model=%s endpoint=%s apiKeySource=%s logLevel=%s\n", effective.Provider, effective.Model, effective.Endpoint, effective.APIKeySource, effective.LogLevel)
 	logger.logf("debug", "deck ask command=%s\n", renderUserCommand(opts))
+	if requestSource != "" {
+		logger.logf("debug", "deck ask request-source=%s from=%s\n", requestSource, strings.TrimSpace(opts.FromPath))
+	}
 	logger.logf("trace", "deck ask user-request:\n%s\n", strings.TrimSpace(requestText))
 
 	decision := heuristic
@@ -124,7 +127,7 @@ func Execute(ctx context.Context, opts Options, client askprovider.Client) error
 		return fmt.Errorf("missing ask api key for provider %q; set %s or run `deck ask auth set --api-key ...`", effective.Provider, "DECK_ASK_API_KEY")
 	}
 	if opts.PlanOnly && !isAuthoringRoute(decision.Route) {
-		return fmt.Errorf("ask plan is intended for draft/refine authoring requests; got route %s", decision.Route)
+		return fmt.Errorf("ask plan is intended for draft/refine authoring requests; got route %s. Try `deck ask %q` instead", decision.Route, strings.TrimSpace(requestText))
 	}
 
 	planRequested := opts.PlanOnly
@@ -159,6 +162,7 @@ func Execute(ctx context.Context, opts Options, client askprovider.Client) error
 			result.Summary = "generated plan artifact"
 			result.Termination = "plan-only-requested"
 			result.FallbackNote = "plan requested"
+			result.ReviewLines = append(result.ReviewLines, renderPlanNotes(plan)...)
 			if err := askstate.Save(resolvedRoot, askstate.Context{
 				LastMode:          "plan",
 				LastRoute:         string(result.Route),
@@ -176,6 +180,7 @@ func Execute(ctx context.Context, opts Options, client askprovider.Client) error
 			result.Summary = "plan generated with blockers"
 			result.Termination = "plan-only-blocked"
 			result.FallbackNote = "generation stopped because plan has blockers"
+			result.ReviewLines = append(result.ReviewLines, renderPlanNotes(plan)...)
 			if err := askstate.Save(resolvedRoot, askstate.Context{
 				LastMode:          "plan",
 				LastRoute:         string(result.Route),
@@ -189,7 +194,11 @@ func Execute(ctx context.Context, opts Options, client askprovider.Client) error
 			}
 			return render(opts.Stdout, opts.Stderr, result)
 		}
-		retrieval = askretrieve.Retrieve(decision.Route, requestText, decision.Target, workspace, state, append(externalChunks, repoMapChunk(workspace), planChunk(plan)))
+		secondPassExternal := append([]askretrieve.Chunk{}, externalChunks...)
+		secondPassExternal = append(secondPassExternal, repoMapChunk(workspace), planChunk(plan))
+		secondPassExternal = append(secondPassExternal, planWorkspaceChunks(plan, workspace)...)
+		decision.Target = planTarget(plan, decision.Target)
+		retrieval = askretrieve.Retrieve(decision.Route, requestText, decision.Target, workspace, state, secondPassExternal)
 		result.Chunks = retrieval.Chunks
 		result.DroppedChunks = retrieval.Dropped
 		logger.logf("debug", "deck ask phase=retrieval-second-pass chunks=%d dropped=%d\n", len(result.Chunks), len(result.DroppedChunks))
@@ -225,6 +234,9 @@ func Execute(ctx context.Context, opts Options, client askprovider.Client) error
 		result.ReviewLines = append(result.ReviewLines, gen.Review...)
 		result.LintSummary = lintSummary
 		result.LocalFindings = localFindings(result.Files)
+		critic := semanticCritic(gen, decision, plan)
+		result.Critic = &critic
+		result.ReviewLines = append(result.ReviewLines, critic.Advisory...)
 		if opts.Write {
 			if err := writeFiles(resolvedRoot, result.Files); err != nil {
 				return err
@@ -399,10 +411,17 @@ func generationAttempts(requested int, decision askintent.Decision, prompt strin
 
 func generateWithValidation(ctx context.Context, client askprovider.Client, req askprovider.Request, root string, attempts int, logger askLogger, decision askintent.Decision, plan askcontract.PlanResponse) (askcontract.GenerationResponse, string, int, error) {
 	var lastValidation string
+	var lastCritic askcontract.CriticResponse
 	for attempt := 1; attempt <= attempts; attempt++ {
 		currentPrompt := req.Prompt
 		if attempt > 1 && lastValidation != "" {
-			currentPrompt += "\n\nLocal validation failed. Fix the response and return full JSON again. Errors:\n" + lastValidation
+			currentPrompt += "\n\nLocal validation failed. Fix the response and return full JSON again."
+			if len(lastCritic.Blocking) > 0 || len(lastCritic.Advisory) > 0 {
+				logger.logf("debug", "deck ask phase=repair-critic payload=%s\n", criticJSON(lastCritic))
+				currentPrompt += "\nBlocking and advisory feedback as JSON:\n" + criticJSON(lastCritic)
+			} else {
+				currentPrompt += "\nErrors:\n" + lastValidation
+			}
 		}
 		logger.logf("basic", "deck ask phase=generation-attempt attempt=%d/%d\n", attempt, attempts)
 		logger.prompt("generation", req.SystemPrompt, currentPrompt)
@@ -429,7 +448,9 @@ func generateWithValidation(ctx context.Context, client askprovider.Client, req 
 			}
 			return askcontract.GenerationResponse{}, lastValidation, attempt - 1, fmt.Errorf("ask generation returned invalid JSON: %s", lastValidation)
 		}
-		lintSummary, err := validateGeneration(root, gen, decision, plan)
+		logger.logf("debug", "deck ask phase=semantic-validate attempt=%d/%d\n", attempt, attempts)
+		lintSummary, critic, err := validateGeneration(root, gen, decision, plan)
+		lastCritic = critic
 		if err == nil {
 			return gen, lintSummary, attempt - 1, nil
 		}
@@ -464,19 +485,20 @@ func repairableValidationError(message string) bool {
 	return true
 }
 
-func validateGeneration(root string, gen askcontract.GenerationResponse, decision askintent.Decision, plan askcontract.PlanResponse) (string, error) {
+func validateGeneration(root string, gen askcontract.GenerationResponse, decision askintent.Decision, plan askcontract.PlanResponse) (string, askcontract.CriticResponse, error) {
 	if len(gen.Files) == 0 {
-		return "", fmt.Errorf("response did not include any files")
+		critic := askcontract.CriticResponse{Blocking: []string{"response did not include any files"}, MissingFiles: filePathsFromPlan(plan), RequiredFixes: []string{"Return the planned workflow files"}}
+		return "", critic, fmt.Errorf("response did not include any files")
 	}
 	staged, err := stageWorkspace(root, gen.Files)
 	if err != nil {
-		return "", err
+		return "", askcontract.CriticResponse{Blocking: []string{err.Error()}}, err
 	}
 	defer func() { _ = os.RemoveAll(staged) }()
 	paths := make([]string, 0, len(gen.Files))
 	for _, file := range gen.Files {
 		if err := validateGeneratedFile(staged, file); err != nil {
-			return "", err
+			return "", askcontract.CriticResponse{Blocking: []string{err.Error()}, RequiredFixes: []string{"Return only schema-valid files under allowed workflow paths"}}, err
 		}
 		paths = append(paths, file.Path)
 	}
@@ -485,13 +507,14 @@ func validateGeneration(root string, gen askcontract.GenerationResponse, decisio
 	for _, path := range entrypoints {
 		files, err := validate.Entrypoint(path)
 		if err != nil {
-			return "", err
+			return "", askcontract.CriticResponse{Blocking: []string{err.Error()}, RequiredFixes: []string{"Fix workflow lint and schema errors"}}, err
 		}
 		validated = append(validated, files...)
 	}
 	validated = dedupe(validated)
-	if err := validateSemanticGeneration(gen, decision, plan); err != nil {
-		return "", err
+	critic := semanticCritic(gen, decision, plan)
+	if len(critic.Blocking) > 0 {
+		return "", critic, fmt.Errorf("semantic validation failed: %s", strings.Join(critic.Blocking, "; "))
 	}
-	return fmt.Sprintf("lint ok (%d workflows)", len(validated)), nil
+	return fmt.Sprintf("lint ok (%d workflows)", len(validated)), critic, nil
 }

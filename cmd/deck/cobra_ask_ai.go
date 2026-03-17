@@ -32,7 +32,12 @@ func newAskCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ask [request]",
 		Short: "Experimental AI helper for drafting and reviewing workflows",
-		Args:  cobra.ArbitraryArgs,
+		Example: strings.Join([]string{
+			`  deck ask "explain what workflows/scenarios/apply.yaml does"`,
+			`  deck ask --write "create an air-gapped rhel9 kubeadm cluster workflow"`,
+			`  deck ask plan "create an air-gapped rhel9 kubeadm cluster workflow"`,
+		}, "\n"),
+		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			request := strings.TrimSpace(strings.Join(args, " "))
 			return askcli.Execute(cmd.Context(), askcli.Options{
@@ -77,7 +82,12 @@ func newAskPlanCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "plan [request]",
 		Short: "Generate an ask plan artifact without writing workflow files",
-		Args:  cobra.ArbitraryArgs,
+		Long:  "Generate a reusable planning artifact under .deck/plan without writing workflow files. This mode is intended for draft/refine style authoring requests.",
+		Example: strings.Join([]string{
+			`  deck ask plan "create an air-gapped rhel9 kubeadm cluster workflow"`,
+			`  deck ask plan --plan-name kubeadm-ha "create a 3-node kubeadm workflow"`,
+		}, "\n"),
+		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			request := strings.TrimSpace(strings.Join(args, " "))
 			return askcli.Execute(cmd.Context(), askcli.Options{

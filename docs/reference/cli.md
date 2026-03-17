@@ -142,6 +142,7 @@ Optional ask augmentation config example:
 - `ask` workspace context lives under `./.deck/ask/`, while saved ask auth/defaults live under `~/.config/deck/config.json` as the top-level `ask` object.
 - `deck ask plan` writes plan artifacts under `./.deck/plan/` by default (`<timestamp>-<slug>.md`, `<timestamp>-<slug>.json`, `latest.md`, `latest.json`).
 - `deck ask --from .deck/plan/<name>.md "implement this plan"` prefers the same-basename `.json` artifact when present.
+- complex one-shot authoring requests may stop after planning if blockers remain; in that case `deck ask` prints the saved plan paths and follow-up commands instead of writing weak output.
 - `ask auth set --log-level trace` is the quickest way to see the effective `deck ask` command, MCP/LSP events, and prompt text in terminal logs.
 - optional augmentation config can be defined under `ask.mcp` and `ask.lsp` in the same config file.
 - optional MCP and LSP augmentation is disabled by default and degrades gracefully when configured tools are unavailable.

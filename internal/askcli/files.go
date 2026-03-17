@@ -211,11 +211,11 @@ func copyTree(src string, dst string) error {
 	})
 }
 
-func loadRequestText(root string, prompt string, fromPath string) (string, error) {
+func loadRequestText(root string, prompt string, fromPath string) (string, string, error) {
 	prompt = strings.TrimSpace(prompt)
 	fromPath = strings.TrimSpace(fromPath)
 	if fromPath == "" {
-		return prompt, nil
+		return prompt, "", nil
 	}
 	candidate := fromPath
 	if !filepath.IsAbs(candidate) {
@@ -223,17 +223,18 @@ func loadRequestText(root string, prompt string, fromPath string) (string, error
 	}
 	rel, err := filepath.Rel(root, candidate)
 	if err != nil {
-		return "", fmt.Errorf("resolve ask request file: %w", err)
+		return "", "", fmt.Errorf("resolve ask request file: %w", err)
 	}
 	resolved, err := fsutil.ResolveUnder(root, strings.Split(filepath.ToSlash(rel), "/")...)
 	if err != nil {
-		return "", fmt.Errorf("resolve ask request file: %w", err)
+		return "", "", fmt.Errorf("resolve ask request file: %w", err)
 	}
 	raw, err := os.ReadFile(resolved) //nolint:gosec
 	if err != nil {
-		return "", fmt.Errorf("read ask request file: %w", err)
+		return "", "", fmt.Errorf("read ask request file: %w", err)
 	}
 	fromText := strings.TrimSpace(string(raw))
+	source := "file"
 	if strings.HasPrefix(filepath.ToSlash(rel), ".deck/plan/") && strings.HasSuffix(strings.ToLower(resolved), ".md") {
 		jsonPath := strings.TrimSuffix(resolved, filepath.Ext(resolved)) + ".json"
 		jsonRaw, jsonErr := os.ReadFile(jsonPath) //nolint:gosec
@@ -241,13 +242,16 @@ func loadRequestText(root string, prompt string, fromPath string) (string, error
 			var plan askcontract.PlanResponse
 			if err := json.Unmarshal(jsonRaw, &plan); err == nil {
 				fromText = buildPlanSourceText(plan)
+				source = "plan-json"
 			}
+		} else {
+			source = "plan-markdown"
 		}
 	}
 	if prompt == "" {
-		return fromText, nil
+		return fromText, source, nil
 	}
-	return prompt + "\n\nAttached request details:\n" + fromText, nil
+	return prompt + "\n\nAttached request details:\n" + fromText, source, nil
 }
 
 func buildPlanSourceText(plan askcontract.PlanResponse) string {
@@ -449,18 +453,59 @@ func filePathsFromPlan(plan askcontract.PlanResponse) []string {
 }
 
 func validateSemanticGeneration(gen askcontract.GenerationResponse, decision askintent.Decision, plan askcontract.PlanResponse) error {
+	critic := semanticCritic(gen, decision, plan)
+	if len(critic.Blocking) > 0 {
+		return fmt.Errorf("semantic validation failed: %s", strings.Join(critic.Blocking, "; "))
+	}
+	return nil
+}
+
+func semanticCritic(gen askcontract.GenerationResponse, decision askintent.Decision, plan askcontract.PlanResponse) askcontract.CriticResponse {
+	critic := askcontract.CriticResponse{}
+	generated := map[string]askcontract.GeneratedFile{}
+	for _, file := range gen.Files {
+		generated[filepath.ToSlash(strings.TrimSpace(file.Path))] = file
+	}
+	for _, file := range gen.Files {
+		if err := validateGeneratedPath(file.Path); err != nil {
+			critic.Blocking = append(critic.Blocking, err.Error())
+			critic.RequiredFixes = append(critic.RequiredFixes, "Keep generated files under allowed workflow paths only")
+		}
+		if strings.HasPrefix(filepath.ToSlash(strings.TrimSpace(file.Path)), "workflows/scenarios/") {
+			role := localRole(file.Content)
+			switch {
+			case role == "":
+				critic.Blocking = append(critic.Blocking, fmt.Sprintf("scenario missing role: %s", file.Path))
+			case strings.HasSuffix(filepath.ToSlash(strings.TrimSpace(file.Path)), "/apply.yaml") && role != "apply":
+				critic.Blocking = append(critic.Blocking, fmt.Sprintf("scenario role/path mismatch: %s should use role apply", file.Path))
+			case strings.HasSuffix(filepath.ToSlash(strings.TrimSpace(file.Path)), "/prepare.yaml") && role != "prepare":
+				critic.Blocking = append(critic.Blocking, fmt.Sprintf("scenario role/path mismatch: %s should use role prepare", file.Path))
+			}
+			for _, importPath := range localImportPaths(file.Content) {
+				resolved := filepath.ToSlash(filepath.Join("workflows/components", importPath))
+				if _, ok := generated[resolved]; !ok {
+					critic.Blocking = append(critic.Blocking, fmt.Sprintf("scenario imports missing component: %s -> %s", file.Path, resolved))
+					critic.InvalidImports = append(critic.InvalidImports, resolved)
+				}
+			}
+		}
+	}
 	if len(plan.Files) > 0 {
 		planned := map[string]string{}
 		for _, file := range plan.Files {
 			planned[filepath.ToSlash(strings.TrimSpace(file.Path))] = strings.ToLower(strings.TrimSpace(file.Action))
 		}
-		generated := map[string]bool{}
-		for _, file := range gen.Files {
-			generated[filepath.ToSlash(strings.TrimSpace(file.Path))] = true
-		}
 		for path := range planned {
-			if !generated[path] {
-				return fmt.Errorf("semantic validation failed: planned file missing from generation: %s", path)
+			if _, ok := generated[path]; !ok {
+				critic.Blocking = append(critic.Blocking, fmt.Sprintf("planned file missing from generation: %s", path))
+				critic.MissingFiles = append(critic.MissingFiles, path)
+			}
+		}
+		checklistText := strings.ToLower(strings.Join(plan.ValidationChecklist, "\n"))
+		if strings.Contains(checklistText, "vars") {
+			if _, ok := generated["workflows/vars.yaml"]; !ok {
+				critic.Blocking = append(critic.Blocking, "validation checklist requires vars but workflows/vars.yaml was not generated")
+				critic.CoverageGaps = append(critic.CoverageGaps, "validation checklist references vars but workflows/vars.yaml was not generated")
 			}
 		}
 		if decision.Route == askintent.RouteRefine {
@@ -468,15 +513,51 @@ func validateSemanticGeneration(gen askcontract.GenerationResponse, decision ask
 				clean := filepath.ToSlash(strings.TrimSpace(file.Path))
 				action, ok := planned[clean]
 				if !ok {
-					return fmt.Errorf("semantic validation failed: refine generated unplanned file: %s", clean)
+					critic.Blocking = append(critic.Blocking, fmt.Sprintf("refine generated unplanned file: %s", clean))
+					critic.RequiredFixes = append(critic.RequiredFixes, "Only update or create files declared in the plan during refine")
 				}
 				if action != "" && action != "update" && action != "create" {
-					return fmt.Errorf("semantic validation failed: invalid planned action for %s", clean)
+					critic.Blocking = append(critic.Blocking, fmt.Sprintf("invalid planned action for %s", clean))
+				}
+				if action == "update" && strings.HasPrefix(clean, "workflows/scenarios/") && strings.Contains(strings.ToLower(clean), "apply") {
+					critic.Advisory = append(critic.Advisory, fmt.Sprintf("refine updates existing entry scenario: %s", clean))
 				}
 			}
 		}
 	}
-	return nil
+	if entry := filepath.ToSlash(strings.TrimSpace(plan.EntryScenario)); entry != "" {
+		if _, ok := generated[entry]; !ok {
+			critic.Blocking = append(critic.Blocking, fmt.Sprintf("planned entry scenario missing from generation: %s", entry))
+			critic.MissingFiles = append(critic.MissingFiles, entry)
+		}
+	}
+	generatedScenarioRefs := map[string]bool{}
+	for _, file := range gen.Files {
+		for _, importPath := range localImportPaths(file.Content) {
+			generatedScenarioRefs[filepath.ToSlash(filepath.Join("workflows/components", importPath))] = true
+		}
+	}
+	for _, file := range gen.Files {
+		clean := filepath.ToSlash(strings.TrimSpace(file.Path))
+		if strings.HasPrefix(clean, "workflows/components/") && !generatedScenarioRefs[clean] {
+			critic.Advisory = append(critic.Advisory, fmt.Sprintf("generated component has no scenario import: %s", clean))
+		}
+	}
+	critic.Blocking = dedupe(critic.Blocking)
+	critic.Advisory = dedupe(critic.Advisory)
+	critic.MissingFiles = dedupe(critic.MissingFiles)
+	critic.InvalidImports = dedupe(critic.InvalidImports)
+	critic.CoverageGaps = dedupe(critic.CoverageGaps)
+	critic.RequiredFixes = dedupe(critic.RequiredFixes)
+	return critic
+}
+
+func criticJSON(critic askcontract.CriticResponse) string {
+	raw, err := json.MarshalIndent(critic, "", "  ")
+	if err != nil {
+		return "{}"
+	}
+	return string(raw)
 }
 
 func dedupe(values []string) []string {

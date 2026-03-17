@@ -39,12 +39,12 @@ type PlanResponse struct {
 }
 
 type CriticResponse struct {
-	Blocking     []string `json:"blocking"`
-	Advisory     []string `json:"advisory"`
-	MissingFiles []string `json:"missingFiles"`
-	InvalidPaths []string `json:"invalidImports"`
-	CoverageGaps []string `json:"coverageGaps"`
-	RequiredFix  []string `json:"requiredFixes"`
+	Blocking       []string `json:"blocking"`
+	Advisory       []string `json:"advisory"`
+	MissingFiles   []string `json:"missingFiles"`
+	InvalidImports []string `json:"invalidImports"`
+	CoverageGaps   []string `json:"coverageGaps"`
+	RequiredFixes  []string `json:"requiredFixes"`
 }
 
 type InfoResponse struct {

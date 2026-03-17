@@ -71,6 +71,35 @@ func TestGenerateWithValidationStopsOnRouteMismatch(t *testing.T) {
 	}
 }
 
+func TestGenerateWithValidationRetriesParseFailure(t *testing.T) {
+	client := &stubClient{responses: []string{
+		`not-json`,
+		`{"summary":"ok","review":[],"files":[{"path":"workflows/scenarios/apply.yaml","content":"role: apply\nversion: v1alpha1\nsteps:\n  - id: run\n    kind: Command\n    spec:\n      command: [\"true\"]\n"}]}`,
+	}}
+	gen, _, retries, err := generateWithValidation(context.Background(), client, askprovider.Request{Kind: "generate", Provider: "openai", Model: "gpt-5.4", APIKey: "test-key", Prompt: "generate"}, t.TempDir(), 2, newAskLogger(io.Discard, "trace"), askintent.Decision{Route: askintent.RouteDraft}, askcontract.PlanResponse{})
+	if err != nil {
+		t.Fatalf("expected parse retry success: %v", err)
+	}
+	if retries != 1 || len(gen.Files) != 1 {
+		t.Fatalf("unexpected result: retries=%d files=%d", retries, len(gen.Files))
+	}
+}
+
+func TestGenerateWithValidationRepairsSemanticFailure(t *testing.T) {
+	client := &stubClient{responses: []string{
+		`{"summary":"missing vars","review":[],"files":[{"path":"workflows/scenarios/apply.yaml","content":"role: apply\nversion: v1alpha1\nsteps:\n  - id: run\n    kind: Command\n    spec:\n      command: [\"true\"]\n"}]}`,
+		`{"summary":"ok","review":[],"files":[{"path":"workflows/scenarios/apply.yaml","content":"role: apply\nversion: v1alpha1\nsteps:\n  - id: run\n    kind: Command\n    spec:\n      command: [\"true\"]\n"},{"path":"workflows/vars.yaml","content":"{}\n"}]}`,
+	}}
+	plan := askcontract.PlanResponse{Files: []askcontract.PlanFile{{Path: "workflows/scenarios/apply.yaml", Action: "create"}, {Path: "workflows/vars.yaml", Action: "create"}}, ValidationChecklist: []string{"vars are defined"}}
+	gen, _, retries, err := generateWithValidation(context.Background(), client, askprovider.Request{Kind: "generate", Provider: "openai", Model: "gpt-5.4", APIKey: "test-key", Prompt: "generate"}, t.TempDir(), 2, newAskLogger(io.Discard, "trace"), askintent.Decision{Route: askintent.RouteDraft}, plan)
+	if err != nil {
+		t.Fatalf("expected semantic repair success: %v", err)
+	}
+	if retries != 1 || len(gen.Files) != 2 {
+		t.Fatalf("unexpected result: retries=%d files=%d", retries, len(gen.Files))
+	}
+}
+
 func TestLocalExplainDescribesScenarioStructure(t *testing.T) {
 	workspace := askretrieve.WorkspaceSummary{
 		Files: []askretrieve.WorkspaceFile{
@@ -109,9 +138,12 @@ func TestLoadRequestTextReadsWorkspaceFile(t *testing.T) {
 	if err := os.WriteFile(requestPath, []byte("extra details\n"), 0o600); err != nil {
 		t.Fatalf("write request file: %v", err)
 	}
-	text, err := loadRequestText(root, "base prompt", "request.md")
+	text, source, err := loadRequestText(root, "base prompt", "request.md")
 	if err != nil {
 		t.Fatalf("load request text: %v", err)
+	}
+	if source != "file" {
+		t.Fatalf("unexpected source: %s", source)
 	}
 	if !strings.Contains(text, "base prompt") || !strings.Contains(text, "extra details") {
 		t.Fatalf("unexpected request text: %q", text)
@@ -124,7 +156,7 @@ func TestLoadRequestTextRejectsEscape(t *testing.T) {
 	if err := os.WriteFile(outside, []byte("secret\n"), 0o600); err != nil {
 		t.Fatalf("write outside request file: %v", err)
 	}
-	_, err := loadRequestText(root, "", outside)
+	_, _, err := loadRequestText(root, "", outside)
 	if err == nil {
 		t.Fatalf("expected escape rejection")
 	}
@@ -148,12 +180,36 @@ func TestLoadRequestTextPrefersPlanJSON(t *testing.T) {
 	if err := os.WriteFile(jsonPath, []byte(json), 0o600); err != nil {
 		t.Fatalf("write json: %v", err)
 	}
-	text, err := loadRequestText(root, "", ".deck/plan/sample.md")
+	text, source, err := loadRequestText(root, "", ".deck/plan/sample.md")
 	if err != nil {
 		t.Fatalf("load request text: %v", err)
 	}
+	if source != "plan-json" {
+		t.Fatalf("expected plan-json source, got %s", source)
+	}
 	if !strings.Contains(text, "Plan request") || !strings.Contains(text, "workflows/scenarios/apply.yaml") {
 		t.Fatalf("expected plan-derived request text, got %q", text)
+	}
+}
+
+func TestLoadRequestTextFallsBackToPlanMarkdown(t *testing.T) {
+	root := t.TempDir()
+	planDir := filepath.Join(root, ".deck", "plan")
+	if err := os.MkdirAll(planDir, 0o755); err != nil {
+		t.Fatalf("mkdir plan dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(planDir, "sample.md"), []byte("freeform markdown"), 0o600); err != nil {
+		t.Fatalf("write markdown: %v", err)
+	}
+	text, source, err := loadRequestText(root, "", ".deck/plan/sample.md")
+	if err != nil {
+		t.Fatalf("load request text: %v", err)
+	}
+	if source != "plan-markdown" {
+		t.Fatalf("expected plan-markdown source, got %s", source)
+	}
+	if text != "freeform markdown" {
+		t.Fatalf("unexpected text: %q", text)
 	}
 }
 
@@ -163,5 +219,24 @@ func TestValidateSemanticGenerationRefineRejectsUnplannedFile(t *testing.T) {
 	err := validateSemanticGeneration(gen, askintent.Decision{Route: askintent.RouteRefine}, plan)
 	if err == nil {
 		t.Fatalf("expected refine semantic validation failure")
+	}
+}
+
+func TestRepoMapChunkIncludesImportsRoleAndKinds(t *testing.T) {
+	workspace := askretrieve.WorkspaceSummary{Files: []askretrieve.WorkspaceFile{{Path: "workflows/scenarios/apply.yaml", Content: "role: apply\nversion: v1alpha1\nphases:\n  - name: bootstrap\n    imports:\n      - path: bootstrap.yaml\nsteps:\n  - id: run\n    kind: Command\n    spec:\n      command: [\"true\"]\n"}}}
+	chunk := repoMapChunk(workspace)
+	for _, want := range []string{"role=apply", "imports=bootstrap.yaml", "steps=Command"} {
+		if !strings.Contains(chunk.Content, want) {
+			t.Fatalf("expected %q in repo map chunk, got %q", want, chunk.Content)
+		}
+	}
+}
+
+func TestPlanWorkspaceChunksIncludeImportedComponents(t *testing.T) {
+	workspace := askretrieve.WorkspaceSummary{Files: []askretrieve.WorkspaceFile{{Path: "workflows/scenarios/apply.yaml", Content: "role: apply\nversion: v1alpha1\nphases:\n  - name: bootstrap\n    imports:\n      - path: bootstrap.yaml\n"}, {Path: "workflows/components/bootstrap.yaml", Content: "steps:\n  - id: run\n    kind: Command\n    spec:\n      command: [\"true\"]\n"}}}
+	plan := askcontract.PlanResponse{Files: []askcontract.PlanFile{{Path: "workflows/scenarios/apply.yaml", Action: "update"}}}
+	chunks := planWorkspaceChunks(plan, workspace)
+	if len(chunks) < 2 {
+		t.Fatalf("expected planned scenario and imported component chunks, got %d", len(chunks))
 	}
 }
