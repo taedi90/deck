@@ -161,6 +161,16 @@ func TestRunPrepareVerboseDiagnostics(t *testing.T) {
 			t.Fatalf("expected %q in stderr, got %q", want, res.stderr)
 		}
 	}
+
+	res = execute([]string{"prepare", "--dry-run", "--v=2"})
+	if res.err != nil {
+		t.Fatalf("expected success, got %v", res.err)
+	}
+	for _, want := range []string{"deck: prepare workflowIncludes=3"} {
+		if !strings.Contains(res.stderr, want) {
+			t.Fatalf("expected %q in stderr, got %q", want, res.stderr)
+		}
+	}
 }
 
 func TestRunPrepareSucceedsWithoutApplyWorkflow(t *testing.T) {

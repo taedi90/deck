@@ -780,6 +780,16 @@ func writeLintReport(output string, report lintReport) error {
 	if err := verbosef(2, "deck: lint summary mode=%s workflows=%d warnings=%d errors=%d version=%s\n", report.Mode, report.Summary.WorkflowCount, report.Summary.WarningCount, report.Summary.ErrorCount, report.Contracts.SupportedVersion); err != nil {
 		return err
 	}
+	for _, workflow := range report.Workflows {
+		if err := verbosef(2, "deck: lint workflow=%s\n", workflow); err != nil {
+			return err
+		}
+	}
+	for _, finding := range report.Findings {
+		if err := verbosef(2, "deck: lint finding code=%s severity=%s path=%s phase=%s step=%s kind=%s\n", finding.Code, finding.Severity, displayValueOrDash(finding.Path), displayValueOrDash(finding.Phase), displayValueOrDash(finding.StepID), displayValueOrDash(finding.Kind)); err != nil {
+			return err
+		}
+	}
 	if output == "json" {
 		enc := stdoutJSONEncoder()
 		enc.SetIndent("", "  ")

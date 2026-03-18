@@ -68,7 +68,7 @@ Global `--v=<n>` writes diagnostics to stderr without changing stdout result con
 
 - `--v=0`: result only
 - `--v=1`: workflow/source/path decisions and high-level execution context
-- `--v=2`: per-step apply diagnostics and plan evaluation details
+- `--v=2`: per-step apply diagnostics, plan evaluation details, and deeper bundle/prepare/health inspection counts
 
 ## Shell completion
 

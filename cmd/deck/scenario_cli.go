@@ -65,6 +65,9 @@ func executeList(source, output string) error {
 	if err != nil {
 		return err
 	}
+	if err := verbosef(1, "deck: list entries=%d\n", len(entries)); err != nil {
+		return err
+	}
 
 	if output == "json" {
 		enc := stdoutJSONEncoder()
@@ -89,6 +92,7 @@ func discoverScenarioEntries(source string) ([]scenarioEntry, error) {
 			if source != scenarioSourceAll {
 				return nil, err
 			}
+			_ = verbosef(2, "deck: list local skipped error=%v\n", err)
 		} else {
 			entries = append(entries, localEntries...)
 		}
@@ -101,15 +105,19 @@ func discoverScenarioEntries(source string) ([]scenarioEntry, error) {
 			if source != scenarioSourceAll {
 				return nil, err
 			}
+			_ = verbosef(2, "deck: list server skipped error=%v\n", err)
 		case strings.TrimSpace(serverURL) != "":
 			serverEntries, err := discoverServerScenarioEntries(serverURL)
 			if err != nil {
 				if source != scenarioSourceAll {
 					return nil, err
 				}
+				_ = verbosef(2, "deck: list server lookup=%s error=%v\n", serverURL, err)
 			} else {
 				entries = append(entries, serverEntries...)
 			}
+		case source == scenarioSourceAll:
+			_ = verbosef(2, "deck: list server skipped reason=no-remote\n")
 		case source == scenarioSourceServer:
 			return nil, errors.New("saved remote server URL is required; set one with \"deck server remote set <url>\"")
 		}

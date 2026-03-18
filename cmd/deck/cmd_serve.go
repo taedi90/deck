@@ -132,17 +132,25 @@ func executeHealth(server string, output string) error {
 
 	client := &http.Client{Timeout: 5 * time.Second}
 	healthURL := strings.TrimRight(resolvedServer, "/") + "/healthz"
+	if err := verbosef(2, "deck: server health url=%s\n", healthURL); err != nil {
+		return err
+	}
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, healthURL, nil)
 	if err != nil {
 		return fmt.Errorf("health: build request: %w", err)
 	}
 	resp, err := client.Do(req)
 	if err != nil {
+		_ = verbosef(2, "deck: server health requestError=%v\n", err)
 		return fmt.Errorf("health: request failed: %w", err)
 	}
 	defer closeSilently(resp.Body)
 	if resp.StatusCode != http.StatusOK {
+		_ = verbosef(2, "deck: server health httpStatus=%d\n", resp.StatusCode)
 		return fmt.Errorf("health: unexpected status %d", resp.StatusCode)
+	}
+	if err := verbosef(2, "deck: server health httpStatus=%d\n", resp.StatusCode); err != nil {
+		return err
 	}
 	report := healthReport{Status: "ok", Server: resolvedServer, HealthURL: healthURL, HTTPStatus: resp.StatusCode}
 	if resolvedOutput == "json" {

@@ -162,6 +162,13 @@ func executeBundleVerify(filePath string, positionalArgs []string, output string
 	if err := bundle.VerifyManifest(resolvedPath); err != nil {
 		return err
 	}
+	entries, err := bundle.InspectManifest(resolvedPath)
+	if err != nil {
+		return err
+	}
+	if err := verbosef(2, "deck: bundle verify manifestEntries=%d\n", len(entries)); err != nil {
+		return err
+	}
 	report := bundleVerifyReport{Status: "ok", Path: resolvedPath}
 	if resolvedOutput == "json" {
 		enc := stdoutJSONEncoder()
@@ -183,9 +190,22 @@ func executeBundleBuild(root string, out string) error {
 	if err := verbosef(1, "deck: bundle build root=%s out=%s\n", resolvedRoot, strings.TrimSpace(out)); err != nil {
 		return err
 	}
+	manifestPath := filepath.Join(resolvedRoot, ".deck", "manifest.json")
+	entries, err := bundle.InspectManifest(resolvedRoot)
+	if err != nil {
+		return err
+	}
+	if err := verbosef(1, "deck: bundle build manifest=%s entries=%d\n", manifestPath, len(entries)); err != nil {
+		return err
+	}
 
 	if err := bundle.CollectArchive(resolvedRoot, out); err != nil {
 		return err
+	}
+	if info, err := os.Stat(out); err == nil {
+		if err := verbosef(2, "deck: bundle build archiveSize=%d\n", info.Size()); err != nil {
+			return err
+		}
 	}
 
 	return stdoutPrintf("bundle build: ok (%s -> %s)\n", resolvedRoot, out)
