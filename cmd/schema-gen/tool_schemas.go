@@ -1,32 +1,61 @@
 package main
 
+import (
+	"fmt"
+
+	"github.com/taedi90/deck/internal/workflowexec"
+)
+
+type toolSchemaGenerator func() (map[string]any, error)
+
 func toolSchemaDefinitions() (map[string]map[string]any, error) {
-	fileSchema, err := generateFileToolSchema()
-	if err != nil {
-		return nil, err
+	defs := workflowexec.StepDefinitions()
+	generated := make(map[string]map[string]any, len(defs))
+	generators := toolSchemaGenerators()
+	for _, def := range defs {
+		generator, ok := generators[def.Kind]
+		if !ok {
+			return nil, fmt.Errorf("missing tool schema generator for %s", def.Kind)
+		}
+		schema, err := generator()
+		if err != nil {
+			return nil, err
+		}
+		generated[def.SchemaFile] = schema
 	}
-	waitSchema, err := generateWaitToolSchema()
-	if err != nil {
-		return nil, err
+	for kind := range generators {
+		if _, ok := workflowexec.StepContractForKind(kind); !ok {
+			return nil, fmt.Errorf("tool schema generator registered for unknown kind %s", kind)
+		}
 	}
-	return map[string]map[string]any{
-		"artifacts.schema.json":     generateArtifactsToolSchema(),
-		"command.schema.json":       generateCommandToolSchema(),
-		"containerd.schema.json":    generateContainerdToolSchema(),
-		"directory.schema.json":     generateDirectoryToolSchema(),
-		"file.schema.json":          fileSchema,
-		"image.schema.json":         generateImageToolSchema(),
-		"checks.schema.json":        generateChecksToolSchema(),
-		"kernel-module.schema.json": generateKernelModuleToolSchema(),
-		"kubeadm.schema.json":       generateKubeadmToolSchema(),
-		"package-cache.schema.json": generatePackageCacheToolSchema(),
-		"packages.schema.json":      generatePackagesToolSchema(),
-		"repository.schema.json":    generateRepositoryToolSchema(),
-		"service.schema.json":       generateServiceToolSchema(),
-		"swap.schema.json":          generateSwapToolSchema(),
-		"symlink.schema.json":       generateSymlinkToolSchema(),
-		"sysctl.schema.json":        generateSysctlToolSchema(),
-		"systemd-unit.schema.json":  generateSystemdUnitToolSchema(),
-		"wait.schema.json":          waitSchema,
-	}, nil
+	return generated, nil
+}
+
+func toolSchemaGenerators() map[string]toolSchemaGenerator {
+	return map[string]toolSchemaGenerator{
+		"Artifacts":    wrapToolSchema(generateArtifactsToolSchema),
+		"Checks":       wrapToolSchema(generateChecksToolSchema),
+		"Command":      wrapToolSchema(generateCommandToolSchema),
+		"Containerd":   wrapToolSchema(generateContainerdToolSchema),
+		"Directory":    wrapToolSchema(generateDirectoryToolSchema),
+		"File":         generateFileToolSchema,
+		"Image":        wrapToolSchema(generateImageToolSchema),
+		"KernelModule": wrapToolSchema(generateKernelModuleToolSchema),
+		"Kubeadm":      wrapToolSchema(generateKubeadmToolSchema),
+		"PackageCache": wrapToolSchema(generatePackageCacheToolSchema),
+		"Packages":     wrapToolSchema(generatePackagesToolSchema),
+		"Repository":   wrapToolSchema(generateRepositoryToolSchema),
+		"Service":      wrapToolSchema(generateServiceToolSchema),
+		"Swap":         wrapToolSchema(generateSwapToolSchema),
+		"Symlink":      wrapToolSchema(generateSymlinkToolSchema),
+		"Sysctl":       wrapToolSchema(generateSysctlToolSchema),
+		"SystemdUnit":  wrapToolSchema(generateSystemdUnitToolSchema),
+		"Wait":         generateWaitToolSchema,
+	}
+}
+
+func wrapToolSchema(generator func() map[string]any) toolSchemaGenerator {
+	return func() (map[string]any, error) {
+		return generator(), nil
+	}
 }
