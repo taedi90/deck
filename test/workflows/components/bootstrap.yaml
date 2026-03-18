@@ -3,6 +3,7 @@ steps:
     kind: Kubeadm
     spec:
       action: reset
+      mode: real
       force: true
       ignoreErrors: true
       criSocket: unix:///run/containerd/containerd.sock

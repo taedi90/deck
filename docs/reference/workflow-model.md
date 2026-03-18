@@ -144,9 +144,11 @@ steps:
   - id: get-join-cmd
     kind: Kubeadm
     spec:
-      action: token-create
+      action: init
+      mode: real
+      outputJoinFile: "{{ .vars.joinFile }}"
     register:
-      joinCmd: joinCommand
+      joinFile: joinFile
 
   - id: join-node
     kind: Kubeadm

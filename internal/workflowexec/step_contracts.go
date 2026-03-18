@@ -181,16 +181,6 @@ func inferContractAction(kind string, spec map[string]any) string {
 			}
 		}
 		return "install"
-	case "Kubeadm":
-		if spec != nil {
-			if spec["joinFile"] != nil {
-				return "join"
-			}
-			if spec["outputJoinFile"] != nil {
-				return "init"
-			}
-		}
-		return "reset"
 	case "Wait":
 		if spec != nil {
 			if state, _ := spec["state"].(string); state == "absent" {

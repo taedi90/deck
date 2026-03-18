@@ -15,10 +15,12 @@ import (
 )
 
 type kubeadmResetSpec struct {
+	Mode                  string   `json:"mode"`
 	Force                 bool     `json:"force"`
 	IgnoreErrors          bool     `json:"ignoreErrors"`
 	StopKubelet           *bool    `json:"stopKubelet"`
 	CriSocket             string   `json:"criSocket"`
+	ExtraArgs             []string `json:"extraArgs"`
 	RemovePaths           []string `json:"removePaths"`
 	RemoveFiles           []string `json:"removeFiles"`
 	CleanupContainers     []string `json:"cleanupContainers"`
@@ -29,6 +31,7 @@ type kubeadmResetSpec struct {
 type kubeadmInitSpec struct {
 	Mode                  string   `json:"mode"`
 	OutputJoinFile        string   `json:"outputJoinFile"`
+	SkipIfAdminConfExists *bool    `json:"skipIfAdminConfExists"`
 	CriSocket             string   `json:"criSocket"`
 	KubernetesVersion     string   `json:"kubernetesVersion"`
 	ConfigFile            string   `json:"configFile"`
@@ -41,11 +44,15 @@ type kubeadmInitSpec struct {
 	Timeout               string   `json:"timeout"`
 }
 
+var kubeadmAdminConfPath = "/etc/kubernetes/admin.conf"
+
 type kubeadmJoinSpec struct {
-	Mode      string   `json:"mode"`
-	JoinFile  string   `json:"joinFile"`
-	ExtraArgs []string `json:"extraArgs"`
-	Timeout   string   `json:"timeout"`
+	Mode           string   `json:"mode"`
+	JoinFile       string   `json:"joinFile"`
+	ConfigFile     string   `json:"configFile"`
+	AsControlPlane bool     `json:"asControlPlane"`
+	ExtraArgs      []string `json:"extraArgs"`
+	Timeout        string   `json:"timeout"`
 }
 
 func runKubeadmInit(ctx context.Context, spec map[string]any) error {
@@ -71,6 +78,9 @@ func runKubeadmInitStub(spec kubeadmInitSpec) error {
 	if joinFile == "" {
 		return fmt.Errorf("%s: KubeadmInit requires outputJoinFile", errCodeInstallInitJoinMissing)
 	}
+	if shouldSkipKubeadmInit(spec) {
+		return nil
+	}
 	content := "kubeadm join 10.0.0.10:6443 --token dummy.token --discovery-token-ca-cert-hash sha256:dummy\n"
 	return filemode.WritePrivateFile(joinFile, []byte(content))
 }
@@ -95,11 +105,21 @@ func runKubeadmJoin(ctx context.Context, spec map[string]any) error {
 
 func runKubeadmJoinStub(spec kubeadmJoinSpec) error {
 	joinFile := strings.TrimSpace(spec.JoinFile)
-	if joinFile == "" {
-		return fmt.Errorf("%s: KubeadmJoin requires joinFile", errCodeInstallJoinPathMissing)
+	configFile := strings.TrimSpace(spec.ConfigFile)
+	if joinFile != "" && configFile != "" {
+		return fmt.Errorf("%s: KubeadmJoin accepts joinFile or configFile, not both", errCodeInstallJoinInputConflict)
 	}
-	if _, err := os.Stat(joinFile); err != nil {
-		return fmt.Errorf("%s: join file not found: %w", errCodeInstallJoinFileMissing, err)
+	if joinFile == "" && configFile == "" {
+		return fmt.Errorf("%s: KubeadmJoin requires joinFile or configFile", errCodeInstallJoinPathMissing)
+	}
+	path := joinFile
+	label := "join file"
+	if configFile != "" {
+		path = configFile
+		label = "config file"
+	}
+	if _, err := os.Stat(path); err != nil {
+		return fmt.Errorf("%s: %s not found: %w", errCodeInstallJoinFileMissing, label, err)
 	}
 	return nil
 }
@@ -108,6 +128,9 @@ func runKubeadmInitReal(parent context.Context, spec kubeadmInitSpec) error {
 	joinFile := strings.TrimSpace(spec.OutputJoinFile)
 	if joinFile == "" {
 		return fmt.Errorf("%s: KubeadmInit requires outputJoinFile", errCodeInstallInitJoinMissing)
+	}
+	if shouldSkipKubeadmInit(spec) {
+		return nil
 	}
 	timeout := parseStepTimeout(spec.Timeout, 10*time.Minute)
 	criSocket := strings.TrimSpace(spec.CriSocket)
@@ -204,6 +227,18 @@ func runKubeadmInitReal(parent context.Context, spec kubeadmInitSpec) error {
 	return filemode.WritePrivateFile(joinFile, []byte(joinCmd+"\n"))
 }
 
+func shouldSkipKubeadmInit(spec kubeadmInitSpec) bool {
+	skip := true
+	if spec.SkipIfAdminConfExists != nil {
+		skip = *spec.SkipIfAdminConfExists
+	}
+	if !skip {
+		return false
+	}
+	_, err := os.Stat(kubeadmAdminConfPath)
+	return err == nil
+}
+
 func resolveKubeadmAdvertiseAddress(ctx context.Context, spec kubeadmInitSpec, configTemplate string, timeout time.Duration) (string, error) {
 	advertiseAddress := strings.TrimSpace(spec.AdvertiseAddress)
 	if strings.EqualFold(advertiseAddress, "auto") || (advertiseAddress == "" && strings.EqualFold(configTemplate, "default")) {
@@ -294,20 +329,36 @@ func renderDefaultKubeadmInitConfig(advertiseAddress, kubernetesVersion, podSubn
 
 func runKubeadmJoinReal(ctx context.Context, spec kubeadmJoinSpec) error {
 	joinFile := strings.TrimSpace(spec.JoinFile)
-	if joinFile == "" {
-		return fmt.Errorf("%s: KubeadmJoin requires joinFile", errCodeInstallJoinPathMissing)
+	configFile := strings.TrimSpace(spec.ConfigFile)
+	if joinFile != "" && configFile != "" {
+		return fmt.Errorf("%s: KubeadmJoin accepts joinFile or configFile, not both", errCodeInstallJoinInputConflict)
 	}
-	raw, err := fsutil.ReadFile(joinFile)
-	if err != nil {
-		return fmt.Errorf("%s: join file not found: %w", errCodeInstallJoinFileMissing, err)
+	if joinFile == "" && configFile == "" {
+		return fmt.Errorf("%s: KubeadmJoin requires joinFile or configFile", errCodeInstallJoinPathMissing)
 	}
-	joinCommand := strings.TrimSpace(string(raw))
-	if joinCommand == "" {
-		return fmt.Errorf("%s: join command is empty", errCodeInstallJoinCmdMissing)
+
+	args := []string{"kubeadm", "join"}
+	if configFile != "" {
+		if _, err := os.Stat(configFile); err != nil {
+			return fmt.Errorf("%s: config file not found: %w", errCodeInstallJoinFileMissing, err)
+		}
+		args = append(args, "--config", configFile)
+	} else {
+		raw, err := fsutil.ReadFile(joinFile)
+		if err != nil {
+			return fmt.Errorf("%s: join file not found: %w", errCodeInstallJoinFileMissing, err)
+		}
+		joinCommand := strings.TrimSpace(string(raw))
+		if joinCommand == "" {
+			return fmt.Errorf("%s: join command is empty", errCodeInstallJoinCmdMissing)
+		}
+		args = strings.Fields(joinCommand)
+		if len(args) == 0 || args[0] != "kubeadm" {
+			return fmt.Errorf("%s: join command must start with kubeadm", errCodeInstallJoinCmdInvalid)
+		}
 	}
-	args := strings.Fields(joinCommand)
-	if len(args) == 0 || args[0] != "kubeadm" {
-		return fmt.Errorf("%s: join command must start with kubeadm", errCodeInstallJoinCmdInvalid)
+	if spec.AsControlPlane && !stringSliceContains(args[1:], "--control-plane") {
+		args = append(args, "--control-plane")
 	}
 	if extra := trimmedStringSlice(spec.ExtraArgs); len(extra) > 0 {
 		args = append(args, extra...)
@@ -331,6 +382,16 @@ func runKubeadmReset(ctx context.Context, spec map[string]any) error {
 	if err != nil {
 		return fmt.Errorf("decode KubeadmReset spec: %w", err)
 	}
+	mode := strings.TrimSpace(decoded.Mode)
+	if mode == "" {
+		mode = "stub"
+	}
+	if mode == "stub" {
+		return runKubeadmResetStub(decoded)
+	}
+	if mode != "real" {
+		return fmt.Errorf("%s: unsupported mode %q", errCodeInstallResetFailed, mode)
+	}
 
 	stopKubelet := true
 	if decoded.StopKubelet != nil {
@@ -346,6 +407,9 @@ func runKubeadmReset(ctx context.Context, spec map[string]any) error {
 	}
 	if strings.TrimSpace(decoded.CriSocket) != "" {
 		kubeadmArgs = append(kubeadmArgs, "--cri-socket", strings.TrimSpace(decoded.CriSocket))
+	}
+	if extra := trimmedStringSlice(decoded.ExtraArgs); len(extra) > 0 {
+		kubeadmArgs = append(kubeadmArgs, extra...)
 	}
 
 	resetErr := runTimedCommandWithContext(ctx, "kubeadm", kubeadmArgs, parseStepTimeout(decoded.Timeout, 10*time.Minute))
@@ -380,6 +444,16 @@ func runKubeadmReset(ctx context.Context, spec map[string]any) error {
 		}
 	}
 
+	return nil
+}
+
+func runKubeadmResetStub(spec kubeadmResetSpec) error {
+	_ = trimmedStringSlice(spec.RemovePaths)
+	_ = trimmedStringSlice(spec.RemoveFiles)
+	_ = trimmedStringSlice(spec.CleanupContainers)
+	_ = trimmedStringSlice(spec.ExtraArgs)
+	_ = strings.TrimSpace(spec.CriSocket)
+	_ = strings.TrimSpace(spec.RestartRuntimeService)
 	return nil
 }
 
@@ -436,4 +510,13 @@ func trimmedStringSlice(items []string) []string {
 		}
 	}
 	return trimmed
+}
+
+func stringSliceContains(items []string, want string) bool {
+	for _, item := range items {
+		if item == want {
+			return true
+		}
+	}
+	return false
 }

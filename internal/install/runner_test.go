@@ -69,8 +69,8 @@ func TestRun_InstallTools(t *testing.T) {
 				{ID: "sysctl", Kind: "Sysctl", Spec: map[string]any{"writeFile": sysctlPath, "values": map[string]any{"net.ipv4.ip_forward": "1"}}},
 				{ID: "modprobe", Kind: "KernelModule", Spec: map[string]any{"name": "overlay", "persistFile": modprobePath}},
 				{ID: "run-cmd", Kind: "Command", Spec: map[string]any{"command": []any{"true"}}},
-				{ID: "kubeadm-init", Kind: "Kubeadm", Spec: map[string]any{"outputJoinFile": joinPath}},
-				{ID: "kubeadm-join", Kind: "Kubeadm", Spec: map[string]any{"joinFile": joinPath}},
+				{ID: "kubeadm-init", Kind: "Kubeadm", Spec: map[string]any{"action": "init", "outputJoinFile": joinPath}},
+				{ID: "kubeadm-join", Kind: "Kubeadm", Spec: map[string]any{"action": "join", "joinFile": joinPath}},
 			},
 		}},
 	}
@@ -879,7 +879,7 @@ func TestRun_KubeadmMissingFileErrorCode(t *testing.T) {
 			Steps: []config.Step{{
 				ID:   "join",
 				Kind: "Kubeadm",
-				Spec: map[string]any{"joinFile": filepath.Join(dir, "missing-join.txt")},
+				Spec: map[string]any{"action": "join", "joinFile": filepath.Join(dir, "missing-join.txt")},
 			}},
 		}},
 	}
@@ -890,6 +890,45 @@ func TestRun_KubeadmMissingFileErrorCode(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "E_INSTALL_KUBEADM_JOIN_FILE_NOT_FOUND") {
 		t.Fatalf("expected E_INSTALL_KUBEADM_JOIN_FILE_NOT_FOUND, got %v", err)
+	}
+}
+
+func TestRun_KubeadmRequiresExplicitAction(t *testing.T) {
+	dir := t.TempDir()
+	bundle := filepath.Join(dir, "bundle")
+	statePath := filepath.Join(dir, "state", "state.json")
+	if err := os.MkdirAll(bundle, 0o755); err != nil {
+		t.Fatalf("mkdir bundle: %v", err)
+	}
+	artifact := filepath.Join(bundle, "files", "a.txt")
+	if err := os.MkdirAll(filepath.Dir(artifact), 0o755); err != nil {
+		t.Fatalf("mkdir files: %v", err)
+	}
+	if err := os.WriteFile(artifact, []byte("ok"), 0o644); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+	if err := writeManifestForTest(bundle, "files/a.txt", []byte("ok")); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "install",
+			Steps: []config.Step{{
+				ID:   "join",
+				Kind: "Kubeadm",
+				Spec: map[string]any{"joinFile": filepath.Join(dir, "join.txt")},
+			}},
+		}},
+	}
+
+	err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, StatePath: statePath})
+	if err == nil {
+		t.Fatalf("expected explicit action error")
+	}
+	if !strings.Contains(err.Error(), "unsupported Kubeadm action") {
+		t.Fatalf("expected unsupported Kubeadm action error, got %v", err)
 	}
 }
 
@@ -1024,8 +1063,8 @@ func TestRun_KubeadmRealMode(t *testing.T) {
 		Phases: []config.Phase{{
 			Name: "install",
 			Steps: []config.Step{
-				{ID: "kubeadm-init", Kind: "Kubeadm", Spec: map[string]any{"mode": "real", "outputJoinFile": joinPath}},
-				{ID: "kubeadm-join", Kind: "Kubeadm", Spec: map[string]any{"mode": "real", "joinFile": joinPath}},
+				{ID: "kubeadm-init", Kind: "Kubeadm", Spec: map[string]any{"action": "init", "mode": "real", "outputJoinFile": joinPath}},
+				{ID: "kubeadm-join", Kind: "Kubeadm", Spec: map[string]any{"action": "join", "mode": "real", "joinFile": joinPath}},
 			},
 		}},
 	}
@@ -1073,7 +1112,7 @@ func TestRun_KubeadmRealModeRejectsInvalidCommand(t *testing.T) {
 			Steps: []config.Step{{
 				ID:   "kubeadm-join",
 				Kind: "Kubeadm",
-				Spec: map[string]any{"mode": "real", "joinFile": joinPath},
+				Spec: map[string]any{"action": "join", "mode": "real", "joinFile": joinPath},
 			}},
 		}},
 	}
@@ -1084,6 +1123,187 @@ func TestRun_KubeadmRealModeRejectsInvalidCommand(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "E_INSTALL_KUBEADM_JOIN_COMMAND_INVALID") {
 		t.Fatalf("expected E_INSTALL_KUBEADM_JOIN_COMMAND_INVALID, got %v", err)
+	}
+}
+
+func TestRun_KubeadmRealModeSupportsJoinConfigFile(t *testing.T) {
+	dir := t.TempDir()
+	bundle := filepath.Join(dir, "bundle")
+	statePath := filepath.Join(dir, "state", "state.json")
+	if err := os.MkdirAll(bundle, 0o755); err != nil {
+		t.Fatalf("mkdir bundle: %v", err)
+	}
+	artifact := filepath.Join(bundle, "files", "a.txt")
+	if err := os.MkdirAll(filepath.Dir(artifact), 0o755); err != nil {
+		t.Fatalf("mkdir files: %v", err)
+	}
+	if err := os.WriteFile(artifact, []byte("ok"), 0o644); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+	if err := writeManifestForTest(bundle, "files/a.txt", []byte("ok")); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	binDir := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatalf("mkdir bin: %v", err)
+	}
+	kubeadmLog := filepath.Join(dir, "kubeadm.log")
+	fakeKubeadmScript := "#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\n' \"$*\" >> \"" + kubeadmLog + "\"\nif [[ \"${1:-}\" == \"join\" ]]; then\n  exit 0\nfi\necho \"unsupported kubeadm invocation\" >&2\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(binDir, "kubeadm"), []byte(fakeKubeadmScript), 0o755); err != nil {
+		t.Fatalf("write fake kubeadm: %v", err)
+	}
+	configPath := filepath.Join(dir, "kubeadm-join.yaml")
+	if err := os.WriteFile(configPath, []byte("apiVersion: kubeadm.k8s.io/v1beta3\nkind: JoinConfiguration\n"), 0o644); err != nil {
+		t.Fatalf("write config file: %v", err)
+	}
+	t.Setenv("PATH", fmt.Sprintf("%s:%s", binDir, os.Getenv("PATH")))
+
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "install",
+			Steps: []config.Step{{
+				ID:   "kubeadm-join",
+				Kind: "Kubeadm",
+				Spec: map[string]any{
+					"action":         "join",
+					"mode":           "real",
+					"configFile":     configPath,
+					"asControlPlane": true,
+					"extraArgs":      []any{"--skip-phases=preflight"},
+				},
+			}},
+		}},
+	}
+
+	if err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, StatePath: statePath}); err != nil {
+		t.Fatalf("real kubeadm join config run failed: %v", err)
+	}
+
+	logRaw, err := os.ReadFile(kubeadmLog)
+	if err != nil {
+		t.Fatalf("read kubeadm log: %v", err)
+	}
+	if got := strings.TrimSpace(string(logRaw)); got != "join --config "+configPath+" --control-plane --skip-phases=preflight" {
+		t.Fatalf("unexpected kubeadm join args: %q", got)
+	}
+}
+
+func TestRun_KubeadmRealModeSupportsAsControlPlaneJoinFile(t *testing.T) {
+	dir := t.TempDir()
+	bundle := filepath.Join(dir, "bundle")
+	statePath := filepath.Join(dir, "state", "state.json")
+	if err := os.MkdirAll(bundle, 0o755); err != nil {
+		t.Fatalf("mkdir bundle: %v", err)
+	}
+	artifact := filepath.Join(bundle, "files", "a.txt")
+	if err := os.MkdirAll(filepath.Dir(artifact), 0o755); err != nil {
+		t.Fatalf("mkdir files: %v", err)
+	}
+	if err := os.WriteFile(artifact, []byte("ok"), 0o644); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+	if err := writeManifestForTest(bundle, "files/a.txt", []byte("ok")); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	binDir := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatalf("mkdir bin: %v", err)
+	}
+	kubeadmLog := filepath.Join(dir, "kubeadm.log")
+	fakeKubeadmScript := "#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\n' \"$*\" >> \"" + kubeadmLog + "\"\nif [[ \"${1:-}\" == \"join\" ]]; then\n  exit 0\nfi\necho \"unsupported kubeadm invocation\" >&2\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(binDir, "kubeadm"), []byte(fakeKubeadmScript), 0o755); err != nil {
+		t.Fatalf("write fake kubeadm: %v", err)
+	}
+	t.Setenv("PATH", fmt.Sprintf("%s:%s", binDir, os.Getenv("PATH")))
+
+	joinPath := filepath.Join(dir, "join.txt")
+	if err := os.WriteFile(joinPath, []byte("kubeadm join 10.1.0.10:6443 --token fake.token --discovery-token-ca-cert-hash sha256:fake\n"), 0o644); err != nil {
+		t.Fatalf("write join file: %v", err)
+	}
+
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "install",
+			Steps: []config.Step{{
+				ID:   "kubeadm-join",
+				Kind: "Kubeadm",
+				Spec: map[string]any{
+					"action":         "join",
+					"mode":           "real",
+					"joinFile":       joinPath,
+					"asControlPlane": true,
+				},
+			}},
+		}},
+	}
+
+	if err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, StatePath: statePath}); err != nil {
+		t.Fatalf("real kubeadm join control-plane run failed: %v", err)
+	}
+
+	logRaw, err := os.ReadFile(kubeadmLog)
+	if err != nil {
+		t.Fatalf("read kubeadm log: %v", err)
+	}
+	if got := strings.TrimSpace(string(logRaw)); got != "join 10.1.0.10:6443 --token fake.token --discovery-token-ca-cert-hash sha256:fake --control-plane" {
+		t.Fatalf("unexpected kubeadm join args: %q", got)
+	}
+}
+
+func TestRun_KubeadmJoinRejectsConflictingInputs(t *testing.T) {
+	dir := t.TempDir()
+	bundle := filepath.Join(dir, "bundle")
+	statePath := filepath.Join(dir, "state", "state.json")
+	if err := os.MkdirAll(bundle, 0o755); err != nil {
+		t.Fatalf("mkdir bundle: %v", err)
+	}
+	artifact := filepath.Join(bundle, "files", "a.txt")
+	if err := os.MkdirAll(filepath.Dir(artifact), 0o755); err != nil {
+		t.Fatalf("mkdir files: %v", err)
+	}
+	if err := os.WriteFile(artifact, []byte("ok"), 0o644); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+	if err := writeManifestForTest(bundle, "files/a.txt", []byte("ok")); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	joinPath := filepath.Join(dir, "join.txt")
+	if err := os.WriteFile(joinPath, []byte("kubeadm join 10.1.0.10:6443 --token fake.token --discovery-token-ca-cert-hash sha256:fake\n"), 0o644); err != nil {
+		t.Fatalf("write join file: %v", err)
+	}
+	configPath := filepath.Join(dir, "kubeadm-join.yaml")
+	if err := os.WriteFile(configPath, []byte("apiVersion: kubeadm.k8s.io/v1beta3\nkind: JoinConfiguration\n"), 0o644); err != nil {
+		t.Fatalf("write config file: %v", err)
+	}
+
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "install",
+			Steps: []config.Step{{
+				ID:   "kubeadm-join",
+				Kind: "Kubeadm",
+				Spec: map[string]any{
+					"action":     "join",
+					"mode":       "real",
+					"joinFile":   joinPath,
+					"configFile": configPath,
+				},
+			}},
+		}},
+	}
+
+	err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, StatePath: statePath})
+	if err == nil {
+		t.Fatalf("expected conflicting join inputs error")
+	}
+	if !strings.Contains(err.Error(), "E_INSTALL_KUBEADM_JOIN_INPUT_CONFLICT") {
+		t.Fatalf("expected E_INSTALL_KUBEADM_JOIN_INPUT_CONFLICT, got %v", err)
 	}
 }
 
@@ -1133,6 +1353,7 @@ func TestRun_KubeadmRealModeSupportsImagePullAndConfigWrite(t *testing.T) {
 				ID:   "kubeadm-init",
 				Kind: "Kubeadm",
 				Spec: map[string]any{
+					"action":                "init",
 					"mode":                  "real",
 					"outputJoinFile":        joinPath,
 					"configFile":            configPath,
@@ -1183,6 +1404,153 @@ func TestRun_KubeadmRealModeSupportsImagePullAndConfigWrite(t *testing.T) {
 	}
 }
 
+func TestRun_KubeadmInitSkipsWhenAdminConfExists(t *testing.T) {
+	dir := t.TempDir()
+	bundle := filepath.Join(dir, "bundle")
+	statePath := filepath.Join(dir, "state", "state.json")
+	if err := os.MkdirAll(bundle, 0o755); err != nil {
+		t.Fatalf("mkdir bundle: %v", err)
+	}
+	artifact := filepath.Join(bundle, "files", "a.txt")
+	if err := os.MkdirAll(filepath.Dir(artifact), 0o755); err != nil {
+		t.Fatalf("mkdir files: %v", err)
+	}
+	if err := os.WriteFile(artifact, []byte("ok"), 0o644); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+	if err := writeManifestForTest(bundle, "files/a.txt", []byte("ok")); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	binDir := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatalf("mkdir bin: %v", err)
+	}
+	kubeadmLog := filepath.Join(dir, "kubeadm.log")
+	fakeKubeadmScript := "#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\n' \"$*\" >> \"" + kubeadmLog + "\"\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(binDir, "kubeadm"), []byte(fakeKubeadmScript), 0o755); err != nil {
+		t.Fatalf("write fake kubeadm: %v", err)
+	}
+	t.Setenv("PATH", fmt.Sprintf("%s:%s", binDir, os.Getenv("PATH")))
+
+	adminConfDir := filepath.Join(dir, "etc", "kubernetes")
+	if err := os.MkdirAll(adminConfDir, 0o755); err != nil {
+		t.Fatalf("mkdir admin conf dir: %v", err)
+	}
+	adminConfPath := filepath.Join(adminConfDir, "admin.conf")
+	if err := os.WriteFile(adminConfPath, []byte("apiVersion: v1\n"), 0o644); err != nil {
+		t.Fatalf("write admin conf: %v", err)
+	}
+	prevAdminConfPath := kubeadmAdminConfPath
+	kubeadmAdminConfPath = adminConfPath
+	t.Cleanup(func() { kubeadmAdminConfPath = prevAdminConfPath })
+
+	joinPath := filepath.Join(dir, "join.txt")
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "install",
+			Steps: []config.Step{{
+				ID:   "kubeadm-init",
+				Kind: "Kubeadm",
+				Spec: map[string]any{
+					"action":         "init",
+					"mode":           "real",
+					"outputJoinFile": joinPath,
+				},
+			}},
+		}},
+	}
+
+	if err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, StatePath: statePath}); err != nil {
+		t.Fatalf("expected init skip success, got %v", err)
+	}
+	if _, err := os.Stat(joinPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected no join file to be written on skip, got err=%v", err)
+	}
+	if _, err := os.Stat(kubeadmLog); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected kubeadm not to run on skip, got err=%v", err)
+	}
+}
+
+func TestRun_KubeadmInitRunsWhenSkipDisabledAndAdminConfExists(t *testing.T) {
+	dir := t.TempDir()
+	bundle := filepath.Join(dir, "bundle")
+	statePath := filepath.Join(dir, "state", "state.json")
+	if err := os.MkdirAll(bundle, 0o755); err != nil {
+		t.Fatalf("mkdir bundle: %v", err)
+	}
+	artifact := filepath.Join(bundle, "files", "a.txt")
+	if err := os.MkdirAll(filepath.Dir(artifact), 0o755); err != nil {
+		t.Fatalf("mkdir files: %v", err)
+	}
+	if err := os.WriteFile(artifact, []byte("ok"), 0o644); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+	if err := writeManifestForTest(bundle, "files/a.txt", []byte("ok")); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	binDir := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatalf("mkdir bin: %v", err)
+	}
+	kubeadmLog := filepath.Join(dir, "kubeadm.log")
+	fakeKubeadmScript := "#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\n' \"$*\" >> \"" + kubeadmLog + "\"\nif [[ \"${1:-}\" == \"init\" ]]; then\n  exit 0\nfi\nif [[ \"${1:-}\" == \"token\" && \"${2:-}\" == \"create\" ]]; then\n  echo \"kubeadm join 10.1.0.10:6443 --token fake.token --discovery-token-ca-cert-hash sha256:fake\"\n  exit 0\nfi\necho \"unsupported kubeadm invocation\" >&2\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(binDir, "kubeadm"), []byte(fakeKubeadmScript), 0o755); err != nil {
+		t.Fatalf("write fake kubeadm: %v", err)
+	}
+	t.Setenv("PATH", fmt.Sprintf("%s:%s", binDir, os.Getenv("PATH")))
+
+	adminConfDir := filepath.Join(dir, "etc", "kubernetes")
+	if err := os.MkdirAll(adminConfDir, 0o755); err != nil {
+		t.Fatalf("mkdir admin conf dir: %v", err)
+	}
+	adminConfPath := filepath.Join(adminConfDir, "admin.conf")
+	if err := os.WriteFile(adminConfPath, []byte("apiVersion: v1\n"), 0o644); err != nil {
+		t.Fatalf("write admin conf: %v", err)
+	}
+	prevAdminConfPath := kubeadmAdminConfPath
+	kubeadmAdminConfPath = adminConfPath
+	t.Cleanup(func() { kubeadmAdminConfPath = prevAdminConfPath })
+
+	joinPath := filepath.Join(dir, "join.txt")
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "install",
+			Steps: []config.Step{{
+				ID:   "kubeadm-init",
+				Kind: "Kubeadm",
+				Spec: map[string]any{
+					"action":                "init",
+					"mode":                  "real",
+					"outputJoinFile":        joinPath,
+					"skipIfAdminConfExists": false,
+				},
+			}},
+		}},
+	}
+
+	if err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, StatePath: statePath}); err != nil {
+		t.Fatalf("expected init to run when skip disabled, got %v", err)
+	}
+	joinRaw, err := os.ReadFile(joinPath)
+	if err != nil {
+		t.Fatalf("read join file: %v", err)
+	}
+	if !strings.Contains(string(joinRaw), "kubeadm join") {
+		t.Fatalf("expected join file output, got %q", string(joinRaw))
+	}
+	logRaw, err := os.ReadFile(kubeadmLog)
+	if err != nil {
+		t.Fatalf("read kubeadm log: %v", err)
+	}
+	if !strings.Contains(string(logRaw), "init") {
+		t.Fatalf("expected kubeadm init to run, got %q", string(logRaw))
+	}
+}
+
 func TestRun_KubeadmAdvertiseAddressDetectionFallback(t *testing.T) {
 	dir := t.TempDir()
 	bundle := filepath.Join(dir, "bundle")
@@ -1228,6 +1596,7 @@ func TestRun_KubeadmAdvertiseAddressDetectionFallback(t *testing.T) {
 				ID:   "kubeadm-init",
 				Kind: "Kubeadm",
 				Spec: map[string]any{
+					"action":            "init",
 					"mode":              "real",
 					"outputJoinFile":    joinPath,
 					"configFile":        configPath,
@@ -1279,7 +1648,7 @@ func TestRun_WhenAndRegisterSemantics(t *testing.T) {
 		Phases: []config.Phase{{
 			Name: "install",
 			Steps: []config.Step{
-				{ID: "init", Kind: "Kubeadm", Spec: map[string]any{"outputJoinFile": joinPath}, Register: map[string]string{"workerJoinFile": "joinFile"}},
+				{ID: "init", Kind: "Kubeadm", Spec: map[string]any{"action": "init", "outputJoinFile": joinPath}, Register: map[string]string{"workerJoinFile": "joinFile"}},
 				{ID: "use-register", Kind: "File", When: "vars.role == \"control-plane\"", Spec: map[string]any{"path": registeredOutputPath, "content": "{{ .runtime.workerJoinFile }}"}},
 				{ID: "skip-worker", Kind: "File", When: "vars.role == \"worker\"", Spec: map[string]any{"path": skippedOutputPath, "content": "worker"}},
 			},
@@ -1315,6 +1684,59 @@ func TestRun_WhenAndRegisterSemantics(t *testing.T) {
 	}
 	if len(st.SkippedSteps) != 1 || st.SkippedSteps[0] != "skip-worker" {
 		t.Fatalf("unexpected skipped steps: %#v", st.SkippedSteps)
+	}
+}
+
+func TestRun_KubeadmInitSkipDoesNotRegisterMissingJoinFile(t *testing.T) {
+	dir := t.TempDir()
+	bundle := filepath.Join(dir, "bundle")
+	statePath := filepath.Join(dir, "state", "state.json")
+	if err := os.MkdirAll(bundle, 0o755); err != nil {
+		t.Fatalf("mkdir bundle: %v", err)
+	}
+	artifact := filepath.Join(bundle, "files", "a.txt")
+	if err := os.MkdirAll(filepath.Dir(artifact), 0o755); err != nil {
+		t.Fatalf("mkdir files: %v", err)
+	}
+	if err := os.WriteFile(artifact, []byte("ok"), 0o644); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+	if err := writeManifestForTest(bundle, "files/a.txt", []byte("ok")); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	adminConfDir := filepath.Join(dir, "etc", "kubernetes")
+	if err := os.MkdirAll(adminConfDir, 0o755); err != nil {
+		t.Fatalf("mkdir admin conf dir: %v", err)
+	}
+	adminConfPath := filepath.Join(adminConfDir, "admin.conf")
+	if err := os.WriteFile(adminConfPath, []byte("apiVersion: v1\n"), 0o644); err != nil {
+		t.Fatalf("write admin conf: %v", err)
+	}
+	prevAdminConfPath := kubeadmAdminConfPath
+	kubeadmAdminConfPath = adminConfPath
+	t.Cleanup(func() { kubeadmAdminConfPath = prevAdminConfPath })
+
+	joinPath := filepath.Join(dir, "join.txt")
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "install",
+			Steps: []config.Step{{
+				ID:       "init",
+				Kind:     "Kubeadm",
+				Spec:     map[string]any{"action": "init", "outputJoinFile": joinPath},
+				Register: map[string]string{"workerJoinFile": "joinFile"},
+			}},
+		}},
+	}
+
+	err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, StatePath: statePath})
+	if err == nil {
+		t.Fatalf("expected register failure for skipped init without join file")
+	}
+	if !strings.Contains(err.Error(), "E_REGISTER_OUTPUT_NOT_FOUND") {
+		t.Fatalf("expected E_REGISTER_OUTPUT_NOT_FOUND, got %v", err)
 	}
 }
 
@@ -3280,6 +3702,8 @@ func TestRun_Kubeadm(t *testing.T) {
 					ID:   "reset",
 					Kind: "Kubeadm",
 					Spec: map[string]any{
+						"action":                "reset",
+						"mode":                  "real",
 						"force":                 true,
 						"criSocket":             "unix:///run/containerd/containerd.sock",
 						"removePaths":           []any{removeDir},
@@ -3376,6 +3800,8 @@ func TestRun_Kubeadm(t *testing.T) {
 					ID:   "reset",
 					Kind: "Kubeadm",
 					Spec: map[string]any{
+						"action":                "reset",
+						"mode":                  "real",
 						"ignoreErrors":          true,
 						"removePaths":           []any{removeDir},
 						"removeFiles":           []any{removeFile},
@@ -3403,6 +3829,136 @@ func TestRun_Kubeadm(t *testing.T) {
 		systemctlLogText := string(systemctlRaw)
 		if !strings.Contains(systemctlLogText, "restart containerd") {
 			t.Fatalf("expected runtime restart command, got %q", systemctlLogText)
+		}
+	})
+
+	t.Run("real mode passes extra args to kubeadm reset", func(t *testing.T) {
+		dir := t.TempDir()
+		statePath := filepath.Join(dir, "state", "state.json")
+		binDir := filepath.Join(dir, "bin")
+		if err := os.MkdirAll(binDir, 0o755); err != nil {
+			t.Fatalf("mkdir bin: %v", err)
+		}
+
+		kubeadmLog := filepath.Join(dir, "kubeadm.log")
+		kubeadmScript := "#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\n' \"$*\" >> \"" + kubeadmLog + "\"\nexit 0\n"
+		if err := os.WriteFile(filepath.Join(binDir, "kubeadm"), []byte(kubeadmScript), 0o755); err != nil {
+			t.Fatalf("write kubeadm script: %v", err)
+		}
+		systemctlScript := "#!/usr/bin/env bash\nset -euo pipefail\nexit 0\n"
+		if err := os.WriteFile(filepath.Join(binDir, "systemctl"), []byte(systemctlScript), 0o755); err != nil {
+			t.Fatalf("write systemctl script: %v", err)
+		}
+		crictlScript := "#!/usr/bin/env bash\nset -euo pipefail\nexit 0\n"
+		if err := os.WriteFile(filepath.Join(binDir, "crictl"), []byte(crictlScript), 0o755); err != nil {
+			t.Fatalf("write crictl script: %v", err)
+		}
+		t.Setenv("PATH", fmt.Sprintf("%s:%s", binDir, os.Getenv("PATH")))
+
+		wf := &config.Workflow{
+			Version: "v1",
+			Phases: []config.Phase{{
+				Name: "install",
+				Steps: []config.Step{{
+					ID:   "reset",
+					Kind: "Kubeadm",
+					Spec: map[string]any{
+						"action":    "reset",
+						"mode":      "real",
+						"force":     true,
+						"extraArgs": []any{"--cleanup-tmp-dir"},
+					},
+				}},
+			}},
+		}
+
+		if err := Run(context.Background(), wf, RunOptions{StatePath: statePath}); err != nil {
+			t.Fatalf("reset run failed: %v", err)
+		}
+
+		raw, err := os.ReadFile(kubeadmLog)
+		if err != nil {
+			t.Fatalf("read kubeadm log: %v", err)
+		}
+		if got := strings.TrimSpace(string(raw)); got != "reset --force --cleanup-tmp-dir" {
+			t.Fatalf("unexpected kubeadm args: %q", got)
+		}
+	})
+
+	t.Run("stub mode skips reset side effects", func(t *testing.T) {
+		dir := t.TempDir()
+		statePath := filepath.Join(dir, "state", "state.json")
+		binDir := filepath.Join(dir, "bin")
+		if err := os.MkdirAll(binDir, 0o755); err != nil {
+			t.Fatalf("mkdir bin: %v", err)
+		}
+
+		kubeadmLog := filepath.Join(dir, "kubeadm.log")
+		systemctlLog := filepath.Join(dir, "systemctl.log")
+		crictlLog := filepath.Join(dir, "crictl.log")
+		kubeadmScript := "#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\n' \"$*\" >> \"" + kubeadmLog + "\"\nexit 1\n"
+		if err := os.WriteFile(filepath.Join(binDir, "kubeadm"), []byte(kubeadmScript), 0o755); err != nil {
+			t.Fatalf("write kubeadm script: %v", err)
+		}
+		systemctlScript := "#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\n' \"$*\" >> \"" + systemctlLog + "\"\nexit 1\n"
+		if err := os.WriteFile(filepath.Join(binDir, "systemctl"), []byte(systemctlScript), 0o755); err != nil {
+			t.Fatalf("write systemctl script: %v", err)
+		}
+		crictlScript := "#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\n' \"$*\" >> \"" + crictlLog + "\"\nexit 1\n"
+		if err := os.WriteFile(filepath.Join(binDir, "crictl"), []byte(crictlScript), 0o755); err != nil {
+			t.Fatalf("write crictl script: %v", err)
+		}
+		t.Setenv("PATH", fmt.Sprintf("%s:%s", binDir, os.Getenv("PATH")))
+
+		removeDir := filepath.Join(dir, "remove-dir")
+		removeFile := filepath.Join(dir, "remove-file.conf")
+		if err := os.MkdirAll(removeDir, 0o755); err != nil {
+			t.Fatalf("mkdir remove dir: %v", err)
+		}
+		if err := os.WriteFile(removeFile, []byte("stale"), 0o644); err != nil {
+			t.Fatalf("write remove file: %v", err)
+		}
+
+		wf := &config.Workflow{
+			Version: "v1",
+			Phases: []config.Phase{{
+				Name: "install",
+				Steps: []config.Step{{
+					ID:   "reset",
+					Kind: "Kubeadm",
+					Spec: map[string]any{
+						"action":                "reset",
+						"mode":                  "stub",
+						"force":                 true,
+						"criSocket":             "unix:///run/containerd/containerd.sock",
+						"extraArgs":             []any{"--cleanup-tmp-dir"},
+						"removePaths":           []any{removeDir},
+						"removeFiles":           []any{removeFile},
+						"cleanupContainers":     []any{"kube-apiserver"},
+						"restartRuntimeService": "containerd",
+					},
+				}},
+			}},
+		}
+
+		if err := Run(context.Background(), wf, RunOptions{StatePath: statePath}); err != nil {
+			t.Fatalf("expected stub reset success, got %v", err)
+		}
+
+		if _, err := os.Stat(kubeadmLog); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("expected kubeadm not to run in stub mode, err=%v", err)
+		}
+		if _, err := os.Stat(systemctlLog); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("expected systemctl not to run in stub mode, err=%v", err)
+		}
+		if _, err := os.Stat(crictlLog); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("expected crictl not to run in stub mode, err=%v", err)
+		}
+		if _, err := os.Stat(removeDir); err != nil {
+			t.Fatalf("expected remove dir to remain in stub mode, err=%v", err)
+		}
+		if _, err := os.Stat(removeFile); err != nil {
+			t.Fatalf("expected remove file to remain in stub mode, err=%v", err)
 		}
 	})
 }

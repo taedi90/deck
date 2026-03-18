@@ -80,7 +80,7 @@ func TestRetrieveIncludesRelatedImportsForTargetScenario(t *testing.T) {
 		Root: filepath.ToSlash(t.TempDir()),
 		Files: []WorkspaceFile{
 			{Path: "workflows/scenarios/apply.yaml", Content: "role: apply\nversion: v1alpha1\nphases:\n  - name: bootstrap\n    imports:\n      - path: bootstrap.yaml\n"},
-			{Path: "workflows/components/bootstrap.yaml", Content: "steps:\n  - id: init\n    kind: Kubeadm\n"},
+			{Path: "workflows/components/bootstrap.yaml", Content: "steps:\n  - id: init\n    kind: Kubeadm\n    spec:\n      action: init\n"},
 			{Path: "workflows/components/unrelated.yaml", Content: "steps:\n  - id: noop\n    kind: Command\n"},
 		},
 	}

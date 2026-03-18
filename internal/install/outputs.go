@@ -1,6 +1,8 @@
 package install
 
 import (
+	"os"
+
 	"github.com/taedi90/deck/internal/config"
 	"github.com/taedi90/deck/internal/workflowexec"
 )
@@ -34,7 +36,9 @@ func stepOutputs(kind string, rendered map[string]any) map[string]any {
 		}
 	case "Kubeadm":
 		if joinFile := stringValue(rendered, "outputJoinFile"); joinFile != "" {
-			outputs["joinFile"] = joinFile
+			if _, err := os.Stat(joinFile); err == nil {
+				outputs["joinFile"] = joinFile
+			}
 		}
 	}
 	return outputs
