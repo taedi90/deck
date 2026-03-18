@@ -165,37 +165,39 @@ func generateKubeadmToolSchema() map[string]any {
 	initAllowed := []string{"action", "mode", "configFile", "configTemplate", "pullImages", "outputJoinFile", "kubernetesVersion", "advertiseAddress", "podNetworkCIDR", "criSocket", "ignorePreflightErrors", "extraArgs", "skipIfAdminConfExists"}
 	joinAllowed := []string{"action", "mode", "configFile", "joinFile", "asControlPlane", "extraArgs"}
 	resetAllowed := []string{"action", "mode", "force", "ignoreErrors", "stopKubelet", "criSocket", "extraArgs", "removePaths", "removeFiles", "cleanupContainers", "restartRuntimeService"}
+	specProps := map[string]any{
+		"action":                enumStringSchema("init", "join", "reset"),
+		"mode":                  enumStringSchema("stub", "real"),
+		"configFile":            map[string]any{"type": "string"},
+		"configTemplate":        map[string]any{"type": "string"},
+		"pullImages":            map[string]any{"type": "boolean"},
+		"outputJoinFile":        map[string]any{"type": "string"},
+		"kubernetesVersion":     map[string]any{"type": "string"},
+		"advertiseAddress":      map[string]any{"type": "string"},
+		"podNetworkCIDR":        map[string]any{"type": "string"},
+		"criSocket":             map[string]any{"type": "string"},
+		"ignorePreflightErrors": stringArraySchema(0, false),
+		"extraArgs":             stringArraySchema(0, false),
+		"skipIfAdminConfExists": map[string]any{"type": "boolean", "default": true},
+		"joinFile":              map[string]any{"type": "string"},
+		"asControlPlane":        map[string]any{"type": "boolean", "default": false},
+		"force":                 map[string]any{"type": "boolean", "default": false},
+		"ignoreErrors":          map[string]any{"type": "boolean", "default": false},
+		"stopKubelet":           map[string]any{"type": "boolean", "default": true},
+		"removePaths":           stringArraySchema(0, false),
+		"removeFiles":           stringArraySchema(0, false),
+		"cleanupContainers":     stringArraySchema(0, false),
+		"restartRuntimeService": map[string]any{"type": "string"},
+	}
+	allFields := schemaPropertyKeys(specProps)
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",
 		"additionalProperties": false,
 		"required":             []any{"action"},
-		"properties": map[string]any{
-			"action":                enumStringSchema("init", "join", "reset"),
-			"mode":                  enumStringSchema("stub", "real"),
-			"configFile":            map[string]any{"type": "string"},
-			"configTemplate":        map[string]any{"type": "string"},
-			"pullImages":            map[string]any{"type": "boolean"},
-			"outputJoinFile":        map[string]any{"type": "string"},
-			"kubernetesVersion":     map[string]any{"type": "string"},
-			"advertiseAddress":      map[string]any{"type": "string"},
-			"podNetworkCIDR":        map[string]any{"type": "string"},
-			"criSocket":             map[string]any{"type": "string"},
-			"ignorePreflightErrors": stringArraySchema(0, false),
-			"extraArgs":             stringArraySchema(0, false),
-			"skipIfAdminConfExists": map[string]any{"type": "boolean", "default": true},
-			"joinFile":              map[string]any{"type": "string"},
-			"asControlPlane":        map[string]any{"type": "boolean", "default": false},
-			"force":                 map[string]any{"type": "boolean", "default": false},
-			"ignoreErrors":          map[string]any{"type": "boolean", "default": false},
-			"stopKubelet":           map[string]any{"type": "boolean", "default": true},
-			"removePaths":           stringArraySchema(0, false),
-			"removeFiles":           stringArraySchema(0, false),
-			"cleanupContainers":     stringArraySchema(0, false),
-			"restartRuntimeService": map[string]any{"type": "string"},
-		},
+		"properties":           specProps,
 		"allOf": []any{
 			conditionalRequired("init", []string{"outputJoinFile"}, nil),
-			forbidFieldsOutsideAction("init", initAllowed),
+			forbidFieldsOutsideAction("init", initAllowed, allFields),
 			map[string]any{
 				"if": map[string]any{
 					"properties": map[string]any{"action": map[string]any{"const": "join"}},
@@ -203,7 +205,7 @@ func generateKubeadmToolSchema() map[string]any {
 				},
 				"then": map[string]any{
 					"allOf": []any{
-						forbidFieldsOutsideActionThen(joinAllowed),
+						forbidFieldsOutsideActionThen(joinAllowed, allFields),
 						map[string]any{"oneOf": []any{
 							map[string]any{"required": []any{"joinFile"}},
 							map[string]any{"required": []any{"configFile"}},
@@ -216,29 +218,28 @@ func generateKubeadmToolSchema() map[string]any {
 					"properties": map[string]any{"action": map[string]any{"const": "reset"}},
 					"required":   []any{"action"},
 				},
-				"then": forbidFieldsOutsideActionThen(resetAllowed),
+				"then": forbidFieldsOutsideActionThen(resetAllowed, allFields),
 			},
 		},
 	})
 	return root
 }
 
-func forbidFieldsOutsideAction(action string, allowed []string) map[string]any {
+func forbidFieldsOutsideAction(action string, allowed, allFields []string) map[string]any {
 	return map[string]any{
 		"if": map[string]any{
 			"properties": map[string]any{"action": map[string]any{"const": action}},
 			"required":   []any{"action"},
 		},
-		"then": forbidFieldsOutsideActionThen(allowed),
+		"then": forbidFieldsOutsideActionThen(allowed, allFields),
 	}
 }
 
-func forbidFieldsOutsideActionThen(allowed []string) map[string]any {
+func forbidFieldsOutsideActionThen(allowed, allFields []string) map[string]any {
 	allowedSet := map[string]bool{}
 	for _, field := range allowed {
 		allowedSet[field] = true
 	}
-	allFields := []string{"action", "mode", "configFile", "configTemplate", "pullImages", "outputJoinFile", "kubernetesVersion", "advertiseAddress", "podNetworkCIDR", "criSocket", "ignorePreflightErrors", "extraArgs", "skipIfAdminConfExists", "joinFile", "asControlPlane", "force", "ignoreErrors", "stopKubelet", "removePaths", "removeFiles", "cleanupContainers", "restartRuntimeService"}
 	forbidden := make([]any, 0)
 	for _, field := range allFields {
 		if !allowedSet[field] {
@@ -250,4 +251,12 @@ func forbidFieldsOutsideActionThen(allowed []string) map[string]any {
 			"anyOf": forbidden,
 		},
 	}
+}
+
+func schemaPropertyKeys(properties map[string]any) []string {
+	keys := make([]string, 0, len(properties))
+	for key := range properties {
+		keys = append(keys, key)
+	}
+	return keys
 }
