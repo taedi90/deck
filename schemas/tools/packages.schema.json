@@ -91,6 +91,16 @@
           },
           "type": "array"
         },
+        "output": {
+          "additionalProperties": false,
+          "properties": {
+            "dir": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
         "packages": {
           "items": {
             "type": "string"

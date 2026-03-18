@@ -2642,6 +2642,31 @@ func TestEditFileBackup_CreateFailureIncludesBackupPath(t *testing.T) {
 	}
 }
 
+func TestEditFileSupportsAppendOperation(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "target.conf")
+	if err := os.WriteFile(path, []byte("alpha\nalpha\n"), 0o644); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+
+	err := runEditFile(map[string]any{
+		"path": path,
+		"edits": []any{
+			map[string]any{"match": "alpha", "with": "-beta", "op": "append"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("runEditFile failed: %v", err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read target: %v", err)
+	}
+	if string(raw) != "alpha-beta\nalpha-beta\n" {
+		t.Fatalf("unexpected edited content: %q", string(raw))
+	}
+}
+
 func TestServiceStep(t *testing.T) {
 	dir := t.TempDir()
 	binDir := filepath.Join(dir, "bin")
@@ -2812,6 +2837,45 @@ func TestInstallFileStep(t *testing.T) {
 	}
 }
 
+func TestRunCommandSupportsEnvAndSudo(t *testing.T) {
+	dir := t.TempDir()
+	binDir := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatalf("mkdir bin: %v", err)
+	}
+	logPath := filepath.Join(dir, "command.log")
+	sudoScript := "#!/usr/bin/env bash\nset -euo pipefail\nprintf 'sudo:%s\\n' \"$*\" >> \"" + logPath + "\"\nexec \"$@\"\n"
+	if err := os.WriteFile(filepath.Join(binDir, "sudo"), []byte(sudoScript), 0o755); err != nil {
+		t.Fatalf("write sudo script: %v", err)
+	}
+	commandPath := filepath.Join(binDir, "print-env")
+	commandScript := "#!/usr/bin/env bash\nset -euo pipefail\nprintf 'env:%s\\n' \"${DECK_TEST_ENV:-missing}\" >> \"" + logPath + "\"\n"
+	if err := os.WriteFile(commandPath, []byte(commandScript), 0o755); err != nil {
+		t.Fatalf("write command script: %v", err)
+	}
+	t.Setenv("PATH", fmt.Sprintf("%s:%s", binDir, os.Getenv("PATH")))
+
+	if err := runCommand(context.Background(), map[string]any{
+		"command": []any{"print-env"},
+		"env":     map[string]any{"DECK_TEST_ENV": "present"},
+		"sudo":    true,
+	}); err != nil {
+		t.Fatalf("runCommand failed: %v", err)
+	}
+
+	raw, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read log: %v", err)
+	}
+	logText := string(raw)
+	if !strings.Contains(logText, "sudo:print-env") {
+		t.Fatalf("expected sudo invocation, got %q", logText)
+	}
+	if !strings.Contains(logText, "env:present") {
+		t.Fatalf("expected env to be passed, got %q", logText)
+	}
+}
+
 func TestInstallArtifactsStep_InstallsSingleFileWithMode(t *testing.T) {
 	dir := t.TempDir()
 	source := filepath.Join(dir, "kubelet")
@@ -2851,6 +2915,44 @@ func TestInstallArtifactsStep_InstallsSingleFileWithMode(t *testing.T) {
 	}
 	if info.Mode().Perm() != 0o755 {
 		t.Fatalf("expected mode 0755, got %o", info.Mode().Perm())
+	}
+}
+
+func TestInstallArtifactsStep_InstallsBundleSource(t *testing.T) {
+	dir := t.TempDir()
+	bundleRoot := filepath.Join(dir, "bundle")
+	sourcePath := filepath.Join(bundleRoot, "files", "bin", "tool")
+	if err := os.MkdirAll(filepath.Dir(sourcePath), 0o755); err != nil {
+		t.Fatalf("mkdir bundle source dir: %v", err)
+	}
+	if err := os.WriteFile(sourcePath, []byte("bundle-binary"), 0o644); err != nil {
+		t.Fatalf("write bundle source: %v", err)
+	}
+	target := filepath.Join(dir, "usr", "local", "bin", "tool")
+	hostFactDetector := func() map[string]any {
+		return map[string]any{"arch": "amd64"}
+	}
+
+	spec := map[string]any{
+		"artifacts": []any{map[string]any{
+			"source": map[string]any{
+				"amd64": map[string]any{"bundle": map[string]any{"root": "files", "path": "bin/tool"}},
+				"arm64": map[string]any{"bundle": map[string]any{"root": "files", "path": "bin/tool"}},
+			},
+			"install": map[string]any{"path": target, "mode": "0755"},
+		}},
+		"fetch": map[string]any{"sources": []any{map[string]any{"type": "bundle", "path": bundleRoot}}},
+	}
+
+	if err := runInstallArtifactsWithHostFactDetector(context.Background(), spec, hostFactDetector); err != nil {
+		t.Fatalf("runInstallArtifacts failed: %v", err)
+	}
+	raw, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read installed artifact: %v", err)
+	}
+	if string(raw) != "bundle-binary" {
+		t.Fatalf("unexpected installed artifact content: %q", string(raw))
 	}
 }
 
@@ -3125,6 +3227,40 @@ func TestSystemdUnitStep(t *testing.T) {
 		}
 		if !strings.Contains(logText, "restart containerd") {
 			t.Fatalf("expected restart call, got %q", logText)
+		}
+	})
+
+	t.Run("derives service name from unit path when omitted", func(t *testing.T) {
+		dir := t.TempDir()
+		binDir := filepath.Join(dir, "bin")
+		if err := os.MkdirAll(binDir, 0o755); err != nil {
+			t.Fatalf("mkdir bin: %v", err)
+		}
+		logPath := filepath.Join(dir, "systemctl.log")
+		script := "#!/usr/bin/env bash\nset -euo pipefail\ncmd=\"${1:-}\"\nif [[ \"${cmd}\" == \"is-enabled\" ]]; then\n  exit 1\nfi\nprintf '%s\\n' \"$*\" >> \"" + logPath + "\"\nexit 0\n"
+		if err := os.WriteFile(filepath.Join(binDir, "systemctl"), []byte(script), 0o755); err != nil {
+			t.Fatalf("write systemctl script: %v", err)
+		}
+		t.Setenv("PATH", fmt.Sprintf("%s:%s", binDir, os.Getenv("PATH")))
+
+		target := filepath.Join(dir, "kubelet.service")
+		spec := map[string]any{
+			"path":    target,
+			"content": "[Unit]",
+			"service": map[string]any{
+				"state": "restarted",
+			},
+		}
+		if err := runSystemdUnit(spec); err != nil {
+			t.Fatalf("runSystemdUnit failed: %v", err)
+		}
+
+		raw, err := os.ReadFile(logPath)
+		if err != nil {
+			t.Fatalf("read systemctl log: %v", err)
+		}
+		if !strings.Contains(string(raw), "restart kubelet.service") {
+			t.Fatalf("expected derived service name, got %q", string(raw))
 		}
 	})
 }

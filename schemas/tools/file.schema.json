@@ -46,8 +46,7 @@
           },
           "then": {
             "required": [
-              "source",
-              "output"
+              "source"
             ]
           }
         },
@@ -147,6 +146,10 @@
                 "type": "string"
               },
               "op": {
+                "enum": [
+                  "replace",
+                  "append"
+                ],
                 "type": "string"
               },
               "with": {
@@ -163,10 +166,6 @@
         },
         "fetch": {
           "type": "object"
-        },
-        "group": {
-          "minLength": 1,
-          "type": "string"
         },
         "mode": {
           "pattern": "^[0-7]{4}$",
@@ -188,10 +187,6 @@
             "path"
           ],
           "type": "object"
-        },
-        "owner": {
-          "minLength": 1,
-          "type": "string"
         },
         "path": {
           "type": "string"

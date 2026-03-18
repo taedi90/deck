@@ -21,8 +21,7 @@ apiVersion: deck/v1alpha1
 id: example-checks
 kind: Checks
 spec:
-    checks:
-        - example
+  checks: [os]
 ```
 
 ## Realistic Example
@@ -53,7 +52,7 @@ spec:
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
 | `spec.binaries` | `array<string>` | no | `` | `` | Binary names to verify are present in `PATH`. Used when `checks` includes `binaries`. | `[kubeadm,kubelet,kubectl]` |
-| `spec.checks` | `array<string>` | yes | `` | `` | Named checks to run. Supported values include `os`, `arch`, `swap`, and `binaries`. | `[os,arch,swap]` |
+| `spec.checks` | `array<string>` | yes | `` | `` | Named checks to run. Supported values include `os`, `arch`, `swap`, `kernelModules`, and `binaries`. | `[os,arch,swap]` |
 | `spec.failFast` | `boolean` | no | `true` | `` | Stop on the first failing check rather than running all checks. Defaults to `true`. | `true` |
 
 ## Related

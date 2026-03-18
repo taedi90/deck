@@ -51,7 +51,7 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.mode` | `string` | no | `` | `` | Directory permissions in octal notation. Applied on creation only. | `0755` |
+| `spec.mode` | `string` | no | `` | `` | Directory permissions in octal notation. Applied after ensuring the directory exists, including on existing directories. | `0755` |
 | `spec.path` | `string` | yes | `` | `` | Directory path to create if it does not already exist. Parent directories are created as needed. | `/var/lib/deck` |
 
 ## Related

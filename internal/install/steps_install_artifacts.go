@@ -47,9 +47,15 @@ type installArtifactSourcesSpec struct {
 }
 
 type installArtifactSourceSpec struct {
-	URL    string `json:"url"`
-	Path   string `json:"path"`
-	SHA256 string `json:"sha256"`
+	URL    string                           `json:"url"`
+	Path   string                           `json:"path"`
+	SHA256 string                           `json:"sha256"`
+	Bundle *installArtifactBundleSourceSpec `json:"bundle"`
+}
+
+type installArtifactBundleSourceSpec struct {
+	Root string `json:"root"`
+	Path string `json:"path"`
 }
 
 type installArtifactSkipSpec struct {
@@ -117,6 +123,12 @@ func runInstallArtifactsWithHostFactDetector(ctx context.Context, spec map[strin
 				"path": "artifact.bin",
 			},
 		}
+		if source.Bundle != nil {
+			downloadSpec["source"].(map[string]any)["bundle"] = map[string]any{
+				"root": source.Bundle.Root,
+				"path": source.Bundle.Path,
+			}
+		}
 		relativePath, err := runFileDownload(ctx, tmpDir, downloadSpec)
 		if err != nil {
 			_ = os.RemoveAll(tmpDir)
@@ -160,8 +172,8 @@ func sourceForArch(sources installArtifactSourcesSpec, arch string) (installArti
 	default:
 		return installArtifactSourceSpec{}, fmt.Errorf("%s: unsupported host architecture %q", errCodeInstallArtifactArch, arch)
 	}
-	if strings.TrimSpace(source.Path) == "" && strings.TrimSpace(source.URL) == "" {
-		return installArtifactSourceSpec{}, fmt.Errorf("%s: source for arch %s requires path or url", errCodeInstallArtifactSource, arch)
+	if strings.TrimSpace(source.Path) == "" && strings.TrimSpace(source.URL) == "" && source.Bundle == nil {
+		return installArtifactSourceSpec{}, fmt.Errorf("%s: source for arch %s requires path, url, or bundle", errCodeInstallArtifactSource, arch)
 	}
 	return source, nil
 }

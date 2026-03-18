@@ -27,8 +27,6 @@ phases:
             engine: go-containerregistry
           output:
             dir: images
-            format: docker-archive
-            manifest: images/manifest.json
 `)
 		if err := os.WriteFile(path, content, 0o644); err != nil {
 			t.Fatalf("write file: %v", err)
@@ -742,6 +740,112 @@ phases:
             name: kubelet
             enabled: true
             state: started
+`)
+		if err := os.WriteFile(path, content, 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+
+		if err := File(path); err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+	})
+
+	t.Run("tool schema valid SystemdUnit without explicit service name", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "workflow.yaml")
+		content := []byte(`role: apply
+version: v1alpha1
+phases:
+  - name: install
+    steps:
+      - id: install-kubelet-unit
+        apiVersion: deck/v1alpha1
+        kind: SystemdUnit
+        spec:
+          path: /etc/systemd/system/kubelet.service
+          content: |
+            [Unit]
+            Description=kubelet
+          service:
+            enabled: true
+            state: started
+`)
+		if err := os.WriteFile(path, content, 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+
+		if err := File(path); err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+	})
+
+	t.Run("tool schema valid File download without output path", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "workflow.yaml")
+		content := []byte(`role: prepare
+version: v1alpha1
+phases:
+  - name: prepare
+    steps:
+      - id: download-runc
+        apiVersion: deck/v1alpha1
+        kind: File
+        spec:
+          action: download
+          source:
+            url: https://example.invalid/runc
+`)
+		if err := os.WriteFile(path, content, 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+
+		if err := File(path); err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+	})
+
+	t.Run("tool schema valid Image download output dir", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "workflow.yaml")
+		content := []byte(`role: prepare
+version: v1alpha1
+phases:
+  - name: prepare
+    steps:
+      - id: download-images
+        apiVersion: deck/v1alpha1
+        kind: Image
+        spec:
+          action: download
+          images: [registry.k8s.io/pause:3.9]
+          output:
+            dir: images/core
+`)
+		if err := os.WriteFile(path, content, 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+
+		if err := File(path); err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+	})
+
+	t.Run("tool schema valid Packages download output dir", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "workflow.yaml")
+		content := []byte(`role: prepare
+version: v1alpha1
+phases:
+  - name: prepare
+    steps:
+      - id: download-packages
+        apiVersion: deck/v1alpha1
+        kind: Packages
+        spec:
+          action: download
+          packages: [containerd]
+          output:
+            dir: packages/custom
 `)
 		if err := os.WriteFile(path, content, 0o644); err != nil {
 			t.Fatalf("write file: %v", err)

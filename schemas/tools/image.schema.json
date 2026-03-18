@@ -148,7 +148,13 @@
           "type": "array"
         },
         "output": {
-          "additionalProperties": true,
+          "additionalProperties": false,
+          "properties": {
+            "dir": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
           "type": "object"
         },
         "runtime": {

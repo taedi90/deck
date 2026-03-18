@@ -25,7 +25,7 @@ func BuildPrefetchWorkflow(wf *config.Workflow) *config.Workflow {
 		return &config.Workflow{}
 	}
 	return &config.Workflow{
-		Role:           wf.Role,
+		Role:           "prepare",
 		Version:        wf.Version,
 		Vars:           wf.Vars,
 		Phases:         []config.Phase{{Name: "prefetch", Steps: prefetchSteps}},

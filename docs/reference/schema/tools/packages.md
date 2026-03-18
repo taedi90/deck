@@ -57,12 +57,19 @@ spec:
 | `spec.backend` | `object` | no | `` | `` | Container-based download backend for `download`. Enables package resolution inside a distro-specific container image when the host OS differs from the target. | `{mode:container,runtime:docker,image:rockylinux:9}` |
 | `spec.distro` | `object` | no | `` | `` | Target distribution hint used by `download` to select the correct package manager and resolver backend. | `{family:rhel,release:rocky9}` |
 | `spec.excludeRepos` | `array<string>` | no | `` | `` | Repository identifiers to exclude from package resolution. Useful for suppressing online repos during an offline install. | `[updates]` |
+| `spec.output` | `object` | no | `` | `` | Optional bundle output settings for `download`. When set, `output.dir` changes the directory where downloaded package artifacts are written. | `{dir:packages/kubernetes}` |
 | `spec.packages` | `array<string>` | yes | `` | `` | Package names to download or install. Use the same list in both `download` and `install` steps to keep offline parity. | `[kubelet,kubeadm,kubectl]` |
 | `spec.repo` | `object` | no | `` | `` | Package manager repository settings applied before `download`. Currently supports RPM module stream configuration. | `{type:yum,modules:[...]}` |
 | `spec.restrictToRepos` | `array<string>` | no | `` | `` | Limit package manager visibility to these repository identifiers during the operation. Prevents accidental pulls from other configured repos. | `[offline-kubernetes]` |
 | `spec.source` | `object` | no | `` | `` | Local repository source for `install`. Points to a pre-prepared on-disk package repo instead of relying on configured package manager sources. | `{type:local-repo,path:/opt/deck/repos/kubernetes}` |
 
 ## Nested Objects
+
+### `spec.output`
+
+| Key | Type | Required | Default | Enum | Description | Example |
+|---|---|---:|---|---|---|---|
+| `spec.output.dir` | `string` | no | `` | `` | Bundle-relative directory used by `download` for downloaded package artifacts. Defaults to `packages` or a repo-derived path when omitted. | `packages/kubernetes` |
 
 ### `spec.repo`
 
@@ -88,6 +95,7 @@ spec:
 - Use `Packages` with `Repository` and `PackageCache` for a complete typed package-management flow.
 - Keeping the same package list across `download` and `install` helps maintain offline parity.
 - Use `restrictToRepos` on the `install` step to prevent the node's default online repos from being consulted during an offline apply.
+- Without a container download backend, `download` currently writes placeholder package markers instead of resolving real packages.
 
 ## Actions
 

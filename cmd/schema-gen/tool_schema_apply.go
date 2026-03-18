@@ -101,7 +101,13 @@ func generateImageToolSchema() map[string]any {
 				},
 			},
 			"backend": map[string]any{"type": "object", "additionalProperties": true},
-			"output":  map[string]any{"type": "object", "additionalProperties": true},
+			"output": map[string]any{
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties": map[string]any{
+					"dir": minLenStringSchema(),
+				},
+			},
 		},
 		"allOf": []any{
 			conditionalRequired("download", []string{"images"}, nil),

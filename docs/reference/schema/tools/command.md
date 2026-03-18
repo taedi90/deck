@@ -53,8 +53,8 @@ spec:
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
 | `spec.command` | `array<string>` | yes | `` | `` | Command vector to execute. The first element is the binary; remaining elements are arguments. | `[systemctl,restart,containerd]` |
-| `spec.env` | `object` | no | `` | `` | Additional environment variables passed to the command as key-value pairs. | `{KUBECONFIG:/etc/kubernetes/admin.conf}` |
-| `spec.sudo` | `boolean` | no | `false` | `` | Run the command with `sudo`. Defaults to `false`. | `false` |
+| `spec.env` | `object` | no | `` | `` | Additional environment variables passed to the command process as key-value pairs. | `{KUBECONFIG:/etc/kubernetes/admin.conf}` |
+| `spec.sudo` | `boolean` | no | `false` | `` | Prepend `sudo` before the command vector. Defaults to `false`. | `false` |
 | `spec.timeout` | `string` | no | `` | `` | Maximum duration for the command before it is killed. Overrides the step-level `timeout`. | `30s` |
 
 ## Notes

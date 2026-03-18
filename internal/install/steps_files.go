@@ -26,6 +26,7 @@ var yumEnabledTruePattern = regexp.MustCompile(`(?i)^\s*enabled\s*=\s*(1|yes|tru
 type editFileEditSpec struct {
 	Match string `json:"match"`
 	With  string `json:"with"`
+	Op    string `json:"op"`
 }
 
 type editFileSpec struct {
@@ -91,7 +92,14 @@ func runEditFile(spec map[string]any) error {
 		if match == "" {
 			continue
 		}
-		updated = strings.Replace(updated, match, with, 1)
+		switch strings.TrimSpace(edit.Op) {
+		case "", "replace":
+			updated = strings.ReplaceAll(updated, match, with)
+		case "append":
+			updated = strings.ReplaceAll(updated, match, match+with)
+		default:
+			return fmt.Errorf("%s: unsupported edit op %q", errCodeInstallEditsMissing, edit.Op)
+		}
 	}
 
 	return hostPath.WriteFile([]byte(updated), filemode.PublishedArtifact)

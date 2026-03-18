@@ -31,10 +31,14 @@ spec:
 kind: SystemdUnit
 spec:
   path: /etc/systemd/system/kubelet.service
-  contentFromTemplate: kubelet.service.tmpl
+  contentFromTemplate: |
+    [Unit]
+    Description=Kubelet
+
+    [Service]
+    Environment=NODE_IP={{ .vars.nodeIP }}
   daemonReload: true
   service:
-    name: kubelet
     enabled: true
     state: started
 ```
@@ -58,7 +62,7 @@ spec:
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
 | `spec.content` | `string` | no | `` | `` | Inline unit file content written verbatim to `path`. | `[Unit]\nDescription=kubelet` |
-| `spec.contentFromTemplate` | `string` | no | `` | `` | Path to a template file relative to `workflows/` rendered with the current vars. Prefer this for parameterized unit files. | `kubelet.service.tmpl` |
+| `spec.contentFromTemplate` | `string` | no | `` | `` | Inline multi-line unit content rendered with the current vars before writing. Prefer this for parameterized unit files. | `[Service]\nEnvironment=NODE_IP={{ .vars.nodeIP }}` |
 | `spec.daemonReload` | `boolean` | no | `` | `` | Run `systemctl daemon-reload` after writing the unit file so systemd picks up the change. | `true` |
 | `spec.mode` | `string` | no | `` | `` | File permissions applied to the unit file in octal notation. | `0644` |
 | `spec.path` | `string` | yes | `` | `` | Destination path for the unit file on the node. | `/etc/systemd/system/kubelet.service` |
@@ -71,7 +75,7 @@ spec:
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
 | `spec.service.enabled` | `boolean` | no | `` | `` | Whether the service should be enabled to start on boot. | `true` |
-| `spec.service.name` | `string` | yes | `` | `` | Service name to manage. Defaults to the unit file name when omitted. | `kubelet` |
+| `spec.service.name` | `string` | no | `` | `` | Service name to manage. Defaults to the unit file basename when omitted. | `kubelet.service` |
 | `spec.service.state` | `string` | no | `` | `unchanged, started, stopped, restarted, reloaded` | Desired service state after writing the unit file. | `started` |
 
 

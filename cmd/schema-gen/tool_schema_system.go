@@ -97,7 +97,6 @@ func generateSystemdUnitToolSchema() map[string]any {
 			"service": map[string]any{
 				"type":                 "object",
 				"additionalProperties": false,
-				"required":             []any{"name"},
 				"properties": map[string]any{
 					"name":    minLenStringSchema(),
 					"enabled": map[string]any{"type": "boolean"},

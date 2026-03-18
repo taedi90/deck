@@ -237,6 +237,33 @@ func TestRun_ContainerBackendsWithFakeRunner(t *testing.T) {
 	}
 }
 
+func TestRun_ImageDownloadUsesOutputDir(t *testing.T) {
+	bundle := t.TempDir()
+	imageOps := stubImageDownloadOps()
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "prepare",
+			Steps: []config.Step{{
+				ID:   "img",
+				Kind: "Image",
+				Spec: map[string]any{
+					"action": "download",
+					"images": []any{"registry.k8s.io/kube-apiserver:v1.30.1"},
+					"output": map[string]any{"dir": "images/control-plane"},
+				},
+			}},
+		}},
+	}
+
+	if err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, imageDownloadOps: imageOps}); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(bundle, "images", "control-plane", "registry.k8s.io_kube-apiserver_v1.30.1.tar")); err != nil {
+		t.Fatalf("expected image artifact in custom dir: %v", err)
+	}
+}
+
 func stubImageDownloadOps() imageDownloadOps {
 	return imageDownloadOps{
 		parseReference: func(v string) (name.Reference, error) {
@@ -348,6 +375,32 @@ func TestRun_PackagesContainerNoArtifacts(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "E_PREPARE_NO_ARTIFACTS") {
 		t.Fatalf("expected no-artifacts error code, got: %v", err)
+	}
+}
+
+func TestRun_PackagesDownloadUsesOutputDir(t *testing.T) {
+	bundle := t.TempDir()
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "prepare",
+			Steps: []config.Step{{
+				ID:   "pkg",
+				Kind: "Packages",
+				Spec: map[string]any{
+					"action":   "download",
+					"packages": []any{"containerd"},
+					"output":   map[string]any{"dir": "packages/custom"},
+				},
+			}},
+		}},
+	}
+
+	if err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle}); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(bundle, "packages", "custom", "containerd.txt")); err != nil {
+		t.Fatalf("expected package artifact in custom dir: %v", err)
 	}
 }
 

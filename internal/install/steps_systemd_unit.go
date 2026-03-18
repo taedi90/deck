@@ -2,6 +2,8 @@ package install
 
 import (
 	"fmt"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -48,6 +50,9 @@ func runSystemdUnit(spec map[string]any) error {
 
 	name := stringValue(service, "name")
 	if name == "" {
+		name = inferSystemdServiceName(path)
+	}
+	if name == "" {
 		return fmt.Errorf("%s: SystemdUnit service requires name", errCodeInstallSystemdUnitSvc)
 	}
 
@@ -63,4 +68,12 @@ func runSystemdUnit(spec map[string]any) error {
 	}
 
 	return runService(serviceSpec)
+}
+
+func inferSystemdServiceName(path string) string {
+	base := strings.TrimSpace(filepath.Base(path))
+	if base == "" || base == "." || base == string(filepath.Separator) {
+		return ""
+	}
+	return base
 }

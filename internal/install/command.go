@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -15,8 +17,10 @@ import (
 var ErrStepCommandTimeout = errors.New("step command timeout")
 
 type runCommandSpec struct {
-	Command []string `json:"command"`
-	Timeout string   `json:"timeout"`
+	Command []string          `json:"command"`
+	Env     map[string]string `json:"env"`
+	Sudo    bool              `json:"sudo"`
+	Timeout string            `json:"timeout"`
 }
 
 func runCommand(ctx context.Context, spec map[string]any) error {
@@ -30,7 +34,7 @@ func runCommand(ctx context.Context, spec map[string]any) error {
 	}
 	timeout := parseStepTimeout(decoded.Timeout, 30*time.Second)
 
-	err = runTimedCommandWithContext(ctx, cmdArgs[0], cmdArgs[1:], timeout)
+	err = runTimedCommandSpecWithContext(ctx, cmdArgs, decoded.Env, decoded.Sudo, timeout, os.Stdout, os.Stderr)
 	if err == nil {
 		return nil
 	}
@@ -67,6 +71,13 @@ func runTimedCommand(name string, args []string, timeout time.Duration) error {
 }
 
 func runTimedCommandWithContext(parent context.Context, name string, args []string, timeout time.Duration) error {
+	return runTimedCommandSpecWithContext(parent, append([]string{name}, args...), nil, false, timeout, os.Stdout, os.Stderr)
+}
+
+func runTimedCommandSpecWithContext(parent context.Context, cmdArgs []string, env map[string]string, sudo bool, timeout time.Duration, stdout, stderr io.Writer) error {
+	if len(cmdArgs) == 0 {
+		return fmt.Errorf("empty command")
+	}
 	if parent == nil {
 		parent = context.Background()
 	}
@@ -76,7 +87,25 @@ func runTimedCommandWithContext(parent context.Context, name string, args []stri
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 
-	err := executil.RunWorkflowCommandWithIO(ctx, os.Stdout, os.Stderr, name, args...)
+	commandArgs := append([]string{}, cmdArgs...)
+	if sudo {
+		commandArgs = append([]string{"sudo"}, commandArgs...)
+	}
+	// #nosec G204 -- Command intentionally executes the workflow-provided command vector.
+	command := exec.CommandContext(ctx, commandArgs[0], commandArgs[1:]...)
+	command.Stdout = stdout
+	command.Stderr = stderr
+	if len(env) > 0 {
+		command.Env = os.Environ()
+		for key, value := range env {
+			key = strings.TrimSpace(key)
+			if key == "" {
+				continue
+			}
+			command.Env = append(command.Env, key+"="+value)
+		}
+	}
+	err := command.Run()
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		if parent.Err() != nil {
 			return parent.Err()

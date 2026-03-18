@@ -37,8 +37,6 @@ spec:
   action: copy
   src: /etc/kubernetes/admin.conf
   dest: /home/vagrant/.kube/config
-  owner: vagrant
-  group: vagrant
   mode: "0644"
 ```
 
@@ -63,16 +61,14 @@ spec:
 | `spec.action` | `string` | no | `` | `download, write, copy, edit` | Selects the file operation. Each action changes which sibling fields are required. | `copy` |
 | `spec.backup` | `boolean` | no | `` | `` | Create a `.bak` copy of the original file before overwriting it. | `true` |
 | `spec.content` | `string` | no | `` | `` | Inline file content written verbatim to `path`. Used with `write`. | `[offline-base]\nbaseurl=http://repo.local` |
-| `spec.contentFromTemplate` | `string` | no | `` | `` | Path to a template file relative to `workflows/` rendered with the current vars. Used with `write`. Prefer this over `content` for multi-line configs. | `containerd-config.toml.tmpl` |
+| `spec.contentFromTemplate` | `string` | no | `` | `` | Inline multi-line content rendered with the current vars before writing. Use this instead of `content` when the body includes template expressions such as `{{ .vars.* }}`. | `[Service]\nEnvironment=ROLE={{ .vars.role }}` |
 | `spec.dest` | `string` | no | `` | `` | Destination path on the node. Required for `copy`. | `/home/vagrant/.kube/config` |
 | `spec.edits` | `array<object>` | no | `` | `` | Ordered list of match/replace rules applied sequentially to the file. Required for `edit`. | `[{match:SystemdCgroup = false,with:SystemdCgroup = true}]` |
 | `spec.fetch` | `object` | no | `` | `` | Optional download transport settings applied to `download` fetches. | `{offlineOnly:true}` |
-| `spec.group` | `string` | no | `` | `` | Group name or GID that should own the written file. | `root` |
 | `spec.mode` | `string` | no | `` | `` | File permissions in octal notation applied after writing. | `0644` |
-| `spec.output` | `object` | no | `` | `` | Output target inside the bundle for the downloaded file. Required for `download`. | `{path:files/bin/runc}` |
-| `spec.owner` | `string` | no | `` | `` | User name or UID that should own the written file. | `root` |
+| `spec.output` | `object` | no | `` | `` | Optional output target inside the bundle for the downloaded file. When omitted, deck writes to `files/<basename>`. | `{path:files/bin/runc}` |
 | `spec.path` | `string` | no | `` | `` | Destination path on the node. Required for `write` and `edit`. | `/etc/containerd/config.toml` |
-| `spec.source` | `object` | no | `` | `` | Download source descriptor. Required for `download`. Provide exactly one of `url`, `path`, or `bundle`. | `{url:https://example.invalid/file.tar.gz}` |
+| `spec.source` | `object` | no | `` | `` | Download source descriptor. `path` or `bundle` may be combined with `url` to allow an online fallback when local resolution fails. | `{url:https://example.invalid/file.tar.gz}` |
 | `spec.src` | `string` | no | `` | `` | Source path already present on the node. Required for `copy`. | `/etc/kubernetes/admin.conf` |
 
 ## Nested Objects
@@ -82,7 +78,7 @@ spec:
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
 | `spec.output.chmod` | `string` | no | `` | `` | File permissions applied to the downloaded output file in octal notation. | `0755` |
-| `spec.output.path` | `string` | yes | `` | `` | Bundle-relative path where the downloaded file is written. | `files/bin/runc` |
+| `spec.output.path` | `string` | yes | `` | `` | Bundle-relative path where the downloaded file is written. Defaults to `files/<basename>` when omitted. | `files/bin/runc` |
 
 ### `spec.source`
 
@@ -103,7 +99,7 @@ spec:
 
 ## Validation Rules
 
-- When `spec.action=download`, `spec.source`, `spec.output` are required.
+- When `spec.action=download`, `spec.source` are required.
 - When `spec.action=write`, `spec.path` are required.
 - When `spec.action=write`, at least one of `spec.content` or `spec.contentFromTemplate` must be set.
 - When `spec.action=copy`, `spec.src`, `spec.dest` are required.
@@ -113,7 +109,7 @@ spec:
 
 - `File` is usually the best first choice for host file changes because it stays declarative and validates action-specific inputs.
 - `download` writes into a bundle output target during prepare, while `copy`, `write`, and `edit` operate on live node paths during apply.
-- Use `contentFromTemplate` instead of `content` for configs that include variable substitution.
+- Use `contentFromTemplate` instead of `content` when the body includes variable substitution.
 
 ## Actions
 
@@ -143,25 +139,20 @@ spec:
   action: copy
   src: /etc/kubernetes/admin.conf
   dest: /home/vagrant/.kube/config
-  owner: vagrant
-  group: vagrant
   mode: "0644"
 ```
 ### `download`
 
 Use `download` to pull or bundle a source into a staged output target during prepare.
 
-- required fields: `spec.source`, `spec.output`
+- required fields: `spec.source`
 
 #### Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
 | `spec.action` | `string` | no | `` | `download, write, copy, edit` | Selects the file operation. Each action changes which sibling fields are required. | `copy` |
-| `spec.output` | `object` | no | `` | `` | Output target inside the bundle for the downloaded file. Required for `download`. | `{path:files/bin/runc}` |
-| `spec.output.chmod` | `string` | no | `` | `` | File permissions applied to the downloaded output file in octal notation. | `0755` |
-| `spec.output.path` | `string` | yes | `` | `` | Bundle-relative path where the downloaded file is written. | `files/bin/runc` |
-| `spec.source` | `object` | no | `` | `` | Download source descriptor. Required for `download`. Provide exactly one of `url`, `path`, or `bundle`. | `{url:https://example.invalid/file.tar.gz}` |
+| `spec.source` | `object` | no | `` | `` | Download source descriptor. `path` or `bundle` may be combined with `url` to allow an online fallback when local resolution fails. | `{url:https://example.invalid/file.tar.gz}` |
 | `spec.source.bundle` | `object` | no | `` | `` | Reference to a file already inside the bundle. Used to stage a bundle-resident file into a new output location. | `{root:files,path:bin/linux/amd64/runc}` |
 | `spec.source.bundle.path` | `string` | yes | `` | `` | Relative path within the bundle root to the source file. | `bin/linux/amd64/runc` |
 | `spec.source.bundle.root` | `string` | yes | `` | `files, images, packages` | Bundle root category to read from (`files`, `images`, or `packages`). | `files` |
@@ -171,7 +162,7 @@ Use `download` to pull or bundle a source into a staged output target during pre
 
 #### Rules
 
-- When `spec.action=download`, `spec.source`, `spec.output` are required.
+- When `spec.action=download`, `spec.source` are required.
 
 #### Example
 
@@ -199,7 +190,7 @@ Use `edit` for in-place match/replace edits on an existing file.
 | `spec.action` | `string` | no | `` | `download, write, copy, edit` | Selects the file operation. Each action changes which sibling fields are required. | `copy` |
 | `spec.edits` | `array<object>` | no | `` | `` | Ordered list of match/replace rules applied sequentially to the file. Required for `edit`. | `[{match:SystemdCgroup = false,with:SystemdCgroup = true}]` |
 | `spec.edits[].match` | `string` | yes | `` | `` | Literal string or pattern to search for in the file. | `SystemdCgroup = false` |
-| `spec.edits[].op` | `string` | no | `` | `` | Edit operation type. `replace` substitutes the match; `append` adds `with` after each match. Defaults to `replace`. | `replace` |
+| `spec.edits[].op` | `string` | no | `` | `replace, append` | Edit operation type. `replace` substitutes all matches; `append` keeps the match text and adds `with` after each match. Defaults to `replace`. | `replace` |
 | `spec.edits[].with` | `string` | no | `` | `` | Replacement string. Substituted wherever `match` is found. | `SystemdCgroup = true` |
 | `spec.path` | `string` | no | `` | `` | Destination path on the node. Required for `write` and `edit`. | `/etc/containerd/config.toml` |
 
@@ -230,7 +221,7 @@ Use `write` to write inline content or a rendered template to a destination path
 |---|---|---:|---|---|---|---|
 | `spec.action` | `string` | no | `` | `download, write, copy, edit` | Selects the file operation. Each action changes which sibling fields are required. | `copy` |
 | `spec.content` | `string` | no | `` | `` | Inline file content written verbatim to `path`. Used with `write`. | `[offline-base]\nbaseurl=http://repo.local` |
-| `spec.contentFromTemplate` | `string` | no | `` | `` | Path to a template file relative to `workflows/` rendered with the current vars. Used with `write`. Prefer this over `content` for multi-line configs. | `containerd-config.toml.tmpl` |
+| `spec.contentFromTemplate` | `string` | no | `` | `` | Inline multi-line content rendered with the current vars before writing. Use this instead of `content` when the body includes template expressions such as `{{ .vars.* }}`. | `[Service]\nEnvironment=ROLE={{ .vars.role }}` |
 | `spec.path` | `string` | no | `` | `` | Destination path on the node. Required for `write` and `edit`. | `/etc/containerd/config.toml` |
 
 #### Rules
@@ -245,7 +236,9 @@ kind: File
 spec:
   action: write
   path: /etc/containerd/config.toml
-  contentFromTemplate: containerd-config.toml.tmpl
+  contentFromTemplate: |
+    [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+      SystemdCgroup = {{ .vars.systemdCgroup }}
   mode: "0644"
 ```
 

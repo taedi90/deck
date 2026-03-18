@@ -61,7 +61,7 @@ spec:
 | `spec.backend` | `object` | no | `` | `` | Backend-specific settings such as runtime or transport configuration. | `{runtime:containerd}` |
 | `spec.command` | `array<string>` | no | `` | `` | Optional image-listing command used by `verify` when the default runtime command is not appropriate. | `[ctr,-n,k8s.io,images,list,-q]` |
 | `spec.images` | `array<string>` | yes | `` | `` | Fully qualified image references to download or verify. | `[registry.k8s.io/pause:3.9]` |
-| `spec.output` | `object` | no | `` | `` | Bundle output settings used when downloaded image archives are written during prepare. | `{layout:oci-archive,path:images/control-plane.tar}` |
+| `spec.output` | `object` | no | `` | `` | Bundle output settings for `download`. Deck writes one tar archive per image under `output.dir`. | `{dir:images/control-plane}` |
 | `spec.runtime` | `object` | no | `` | `` | Container runtime configuration used when pulling or verifying images. | `{socket:unix:///run/containerd/containerd.sock}` |
 
 ## Nested Objects
@@ -72,6 +72,12 @@ spec:
 |---|---|---:|---|---|---|---|
 | `spec.auth[].basic.password` | `string` | yes | `` | `` | Registry password or access token paired with `basic.username`. | `${REGISTRY_PASSWORD}` |
 | `spec.auth[].basic.username` | `string` | yes | `` | `` | Registry username used for basic authentication. | `robot` |
+
+### `spec.output`
+
+| Key | Type | Required | Default | Enum | Description | Example |
+|---|---|---:|---|---|---|---|
+| `spec.output.dir` | `string` | no | `` | `` | Bundle-relative directory where per-image tar archives are written. Defaults to `images` when omitted. | `images/control-plane` |
 
 
 ## Validation Rules
@@ -119,7 +125,7 @@ spec:
         username: "{{ .vars.registryUser }}"
         password: "{{ .vars.registryPassword }}"
   output:
-    path: images/control-plane.tar
+    dir: images/control-plane
 ```
 ### `verify`
 

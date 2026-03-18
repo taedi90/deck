@@ -83,13 +83,13 @@ func patchFileSpec(node any) {
 	props := propertyMap(spec)
 	setMap(props, "action", map[string]any{"type": "string", "enum": []any{"download", "write", "copy", "edit"}})
 	mergeMap(props, "mode", map[string]any{"type": "string", "pattern": "^[0-7]{4}$"})
-	mergeMap(props, "owner", map[string]any{"type": "string", "minLength": 1})
-	mergeMap(props, "group", map[string]any{"type": "string", "minLength": 1})
+	delete(props, "owner")
+	delete(props, "group")
 	patchFileEditRules(props["edits"])
 	patchFileSource(props["source"])
 	patchFileOutput(props["output"])
 	spec["allOf"] = []any{
-		conditionalRequired("download", []string{"source", "output"}, nil),
+		conditionalRequired("download", []string{"source"}, nil),
 		conditionalRequired("write", []string{"path"}, []any{
 			map[string]any{"required": []any{"content"}},
 			map[string]any{"required": []any{"contentFromTemplate"}},
@@ -137,7 +137,7 @@ func patchFileEditRules(node any) {
 		"properties": map[string]any{
 			"match": map[string]any{"type": "string"},
 			"with":  map[string]any{"type": "string"},
-			"op":    map[string]any{"type": "string"},
+			"op":    enumStringSchema("replace", "append"),
 		},
 	}
 }
