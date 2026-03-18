@@ -126,6 +126,14 @@ Formatting is enforced with:
 - `gofumpt`
 - `gci`
 
+Dependency vulnerability checks run separately from lint:
+
+- `make vuln` runs pinned `govulncheck` against `./...`
+- `make vuln-ai` runs pinned `govulncheck -tags ai ./...`
+- the scanner version is pinned in `Makefile` for reproducible CI behavior, while vulnerability data still comes from the latest Go vuln database at runtime
+- CI treats `govulncheck` as a separate security gate instead of folding it into `golangci-lint`
+- fix reachable vulnerabilities by upgrading dependencies first; if an exception is unavoidable, record the reason and revisit it explicitly
+
 Additional style-focused linters may be added over time, but only if they improve signal quality for this repo.
 
 ## Deliberate deviations from the Uber guide

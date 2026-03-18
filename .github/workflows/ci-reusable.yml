@@ -92,3 +92,22 @@ jobs:
             echo "linting ${example_path}"
             ./bin/deck lint --file "${example_path}"
           done < docs/examples/cases.tsv
+
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run govulncheck (core)
+        run: make vuln
+
+      - name: Run govulncheck (ai)
+        run: make vuln-ai
