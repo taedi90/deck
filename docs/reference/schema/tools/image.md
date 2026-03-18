@@ -56,7 +56,7 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | no | `` | `download, verify` | Chooses whether the step downloads images into the bundle or verifies their presence on the node. | `verify` |
+| `spec.action` | `string` | yes | `` | `download, verify` | Chooses whether the step downloads images into the bundle or verifies their presence on the node. | `verify` |
 | `spec.auth` | `array<object>` | no | `` | `` | Optional registry authentication entries for `download`. Match each private registry with credentials while leaving public registries to the default keychain. | `[{registry:registry.example.com,basic:{username:robot,password:${REGISTRY_PASSWORD}}}]` |
 | `spec.backend` | `object` | no | `` | `` | Backend-specific settings such as runtime or transport configuration. | `{runtime:containerd}` |
 | `spec.command` | `array<string>` | no | `` | `` | Optional image-listing command used by `verify` when the default runtime command is not appropriate. | `[ctr,-n,k8s.io,images,list,-q]` |
@@ -103,7 +103,7 @@ Use `download` during prepare to collect images into bundle outputs.
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | no | `` | `download, verify` | Chooses whether the step downloads images into the bundle or verifies their presence on the node. | `verify` |
+| `spec.action` | `string` | yes | `` | `download, verify` | Chooses whether the step downloads images into the bundle or verifies their presence on the node. | `verify` |
 | `spec.images` | `array<string>` | yes | `` | `` | Fully qualified image references to download or verify. | `[registry.k8s.io/pause:3.9]` |
 
 #### Rules
@@ -137,7 +137,7 @@ Use `verify` to assert that required images already exist locally on the node.
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | no | `` | `download, verify` | Chooses whether the step downloads images into the bundle or verifies their presence on the node. | `verify` |
+| `spec.action` | `string` | yes | `` | `download, verify` | Chooses whether the step downloads images into the bundle or verifies their presence on the node. | `verify` |
 | `spec.images` | `array<string>` | yes | `` | `` | Fully qualified image references to download or verify. | `[registry.k8s.io/pause:3.9]` |
 
 #### Rules

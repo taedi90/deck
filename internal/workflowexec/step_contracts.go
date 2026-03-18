@@ -97,25 +97,10 @@ func StepAllowedForRole(role, kind string, spec map[string]any) bool {
 	if !ok {
 		return false
 	}
-	if spec != nil {
-		if _, ok := spec["action"].(string); !ok || spec["action"] == "" {
-			switch kind {
-			case "File":
-				if role == "prepare" {
-					return spec["source"] != nil || spec["output"] != nil
-				}
-				return contract.Roles[role]
-			case "Image":
-				if role == "prepare" {
-					return spec["backend"] != nil || spec["output"] != nil || spec["images"] != nil
-				}
-				return contract.Roles[role]
-			case "Packages":
-				return contract.Roles[role]
-			}
-		}
-	}
 	action := inferContractAction(kind, spec)
+	if len(contract.Actions) > 0 && action == "" {
+		return contract.Roles[role]
+	}
 	if action != "" && len(contract.Actions) > 0 {
 		if actionContract, ok := contract.Actions[action]; ok && len(actionContract.Roles) > 0 {
 			return actionContract.Roles[role]
@@ -149,39 +134,7 @@ func inferContractAction(kind string, spec map[string]any) string {
 			return raw
 		}
 	}
-	switch kind {
-	case "File":
-		if spec != nil {
-			if spec["source"] != nil || spec["output"] != nil {
-				return "download"
-			}
-		}
-		if _, ok := spec["edits"]; ok {
-			return "edit"
-		}
-		if spec != nil {
-			if spec["src"] != nil || spec["dest"] != nil {
-				return "copy"
-			}
-		}
-		return "write"
-	case "Image":
-		if spec != nil {
-			if spec["backend"] != nil || spec["output"] != nil {
-				return "download"
-			}
-		}
-		return "verify"
-	case "Packages":
-		if spec != nil {
-			if spec["backend"] != nil || spec["distro"] != nil || spec["repo"] != nil {
-				return "download"
-			}
-		}
-		return "install"
-	default:
-		return ""
-	}
+	return ""
 }
 
 func setOf(values ...string) map[string]bool {

@@ -27,7 +27,7 @@ func generatePackagesToolSchema() map[string]any {
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",
 		"additionalProperties": false,
-		"required":             []any{"packages"},
+		"required":             []any{"action", "packages"},
 		"properties": map[string]any{
 			"source": map[string]any{
 				"type":                 "object",

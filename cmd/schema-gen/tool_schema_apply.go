@@ -73,7 +73,7 @@ func generateImageToolSchema() map[string]any {
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",
 		"additionalProperties": false,
-		"required":             []any{"images"},
+		"required":             []any{"action", "images"},
 		"properties": map[string]any{
 			"action":  enumStringSchema("download", "verify"),
 			"runtime": map[string]any{"type": "object", "additionalProperties": true},

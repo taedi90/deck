@@ -62,10 +62,10 @@ func TestRun_InstallTools(t *testing.T) {
 		Phases: []config.Phase{{
 			Name: "install",
 			Steps: []config.Step{
-				{ID: "install-packages", Kind: "Packages", Spec: map[string]any{"packages": []any{"containerd"}}},
-				{ID: "write-file", Kind: "File", Spec: map[string]any{"path": fileA, "content": "hello world"}},
-				{ID: "edit-file", Kind: "File", Spec: map[string]any{"path": fileA, "edits": []any{map[string]any{"op": "replace", "match": "world", "with": "deck"}}}},
-				{ID: "copy-file", Kind: "File", Spec: map[string]any{"src": fileA, "dest": fileB}},
+				{ID: "install-packages", Kind: "Packages", Spec: map[string]any{"action": "install", "packages": []any{"containerd"}}},
+				{ID: "write-file", Kind: "File", Spec: map[string]any{"action": "write", "path": fileA, "content": "hello world"}},
+				{ID: "edit-file", Kind: "File", Spec: map[string]any{"action": "edit", "path": fileA, "edits": []any{map[string]any{"op": "replace", "match": "world", "with": "deck"}}}},
+				{ID: "copy-file", Kind: "File", Spec: map[string]any{"action": "copy", "src": fileA, "dest": fileB}},
 				{ID: "sysctl", Kind: "Sysctl", Spec: map[string]any{"writeFile": sysctlPath, "values": map[string]any{"net.ipv4.ip_forward": "1"}}},
 				{ID: "modprobe", Kind: "KernelModule", Spec: map[string]any{"name": "overlay", "persistFile": modprobePath}},
 				{ID: "run-cmd", Kind: "Command", Spec: map[string]any{"command": []any{"true"}}},
@@ -291,9 +291,9 @@ func TestRun_ResumeFromFailedStep(t *testing.T) {
 		Phases: []config.Phase{{
 			Name: "install",
 			Steps: []config.Step{
-				{ID: "s1", Kind: "File", Spec: map[string]any{"path": first, "content": "ok"}},
+				{ID: "s1", Kind: "File", Spec: map[string]any{"action": "write", "path": first, "content": "ok"}},
 				{ID: "s2", Kind: "Command", Spec: map[string]any{"command": []any{"false"}}},
-				{ID: "s3", Kind: "File", Spec: map[string]any{"path": second, "content": "done"}},
+				{ID: "s3", Kind: "File", Spec: map[string]any{"action": "write", "path": second, "content": "done"}},
 			},
 		}},
 	}
@@ -484,6 +484,7 @@ func TestRun_CommandErrorCodes(t *testing.T) {
 					ID:   "verify-images",
 					Kind: "Image",
 					Spec: map[string]any{
+						"action":  "verify",
 						"images":  []any{"registry.k8s.io/pause:3.10.1"},
 						"command": []any{fakeList},
 						"timeout": "20ms",
@@ -965,6 +966,7 @@ func TestRun_Image(t *testing.T) {
 					ID:   "verify-images",
 					Kind: "Image",
 					Spec: map[string]any{
+						"action":  "verify",
 						"images":  []any{"registry.k8s.io/pause:3.10.1"},
 						"command": []any{fakeList},
 					},
@@ -1009,6 +1011,7 @@ func TestRun_Image(t *testing.T) {
 					ID:   "verify-images",
 					Kind: "Image",
 					Spec: map[string]any{
+						"action":  "verify",
 						"images":  []any{"registry.k8s.io/pause:3.10.1"},
 						"command": []any{fakeList},
 					},
@@ -1649,8 +1652,8 @@ func TestRun_WhenAndRegisterSemantics(t *testing.T) {
 			Name: "install",
 			Steps: []config.Step{
 				{ID: "init", Kind: "Kubeadm", Spec: map[string]any{"action": "init", "outputJoinFile": joinPath}, Register: map[string]string{"workerJoinFile": "joinFile"}},
-				{ID: "use-register", Kind: "File", When: "vars.role == \"control-plane\"", Spec: map[string]any{"path": registeredOutputPath, "content": "{{ .runtime.workerJoinFile }}"}},
-				{ID: "skip-worker", Kind: "File", When: "vars.role == \"worker\"", Spec: map[string]any{"path": skippedOutputPath, "content": "worker"}},
+				{ID: "use-register", Kind: "File", When: "vars.role == \"control-plane\"", Spec: map[string]any{"action": "write", "path": registeredOutputPath, "content": "{{ .runtime.workerJoinFile }}"}},
+				{ID: "skip-worker", Kind: "File", When: "vars.role == \"worker\"", Spec: map[string]any{"action": "write", "path": skippedOutputPath, "content": "worker"}},
 			},
 		}},
 	}
@@ -1947,7 +1950,7 @@ func TestRun_FileRespectsParentContext(t *testing.T) {
 			Steps: []config.Step{{
 				ID:   "download",
 				Kind: "File",
-				Spec: map[string]any{"source": map[string]any{"url": srv.URL + "/files/payload.txt"}, "output": map[string]any{"path": "files/payload.txt"}},
+				Spec: map[string]any{"action": "download", "source": map[string]any{"url": srv.URL + "/files/payload.txt"}, "output": map[string]any{"path": "files/payload.txt"}},
 			}},
 		}},
 	}
@@ -2213,7 +2216,7 @@ func TestRun_PackagesExecutesPackageManager(t *testing.T) {
 			Steps: []config.Step{{
 				ID:   "install-pkgs",
 				Kind: "Packages",
-				Spec: map[string]any{"packages": []any{"containerd", "kubelet"}},
+				Spec: map[string]any{"action": "install", "packages": []any{"containerd", "kubelet"}},
 			}},
 		}},
 	}
@@ -2258,6 +2261,7 @@ func TestRun_PackagesSourcePathValidation(t *testing.T) {
 				ID:   "install-pkgs",
 				Kind: "Packages",
 				Spec: map[string]any{
+					"action":   "install",
 					"packages": []any{"containerd"},
 					"source":   map[string]any{"type": "local-repo", "path": filepath.Join(dir, "missing")},
 				},
@@ -2327,6 +2331,7 @@ func TestRun_PackagesInstallsFromLocalRepo(t *testing.T) {
 				ID:   "install-pkgs",
 				Kind: "Packages",
 				Spec: map[string]any{
+					"action":   "install",
 					"packages": []any{"containerd", "kubelet"},
 					"source":   map[string]any{"type": "local-repo", "path": repoDir},
 				},
@@ -2389,7 +2394,7 @@ func TestRun_PackagesTimeoutUsesTimeoutClassification(t *testing.T) {
 				ID:      "install-pkgs",
 				Kind:    "Packages",
 				Timeout: "20ms",
-				Spec:    map[string]any{"packages": []any{"containerd"}},
+				Spec:    map[string]any{"action": "install", "packages": []any{"containerd"}},
 			}},
 		}},
 	}

@@ -3,12 +3,10 @@ package install
 import (
 	"context"
 	"fmt"
-
-	"github.com/taedi90/deck/internal/workflowexec"
 )
 
 func runFile(spec map[string]any) error {
-	switch workflowexec.InferStepAction("File", spec) {
+	switch stringValue(spec, "action") {
 	case "download":
 		return fmt.Errorf("file action download is not supported in apply dispatch without context")
 	case "write":
@@ -23,7 +21,7 @@ func runFile(spec map[string]any) error {
 }
 
 func runPackages(ctx context.Context, spec map[string]any) error {
-	switch workflowexec.InferStepAction("Packages", spec) {
+	switch stringValue(spec, "action") {
 	case "download":
 		return fmt.Errorf("packages action download is not supported in apply dispatch")
 	case "install":
@@ -38,7 +36,7 @@ func runContainerd(ctx context.Context, spec map[string]any) error {
 }
 
 func runRepository(spec map[string]any) error {
-	switch workflowexec.InferStepAction("Repository", spec) {
+	switch stringValue(spec, "action") {
 	case "configure":
 		return runRepoConfig(spec)
 	default:
@@ -47,7 +45,7 @@ func runRepository(spec map[string]any) error {
 }
 
 func runImage(ctx context.Context, spec map[string]any) error {
-	switch workflowexec.InferStepAction("Image", spec) {
+	switch stringValue(spec, "action") {
 	case "download":
 		return fmt.Errorf("image action download is not supported in apply dispatch")
 	case "verify":
@@ -58,7 +56,7 @@ func runImage(ctx context.Context, spec map[string]any) error {
 }
 
 func runKubeadm(ctx context.Context, spec map[string]any) error {
-	switch workflowexec.InferStepAction("Kubeadm", spec) {
+	switch stringValue(spec, "action") {
 	case "init":
 		return runKubeadmInit(ctx, spec)
 	case "join":

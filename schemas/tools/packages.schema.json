@@ -160,6 +160,7 @@
         }
       },
       "required": [
+        "action",
         "packages"
       ],
       "type": "object"

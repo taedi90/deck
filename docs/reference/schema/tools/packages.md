@@ -53,7 +53,7 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | no | `` | `download, install` | Selects whether to collect packages during prepare (`download`) or install them on the node (`install`). | `install` |
+| `spec.action` | `string` | yes | `` | `download, install` | Selects whether to collect packages during prepare (`download`) or install them on the node (`install`). | `install` |
 | `spec.backend` | `object` | no | `` | `` | Container-based download backend for `download`. Enables package resolution inside a distro-specific container image when the host OS differs from the target. | `{mode:container,runtime:docker,image:rockylinux:9}` |
 | `spec.distro` | `object` | no | `` | `` | Target distribution hint used by `download` to select the correct package manager and resolver backend. | `{family:rhel,release:rocky9}` |
 | `spec.excludeRepos` | `array<string>` | no | `` | `` | Repository identifiers to exclude from package resolution. Useful for suppressing online repos during an offline install. | `[updates]` |
@@ -109,7 +109,7 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | no | `` | `download, install` | Selects whether to collect packages during prepare (`download`) or install them on the node (`install`). | `install` |
+| `spec.action` | `string` | yes | `` | `download, install` | Selects whether to collect packages during prepare (`download`) or install them on the node (`install`). | `install` |
 | `spec.packages` | `array<string>` | yes | `` | `` | Package names to download or install. Use the same list in both `download` and `install` steps to keep offline parity. | `[kubelet,kubeadm,kubectl]` |
 
 #### Rules
@@ -146,7 +146,7 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | no | `` | `download, install` | Selects whether to collect packages during prepare (`download`) or install them on the node (`install`). | `install` |
+| `spec.action` | `string` | yes | `` | `download, install` | Selects whether to collect packages during prepare (`download`) or install them on the node (`install`). | `install` |
 | `spec.packages` | `array<string>` | yes | `` | `` | Package names to download or install. Use the same list in both `download` and `install` steps to keep offline parity. | `[kubelet,kubeadm,kubectl]` |
 
 #### Rules

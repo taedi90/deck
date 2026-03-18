@@ -498,6 +498,13 @@ func validateSemantics(wf *config.Workflow) error {
 	assignedRuntime := map[string]string{}
 
 	for _, step := range workflowSteps(wf) {
+		if contract, ok := workflowexec.StepContractForKind(step.Kind); ok && len(contract.Actions) > 0 {
+			action, _ := step.Spec["action"].(string)
+			if strings.TrimSpace(action) == "" {
+				return fmt.Errorf("E_SCHEMA_INVALID: step %s (%s): spec.action is required", step.ID, step.Kind)
+			}
+		}
+
 		if step.ID == "" {
 			continue
 		}
@@ -527,13 +534,6 @@ func validateSemantics(wf *config.Workflow) error {
 
 		if step.Kind == "Wait" {
 			action, _ := step.Spec["action"].(string)
-			if action == "" {
-				if state, _ := step.Spec["state"].(string); state == "absent" {
-					action = "fileAbsent"
-				} else {
-					action = "fileExists"
-				}
-			}
 			nonEmpty, _ := step.Spec["nonEmpty"].(bool)
 			if action == "fileAbsent" && nonEmpty {
 				return fmt.Errorf("E_SCHEMA_INVALID: step %s (Wait): nonEmpty is only valid for fileExists", step.ID)

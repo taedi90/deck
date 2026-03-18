@@ -58,7 +58,7 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | no | `` | `download, write, copy, edit` | Selects the file operation. Each action changes which sibling fields are required. | `copy` |
+| `spec.action` | `string` | yes | `` | `download, write, copy, edit` | Selects the file operation. Each action changes which sibling fields are required. | `copy` |
 | `spec.backup` | `boolean` | no | `` | `` | Create a `.bak` copy of the original file before overwriting it. | `true` |
 | `spec.content` | `string` | no | `` | `` | Inline file content written verbatim to `path`. Used with `write`. | `[offline-base]\nbaseurl=http://repo.local` |
 | `spec.contentFromTemplate` | `string` | no | `` | `` | Inline multi-line content rendered with the current vars before writing. Use this instead of `content` when the body includes template expressions such as `{{ .vars.* }}`. | `[Service]\nEnvironment=ROLE={{ .vars.role }}` |
@@ -123,7 +123,7 @@ Use `copy` to move a file already present on the node from one path to another.
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | no | `` | `download, write, copy, edit` | Selects the file operation. Each action changes which sibling fields are required. | `copy` |
+| `spec.action` | `string` | yes | `` | `download, write, copy, edit` | Selects the file operation. Each action changes which sibling fields are required. | `copy` |
 | `spec.dest` | `string` | no | `` | `` | Destination path on the node. Required for `copy`. | `/home/vagrant/.kube/config` |
 | `spec.src` | `string` | no | `` | `` | Source path already present on the node. Required for `copy`. | `/etc/kubernetes/admin.conf` |
 
@@ -151,7 +151,7 @@ Use `download` to pull or bundle a source into a staged output target during pre
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | no | `` | `download, write, copy, edit` | Selects the file operation. Each action changes which sibling fields are required. | `copy` |
+| `spec.action` | `string` | yes | `` | `download, write, copy, edit` | Selects the file operation. Each action changes which sibling fields are required. | `copy` |
 | `spec.source` | `object` | no | `` | `` | Download source descriptor. `path` or `bundle` may be combined with `url` to allow an online fallback when local resolution fails. | `{url:https://example.invalid/file.tar.gz}` |
 | `spec.source.bundle` | `object` | no | `` | `` | Reference to a file already inside the bundle. Used to stage a bundle-resident file into a new output location. | `{root:files,path:bin/linux/amd64/runc}` |
 | `spec.source.bundle.path` | `string` | yes | `` | `` | Relative path within the bundle root to the source file. | `bin/linux/amd64/runc` |
@@ -187,7 +187,7 @@ Use `edit` for in-place match/replace edits on an existing file.
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | no | `` | `download, write, copy, edit` | Selects the file operation. Each action changes which sibling fields are required. | `copy` |
+| `spec.action` | `string` | yes | `` | `download, write, copy, edit` | Selects the file operation. Each action changes which sibling fields are required. | `copy` |
 | `spec.edits` | `array<object>` | no | `` | `` | Ordered list of match/replace rules applied sequentially to the file. Required for `edit`. | `[{match:SystemdCgroup = false,with:SystemdCgroup = true}]` |
 | `spec.edits[].match` | `string` | yes | `` | `` | Literal string or pattern to search for in the file. | `SystemdCgroup = false` |
 | `spec.edits[].op` | `string` | no | `` | `replace, append` | Edit operation type. `replace` substitutes all matches; `append` keeps the match text and adds `with` after each match. Defaults to `replace`. | `replace` |
@@ -219,7 +219,7 @@ Use `write` to write inline content or a rendered template to a destination path
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.action` | `string` | no | `` | `download, write, copy, edit` | Selects the file operation. Each action changes which sibling fields are required. | `copy` |
+| `spec.action` | `string` | yes | `` | `download, write, copy, edit` | Selects the file operation. Each action changes which sibling fields are required. | `copy` |
 | `spec.content` | `string` | no | `` | `` | Inline file content written verbatim to `path`. Used with `write`. | `[offline-base]\nbaseurl=http://repo.local` |
 | `spec.contentFromTemplate` | `string` | no | `` | `` | Inline multi-line content rendered with the current vars before writing. Use this instead of `content` when the body includes template expressions such as `{{ .vars.* }}`. | `[Service]\nEnvironment=ROLE={{ .vars.role }}` |
 | `spec.path` | `string` | no | `` | `` | Destination path on the node. Required for `write` and `edit`. | `/etc/containerd/config.toml` |

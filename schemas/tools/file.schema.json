@@ -252,7 +252,9 @@
           "type": "string"
         }
       },
-      "required": [],
+      "required": [
+        "action"
+      ],
       "type": "object"
     },
     "timeout": {

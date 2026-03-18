@@ -18,7 +18,7 @@ func executeStep(ctx context.Context, kind string, spec map[string]any, bundleRo
 	case "Packages":
 		return runPackages(ctx, spec)
 	case "File":
-		if workflowexec.InferStepAction("File", spec) == "download" {
+		if stringValue(spec, "action") == "download" {
 			_, err := runFileDownload(ctx, bundleRoot, spec)
 			return err
 		}

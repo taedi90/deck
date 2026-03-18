@@ -79,7 +79,7 @@ func patchFileSpec(node any) {
 	}
 	spec["type"] = "object"
 	spec["additionalProperties"] = false
-	spec["required"] = []any{}
+	spec["required"] = []any{"action"}
 	props := propertyMap(spec)
 	setMap(props, "action", map[string]any{"type": "string", "enum": []any{"download", "write", "copy", "edit"}})
 	mergeMap(props, "mode", map[string]any{"type": "string", "pattern": "^[0-7]{4}$"})
