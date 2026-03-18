@@ -71,7 +71,7 @@ source <(deck completion zsh)  # for zsh
 deck completion fish | source  # for fish
 ```
 
-To make it persistent, add the above command to your `~/.bashrc` or `~/.zshrc`.
+To make it persistent, add the relevant command to your shell's startup file (e.g., `~/.bashrc` or `~/.zshrc`). For detailed instructions for all supported shells, see the [CLI Reference](docs/reference/cli.md#shell-completion).
 
 ## Documentation
 
