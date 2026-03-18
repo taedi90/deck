@@ -71,32 +71,7 @@
                 },
                 {
                   "required": [
-                    "ignoreErrors"
-                  ]
-                },
-                {
-                  "required": [
-                    "removeFiles"
-                  ]
-                },
-                {
-                  "required": [
                     "cleanupContainers"
-                  ]
-                },
-                {
-                  "required": [
-                    "joinFile"
-                  ]
-                },
-                {
-                  "required": [
-                    "stopKubelet"
-                  ]
-                },
-                {
-                  "required": [
-                    "restartRuntimeService"
                   ]
                 },
                 {
@@ -106,7 +81,32 @@
                 },
                 {
                   "required": [
+                    "ignoreErrors"
+                  ]
+                },
+                {
+                  "required": [
+                    "joinFile"
+                  ]
+                },
+                {
+                  "required": [
+                    "removeFiles"
+                  ]
+                },
+                {
+                  "required": [
                     "removePaths"
+                  ]
+                },
+                {
+                  "required": [
+                    "restartRuntimeService"
+                  ]
+                },
+                {
+                  "required": [
+                    "stopKubelet"
                   ]
                 }
               ]
@@ -131,32 +131,7 @@
                   "anyOf": [
                     {
                       "required": [
-                        "outputJoinFile"
-                      ]
-                    },
-                    {
-                      "required": [
-                        "kubernetesVersion"
-                      ]
-                    },
-                    {
-                      "required": [
-                        "criSocket"
-                      ]
-                    },
-                    {
-                      "required": [
-                        "ignorePreflightErrors"
-                      ]
-                    },
-                    {
-                      "required": [
-                        "ignoreErrors"
-                      ]
-                    },
-                    {
-                      "required": [
-                        "removeFiles"
+                        "advertiseAddress"
                       ]
                     },
                     {
@@ -166,37 +141,12 @@
                     },
                     {
                       "required": [
-                        "podNetworkCIDR"
-                      ]
-                    },
-                    {
-                      "required": [
-                        "stopKubelet"
-                      ]
-                    },
-                    {
-                      "required": [
-                        "restartRuntimeService"
-                      ]
-                    },
-                    {
-                      "required": [
                         "configTemplate"
                       ]
                     },
                     {
                       "required": [
-                        "pullImages"
-                      ]
-                    },
-                    {
-                      "required": [
-                        "advertiseAddress"
-                      ]
-                    },
-                    {
-                      "required": [
-                        "skipIfAdminConfExists"
+                        "criSocket"
                       ]
                     },
                     {
@@ -206,7 +156,57 @@
                     },
                     {
                       "required": [
+                        "ignoreErrors"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "ignorePreflightErrors"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "kubernetesVersion"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "outputJoinFile"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "podNetworkCIDR"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "pullImages"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "removeFiles"
+                      ]
+                    },
+                    {
+                      "required": [
                         "removePaths"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "restartRuntimeService"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "skipIfAdminConfExists"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "stopKubelet"
                       ]
                     }
                   ]
@@ -245,17 +245,7 @@
               "anyOf": [
                 {
                   "required": [
-                    "outputJoinFile"
-                  ]
-                },
-                {
-                  "required": [
-                    "kubernetesVersion"
-                  ]
-                },
-                {
-                  "required": [
-                    "ignorePreflightErrors"
+                    "advertiseAddress"
                   ]
                 },
                 {
@@ -270,7 +260,12 @@
                 },
                 {
                   "required": [
-                    "podNetworkCIDR"
+                    "configTemplate"
+                  ]
+                },
+                {
+                  "required": [
+                    "ignorePreflightErrors"
                   ]
                 },
                 {
@@ -280,17 +275,22 @@
                 },
                 {
                   "required": [
-                    "configTemplate"
+                    "kubernetesVersion"
+                  ]
+                },
+                {
+                  "required": [
+                    "outputJoinFile"
+                  ]
+                },
+                {
+                  "required": [
+                    "podNetworkCIDR"
                   ]
                 },
                 {
                   "required": [
                     "pullImages"
-                  ]
-                },
-                {
-                  "required": [
-                    "advertiseAddress"
                   ]
                 },
                 {

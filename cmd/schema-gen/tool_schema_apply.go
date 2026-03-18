@@ -1,5 +1,7 @@
 package main
 
+import "sort"
+
 func generateArtifactsToolSchema() map[string]any {
 	root := stepEnvelopeSchema("Artifacts", "ArtifactsStep", "Installs or extracts per-architecture artifacts during apply.", "public")
 	props := propertyMap(root)
@@ -258,5 +260,6 @@ func schemaPropertyKeys(properties map[string]any) []string {
 	for key := range properties {
 		keys = append(keys, key)
 	}
+	sort.Strings(keys)
 	return keys
 }
