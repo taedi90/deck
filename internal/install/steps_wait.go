@@ -34,13 +34,6 @@ func runWait(parent context.Context, spec map[string]any) error {
 	}
 	action := decoded.Action
 	if action == "" {
-		if decoded.State == "absent" {
-			action = "fileAbsent"
-		} else {
-			action = "fileExists"
-		}
-	}
-	if action == "" {
 		return fmt.Errorf("wait requires action")
 	}
 	interval := 500 * time.Millisecond

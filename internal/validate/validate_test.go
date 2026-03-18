@@ -606,6 +606,33 @@ phases:
 		}
 	})
 
+	t.Run("tool schema rejects Wait without explicit action", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "workflow.yaml")
+		content := []byte(`role: apply
+version: v1alpha1
+phases:
+  - name: install
+    steps:
+      - id: wait-admin-conf
+        apiVersion: deck/v1alpha1
+        kind: Wait
+        spec:
+          path: /etc/kubernetes/admin.conf
+`)
+		if err := os.WriteFile(path, content, 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+
+		err := File(path)
+		if err == nil {
+			t.Fatalf("expected tool schema validation error")
+		}
+		if got := err.Error(); !strings.Contains(got, "E_SCHEMA_INVALID") {
+			t.Fatalf("expected E_SCHEMA_INVALID, got %v", err)
+		}
+	})
+
 	t.Run("tool schema rejects WaitPath nonEmpty with absent state", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
@@ -681,6 +708,61 @@ phases:
           force: true
           createParent: true
           requireTarget: true
+`)
+		if err := os.WriteFile(path, content, 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+
+		if err := File(path); err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+	})
+
+	t.Run("tool schema rejects Repository without explicit action", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "workflow.yaml")
+		content := []byte(`role: apply
+version: v1alpha1
+phases:
+  - name: install
+    steps:
+      - id: repo-config
+        apiVersion: deck/v1alpha1
+        kind: Repository
+        spec:
+          format: apt
+          repositories:
+            - id: offline
+              baseurl: http://repo.local/debian
+`)
+		if err := os.WriteFile(path, content, 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+
+		err := File(path)
+		if err == nil {
+			t.Fatalf("expected tool schema validation error")
+		}
+		if got := err.Error(); !strings.Contains(got, "E_SCHEMA_INVALID") {
+			t.Fatalf("expected E_SCHEMA_INVALID, got %v", err)
+		}
+	})
+
+	t.Run("tool schema valid KernelModule names", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "workflow.yaml")
+		content := []byte(`role: apply
+version: v1alpha1
+phases:
+  - name: install
+    steps:
+      - id: load-modules
+        apiVersion: deck/v1alpha1
+        kind: KernelModule
+        spec:
+          names: [overlay, br_netfilter]
+          load: true
+          persist: true
 `)
 		if err := os.WriteFile(path, content, 0o644); err != nil {
 			t.Fatalf("write file: %v", err)

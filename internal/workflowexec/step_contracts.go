@@ -165,8 +165,6 @@ func inferContractAction(kind string, spec map[string]any) string {
 			}
 		}
 		return "write"
-	case "Repository":
-		return "configure"
 	case "Image":
 		if spec != nil {
 			if spec["backend"] != nil || spec["output"] != nil {
@@ -181,13 +179,6 @@ func inferContractAction(kind string, spec map[string]any) string {
 			}
 		}
 		return "install"
-	case "Wait":
-		if spec != nil {
-			if state, _ := spec["state"].(string); state == "absent" {
-				return "fileAbsent"
-			}
-		}
-		return "fileExists"
 	default:
 		return ""
 	}

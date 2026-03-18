@@ -9,7 +9,16 @@ import (
 	"github.com/taedi90/deck/internal/filemode"
 	"github.com/taedi90/deck/internal/fsutil"
 	"github.com/taedi90/deck/internal/hostfs"
+	"github.com/taedi90/deck/internal/workflowexec"
 )
+
+type kernelModuleSpec struct {
+	Name        string   `json:"name"`
+	Names       []string `json:"names"`
+	Load        *bool    `json:"load"`
+	Persist     *bool    `json:"persist"`
+	PersistFile string   `json:"persistFile"`
+}
 
 func runSysctl(spec map[string]any) error {
 	path := stringValue(spec, "writeFile")
@@ -219,22 +228,29 @@ func runSwap(spec map[string]any) error {
 }
 
 func runKernelModule(spec map[string]any) error {
-	name := stringValue(spec, "name")
-	if name == "" {
-		return fmt.Errorf("%s: KernelModule requires name", errCodeInstallKernelModuleMiss)
+	decoded, err := workflowexec.DecodeSpec[kernelModuleSpec](spec)
+	if err != nil {
+		return fmt.Errorf("decode KernelModule spec: %w", err)
+	}
+	modules := kernelModuleNames(decoded)
+	if len(modules) == 0 {
+		return fmt.Errorf("%s: KernelModule requires name or names", errCodeInstallKernelModuleMiss)
+	}
+	if decoded.Name != "" && len(decoded.Names) > 0 {
+		return fmt.Errorf("%s: KernelModule accepts either name or names", errCodeInstallKernelModuleMiss)
 	}
 
 	load := true
-	if v, ok := spec["load"].(bool); ok {
-		load = v
+	if decoded.Load != nil {
+		load = *decoded.Load
 	}
 	persist := true
-	if v, ok := spec["persist"].(bool); ok {
-		persist = v
+	if decoded.Persist != nil {
+		persist = *decoded.Persist
 	}
 
 	if persist {
-		persistFile := stringValue(spec, "persistFile")
+		persistFile := strings.TrimSpace(decoded.PersistFile)
 		if persistFile == "" {
 			persistFile = "/etc/modules-load.d/k8s.conf"
 		}
@@ -246,20 +262,28 @@ func runKernelModule(spec map[string]any) error {
 		if err != nil && !os.IsNotExist(err) {
 			return err
 		}
-		lines := strings.Split(string(raw), "\n")
-		present := false
+		lines := strings.Split(strings.TrimRight(string(raw), "\n"), "\n")
+		seen := map[string]bool{}
+		contentLines := make([]string, 0, len(lines)+len(modules))
 		for _, line := range lines {
-			if strings.TrimSpace(line) == name {
-				present = true
-				break
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "" {
+				continue
 			}
+			contentLines = append(contentLines, trimmed)
+			seen[trimmed] = true
 		}
-		if !present {
-			content := strings.TrimRight(string(raw), "\n")
-			if content != "" {
-				content += "\n"
+		changed := false
+		for _, module := range modules {
+			if seen[module] {
+				continue
 			}
-			content += name + "\n"
+			contentLines = append(contentLines, module)
+			seen[module] = true
+			changed = true
+		}
+		if changed {
+			content := strings.Join(contentLines, "\n") + "\n"
 			if err := persistRef.WriteFile([]byte(content), filemode.PublishedArtifact); err != nil {
 				return err
 			}
@@ -267,18 +291,38 @@ func runKernelModule(spec map[string]any) error {
 	}
 
 	if load {
-		loaded, err := kernelModuleLoaded(name)
-		if err != nil {
-			return err
-		}
-		if !loaded {
-			if err := runTimedCommand("modprobe", []string{name}, commandTimeoutWithDefault(spec, 30*time.Second)); err != nil {
+		for _, module := range modules {
+			loaded, err := kernelModuleLoaded(module)
+			if err != nil {
 				return err
+			}
+			if !loaded {
+				if err := runTimedCommand("modprobe", []string{module}, commandTimeoutWithDefault(spec, 30*time.Second)); err != nil {
+					return err
+				}
 			}
 		}
 	}
 
 	return nil
+}
+
+func kernelModuleNames(spec kernelModuleSpec) []string {
+	items := make([]string, 0, 1+len(spec.Names))
+	seen := map[string]bool{}
+	appendName := func(name string) {
+		name = strings.TrimSpace(name)
+		if name == "" || seen[name] {
+			return
+		}
+		seen[name] = true
+		items = append(items, name)
+	}
+	appendName(spec.Name)
+	for _, name := range spec.Names {
+		appendName(name)
+	}
+	return items
 }
 
 func runSysctlApply(spec map[string]any) error {

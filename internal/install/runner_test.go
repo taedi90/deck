@@ -518,7 +518,7 @@ func TestRun_Wait(t *testing.T) {
 				Steps: []config.Step{{
 					ID:   "wait-file",
 					Kind: "Wait",
-					Spec: map[string]any{"path": target, "state": "exists", "type": "file", "pollInterval": "10ms", "timeout": "1s"},
+					Spec: map[string]any{"action": "fileExists", "path": target, "state": "exists", "type": "file", "pollInterval": "10ms", "timeout": "1s"},
 				}},
 			}},
 		}
@@ -548,7 +548,7 @@ func TestRun_Wait(t *testing.T) {
 				Steps: []config.Step{{
 					ID:   "wait-absent",
 					Kind: "Wait",
-					Spec: map[string]any{"path": target, "state": "absent", "pollInterval": "10ms", "timeout": "1s"},
+					Spec: map[string]any{"action": "fileAbsent", "path": target, "state": "absent", "pollInterval": "10ms", "timeout": "1s"},
 				}},
 			}},
 		}
@@ -578,7 +578,7 @@ func TestRun_Wait(t *testing.T) {
 				Steps: []config.Step{{
 					ID:   "wait-non-empty",
 					Kind: "Wait",
-					Spec: map[string]any{"path": target, "state": "exists", "type": "file", "nonEmpty": true, "pollInterval": "10ms", "timeout": "1s"},
+					Spec: map[string]any{"action": "fileExists", "path": target, "state": "exists", "type": "file", "nonEmpty": true, "pollInterval": "10ms", "timeout": "1s"},
 				}},
 			}},
 		}
@@ -609,7 +609,7 @@ func TestRun_Wait(t *testing.T) {
 					ID:      "wait-type",
 					Kind:    "Wait",
 					Timeout: "80ms",
-					Spec:    map[string]any{"path": target, "state": "exists", "type": "file", "pollInterval": "10ms"},
+					Spec:    map[string]any{"action": "fileExists", "path": target, "state": "exists", "type": "file", "pollInterval": "10ms"},
 				}},
 			}},
 		}
@@ -3765,6 +3765,71 @@ func TestKernelModuleStep(t *testing.T) {
 	}
 	if strings.Count(string(raw), "overlay") != 1 {
 		t.Fatalf("expected single module line, got %q", string(raw))
+	}
+
+	multiPersistPath := filepath.Join(dir, "modules-load.d", "multi.conf")
+	multiSpec := map[string]any{"names": []any{"overlay", "br_netfilter", "overlay"}, "load": false, "persist": true, "persistFile": multiPersistPath}
+	if err := runKernelModule(multiSpec); err != nil {
+		t.Fatalf("runKernelModule multi failed: %v", err)
+	}
+	multiRaw, err := os.ReadFile(multiPersistPath)
+	if err != nil {
+		t.Fatalf("read multi persist file: %v", err)
+	}
+	if strings.Count(string(multiRaw), "overlay") != 1 || strings.Count(string(multiRaw), "br_netfilter") != 1 {
+		t.Fatalf("expected deduplicated module lines, got %q", string(multiRaw))
+	}
+}
+
+func TestRun_WaitRequiresExplicitAction(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state", "state.json")
+	target := filepath.Join(dir, "appears.txt")
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "install",
+			Steps: []config.Step{{
+				ID:   "wait-file",
+				Kind: "Wait",
+				Spec: map[string]any{"path": target, "state": "exists", "timeout": "10ms"},
+			}},
+		}},
+	}
+	err := Run(context.Background(), wf, RunOptions{StatePath: statePath})
+	if err == nil {
+		t.Fatalf("expected explicit action error")
+	}
+	if !strings.Contains(err.Error(), "wait requires action") {
+		t.Fatalf("expected wait requires action error, got %v", err)
+	}
+}
+
+func TestRun_RepositoryRequiresExplicitAction(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state", "state.json")
+	target := filepath.Join(dir, "offline.list")
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "install",
+			Steps: []config.Step{{
+				ID:   "repo-config",
+				Kind: "Repository",
+				Spec: map[string]any{
+					"format":       "apt",
+					"path":         target,
+					"repositories": []any{map[string]any{"id": "offline", "baseurl": "http://repo.local/debian"}},
+				},
+			}},
+		}},
+	}
+	err := Run(context.Background(), wf, RunOptions{StatePath: statePath})
+	if err == nil {
+		t.Fatalf("expected explicit action error")
+	}
+	if !strings.Contains(err.Error(), "unsupported Repository action") {
+		t.Fatalf("expected unsupported Repository action error, got %v", err)
 	}
 }
 
