@@ -47,7 +47,7 @@ jobs:
           ./bin/deck completion powershell >/tmp/deck.ps1
           test -s /tmp/deck.ps1
           ./bin/deck version
-          ./bin/deck version --json
+          ./bin/deck version -o json
 
       - name: Validate JSON schema files are parseable
         run: |
