@@ -11,6 +11,10 @@ Reference documentation for each typed workflow step supported by deck.
 
 - **Summary**: Run host checks before prepare execution.
 
+## [Command](command.md)
+
+- **Summary**: Run an explicit command as an escape hatch.
+
 ## [Containerd](containerd.md)
 
 - **Summary**: Write containerd config and registry host settings.

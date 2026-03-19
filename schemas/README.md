@@ -20,7 +20,7 @@ For the human-facing reference, read `../docs/reference/schema/index.md`.
 
 - `tools/artifacts.schema.json`: `Artifacts` (`public`)
 - `tools/checks.schema.json`: `Checks` (`public`)
-- `tools/command.schema.json`: `Command` (`advanced`)
+- `tools/command.schema.json`: `Command` (`public`)
 - `tools/containerd.schema.json`: `Containerd` (`public`)
 - `tools/directory.schema.json`: `Directory` (`public`)
 - `tools/file.schema.json`: `File` (`public`)

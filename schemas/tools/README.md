@@ -7,7 +7,7 @@ This directory contains JSON Schema files for typed workflow steps.
 
 - `artifacts.schema.json`: `Artifacts` (`public`)
 - `checks.schema.json`: `Checks` (`public`)
-- `command.schema.json`: `Command` (`advanced`)
+- `command.schema.json`: `Command` (`public`)
 - `containerd.schema.json`: `Containerd` (`public`)
 - `directory.schema.json`: `Directory` (`public`)
 - `file.schema.json`: `File` (`public`)

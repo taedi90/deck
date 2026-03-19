@@ -11,7 +11,7 @@ func generateArtifactsToolSchema() map[string]any {
 }
 
 func generateCommandToolSchema() map[string]any {
-	root := stepEnvelopeSchema("Command", "CommandStep", "Escape hatch for commands that are not yet covered by typed steps.", "advanced")
+	root := stepEnvelopeSchema("Command", "CommandStep", "Escape hatch for commands that are not yet covered by typed steps.", "public")
 	props := propertyMap(root)
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",

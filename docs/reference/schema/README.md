@@ -20,6 +20,7 @@ This is the entrypoint for deck's generated schema documentation.
 
 - [Artifacts](tools/artifacts.md)
 - [Checks](tools/checks.md)
+- [Command](tools/command.md)
 - [Containerd](tools/containerd.md)
 - [Directory](tools/directory.md)
 - [File](tools/file.md)

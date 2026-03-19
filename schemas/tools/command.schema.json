@@ -75,5 +75,5 @@
   ],
   "title": "CommandStep",
   "type": "object",
-  "x-deck-visibility": "advanced"
+  "x-deck-visibility": "public"
 }

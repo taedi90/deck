@@ -46,10 +46,13 @@ func TestLoadToolPageInputsIncludesOnlyPublicSteps(t *testing.T) {
 			t.Fatalf("non-public step %s should not be rendered", page.Kind)
 		}
 	}
-	for _, hidden := range []string{"Command"} {
+	for _, def := range workflowcontract.StepDefinitions() {
+		if def.Visibility == "public" {
+			continue
+		}
 		for _, page := range pages {
-			if page.Kind == hidden {
-				t.Fatalf("did not expect %s in public schema docs", hidden)
+			if page.Kind == def.Kind {
+				t.Fatalf("did not expect %s in public schema docs", def.Kind)
 			}
 		}
 	}
