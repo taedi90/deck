@@ -876,7 +876,7 @@ func TestRun_ChecksStep(t *testing.T) {
 					{
 						ID:   "runtime-branch",
 						Kind: "Packages",
-						When: "runtime.hostPassed == true and vars.want == \"ok\" and runtime.host.os.family == \"debian\" and runtime.host.arch == \"arm64\"",
+						When: "runtime.hostPassed == true && vars.want == \"ok\" && runtime.host.os.family == \"debian\" && runtime.host.arch == \"arm64\"",
 						Spec: map[string]any{
 							"action":   "download",
 							"packages": []any{"containerd"},

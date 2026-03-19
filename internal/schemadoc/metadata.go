@@ -3,6 +3,8 @@ package schemadoc
 import (
 	"maps"
 	"sort"
+
+	"github.com/taedi90/deck/internal/workflowcontract"
 )
 
 type FieldDoc struct {
@@ -39,10 +41,10 @@ var commonFieldDocs = map[string]FieldDoc{
 	"id":         {Description: "Unique identifier for the step within the workflow. Used in logs and plan output.", Example: "configure-containerd"},
 	"kind":       {Description: "Typed step kind. Determines which schema is applied to `spec`.", Example: "File"},
 	"spec":       {Description: "Step-specific configuration payload. Shape depends on the chosen `kind`.", Example: "{...}"},
-	"when":       {Description: "CEL expression evaluated at runtime. The step is skipped when the expression evaluates to false.", Example: "vars.skipKubeadm != 'true'"},
+	"when":       {Description: workflowcontract.WhenDescription(), Example: workflowcontract.WhenExample()},
 	"retry":      {Description: "Number of times to retry the step after a failure before marking it as failed.", Example: "3"},
 	"timeout":    {Description: "Maximum duration allowed for the step before it is cancelled. Accepts Go duration strings.", Example: "5m"},
-	"register":   {Description: "Map of variable names to step output keys. Exported values are available to later steps as runtime vars.", Example: "{outputPath:path}"},
+	"register":   {Description: workflowcontract.RegisterDescription(), Example: workflowcontract.RegisterExample()},
 	"metadata":   {Description: "Optional free-form annotation map attached to the step for tooling or audit purposes.", Example: "{owner: platform-team}"},
 }
 
@@ -534,9 +536,16 @@ var toolMetadata = map[string]ToolMetadata{
 }
 
 func ToolMeta(kind string) ToolMetadata {
+	def, hasDefinition := workflowcontract.StepDefinitionForKind(kind)
 	meta, ok := toolMetadata[kind]
-	if !ok {
+	if !ok && !hasDefinition {
 		return ToolMetadata{Kind: kind, Category: "other", Summary: "Generated schema reference.", WhenToUse: "Use this schema according to the workflow contract."}
+	}
+	meta.Kind = kind
+	if hasDefinition {
+		meta.Category = def.Category
+		meta.Summary = def.Summary
+		meta.WhenToUse = def.WhenToUse
 	}
 	// Merge common field docs so every tool page documents shared execution controls.
 	merged := make(map[string]FieldDoc, len(commonFieldDocs)+len(meta.FieldDocs))
@@ -571,10 +580,10 @@ func WorkflowMeta() PageMetadata {
 			"steps":                          {Description: "Flat step list for workflows that do not need named phases.", Example: "[{id:configure-runtime,kind:Containerd,spec:{...}}]"},
 			"steps[].kind":                   {Description: "Typed step kind selected from the shipped public step inventory.", Example: "File"},
 			"steps[].spec":                   {Description: "Action-specific step payload validated against the schema for the chosen kind.", Example: "{action:install,path:/etc/example.conf,content:hello}"},
-			"steps[].when":                   {Description: "CEL expression evaluated at runtime. The step is skipped when the expression evaluates to false.", Example: "vars.skipSetup != 'true'"},
+			"steps[].when":                   {Description: workflowcontract.WhenDescription(), Example: `vars.skipSetup != "true"`},
 			"steps[].retry":                  {Description: "Number of times to retry the step after a failure before marking it as failed.", Example: "3"},
 			"steps[].timeout":                {Description: "Maximum duration for the step. Accepts Go duration strings.", Example: "5m"},
-			"steps[].register":               {Description: "Map of variable names to step output keys. Exported values are available to later steps as runtime vars.", Example: "{outputPath:path}"},
+			"steps[].register":               {Description: workflowcontract.RegisterDescription(), Example: workflowcontract.RegisterExample()},
 			"phases[].name":                  {Description: "Stable phase name used for ordering and selective execution.", Example: "install"},
 			"phases[].imports":               {Description: "Component fragment imports that expand into this phase before step execution.", Example: "[{path:k8s/containerd-kubelet.yaml}]"},
 		},
