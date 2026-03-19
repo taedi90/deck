@@ -79,6 +79,4 @@ phases:
           action: copy
           src: /etc/kubernetes/admin.conf
           dest: /home/vagrant/.kube/config
-          owner: vagrant
-          group: vagrant
           mode: "0644"
