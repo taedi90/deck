@@ -70,20 +70,13 @@ func loadToolPageInputs(dir string) ([]schemadoc.PageInput, error) {
 		if err != nil {
 			return nil, err
 		}
-		kind := schemaConst(doc.Properties, "kind")
-		if kind != def.Kind {
-			return nil, fmt.Errorf("tool schema %s kind mismatch: expected %s, got %s", def.SchemaFile, def.Kind, kind)
-		}
-		if visibility := firstNonEmpty(doc.Visibility, "public"); visibility != def.Visibility {
-			return nil, fmt.Errorf("tool schema %s visibility mismatch: expected %s, got %s", def.SchemaFile, def.Visibility, visibility)
+		kind, actions, err := validateToolSchemaDoc(def, doc)
+		if err != nil {
+			return nil, err
 		}
 		spec, _ := doc.Properties["spec"].(map[string]any)
 		meta := schemadoc.ToolMeta(kind)
 		meta.Category = def.Category
-		actions := make([]string, 0, len(def.Actions))
-		for _, action := range def.Actions {
-			actions = append(actions, action.Name)
-		}
 		page := schemadoc.PageInput{
 			Kind:        kind,
 			PageSlug:    strings.TrimSuffix(def.SchemaFile, ".schema.json"),
@@ -121,18 +114,11 @@ func loadToolSchemas(dir string) ([]toolSchemaDoc, error) {
 		if err := json.Unmarshal(raw, &doc); err != nil {
 			return nil, fmt.Errorf("parse tool schema %s: %w", def.SchemaFile, err)
 		}
-		kind := schemaConst(doc.Properties, "kind")
-		if kind != def.Kind {
-			return nil, fmt.Errorf("tool schema %s kind mismatch: expected %s, got %s", def.SchemaFile, def.Kind, kind)
-		}
-		if visibility := firstNonEmpty(doc.Visibility, "public"); visibility != def.Visibility {
-			return nil, fmt.Errorf("tool schema %s visibility mismatch: expected %s, got %s", def.SchemaFile, def.Visibility, visibility)
+		kind, actions, err := validateToolSchemaDoc(def, doc)
+		if err != nil {
+			return nil, err
 		}
 		specProps := nestedProperties(doc.Properties, "spec")
-		actions := make([]string, 0, len(def.Actions))
-		for _, action := range def.Actions {
-			actions = append(actions, action.Name)
-		}
 		tool := toolSchemaDoc{
 			File:        def.SchemaFile,
 			Kind:        kind,
@@ -162,4 +148,19 @@ func ensureRegistrySchemaFiles(dir string, entries []os.DirEntry) error {
 		}
 	}
 	return nil
+}
+
+func validateToolSchemaDoc(def workflowexec.StepDefinition, doc schemaDoc) (string, []string, error) {
+	kind := schemaConst(doc.Properties, "kind")
+	if kind != def.Kind {
+		return "", nil, fmt.Errorf("tool schema %s kind mismatch: expected %s, got %s", def.SchemaFile, def.Kind, kind)
+	}
+	if visibility := firstNonEmpty(doc.Visibility, "public"); visibility != def.Visibility {
+		return "", nil, fmt.Errorf("tool schema %s visibility mismatch: expected %s, got %s", def.SchemaFile, def.Visibility, visibility)
+	}
+	actions := make([]string, 0, len(def.Actions))
+	for _, action := range def.Actions {
+		actions = append(actions, action.Name)
+	}
+	return kind, actions, nil
 }
