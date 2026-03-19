@@ -38,12 +38,17 @@ func TestLoadToolPageInputsIncludesOnlyPublicSteps(t *testing.T) {
 		t.Fatalf("expected public tool pages")
 	}
 	for _, page := range pages {
-		def, ok := workflowcontract.StepDefinitionForKind(page.Kind)
-		if !ok {
-			t.Fatalf("missing step definition for %s", page.Kind)
+		if len(page.Variants) == 0 {
+			t.Fatalf("expected grouped variants for page %s", page.PageSlug)
 		}
-		if def.Visibility != "public" {
-			t.Fatalf("non-public step %s should not be rendered", page.Kind)
+		for _, variant := range page.Variants {
+			def, ok := workflowcontract.StepDefinitionForKind(variant.Kind)
+			if !ok {
+				t.Fatalf("missing step definition for %s", variant.Kind)
+			}
+			if def.Visibility != "public" {
+				t.Fatalf("non-public step %s should not be rendered", variant.Kind)
+			}
 		}
 	}
 	for _, def := range workflowcontract.StepDefinitions() {
@@ -51,8 +56,10 @@ func TestLoadToolPageInputsIncludesOnlyPublicSteps(t *testing.T) {
 			continue
 		}
 		for _, page := range pages {
-			if page.Kind == def.Kind {
-				t.Fatalf("did not expect %s in public schema docs", def.Kind)
+			for _, variant := range page.Variants {
+				if variant.Kind == def.Kind {
+					t.Fatalf("did not expect %s in public schema docs", def.Kind)
+				}
 			}
 		}
 	}

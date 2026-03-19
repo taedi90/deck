@@ -12,9 +12,8 @@ steps:
           capabilities: [pull, resolve]
           skipVerify: true
   - id: update-containerd-pause-image
-    kind: File
+    kind: FileEdit
     spec:
-      action: edit
       path: /etc/containerd/config.toml
       backup: false
       edits:

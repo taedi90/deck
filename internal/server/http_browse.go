@@ -263,7 +263,7 @@ func (h *serverHandler) renderImageBrowse(rel string) (string, error) {
 	}
 	items := []browseEntry{{Name: "..", Href: "/browse/images/" + repo + "/", Kind: "dir"}}
 	items = append(items,
-		browseEntry{Name: "repository", Kind: "meta", Meta: resolved.repo},
+		browseEntry{Name: "Repository", Kind: "meta", Meta: resolved.repo},
 		browseEntry{Name: "tag", Kind: "meta", Meta: resolved.tag},
 		browseEntry{Name: "digest", Kind: "meta", Meta: resolved.digest.String()},
 		browseEntry{Name: "archive", Kind: "meta", Meta: resolved.tarPath},

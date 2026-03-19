@@ -114,14 +114,14 @@ func TestLocalExplainDescribesScenarioStructure(t *testing.T) {
 	workspace := askretrieve.WorkspaceSummary{
 		Files: []askretrieve.WorkspaceFile{
 			{Path: "workflows/scenarios/apply.yaml", Content: "role: apply\nversion: v1alpha1\nphases:\n  - name: bootstrap\n    imports:\n      - path: bootstrap.yaml\n  - name: verify\n    steps:\n      - id: report\n        kind: Command\n        spec:\n          command: [bash, -lc, \"true\"]\n"},
-			{Path: "workflows/components/bootstrap.yaml", Content: "steps:\n  - id: step-one\n    kind: Kubeadm\n    spec:\n      action: init\n"},
+			{Path: "workflows/components/bootstrap.yaml", Content: "steps:\n  - id: step-one\n    kind: KubeadmInit\n    spec:\n"},
 		},
 	}
 	summary, answer := localExplain(workspace, "explain apply", askintent.Target{Kind: "scenario", Path: "workflows/scenarios/apply.yaml", Name: "apply"})
 	if summary == "" {
 		t.Fatalf("expected explain summary")
 	}
-	for _, want := range []string{"role \"apply\"", "bootstrap, verify", "bootstrap.yaml", "Command step", "Related component available: workflows/components/bootstrap.yaml"} {
+	for _, want := range []string{"role \"apply\"", "bootstrap, verify", "bootstrap.yaml", "Command x1", "Related component available: workflows/components/bootstrap.yaml"} {
 		if !strings.Contains(answer, want) {
 			t.Fatalf("expected %q in answer, got %q", want, answer)
 		}

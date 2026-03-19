@@ -80,7 +80,7 @@ func TestRetrieveIncludesRelatedImportsForTargetScenario(t *testing.T) {
 		Root: filepath.ToSlash(t.TempDir()),
 		Files: []WorkspaceFile{
 			{Path: "workflows/scenarios/apply.yaml", Content: "role: apply\nversion: v1alpha1\nphases:\n  - name: bootstrap\n    imports:\n      - path: bootstrap.yaml\n"},
-			{Path: "workflows/components/bootstrap.yaml", Content: "steps:\n  - id: init\n    kind: Kubeadm\n    spec:\n      action: init\n"},
+			{Path: "workflows/components/bootstrap.yaml", Content: "steps:\n  - id: init\n    kind: KubeadmInit\n    spec:\n"},
 			{Path: "workflows/components/unrelated.yaml", Content: "steps:\n  - id: noop\n    kind: Command\n"},
 		},
 	}
@@ -116,8 +116,8 @@ func TestRetrieveIncludesAskContextChunks(t *testing.T) {
 		}
 	}
 	for _, chunk := range result.Chunks {
-		if chunk.ID == "typed-steps" && !containsString(chunk.Content, "Packages") {
-			t.Fatalf("expected Packages in typed-step chunk, got %q", chunk.Content)
+		if chunk.ID == "typed-steps" && !containsString(chunk.Content, "PackagesInstall") {
+			t.Fatalf("expected packages.install in typed-step chunk, got %q", chunk.Content)
 		}
 	}
 }

@@ -15,7 +15,7 @@ import (
 
 type applyRunRecord struct {
 	ID             string               `json:"id"`
-	Command        string               `json:"command"`
+	Command        string               `json:"Command"`
 	WorkflowRef    string               `json:"workflow_ref"`
 	WorkflowSource string               `json:"workflow_source,omitempty"`
 	Scenario       string               `json:"scenario,omitempty"`

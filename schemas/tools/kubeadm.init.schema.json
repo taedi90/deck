@@ -1,0 +1,98 @@
+{
+  "$id": "https://deck.local/schemas/tools/kubeadm.init.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Runs kubeadm init and writes a join command file.",
+  "properties": {
+    "apiVersion": {
+      "const": "deck/v1alpha1"
+    },
+    "id": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "KubeadmInit"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "register": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      },
+      "type": "object"
+    },
+    "retry": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "spec": {
+      "additionalProperties": false,
+      "properties": {
+        "advertiseAddress": {
+          "type": "string"
+        },
+        "configFile": {
+          "type": "string"
+        },
+        "configTemplate": {
+          "type": "string"
+        },
+        "criSocket": {
+          "type": "string"
+        },
+        "extraArgs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "ignorePreflightErrors": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "kubernetesVersion": {
+          "type": "string"
+        },
+        "outputJoinFile": {
+          "type": "string"
+        },
+        "podNetworkCIDR": {
+          "type": "string"
+        },
+        "pullImages": {
+          "type": "boolean"
+        },
+        "skipIfAdminConfExists": {
+          "default": true,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "outputJoinFile"
+      ],
+      "type": "object"
+    },
+    "timeout": {
+      "pattern": "^[0-9]+(ms|s|m|h)$",
+      "type": "string"
+    },
+    "when": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "kind",
+    "spec"
+  ],
+  "title": "KubeadmInitStep",
+  "type": "object",
+  "x-deck-visibility": "public"
+}

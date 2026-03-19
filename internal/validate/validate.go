@@ -525,11 +525,8 @@ func validateSemantics(wf *config.Workflow) error {
 	assignedRuntime := map[string]string{}
 
 	for _, step := range workflowSteps(wf) {
-		if contract, ok := workflowexec.StepContractForKind(step.Kind); ok && len(contract.Actions) > 0 {
-			action, _ := step.Spec["action"].(string)
-			if strings.TrimSpace(action) == "" {
-				return fmt.Errorf("E_SCHEMA_INVALID: step %s (%s): spec.action is required", step.ID, step.Kind)
-			}
+		if _, hasLegacyAction := step.Spec["action"]; hasLegacyAction {
+			return fmt.Errorf("E_SCHEMA_INVALID: step %s (%s): spec.action is no longer supported; move the operation into kind (for example `file.download`)", step.ID, step.Kind)
 		}
 
 		if strings.TrimSpace(step.When) != "" {
@@ -564,11 +561,10 @@ func validateSemantics(wf *config.Workflow) error {
 			assignedRuntime[runtimeVar] = step.ID
 		}
 
-		if step.Kind == "Wait" {
-			action, _ := step.Spec["action"].(string)
+		if step.Kind == "WaitFileAbsent" {
 			nonEmpty, _ := step.Spec["nonEmpty"].(bool)
-			if action == "fileAbsent" && nonEmpty {
-				return fmt.Errorf("E_SCHEMA_INVALID: step %s (Wait): nonEmpty is only valid for fileExists", step.ID)
+			if nonEmpty {
+				return fmt.Errorf("E_SCHEMA_INVALID: step %s (wait.file-absent): nonEmpty is only valid for wait.file-exists", step.ID)
 			}
 		}
 	}
@@ -774,7 +770,7 @@ func stringValue(v map[string]any, key string) string {
 func validateRoleKinds(wf *config.Workflow) error {
 	role := strings.TrimSpace(wf.Role)
 	for _, step := range workflowSteps(wf) {
-		if workflowexec.StepAllowedForRole(role, step.Kind, step.Spec) {
+		if workflowexec.StepAllowedForRole(role, step.Kind) {
 			continue
 		}
 		return fmt.Errorf("E_KIND_ROLE_MISMATCH: step %s (%s) is not supported for role %s", step.ID, step.Kind, role)
@@ -788,7 +784,7 @@ func isReservedRuntimeVar(runtimeVar string) bool {
 }
 
 func isValidOutputKey(kind string, spec map[string]any, outputKey string) bool {
-	return workflowexec.StepHasOutput(kind, spec, outputKey)
+	return workflowexec.StepHasOutput(kind, outputKey)
 }
 
 func workflowSteps(wf *config.Workflow) []config.Step {

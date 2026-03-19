@@ -4,9 +4,8 @@ steps:
     spec:
       path: /etc/cni/net.d
   - id: write-basic-cni-config
-    kind: File
+    kind: FileWrite
     spec:
-      action: write
       path: /etc/cni/net.d/10-deck-bridge.conflist
       content: |
         {

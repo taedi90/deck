@@ -2,7 +2,6 @@ steps:
   - id: apply-offline-repo-config-debian
     kind: Repository
     spec:
-      action: configure
       format: apt
       path: /etc/apt/sources.list.d/offline.list
       replaceExisting: true

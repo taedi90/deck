@@ -198,7 +198,7 @@ func RelevantStepKindsBlock(prompt string) string {
 			}
 			b.WriteString("\n")
 		}
-		if step.Kind == "Packages" {
+		if step.Kind == "PackagesInstall" || step.Kind == "PackagesDownload" {
 			b.WriteString("  - spec.packages must stay a real YAML array, not a quoted template string.\n")
 			b.WriteString("  - Do not set spec.packages to `{{ .vars.* }}` or any other whole-value template expression; inline the package list as YAML items instead.\n")
 		}
@@ -276,18 +276,18 @@ func RelevantStepKinds(prompt string) []StepKindContext {
 				score += 4
 			}
 		}
-		if strings.Contains(lower, "repo") || strings.Contains(lower, "repository") {
+		if strings.Contains(lower, "repo") || strings.Contains(lower, "Repository") {
 			if step.Kind == "Repository" {
 				score += 60
 			}
 		}
 		if strings.Contains(lower, "docker") || strings.Contains(lower, "package") || strings.Contains(lower, "dnf") {
-			if step.Kind == "Packages" || step.Kind == "Repository" || step.Kind == "Service" {
+			if step.Kind == "PackagesInstall" || step.Kind == "PackagesDownload" || step.Kind == "Repository" || step.Kind == "Service" {
 				score += 30
 			}
 		}
 		if strings.Contains(lower, "file") || strings.Contains(lower, "config") {
-			if step.Kind == "File" || step.Kind == "Directory" {
+			if strings.HasPrefix(step.Kind, "file.") || step.Kind == "Directory" {
 				score += 20
 			}
 		}

@@ -1,0 +1,121 @@
+{
+  "$id": "https://deck.local/schemas/tools/image.download.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Downloads images into bundle output storage.",
+  "properties": {
+    "apiVersion": {
+      "const": "deck/v1alpha1"
+    },
+    "id": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "ImageDownload"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "register": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      },
+      "type": "object"
+    },
+    "retry": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "spec": {
+      "additionalProperties": false,
+      "properties": {
+        "auth": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "basic": {
+                "additionalProperties": false,
+                "properties": {
+                  "password": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "username",
+                  "password"
+                ],
+                "type": "object"
+              },
+              "registry": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "registry",
+              "basic"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "backend": {
+          "additionalProperties": false,
+          "properties": {
+            "engine": {
+              "enum": [
+                "go-containerregistry"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "images": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "output": {
+          "additionalProperties": false,
+          "properties": {
+            "dir": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "images"
+      ],
+      "type": "object"
+    },
+    "timeout": {
+      "pattern": "^[0-9]+(ms|s|m|h)$",
+      "type": "string"
+    },
+    "when": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "kind",
+    "spec"
+  ],
+  "title": "ImageDownloadStep",
+  "type": "object",
+  "x-deck-visibility": "public"
+}

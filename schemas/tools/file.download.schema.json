@@ -1,0 +1,179 @@
+{
+  "$id": "https://deck.local/schemas/tools/file.download.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Downloads or stages a file into bundle output storage.",
+  "properties": {
+    "apiVersion": {
+      "const": "deck/v1alpha1"
+    },
+    "id": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "FileDownload"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "register": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      },
+      "type": "object"
+    },
+    "retry": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "spec": {
+      "additionalProperties": false,
+      "properties": {
+        "fetch": {
+          "additionalProperties": false,
+          "properties": {
+            "offlineOnly": {
+              "type": "boolean"
+            },
+            "sources": {
+              "items": {
+                "additionalProperties": false,
+                "anyOf": [
+                  {
+                    "required": [
+                      "path"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "url"
+                    ]
+                  }
+                ],
+                "properties": {
+                  "path": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "type": {
+                    "enum": [
+                      "local",
+                      "bundle",
+                      "repo",
+                      "online"
+                    ],
+                    "type": "string"
+                  },
+                  "url": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": false,
+          "properties": {
+            "chmod": {
+              "pattern": "^[0-7]{4}$",
+              "type": "string"
+            },
+            "path": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "source": {
+          "additionalProperties": false,
+          "anyOf": [
+            {
+              "required": [
+                "url"
+              ]
+            },
+            {
+              "required": [
+                "path"
+              ]
+            },
+            {
+              "required": [
+                "bundle"
+              ]
+            }
+          ],
+          "properties": {
+            "bundle": {
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "root": {
+                  "enum": [
+                    "files",
+                    "images",
+                    "packages"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "root",
+                "path"
+              ],
+              "type": "object"
+            },
+            "path": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "sha256": {
+              "pattern": "^[a-fA-F0-9]{64}$",
+              "type": "string"
+            },
+            "url": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "type": "object"
+    },
+    "timeout": {
+      "pattern": "^[0-9]+(ms|s|m|h)$",
+      "type": "string"
+    },
+    "when": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "kind",
+    "spec"
+  ],
+  "title": "FileDownloadStep",
+  "type": "object",
+  "x-deck-visibility": "public"
+}

@@ -11,7 +11,6 @@ import (
 )
 
 type waitSpec struct {
-	Action       string   `json:"action"`
 	Interval     string   `json:"interval"`
 	PollInterval string   `json:"pollInterval"`
 	InitialDelay string   `json:"initialDelay"`
@@ -19,17 +18,13 @@ type waitSpec struct {
 	Type         string   `json:"type"`
 	NonEmpty     bool     `json:"nonEmpty"`
 	Name         string   `json:"name"`
-	Command      []string `json:"command"`
+	Command      []string `json:"Command"`
 	Address      string   `json:"address"`
 	Port         string   `json:"port"`
 	Timeout      string   `json:"timeout"`
 }
 
-func runWaitDecoded(parent context.Context, decoded waitSpec, timeout time.Duration) error {
-	action := decoded.Action
-	if action == "" {
-		return fmt.Errorf("wait requires action")
-	}
+func runWaitDecoded(parent context.Context, kind string, decoded waitSpec, timeout time.Duration) error {
 	interval := 500 * time.Millisecond
 	if raw := firstNonEmpty(decoded.Interval, decoded.PollInterval); raw != "" {
 		parsed, err := time.ParseDuration(raw)
@@ -59,7 +54,7 @@ func runWaitDecoded(parent context.Context, decoded waitSpec, timeout time.Durat
 		}
 	}
 	for {
-		ok, err := waitConditionMet(ctx, action, decoded)
+		ok, err := waitConditionMet(ctx, kind, decoded)
 		if err != nil {
 			return err
 		}
@@ -68,12 +63,12 @@ func runWaitDecoded(parent context.Context, decoded waitSpec, timeout time.Durat
 		}
 		select {
 		case <-ctx.Done():
-			detail := action
+			detail := kind
 			if p := decoded.Path; p != "" {
-				if action == "fileExists" || action == "fileAbsent" {
-					detail = waitPathExpectedCondition(p, map[string]string{"fileExists": "exists", "fileAbsent": "absent"}[action], waitPathType(decoded), decoded.NonEmpty)
+				if kind == "WaitFileExists" || kind == "WaitFileAbsent" {
+					detail = waitPathExpectedCondition(p, map[string]string{"WaitFileExists": "exists", "WaitFileAbsent": "absent"}[kind], waitPathType(decoded), decoded.NonEmpty)
 				} else {
-					detail = fmt.Sprintf("%s (%s)", action, p)
+					detail = fmt.Sprintf("%s (%s)", kind, p)
 				}
 			}
 			return fmt.Errorf("%s: timed out after %s for %s", errCodeInstallWaitTimeout, timeout, detail)
@@ -82,16 +77,16 @@ func runWaitDecoded(parent context.Context, decoded waitSpec, timeout time.Durat
 	}
 }
 
-func waitConditionMet(ctx context.Context, action string, spec waitSpec) (bool, error) {
-	switch action {
-	case "fileExists":
+func waitConditionMet(ctx context.Context, kind string, spec waitSpec) (bool, error) {
+	switch kind {
+	case "WaitFileExists":
 		return waitPathConditionMet(spec.Path, "exists", waitPathType(spec), spec.NonEmpty)
-	case "fileAbsent":
+	case "WaitFileAbsent":
 		return waitPathConditionMet(spec.Path, "absent", waitPathType(spec), false)
-	case "serviceActive":
+	case "WaitServiceActive":
 		name := spec.Name
 		if name == "" {
-			return false, fmt.Errorf("wait action serviceActive requires name")
+			return false, fmt.Errorf("wait.service-active requires name")
 		}
 		err := executil.RunSystemctl(ctx, "is-active", "--quiet", name)
 		if err == nil {
@@ -101,10 +96,10 @@ func waitConditionMet(ctx context.Context, action string, spec waitSpec) (bool, 
 			return false, nil
 		}
 		return false, err
-	case "commandSuccess":
+	case "WaitCommandSuccess":
 		cmd := spec.Command
 		if len(cmd) == 0 {
-			return false, fmt.Errorf("wait action commandSuccess requires command")
+			return false, fmt.Errorf("wait.command-success requires command")
 		}
 		err := executil.RunWorkflowCommand(ctx, cmd[0], cmd[1:]...)
 		if err == nil {
@@ -114,19 +109,19 @@ func waitConditionMet(ctx context.Context, action string, spec waitSpec) (bool, 
 			return false, nil
 		}
 		return false, err
-	case "tcpPortClosed", "tcpPortOpen":
+	case "WaitTCPPortClosed", "WaitTCPPortOpen":
 		address := spec.Address
 		if address == "" {
 			address = "127.0.0.1"
 		}
 		port := spec.Port
 		if port == "" {
-			return false, fmt.Errorf("wait action %s requires port", action)
+			return false, fmt.Errorf("%s requires port", kind)
 		}
 		conn, err := net.DialTimeout("tcp", net.JoinHostPort(address, port), 500*time.Millisecond)
 		if err == nil {
 			_ = conn.Close()
-			return action == "tcpPortOpen", nil
+			return kind == "WaitTCPPortOpen", nil
 		}
 		if ne, ok := err.(net.Error); ok && ne.Timeout() {
 			return false, nil
@@ -134,9 +129,9 @@ func waitConditionMet(ctx context.Context, action string, spec waitSpec) (bool, 
 		if os.IsTimeout(err) {
 			return false, nil
 		}
-		return action == "tcpPortClosed", nil
+		return kind == "WaitTCPPortClosed", nil
 	default:
-		return false, fmt.Errorf("unsupported Wait action %q", action)
+		return false, fmt.Errorf("unsupported wait kind %q", kind)
 	}
 }
 

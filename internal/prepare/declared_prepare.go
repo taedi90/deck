@@ -61,8 +61,8 @@ func declaredPrepareFileSteps(wf *config.Workflow) ([]config.Step, error) {
 				steps = append(steps, config.Step{
 					ID:         prepareSyntheticStepID("file", group.Group, item.ID, target),
 					APIVersion: "deck/v1alpha1",
-					Kind:       "File",
-					Spec:       withPrepareAction(rendered, "download"),
+					Kind:       "FileDownload",
+					Spec:       rendered,
 				})
 			}
 		}
@@ -100,8 +100,8 @@ func declaredPrepareImageSteps(wf *config.Workflow) ([]config.Step, error) {
 			steps = append(steps, config.Step{
 				ID:         prepareSyntheticStepID("image", group.Group, "batch", target),
 				APIVersion: "deck/v1alpha1",
-				Kind:       "Image",
-				Spec:       withPrepareAction(spec, "download"),
+				Kind:       "ImageDownload",
+				Spec:       spec,
 			})
 		}
 	}
@@ -141,24 +141,12 @@ func declaredPreparePackageSteps(wf *config.Workflow) ([]config.Step, error) {
 			steps = append(steps, config.Step{
 				ID:         prepareSyntheticStepID("package", group.Group, target.Release, target),
 				APIVersion: "deck/v1alpha1",
-				Kind:       "Packages",
-				Spec:       withPrepareAction(spec, "download"),
+				Kind:       "PackagesDownload",
+				Spec:       spec,
 			})
 		}
 	}
 	return steps, nil
-}
-
-func withPrepareAction(spec map[string]any, action string) map[string]any {
-	if spec == nil {
-		return map[string]any{"action": action}
-	}
-	out := make(map[string]any, len(spec)+1)
-	for k, v := range spec {
-		out[k] = v
-	}
-	out["action"] = action
-	return out
 }
 
 func expandArtifactTargets(targets []config.ArtifactTarget) []config.ArtifactTarget {

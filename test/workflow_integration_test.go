@@ -49,8 +49,8 @@ func TestWorkflowIntegrationBootstrap(t *testing.T) {
 		"PHASE=bootstrap",
 		"PHASE=verify",
 		"prep-disable-swap Swap PLAN",
-		"bootstrap-reset-preflight Kubeadm PLAN",
-		"bootstrap-init Kubeadm PLAN",
+		"bootstrap-reset-preflight KubeadmReset PLAN",
+		"bootstrap-init KubeadmInit PLAN",
 		"bootstrap-report Command PLAN",
 	)
 }
@@ -77,8 +77,8 @@ func TestWorkflowIntegrationWorkerJoin(t *testing.T) {
 		"PHASE=runtime",
 		"PHASE=join",
 		"prep-disable-swap Swap PLAN",
-		"fetch-join-file File PLAN",
-		"join-worker Kubeadm PLAN",
+		"fetch-join-file FileDownload PLAN",
+		"join-worker KubeadmJoin PLAN",
 	)
 }
 
@@ -101,7 +101,7 @@ func TestWorkflowIntegrationNodeReset(t *testing.T) {
 		"PHASE=reset",
 		"PHASE=verify",
 		"prep-disable-swap Swap PLAN",
-		"reset-node Kubeadm SKIP",
+		"reset-node KubeadmReset SKIP",
 		"reset-runtime-ready Command PLAN",
 		"reset-state-report Command PLAN",
 		"reset-summary Command PLAN",
@@ -143,9 +143,8 @@ phases:
           command: ["bash", "-lc", "true"]
       - id: bootstrap-publish-join
         apiVersion: deck/v1alpha1
-        kind: File
+        kind: FileCopy
         spec:
-          action: copy
           src: /tmp/nonexistent-join.txt
           dest: /tmp/published-join.txt
       - id: bootstrap-report
@@ -169,9 +168,8 @@ phases:
     steps:
       - id: fetch-join-file
         apiVersion: deck/v1alpha1
-        kind: File
+        kind: FileDownload
         spec:
-          action: download
           source:
             url: http://127.0.0.1:9/join.txt
           output:

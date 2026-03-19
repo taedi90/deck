@@ -21,27 +21,16 @@ func generatePackageCacheToolSchema() map[string]any {
 	return root
 }
 
-func generatePackagesToolSchema() map[string]any {
-	root := stepEnvelopeSchema("Packages", "PackagesStep", "Installs packages on the local node.", "public")
+func generatePackagesDownloadToolSchema() map[string]any {
+	root := stepEnvelopeSchema("PackagesDownload", "PackagesDownloadStep", "Downloads packages into bundle output storage.", "public")
 	props := propertyMap(root)
-	packagesAllowedByAction := registryActionFields("Packages")
-	packageFields := []string{"action", "packages", "source", "restrictToRepos", "excludeRepos", "distro", "repo", "backend", "output"}
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",
 		"additionalProperties": false,
-		"required":             []any{"action", "packages"},
+		"required":             []any{"packages"},
 		"properties": map[string]any{
-			"source": map[string]any{
-				"type":                 "object",
-				"additionalProperties": false,
-				"required":             []any{"type", "path"},
-				"properties":           map[string]any{"type": map[string]any{"const": "local-repo"}, "path": map[string]any{"type": "string"}},
-			},
-			"packages":        stringArraySchema(1, false),
-			"restrictToRepos": stringArraySchema(0, true),
-			"excludeRepos":    stringArraySchema(0, true),
-			"action":          enumStringSchema("download", "install"),
-			"distro":          map[string]any{"type": "object", "additionalProperties": true},
+			"packages": stringArraySchema(1, false),
+			"distro":   map[string]any{"type": "object", "additionalProperties": true},
 			"repo": map[string]any{
 				"type":                 "object",
 				"additionalProperties": false,
@@ -82,10 +71,27 @@ func generatePackagesToolSchema() map[string]any {
 				},
 			},
 		},
-		"allOf": []any{
-			conditionalRequired("download", []string{"packages"}, nil),
-			conditionalRequired("install", []string{"packages"}, nil),
-			restrictActionFields(packagesAllowedByAction, packageFields),
+	})
+	return root
+}
+
+func generatePackagesInstallToolSchema() map[string]any {
+	root := stepEnvelopeSchema("PackagesInstall", "PackagesInstallStep", "Installs packages on the local node.", "public")
+	props := propertyMap(root)
+	setMap(props, "spec", map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"required":             []any{"packages"},
+		"properties": map[string]any{
+			"source": map[string]any{
+				"type":                 "object",
+				"additionalProperties": false,
+				"required":             []any{"type", "path"},
+				"properties":           map[string]any{"type": map[string]any{"const": "local-repo"}, "path": map[string]any{"type": "string"}},
+			},
+			"packages":        stringArraySchema(1, false),
+			"restrictToRepos": stringArraySchema(0, true),
+			"excludeRepos":    stringArraySchema(0, true),
 		},
 	})
 	return root
@@ -97,9 +103,8 @@ func generateRepositoryToolSchema() map[string]any {
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",
 		"additionalProperties": false,
-		"required":             []any{"action"},
+		"required":             []any{"repositories"},
 		"properties": map[string]any{
-			"action":          enumStringSchema("configure"),
 			"format":          enumStringSchema("auto", "apt", "yum"),
 			"path":            map[string]any{"type": "string"},
 			"mode":            modeSchema(),
@@ -122,10 +127,6 @@ func generateRepositoryToolSchema() map[string]any {
 				"items":    map[string]any{"type": "object", "additionalProperties": true},
 			},
 		},
-		"allOf": []any{map[string]any{
-			"if":   map[string]any{"properties": map[string]any{"action": map[string]any{"const": "configure"}}},
-			"then": map[string]any{"required": []any{"repositories"}},
-		}},
 	})
 	return root
 }

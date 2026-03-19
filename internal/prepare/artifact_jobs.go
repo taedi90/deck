@@ -86,13 +86,13 @@ func planFileArtifactGroup(wf *config.Workflow, bundleRoot string, group config.
 			if err != nil {
 				return artifactJobGroup{}, fmt.Errorf("artifacts.files group %s item %s: %w", group.Group, item.ID, err)
 			}
-			spec := withPrepareAction(rendered, "download")
+			spec := rendered
 			outputPath := fileDownloadOutputPath(spec)
 			label := fmt.Sprintf("group %s item %s", group.Group, item.ID)
 			jobSpec := cloneMap(spec)
 			planned.Jobs = append(planned.Jobs, artifactJob{
 				Group:      group.Group,
-				Kind:       "File",
+				Kind:       "FileDownload",
 				Label:      label,
 				OutputPath: outputPath,
 				Run: func(ctx context.Context) ([]string, error) {
@@ -134,7 +134,7 @@ func planImageArtifactGroup(wf *config.Workflow, bundleRoot string, group config
 				return artifactJobGroup{}, fmt.Errorf("artifacts.images group %s item %s: %w", group.Group, item.Image, err)
 			}
 			image := strings.TrimSpace(stringValue(renderedImage, "image"))
-			spec := map[string]any{"action": "download", "images": []any{image}}
+			spec := map[string]any{"images": []any{image}}
 			if len(backend) > 0 {
 				spec["backend"] = cloneMap(backend)
 			}
@@ -146,7 +146,7 @@ func planImageArtifactGroup(wf *config.Workflow, bundleRoot string, group config
 			label := fmt.Sprintf("group %s image %s", group.Group, image)
 			planned.Jobs = append(planned.Jobs, artifactJob{
 				Group:      group.Group,
-				Kind:       "Image",
+				Kind:       "ImageDownload",
 				Label:      label,
 				OutputPath: outputPath,
 				Run: func(ctx context.Context) ([]string, error) {
@@ -167,7 +167,6 @@ func planPackageArtifactGroup(wf *config.Workflow, bundleRoot string, group conf
 			packages = append(packages, item.Name)
 		}
 		spec := map[string]any{
-			"action": "download",
 			"distro": map[string]any{
 				"family":  target.OSFamily,
 				"release": target.Release,
@@ -197,7 +196,7 @@ func planPackageArtifactGroup(wf *config.Workflow, bundleRoot string, group conf
 		jobSpec := cloneMap(spec)
 		planned.Jobs = append(planned.Jobs, artifactJob{
 			Group:      group.Group,
-			Kind:       "Packages",
+			Kind:       "PackagesDownload",
 			Label:      label,
 			OutputRoot: outputRoot,
 			Run: func(ctx context.Context) ([]string, error) {

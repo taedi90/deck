@@ -59,9 +59,8 @@ phases:
           state: started
       - id: kubeadm-init
         apiVersion: deck/v1alpha1
-        kind: Kubeadm
+        kind: KubeadmInit
         spec:
-          action: init
           outputJoinFile: /tmp/deck/join-real.txt
           podNetworkCIDR: 10.244.0.0/16
           criSocket: unix:///run/containerd/containerd.sock
@@ -74,9 +73,8 @@ phases:
           path: /home/vagrant/.kube
       - id: copy-kubeconfig
         apiVersion: deck/v1alpha1
-        kind: File
+        kind: FileCopy
         spec:
-          action: copy
           src: /etc/kubernetes/admin.conf
           dest: /home/vagrant/.kube/config
           mode: "0644"

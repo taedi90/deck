@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/taedi90/deck/internal/fsutil"
@@ -58,9 +59,8 @@ func loadToolPageInputs(dir string) ([]schemadoc.PageInput, error) {
 	if err := ensureRegistrySchemaFiles(dir, entries); err != nil {
 		return nil, err
 	}
-	defs := workflowexec.StepDefinitions()
-	pages := make([]schemadoc.PageInput, 0, len(defs))
-	for _, def := range defs {
+	pagesBySlug := map[string]*schemadoc.PageInput{}
+	for _, def := range workflowexec.StepDefinitions() {
 		if def.Visibility != "public" {
 			continue
 		}
@@ -73,29 +73,48 @@ func loadToolPageInputs(dir string) ([]schemadoc.PageInput, error) {
 		if err != nil {
 			return nil, err
 		}
-		kind, actions, err := validateToolSchemaDoc(def, doc)
+		kind, err := validateToolSchemaDoc(def, doc)
 		if err != nil {
 			return nil, err
 		}
+		page := pagesBySlug[def.DocsPage]
+		if page == nil {
+			page = &schemadoc.PageInput{
+				Family:      def.Family,
+				PageSlug:    def.DocsPage,
+				Title:       def.FamilyTitle,
+				Summary:     familyPageSummary(def),
+				Description: familyPageSummary(def),
+			}
+			pagesBySlug[def.DocsPage] = page
+		}
 		spec, _ := doc.Properties["spec"].(map[string]any)
-		meta := schemadoc.ToolMeta(kind)
-		meta.Category = def.Category
-		page := schemadoc.PageInput{
+		page.Variants = append(page.Variants, schemadoc.VariantInput{
 			Kind:        kind,
-			PageSlug:    strings.TrimSuffix(def.SchemaFile, ".schema.json"),
 			Title:       doc.Title,
 			Description: doc.Description,
-			Visibility:  def.Visibility,
 			SchemaPath:  filepath.ToSlash(filepath.Join("schemas", "tools", def.SchemaFile)),
 			Schema:      raw,
-			Meta:        meta,
-			Actions:     actions,
+			Meta:        schemadoc.ToolMeta(kind),
 			Required:    nestedRequired(doc.Properties, "spec"),
 			Spec:        spec,
-		}
-		pages = append(pages, page)
+			Outputs:     append([]string(nil), def.Outputs...),
+			DocsOrder:   def.DocsOrder,
+		})
 	}
+	pages := make([]schemadoc.PageInput, 0, len(pagesBySlug))
+	for _, page := range pagesBySlug {
+		pages = append(pages, *page)
+	}
+	sort.Slice(pages, func(i, j int) bool { return pages[i].PageSlug < pages[j].PageSlug })
 	return pages, nil
+}
+
+func familyPageSummary(def workflowexec.StepDefinition) string {
+	if def.Kind == def.Family {
+		return def.Summary
+	}
+	return fmt.Sprintf("Reference for the `%s` family of typed workflow steps.", def.FamilyTitle)
 }
 
 func loadToolSchemas(dir string) ([]toolSchemaDoc, error) {
@@ -117,22 +136,20 @@ func loadToolSchemas(dir string) ([]toolSchemaDoc, error) {
 		if err := json.Unmarshal(raw, &doc); err != nil {
 			return nil, fmt.Errorf("parse tool schema %s: %w", def.SchemaFile, err)
 		}
-		kind, actions, err := validateToolSchemaDoc(def, doc)
+		kind, err := validateToolSchemaDoc(def, doc)
 		if err != nil {
 			return nil, err
 		}
 		specProps := nestedProperties(doc.Properties, "spec")
-		tool := toolSchemaDoc{
+		tools = append(tools, toolSchemaDoc{
 			File:        def.SchemaFile,
 			Kind:        kind,
 			Title:       doc.Title,
 			Description: doc.Description,
 			Visibility:  def.Visibility,
-			Actions:     actions,
 			SpecFields:  sortedKeys(specProps),
 			Required:    nestedRequired(doc.Properties, "spec"),
-		}
-		tools = append(tools, tool)
+		})
 	}
 	return tools, nil
 }
@@ -153,17 +170,13 @@ func ensureRegistrySchemaFiles(dir string, entries []os.DirEntry) error {
 	return nil
 }
 
-func validateToolSchemaDoc(def workflowexec.StepDefinition, doc schemaDoc) (string, []string, error) {
+func validateToolSchemaDoc(def workflowexec.StepDefinition, doc schemaDoc) (string, error) {
 	kind := schemaConst(doc.Properties, "kind")
 	if kind != def.Kind {
-		return "", nil, fmt.Errorf("tool schema %s kind mismatch: expected %s, got %s", def.SchemaFile, def.Kind, kind)
+		return "", fmt.Errorf("tool schema %s kind mismatch: expected %s, got %s", def.SchemaFile, def.Kind, kind)
 	}
 	if visibility := firstNonEmpty(doc.Visibility, "public"); visibility != def.Visibility {
-		return "", nil, fmt.Errorf("tool schema %s visibility mismatch: expected %s, got %s", def.SchemaFile, def.Visibility, visibility)
+		return "", fmt.Errorf("tool schema %s visibility mismatch: expected %s, got %s", def.SchemaFile, def.Visibility, visibility)
 	}
-	actions := make([]string, 0, len(def.Actions))
-	for _, action := range def.Actions {
-		actions = append(actions, action.Name)
-	}
-	return kind, actions, nil
+	return kind, nil
 }

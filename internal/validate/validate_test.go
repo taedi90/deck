@@ -19,9 +19,8 @@ phases:
     steps:
       - id: prepare-images
         apiVersion: deck/v1alpha1
-        kind: Image
+        kind: ImageDownload
         spec:
-          action: download
           images: [registry.k8s.io/kube-apiserver:v1.30.1]
           backend:
             engine: go-containerregistry
@@ -47,9 +46,8 @@ phases:
     steps:
       - id: pull-private-images
         apiVersion: deck/v1alpha1
-        kind: Image
+        kind: ImageDownload
         spec:
-          action: download
           images:
             - registry.example.com/team/app:1.0.0
           auth:
@@ -105,9 +103,8 @@ phases:
     steps:
       - id: verify-private-images
         apiVersion: deck/v1alpha1
-        kind: Image
+        kind: ImageVerify
         spec:
-          action: verify
           images:
             - registry.example.com/team/app:1.0.0
           auth:
@@ -139,9 +136,8 @@ phases:
     steps:
       - id: verify-images
         apiVersion: deck/v1alpha1
-        kind: Image
+        kind: ImageVerify
         spec:
-          action: verify
           images:
             - registry.k8s.io/pause:3.9
           backend:
@@ -170,9 +166,8 @@ phases:
     steps:
       - id: install-packages
         apiVersion: deck/v1alpha1
-        kind: Packages
+        kind: PackagesInstall
         spec:
-          action: install
           packages: [containerd]
 `)
 		if err := os.WriteFile(path, content, 0o644); err != nil {
@@ -221,9 +216,8 @@ phases:
     steps:
       - id: download-packages
         apiVersion: deck/v1alpha1
-        kind: Packages
+        kind: PackagesDownload
         spec:
-          action: download
           packages: [containerd]
           source:
             type: local-repo
@@ -252,9 +246,8 @@ phases:
     steps:
       - id: install-packages
         apiVersion: deck/v1alpha1
-        kind: Packages
+        kind: PackagesInstall
         spec:
-          action: install
           packages: [containerd]
           backend:
             mode: container
@@ -413,9 +406,8 @@ phases:
     steps:
       - id: install-packages-curl
         apiVersion: deck/v1alpha1
-        kind: Packages
+        kind: PackagesInstall
         spec:
-          action: install
           packages: [curl]
 `)
 		if err := os.WriteFile(path, content, 0o644); err != nil {
@@ -439,7 +431,6 @@ phases:
         apiVersion: deck/v1alpha1
         kind: Repository
         spec:
-          action: configure
           format: apt
           replaceExisting: true
           refreshCache:
@@ -609,9 +600,8 @@ phases:
     steps:
       - id: dup-id
         apiVersion: deck/v1alpha1
-        kind: File
+        kind: FileDownload
         spec:
-          action: download
           source:
             url: https://example.local/a
           output:
@@ -643,22 +633,20 @@ phases:
     steps:
       - id: s1
         apiVersion: deck/v1alpha1
-        kind: File
+        kind: FileDownload
         register:
           token: outputA
         spec:
-          action: download
           source:
             url: https://example.local/a
           output:
             path: files/a
       - id: s2
         apiVersion: deck/v1alpha1
-        kind: File
+        kind: FileDownload
         register:
           token: outputB
         spec:
-          action: download
           source:
             url: https://example.local/b
           output:
@@ -683,11 +671,10 @@ phases:
     steps:
       - id: copy-file
         apiVersion: deck/v1alpha1
-        kind: File
+        kind: FileCopy
         register:
           copiedPath: path
         spec:
-          action: copy
           src: /tmp/source.txt
           dest: /tmp/dest.txt
 `)
@@ -768,9 +755,8 @@ phases:
     steps:
       - id: wait-admin-conf
         apiVersion: deck/v1alpha1
-        kind: Wait
+        kind: WaitFileExists
         spec:
-          action: fileExists
           path: /etc/kubernetes/admin.conf
           type: file
           nonEmpty: true
@@ -823,9 +809,8 @@ phases:
     steps:
       - id: bad-wait
         apiVersion: deck/v1alpha1
-        kind: Wait
+        kind: WaitFileAbsent
         spec:
-          action: fileAbsent
           path: /tmp/old-file
           nonEmpty: true
 `)
@@ -852,9 +837,8 @@ phases:
     steps:
       - id: bad-wait-type
         apiVersion: deck/v1alpha1
-        kind: Wait
+        kind: WaitFileExists
         spec:
-          action: fileExists
           path: /tmp/target
           type: socket
 `)
@@ -881,9 +865,8 @@ phases:
     steps:
       - id: bad-wait-mix
         apiVersion: deck/v1alpha1
-        kind: Wait
+        kind: WaitFileExists
         spec:
-          action: fileExists
           path: /tmp/target
           port: "6443"
 `)
@@ -927,7 +910,7 @@ phases:
 		}
 	})
 
-	t.Run("tool schema rejects Repository without explicit action", func(t *testing.T) {
+	t.Run("tool schema valid repository without legacy action", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
 		content := []byte(`role: apply
@@ -948,12 +931,8 @@ phases:
 			t.Fatalf("write file: %v", err)
 		}
 
-		err := File(path)
-		if err == nil {
-			t.Fatalf("expected tool schema validation error")
-		}
-		if got := err.Error(); !strings.Contains(got, "E_SCHEMA_INVALID") {
-			t.Fatalf("expected E_SCHEMA_INVALID, got %v", err)
+		if err := File(path); err != nil {
+			t.Fatalf("expected no error, got %v", err)
 		}
 	})
 
@@ -1080,9 +1059,8 @@ phases:
     steps:
       - id: download-runc
         apiVersion: deck/v1alpha1
-        kind: File
+        kind: FileDownload
         spec:
-          action: download
           source:
             url: https://example.invalid/runc
 `)
@@ -1133,9 +1111,8 @@ phases:
     steps:
       - id: write-file
         apiVersion: deck/v1alpha1
-        kind: File
+        kind: FileWrite
         spec:
-          action: write
           path: /etc/example.conf
           content: plain text
           contentFromTemplate: |
@@ -1164,9 +1141,8 @@ phases:
     steps:
       - id: write-file
         apiVersion: deck/v1alpha1
-        kind: File
+        kind: FileWrite
         spec:
-          action: write
           path: /etc/example.conf
           content: plain text
           src: /tmp/source.txt
@@ -1194,9 +1170,8 @@ phases:
     steps:
       - id: download-images
         apiVersion: deck/v1alpha1
-        kind: Image
+        kind: ImageDownload
         spec:
-          action: download
           images: [registry.k8s.io/pause:3.9]
           output:
             dir: images/core
@@ -1220,9 +1195,8 @@ phases:
     steps:
       - id: download-packages
         apiVersion: deck/v1alpha1
-        kind: Packages
+        kind: PackagesDownload
         spec:
-          action: download
           packages: [containerd]
           output:
             dir: packages/custom
@@ -1281,9 +1255,8 @@ phases:
     steps:
       - id: reset-node
         apiVersion: deck/v1alpha1
-        kind: Kubeadm
+        kind: KubeadmReset
         spec:
-          action: reset
           force: true
           ignoreErrors: true
           stopKubelet: true
@@ -1312,9 +1285,8 @@ phases:
     steps:
       - id: kubeadm-init
         apiVersion: deck/v1alpha1
-        kind: Kubeadm
+        kind: KubeadmInit
         spec:
-          action: init
           outputJoinFile: /tmp/deck/join.txt
           configFile: /tmp/deck/kubeadm-init.yaml
           configTemplate: default
@@ -1344,9 +1316,8 @@ phases:
     steps:
       - id: kubeadm-init
         apiVersion: deck/v1alpha1
-        kind: Kubeadm
+        kind: KubeadmInit
         spec:
-          action: init
           outputJoinFile: /tmp/deck/join.txt
           pullImages: "yes"
 `)
@@ -1373,9 +1344,8 @@ phases:
     steps:
       - id: kubeadm-init
         apiVersion: deck/v1alpha1
-        kind: Kubeadm
+        kind: KubeadmInit
         spec:
-          action: init
           mode: stub
           outputJoinFile: /tmp/deck/join.txt
 `)
@@ -1402,9 +1372,8 @@ phases:
     steps:
       - id: kubeadm-join
         apiVersion: deck/v1alpha1
-        kind: Kubeadm
+        kind: KubeadmJoin
         spec:
-          action: join
           configFile: /tmp/deck/kubeadm-join.yaml
           asControlPlane: true
           extraArgs: [--skip-phases=preflight]
@@ -1428,9 +1397,8 @@ phases:
     steps:
       - id: kubeadm-join
         apiVersion: deck/v1alpha1
-        kind: Kubeadm
+        kind: KubeadmJoin
         spec:
-          action: join
           joinFile: /tmp/deck/join.txt
           configFile: /tmp/deck/kubeadm-join.yaml
 `)
@@ -1484,9 +1452,8 @@ phases:
     steps:
       - id: kubeadm-join
         apiVersion: deck/v1alpha1
-        kind: Kubeadm
+        kind: KubeadmJoin
         spec:
-          action: join
           joinFile: /tmp/deck/join.txt
           force: true
 `)
@@ -1513,9 +1480,8 @@ phases:
     steps:
       - id: kubeadm-init
         apiVersion: deck/v1alpha1
-        kind: Kubeadm
+        kind: KubeadmInit
         spec:
-          action: init
           outputJoinFile: /tmp/deck/join.txt
           asControlPlane: true
 `)
@@ -1542,9 +1508,8 @@ phases:
     steps:
       - id: reset-node
         apiVersion: deck/v1alpha1
-        kind: Kubeadm
+        kind: KubeadmReset
         spec:
-          action: reset
           outputJoinFile: /tmp/deck/join.txt
 `)
 		if err := os.WriteFile(path, content, 0o644); err != nil {
@@ -1570,9 +1535,8 @@ phases:
     steps:
       - id: reset-node
         apiVersion: deck/v1alpha1
-        kind: Kubeadm
+        kind: KubeadmReset
         spec:
-          action: reset
           cleanupContainers: kube-apiserver
 `)
 		if err := os.WriteFile(path, content, 0o644); err != nil {
@@ -1598,11 +1562,10 @@ phases:
     steps:
       - id: w1
         apiVersion: deck/v1alpha1
-        kind: File
+        kind: FileWrite
         register:
           x: notARealOutput
         spec:
-          action: write
           path: /tmp/a.txt
           content: hello
 `)
@@ -1629,11 +1592,10 @@ phases:
     steps:
       - id: d1
         apiVersion: deck/v1alpha1
-        kind: File
+        kind: FileDownload
         register:
           fetched: path
         spec:
-          action: download
           source:
             url: https://example.local/a
           output:
@@ -1959,23 +1921,20 @@ steps:
       path: /etc/containerd/certs.d
       mode: "0755"
   - id: install-file
-    kind: File
+    kind: FileWrite
     spec:
-      action: write
       path: /etc/modules-load.d/k8s.conf
       content: |
         overlay
   - id: template-file
-    kind: File
+    kind: FileWrite
     spec:
-      action: write
       path: /etc/containerd/certs.d/registry.k8s.io/hosts.toml
       contentFromTemplate: |
         server = "http://registry.local"
   - id: repo-config
     kind: Repository
     spec:
-      action: configure
       path: /etc/yum.repos.d/offline.repo
       repositories:
         - id: offline-base

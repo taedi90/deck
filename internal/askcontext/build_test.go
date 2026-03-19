@@ -135,11 +135,11 @@ func TestRelevantStepKindsMatchesDockerRequest(t *testing.T) {
 	for _, step := range relevant {
 		joined = append(joined, step.Kind)
 	}
-	if !contains(joined, "Packages") {
-		t.Fatalf("expected Packages in relevant steps, got %v", joined)
+	if !contains(joined, "PackagesInstall") {
+		t.Fatalf("expected packages.install in relevant steps, got %v", joined)
 	}
 	if !contains(joined, "Repository") {
-		t.Fatalf("expected Repository in relevant steps, got %v", joined)
+		t.Fatalf("expected repository in relevant steps, got %v", joined)
 	}
 }
 
@@ -150,10 +150,10 @@ func TestRelevantStepKindsBlockIncludesTypedShapeGuidance(t *testing.T) {
 		"real YAML array",
 		"{{ .vars.* }}",
 		"spec.repositories",
-		"action install",
-		"action configure",
-		"source:\n",
+		"spec.source",
 		"spec.format",
+		"PackagesInstall",
+		"Repository",
 	} {
 		if !strings.Contains(block, want) {
 			t.Fatalf("expected %q in typed step guidance block, got %q", want, block)

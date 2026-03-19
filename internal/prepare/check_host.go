@@ -31,7 +31,7 @@ func resolveChecksRuntime(opts RunOptions) checksRuntime {
 }
 
 type checksSpec struct {
-	Checks   []string `json:"checks"`
+	Checks   []string `json:"Checks"`
 	Binaries []string `json:"binaries"`
 	FailFast *bool    `json:"failFast"`
 }
@@ -86,17 +86,17 @@ func runChecksDecoded(runner CommandRunner, decoded checksSpec, deps checksRunti
 					return nil, err
 				}
 			}
-		case "swap":
+		case "Swap":
 			raw, err := deps.readHostFile("/proc/swaps")
 			if err != nil {
-				if err := fail("swap", "cannot read /proc/swaps"); err != nil {
+				if err := fail("Swap", "cannot read /proc/swaps"); err != nil {
 					return nil, err
 				}
 				break
 			}
 			lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
 			if len(lines) > 1 {
-				if err := fail("swap", "swap enabled"); err != nil {
+				if err := fail("Swap", "swap enabled"); err != nil {
 					return nil, err
 				}
 			}

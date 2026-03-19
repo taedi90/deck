@@ -5,9 +5,8 @@ steps:
       disable: true
       persist: false
   - id: prep-enable-ip-forward
-    kind: File
+    kind: FileWrite
     spec:
-      action: write
       path: /etc/sysctl.d/99-kubernetes-ipforward.conf
       content: |
         net.ipv4.ip_forward = 1

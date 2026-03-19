@@ -40,7 +40,7 @@ func runSystemdUnit(ctx context.Context, spec map[string]any) error {
 		}
 	}
 
-	serviceRaw, hasService := spec["service"]
+	serviceRaw, hasService := spec["Service"]
 	if !hasService {
 		return nil
 	}

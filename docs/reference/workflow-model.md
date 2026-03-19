@@ -52,9 +52,8 @@ vars:
 
 ```yaml
 - id: write-hostname
-  kind: File
+  kind: FileWrite
   spec:
-    action: write
     path: /etc/hostname
     content: "{{ .vars.clusterName }}\n"
 ```
@@ -63,9 +62,8 @@ vars:
 
 ```yaml
 - id: install-rhel-packages
-  kind: Packages
+  kind: PackagesInstall
   spec:
-    action: install
     names: [kubeadm, kubelet, kubectl]
   when: vars.osFamily == "rhel"
 ```
@@ -145,17 +143,15 @@ steps:
 ```yaml
 steps:
   - id: get-join-cmd
-    kind: Kubeadm
+    kind: KubeadmInit
     spec:
-      action: init
       outputJoinFile: "{{ .vars.joinFile }}"
     register:
       joinFile: joinFile
 
   - id: join-node
-    kind: Kubeadm
+    kind: KubeadmJoin
     spec:
-      action: join
       joinFile: "{{ .runtime.joinFile }}"
       extraArgs: ["--cri-socket", "unix:///run/containerd/containerd.sock", "--ignore-preflight-errors=Swap,FileExisting-crictl,FileExisting-conntrack,FileExisting-socat"]
 ```

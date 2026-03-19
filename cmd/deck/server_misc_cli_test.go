@@ -446,7 +446,7 @@ func TestRunServerAuditRotationFlagValidation(t *testing.T) {
 }
 
 func TestRunLegacyTopLevelCommandsAreRemoved(t *testing.T) {
-	for _, cmd := range []string{"run", "resume", "diagnose", "agent", "workflow", "control", "strategy", "service", "serve", "health", "logs"} {
+	for _, cmd := range []string{"run", "resume", "diagnose", "agent", "workflow", "control", "strategy", "Service", "serve", "health", "logs"} {
 		t.Run(cmd, func(t *testing.T) {
 			err := run([]string{cmd})
 			if err == nil {
@@ -462,11 +462,11 @@ func TestRunLegacyTopLevelCommandsAreRemoved(t *testing.T) {
 }
 
 func TestLegacyServiceSurfaceRemoved(t *testing.T) {
-	err := run([]string{"service"})
+	err := run([]string{"Service"})
 	if err == nil {
 		t.Fatalf("expected unknown command error")
 	}
-	if !strings.Contains(err.Error(), `unknown command "service" for "deck"`) {
+	if !strings.Contains(err.Error(), `unknown command "Service" for "deck"`) {
 		t.Fatalf("unexpected error: %q", err.Error())
 	}
 }
@@ -599,7 +599,7 @@ func TestRunWorkflowLintAndLegacyValidateMigration(t *testing.T) {
 			t.Fatalf("write prepare: %v", err)
 		}
 		componentPath := filepath.Join(root, "workflows", "components", "shared", "checks.yaml")
-		if err := os.WriteFile(componentPath, []byte("steps:\n  - id: imported-file\n    kind: File\n    spec:\n      action: download\n      source:\n        path: files/source.bin\n      output:\n        path: imported.bin\n"), 0o644); err != nil {
+		if err := os.WriteFile(componentPath, []byte("steps:\n  - id: imported-file\n    kind: FileDownload\n    spec:\n      source:\n        path: files/source.bin\n      output:\n        path: imported.bin\n"), 0o644); err != nil {
 			t.Fatalf("write component: %v", err)
 		}
 

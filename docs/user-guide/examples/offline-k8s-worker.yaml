@@ -59,8 +59,7 @@ phases:
           state: started
       - id: kubeadm-join
         apiVersion: deck/v1alpha1
-        kind: Kubeadm
+        kind: KubeadmJoin
         spec:
-          action: join
           joinFile: /tmp/deck/join-real.txt
           extraArgs: ["--cri-socket", "unix:///run/containerd/containerd.sock", "--ignore-preflight-errors=Swap"]

@@ -5,73 +5,91 @@ Reference documentation for each typed workflow step supported by deck.
 
 ## [Artifacts](artifacts.md)
 
-- **Summary**: Install or extract pre-collected artifacts on the node.
+- **Summary**: Reference for the `Artifacts` family of typed workflow steps.
+- **Kinds**: `Artifacts`
 
 ## [Checks](checks.md)
 
-- **Summary**: Run host checks before prepare execution.
+- **Summary**: Reference for the `Checks` family of typed workflow steps.
+- **Kinds**: `Checks`
 
 ## [Command](command.md)
 
-- **Summary**: Run an explicit command as an escape hatch.
+- **Summary**: Reference for the `Command` family of typed workflow steps.
+- **Kinds**: `Command`
 
 ## [Containerd](containerd.md)
 
-- **Summary**: Write containerd config and registry host settings.
+- **Summary**: Reference for the `Containerd` family of typed workflow steps.
+- **Kinds**: `Containerd`
 
 ## [Directory](directory.md)
 
-- **Summary**: Ensure a directory exists with an optional mode.
+- **Summary**: Reference for the `Directory` family of typed workflow steps.
+- **Kinds**: `Directory`
 
 ## [File](file.md)
 
-- **Summary**: Manage files through write, copy, edit, or download actions.
+- **Summary**: Reference for the `File` family of typed workflow steps.
+- **Kinds**: `FileDownload`, `FileWrite`, `FileCopy`, `FileEdit`
 
 ## [Image](image.md)
 
-- **Summary**: Download or verify container images.
+- **Summary**: Reference for the `Image` family of typed workflow steps.
+- **Kinds**: `ImageDownload`, `ImageVerify`
 
 ## [KernelModule](kernel-module.md)
 
-- **Summary**: Load and persist kernel modules.
+- **Summary**: Reference for the `KernelModule` family of typed workflow steps.
+- **Kinds**: `KernelModule`
 
 ## [Kubeadm](kubeadm.md)
 
-- **Summary**: Run kubeadm init, join, or reset actions.
+- **Summary**: Reference for the `Kubeadm` family of typed workflow steps.
+- **Kinds**: `KubeadmInit`, `KubeadmJoin`, `KubeadmReset`
 
 ## [PackageCache](package-cache.md)
 
-- **Summary**: Refresh package metadata with repo filtering.
+- **Summary**: Reference for the `PackageCache` family of typed workflow steps.
+- **Kinds**: `PackageCache`
 
 ## [Packages](packages.md)
 
-- **Summary**: Download or install package sets.
+- **Summary**: Reference for the `Packages` family of typed workflow steps.
+- **Kinds**: `PackagesDownload`, `PackagesInstall`
 
 ## [Repository](repository.md)
 
-- **Summary**: Configure apt or yum repository definitions.
+- **Summary**: Reference for the `Repository` family of typed workflow steps.
+- **Kinds**: `Repository`
 
 ## [Service](service.md)
 
-- **Summary**: Start, stop, enable, or reload local services.
+- **Summary**: Reference for the `Service` family of typed workflow steps.
+- **Kinds**: `Service`
 
 ## [Swap](swap.md)
 
-- **Summary**: Enable or disable swap and its persistence.
+- **Summary**: Reference for the `Swap` family of typed workflow steps.
+- **Kinds**: `Swap`
 
 ## [Symlink](symlink.md)
 
-- **Summary**: Create or replace a symbolic link.
+- **Summary**: Reference for the `Symlink` family of typed workflow steps.
+- **Kinds**: `Symlink`
 
 ## [Sysctl](sysctl.md)
 
-- **Summary**: Write and optionally apply sysctl values.
+- **Summary**: Reference for the `Sysctl` family of typed workflow steps.
+- **Kinds**: `Sysctl`
 
 ## [SystemdUnit](systemd-unit.md)
 
-- **Summary**: Write a systemd unit file and optionally manage the service.
+- **Summary**: Reference for the `SystemdUnit` family of typed workflow steps.
+- **Kinds**: `SystemdUnit`
 
 ## [Wait](wait.md)
 
-- **Summary**: Wait for command, service, file, or port conditions.
+- **Summary**: Reference for the `Wait` family of typed workflow steps.
+- **Kinds**: `WaitServiceActive`, `WaitCommandSuccess`, `WaitFileExists`, `WaitFileAbsent`, `WaitTCPPortOpen`, `WaitTCPPortClosed`
 

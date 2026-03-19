@@ -366,7 +366,7 @@ func TestAskOneShotFallsBackToPlanOnlyWhenPlannerBlocks(t *testing.T) {
 }
 
 func validAskJSON() string {
-	return `{"summary":"generated starter workflows","review":["Prefer typed steps where possible."],"files":[{"path":"workflows/vars.yaml","content":"{}\n"},{"path":"workflows/scenarios/prepare.yaml","content":"role: prepare\nversion: v1alpha1\nartifacts: {}\n"},{"path":"workflows/scenarios/apply.yaml","content":"role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    imports:\n      - path: example-apply.yaml\n"},{"path":"workflows/components/example-apply.yaml","content":"steps:\n  - id: wait-runtime\n    kind: Wait\n    spec:\n      action: fileExists\n      path: /etc/containerd/config.toml\n      interval: 1s\n      timeout: 5s\n"}]}`
+	return `{"summary":"generated starter workflows","review":["Prefer typed steps where possible."],"files":[{"path":"workflows/vars.yaml","content":"{}\n"},{"path":"workflows/scenarios/prepare.yaml","content":"role: prepare\nversion: v1alpha1\nartifacts: {}\n"},{"path":"workflows/scenarios/apply.yaml","content":"role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    imports:\n      - path: example-apply.yaml\n"},{"path":"workflows/components/example-apply.yaml","content":"steps:\n  - id: wait-runtime\n    kind: WaitFileExists\n    spec:\n      path: /etc/containerd/config.toml\n      interval: 1s\n      timeout: 5s\n"}]}`
 }
 
 func validClassificationDraft() string {

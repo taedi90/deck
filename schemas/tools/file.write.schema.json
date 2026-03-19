@@ -1,0 +1,94 @@
+{
+  "$id": "https://deck.local/schemas/tools/file.write.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Writes inline or templated content to a node path.",
+  "properties": {
+    "apiVersion": {
+      "const": "deck/v1alpha1"
+    },
+    "id": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "FileWrite"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "register": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      },
+      "type": "object"
+    },
+    "retry": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "spec": {
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "not": {
+            "required": [
+              "contentFromTemplate"
+            ]
+          },
+          "required": [
+            "content"
+          ]
+        },
+        {
+          "not": {
+            "required": [
+              "content"
+            ]
+          },
+          "required": [
+            "contentFromTemplate"
+          ]
+        }
+      ],
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "contentFromTemplate": {
+          "type": "string"
+        },
+        "mode": {
+          "pattern": "^[0-7]{4}$",
+          "type": "string"
+        },
+        "path": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "timeout": {
+      "pattern": "^[0-9]+(ms|s|m|h)$",
+      "type": "string"
+    },
+    "when": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "kind",
+    "spec"
+  ],
+  "title": "FileWriteStep",
+  "type": "object",
+  "x-deck-visibility": "public"
+}

@@ -1,15 +1,13 @@
 steps:
   - id: fetch-join-file
-    kind: File
+    kind: FileDownload
     spec:
-      action: download
       source:
         url: http://{{ .vars.serverURL }}/files/cluster/join.txt
       output:
         path: "{{ .vars.joinFile }}"
   - id: join-worker
-    kind: Kubeadm
+    kind: KubeadmJoin
     spec:
-      action: join
       joinFile: "{{ .vars.joinFile }}"
       extraArgs: ["--cri-socket", "unix:///run/containerd/containerd.sock", "--ignore-preflight-errors=Swap,FileExisting-crictl,FileExisting-conntrack,FileExisting-socat"]

@@ -159,7 +159,7 @@ Optional ask augmentation config example:
       "servers": [
         {
           "name": "context7",
-          "command": "context7-mcp",
+          "Command": "context7-mcp",
           "args": []
         }
       ]
@@ -167,7 +167,7 @@ Optional ask augmentation config example:
     "lsp": {
       "enabled": true,
       "yaml": {
-        "command": "yaml-language-server",
+        "Command": "yaml-language-server",
         "args": ["--stdio"]
       }
     }

@@ -3,6 +3,7 @@ package schemadoc
 import (
 	"maps"
 	"sort"
+	"strings"
 
 	"github.com/taedi90/deck/internal/workflowcontract"
 )
@@ -38,7 +39,7 @@ type PageMetadata struct {
 var commonFieldDocs = map[string]FieldDoc{
 	"apiVersion": {Description: "Optional step API version. When omitted, deck uses the current default. When set, it must be a supported deck step API version.", Example: "deck/v1alpha1"},
 	"id":         {Description: "Unique identifier for the step within the workflow. Used in logs and plan output.", Example: "configure-containerd"},
-	"kind":       {Description: "Typed step kind. Determines which schema is applied to `spec`.", Example: "File"},
+	"kind":       {Description: "Concrete typed step kind. Determines which schema is applied to `spec`.", Example: "FileWrite"},
 	"spec":       {Description: "Step-specific configuration payload. Shape depends on the chosen `kind`.", Example: "{...}"},
 	"when":       {Description: workflowcontract.WhenDescription(), Example: workflowcontract.WhenExample()},
 	"retry":      {Description: "Number of times to retry the step after a failure before marking it as failed.", Example: "3"},
@@ -449,6 +450,9 @@ var toolMetadata = map[string]ToolMetadata{
 func ToolMeta(kind string) ToolMetadata {
 	def, hasDefinition := workflowcontract.StepDefinitionForKind(kind)
 	meta, ok := toolMetadata[kind]
+	if !ok && hasDefinition {
+		meta, ok = toolMetadata[def.FamilyTitle]
+	}
 	if !ok && !hasDefinition {
 		return ToolMetadata{Kind: kind, Category: "other", Summary: "Generated schema reference.", WhenToUse: "Use this schema according to the workflow contract."}
 	}
@@ -458,12 +462,64 @@ func ToolMeta(kind string) ToolMetadata {
 		meta.Summary = def.Summary
 		meta.WhenToUse = def.WhenToUse
 	}
+	meta.Example = normalizedToolExample(kind, def, meta)
 	// Merge common field docs so every tool page documents shared execution controls.
 	merged := make(map[string]FieldDoc, len(commonFieldDocs)+len(meta.FieldDocs))
 	maps.Copy(merged, commonFieldDocs)
 	maps.Copy(merged, meta.FieldDocs)
+	delete(merged, "spec.action")
 	meta.FieldDocs = merged
 	return meta
+}
+
+func normalizedToolExample(kind string, def workflowcontract.StepDefinition, meta ToolMetadata) string {
+	example := strings.TrimSpace(meta.Example)
+	if example == "" {
+		actionKey := legacyActionName(def)
+		if actionKey != "" {
+			example = strings.TrimSpace(meta.ActionExamples[actionKey])
+		}
+	}
+	if example == "" {
+		return ""
+	}
+	legacyKind := kind
+	if strings.TrimSpace(def.FamilyTitle) != "" {
+		legacyKind = def.FamilyTitle
+	}
+	return normalizeLegacyExample(example, legacyKind, kind)
+}
+
+func legacyActionName(def workflowcontract.StepDefinition) string {
+	if def.Kind == def.FamilyTitle {
+		return ""
+	}
+	base := strings.TrimSuffix(def.SchemaFile, ".schema.json")
+	_, action, ok := strings.Cut(base, ".")
+	if !ok {
+		return ""
+	}
+	parts := strings.Split(action, "-")
+	for i := 1; i < len(parts); i++ {
+		if parts[i] == "" {
+			continue
+		}
+		parts[i] = strings.ToUpper(parts[i][:1]) + parts[i][1:]
+	}
+	return strings.Join(parts, "")
+}
+
+func normalizeLegacyExample(example, legacyKind, kind string) string {
+	lines := strings.Split(strings.TrimSpace(example), "\n")
+	filtered := make([]string, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "action:") {
+			continue
+		}
+		filtered = append(filtered, strings.Replace(line, "kind: "+legacyKind, "kind: "+kind, 1))
+	}
+	return strings.Join(filtered, "\n") + "\n"
 }
 
 func ToolKinds() []string {
@@ -480,7 +536,7 @@ func WorkflowMeta() PageMetadata {
 	return PageMetadata{
 		Title:   "Workflow Schema",
 		Summary: "Top-level workflow authoring reference for deck workflows.",
-		Example: "role: apply\nversion: v1alpha1\nsteps:\n  - id: write-config\n    apiVersion: deck/v1alpha1\n    kind: File\n    spec:\n      action: write\n      path: /etc/example.conf\n      content: hello\n",
+		Example: "role: apply\nversion: v1alpha1\nsteps:\n  - id: write-config\n    apiVersion: deck/v1alpha1\n    kind: FileWrite\n    spec:\n      path: /etc/example.conf\n      content: hello\n",
 		FieldDocs: map[string]FieldDoc{
 			"role":                           {Description: "Workflow role. `prepare` builds offline artifacts; `apply` changes the local node.", Example: "apply"},
 			"artifacts":                      {Description: "Declarative prepare inventory that replaces legacy prepare download steps.", Example: "{files:[...],images:[...],packages:[...]}"},
@@ -489,8 +545,8 @@ func WorkflowMeta() PageMetadata {
 			"artifacts.packages[].execution": {Description: "Optional execution controls for package artifact jobs. `parallelism` runs different target/container jobs concurrently and `retry` applies per target job.", Example: "{parallelism:2,retry:1}"},
 			"phases":                         {Description: "Ordered execution phases. Each phase can contain imports, steps, or both.", Example: "[{name:install,steps:[...]}]"},
 			"steps":                          {Description: "Flat step list for workflows that do not need named phases.", Example: "[{id:configure-runtime,kind:Containerd,spec:{...}}]"},
-			"steps[].kind":                   {Description: "Typed step kind selected from the shipped public step inventory.", Example: "File"},
-			"steps[].spec":                   {Description: "Action-specific step payload validated against the schema for the chosen kind.", Example: "{action:install,path:/etc/example.conf,content:hello}"},
+			"steps[].kind":                   {Description: "Typed step kind selected from the shipped public step inventory.", Example: "FileWrite"},
+			"steps[].spec":                   {Description: "Step payload validated against the schema for the chosen kind.", Example: "{path:/etc/example.conf,content:hello}"},
 			"steps[].when":                   {Description: workflowcontract.WhenDescription(), Example: `vars.skipSetup != "true"`},
 			"steps[].retry":                  {Description: "Number of times to retry the step after a failure before marking it as failed.", Example: "3"},
 			"steps[].timeout":                {Description: "Maximum duration for the step. Accepts Go duration strings.", Example: "5m"},
@@ -534,7 +590,7 @@ func ComponentFragmentMeta() PageMetadata {
 	return PageMetadata{
 		Title:   "Component Fragment Schema",
 		Summary: "Reference for reusable workflow component fragments located under `workflows/components/`.",
-		Example: "steps:\n  - id: write-config\n    kind: File\n    spec:\n      action: write\n      path: /etc/example.conf\n      content: hello\n  - id: restart-service\n    kind: Service\n    spec:\n      name: example\n      state: restarted\n",
+		Example: "steps:\n  - id: write-config\n    kind: FileWrite\n    spec:\n      path: /etc/example.conf\n      content: hello\n  - id: restart-service\n    kind: Service\n    spec:\n      name: example\n      state: restarted\n",
 		FieldDocs: map[string]FieldDoc{
 			"steps": {Description: "Ordered list of workflow steps contained in this fragment.", Example: "[{id:example,kind:Command,spec:{...}}]"},
 		},

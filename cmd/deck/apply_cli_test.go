@@ -70,7 +70,7 @@ func TestApplyWritesRunRecordUnderXDGStateHome(t *testing.T) {
 		t.Fatalf("read run record: %v", err)
 	}
 	var record struct {
-		Command string `json:"command"`
+		Command string `json:"Command"`
 		Status  string `json:"status"`
 		Steps   []struct {
 			StepID string `json:"step_id"`
@@ -234,9 +234,8 @@ phases:
             - -c
             - 'test -f %s'
       - id: download-file
-        kind: File
+        kind: FileDownload
         spec:
-          action: download
           source:
             url: '%s'
           output:

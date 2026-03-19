@@ -119,16 +119,11 @@ func buildStepKinds() []StepKindContext {
 			WhenToUse:    meta.WhenToUse,
 			SchemaFile:   def.SchemaFile,
 			AllowedRoles: sortedKeys(contract.Roles),
-			Actions:      sortedActionKeys(contract.Actions),
 			Outputs:      sortedKeys(contract.Outputs),
 			MinimalShape: strings.TrimSpace(meta.Example),
 			CuratedShape: strings.TrimSpace(meta.Example),
 			KeyFields:    buildStepKeyFields(def.Kind, meta),
-			ActionGuides: buildStepActionGuides(meta),
 			Notes:        append([]string(nil), meta.Notes...),
-		}
-		for _, action := range ctx.Actions {
-			ctx.Outputs = append(ctx.Outputs, sortedKeys(contract.Actions[action].Outputs)...)
 		}
 		ctx.Outputs = dedupe(ctx.Outputs)
 		out = append(out, ctx)
@@ -138,14 +133,18 @@ func buildStepKinds() []StepKindContext {
 
 func buildStepKeyFields(kind string, meta schemadoc.ToolMetadata) []StepFieldContext {
 	preferred := map[string][]string{
-		"Packages":   {"spec.action", "spec.packages", "spec.source", "spec.distro", "spec.repo", "spec.excludeRepos"},
-		"Repository": {"spec.action", "spec.format", "spec.path", "spec.repositories", "spec.refreshCache", "spec.replaceExisting"},
-		"Service":    {"spec.name", "spec.action", "spec.enabled"},
-		"File":       {"spec.action", "spec.path", "spec.content", "spec.source", "spec.output"},
+		"PackagesDownload": {"spec.packages", "spec.distro", "spec.repo", "spec.backend", "spec.output"},
+		"PackagesInstall":  {"spec.packages", "spec.source", "spec.restrictToRepos", "spec.excludeRepos"},
+		"Repository":       {"spec.format", "spec.path", "spec.repositories", "spec.refreshCache", "spec.replaceExisting"},
+		"Service":          {"spec.name", "spec.names", "spec.state", "spec.enabled"},
+		"FileDownload":     {"spec.source", "spec.fetch", "spec.output"},
+		"FileWrite":        {"spec.path", "spec.content", "spec.contentFromTemplate", "spec.mode"},
+		"FileCopy":         {"spec.src", "spec.dest", "spec.mode"},
+		"FileEdit":         {"spec.path", "spec.edits", "spec.backup", "spec.mode"},
 	}
 	keys := preferred[kind]
 	if len(keys) == 0 {
-		keys = []string{"spec.action", "spec.path", "spec.source", "spec.content"}
+		keys = []string{"spec.path", "spec.source", "spec.content"}
 	}
 	out := make([]StepFieldContext, 0, len(keys))
 	for _, key := range keys {
@@ -158,38 +157,12 @@ func buildStepKeyFields(kind string, meta schemadoc.ToolMetadata) []StepFieldCon
 	return out
 }
 
-func buildStepActionGuides(meta schemadoc.ToolMetadata) []StepActionContext {
-	keys := make([]string, 0, len(meta.ActionExamples))
-	for action := range meta.ActionExamples {
-		keys = append(keys, action)
-	}
-	sort.Strings(keys)
-	out := make([]StepActionContext, 0, len(keys))
-	for _, action := range keys {
-		out = append(out, StepActionContext{
-			Action:  action,
-			Note:    strings.TrimSpace(meta.ActionNotes[action]),
-			Example: strings.TrimSpace(meta.ActionExamples[action]),
-		})
-	}
-	return out
-}
-
 func sortedKeys(values map[string]bool) []string {
 	out := make([]string, 0, len(values))
 	for value, ok := range values {
 		if ok {
 			out = append(out, value)
 		}
-	}
-	sort.Strings(out)
-	return out
-}
-
-func sortedActionKeys(values map[string]workflowexec.ActionContract) []string {
-	out := make([]string, 0, len(values))
-	for value := range values {
-		out = append(out, value)
 	}
 	sort.Strings(out)
 	return out

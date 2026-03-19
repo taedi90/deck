@@ -10,58 +10,45 @@ import (
 	"github.com/taedi90/deck/schemas"
 )
 
-func TestRenderToolPageActionBasedUsesActionSectionsOnly(t *testing.T) {
-	in := testToolPageInput(t, "Packages")
-	rendered := string(RenderToolPage(in))
+func TestRenderToolPageGroupsConcreteKindsByFamily(t *testing.T) {
+	page := testFamilyPageInput(t, "file")
+	rendered := string(RenderToolPage(page))
 
-	if strings.Contains(rendered, "\n## Example\n") {
-		t.Fatalf("action-based page should not render a page-level example:\n%s", rendered)
+	if !strings.Contains(rendered, "## Supported Kinds") {
+		t.Fatalf("expected supported kinds section:\n%s", rendered)
 	}
-	if strings.Contains(rendered, "\n## Fields\n") {
-		t.Fatalf("action-based page should not render page-level fields:\n%s", rendered)
+	for _, kind := range []string{"FileDownload", "FileWrite", "FileCopy", "FileEdit"} {
+		if !strings.Contains(rendered, "`"+kind+"`") {
+			t.Fatalf("expected grouped file kind %s:\n%s", kind, rendered)
+		}
 	}
-	if !strings.Contains(rendered, "## Shared Step Fields") {
-		t.Fatalf("expected shared step fields note:\n%s", rendered)
+	if strings.Contains(rendered, "spec.action") {
+		t.Fatalf("did not expect legacy spec.action docs:\n%s", rendered)
 	}
-	if !strings.Contains(rendered, "### `download`") || !strings.Contains(rendered, "### `install`") {
-		t.Fatalf("expected action sections for Packages:\n%s", rendered)
-	}
-	if !strings.Contains(rendered, "`spec.repo.type`") || !strings.Contains(rendered, "`spec.backend.image`") {
-		t.Fatalf("expected optional action-relevant download fields:\n%s", rendered)
-	}
-	if !strings.Contains(rendered, "`spec.source.type`") || !strings.Contains(rendered, "`spec.excludeRepos`") {
-		t.Fatalf("expected install action fields:\n%s", rendered)
-	}
-	if !strings.Contains(rendered, "[Workflow Schema](../workflow.md)") {
-		t.Fatalf("expected workflow schema pointer:\n%s", rendered)
-	}
-	if strings.Contains(rendered, "- visibility:") || strings.Contains(rendered, "- category:") {
-		t.Fatalf("action-based page should not render visibility/category:\n%s", rendered)
+	if !strings.Contains(rendered, "../../../schemas/tools/file.download.schema.json") {
+		t.Fatalf("expected raw schema link for grouped variant:\n%s", rendered)
 	}
 }
 
-func TestRenderToolPageNonActionUsesSingleExampleAndOptionalAPIVersion(t *testing.T) {
-	in := testToolPageInput(t, "Checks")
-	rendered := string(RenderToolPage(in))
+func TestRenderToolPageConcreteKindSectionUsesNormalizedExample(t *testing.T) {
+	page := testFamilyPageInput(t, "packages")
+	rendered := string(RenderToolPage(page))
 
-	if !strings.Contains(rendered, "\n## Example\n") {
-		t.Fatalf("expected single example section:\n%s", rendered)
+	if !strings.Contains(rendered, "## `PackagesDownload`") || !strings.Contains(rendered, "## `PackagesInstall`") {
+		t.Fatalf("expected concrete kind sections:\n%s", rendered)
 	}
-	if strings.Contains(rendered, "## Minimal Example") || strings.Contains(rendered, "## Realistic Example") {
-		t.Fatalf("did not expect old example headings:\n%s", rendered)
+	if !strings.Contains(rendered, "kind: PackagesInstall") {
+		t.Fatalf("expected normalized concrete kind example:\n%s", rendered)
 	}
-	if !strings.Contains(rendered, "| `apiVersion` | `string` | no |") {
-		t.Fatalf("expected optional apiVersion row:\n%s", rendered)
+	if strings.Contains(rendered, "action:") {
+		t.Fatalf("did not expect legacy action selector in rendered page:\n%s", rendered)
 	}
-	if !strings.Contains(rendered, "Optional step API version") {
-		t.Fatalf("expected updated apiVersion description:\n%s", rendered)
-	}
-	if strings.Contains(rendered, "- visibility:") || strings.Contains(rendered, "- category:") {
-		t.Fatalf("non-action page should not render visibility/category:\n%s", rendered)
+	if !strings.Contains(rendered, "outputs: `artifacts`") {
+		t.Fatalf("expected outputs section for packages.download:\n%s", rendered)
 	}
 }
 
-func TestRenderWorkflowPageUsesSingleExample(t *testing.T) {
+func TestRenderWorkflowPageUsesConcreteKindExample(t *testing.T) {
 	raw, err := schemas.WorkflowSchema()
 	if err != nil {
 		t.Fatalf("WorkflowSchema: %v", err)
@@ -72,42 +59,64 @@ func TestRenderWorkflowPageUsesSingleExample(t *testing.T) {
 	}
 	rendered := string(RenderWorkflowPage("schemas/deck-workflow.schema.json", schema, WorkflowMeta()))
 
-	if !strings.Contains(rendered, "\n## Example\n") {
-		t.Fatalf("expected single workflow example:\n%s", rendered)
+	if !strings.Contains(rendered, "kind: FileWrite") {
+		t.Fatalf("expected concrete kind workflow example:\n%s", rendered)
 	}
-	if strings.Contains(rendered, "## Minimal Example") || strings.Contains(rendered, "## Realistic Example") {
-		t.Fatalf("did not expect old workflow example headings:\n%s", rendered)
+	if strings.Contains(rendered, "action: write") {
+		t.Fatalf("did not expect legacy action line in workflow example:\n%s", rendered)
 	}
 }
 
-func testToolPageInput(t *testing.T, kind string) PageInput {
+func testFamilyPageInput(t *testing.T, family string) PageInput {
 	t.Helper()
-	def, ok := workflowcontract.StepDefinitionForKind(kind)
-	if !ok {
-		t.Fatalf("missing step definition for %s", kind)
+	defs := workflowcontract.StepDefinitions()
+	page := PageInput{Family: family}
+	for _, def := range defs {
+		if def.Family != family || def.Visibility != "public" {
+			continue
+		}
+		raw, err := schemas.ToolSchema(def.SchemaFile)
+		if err != nil {
+			t.Fatalf("ToolSchema(%q): %v", def.SchemaFile, err)
+		}
+		var schema map[string]any
+		if err := json.Unmarshal(raw, &schema); err != nil {
+			t.Fatalf("unmarshal tool schema %q: %v", def.SchemaFile, err)
+		}
+		properties, _ := schema["properties"].(map[string]any)
+		spec, _ := properties["spec"].(map[string]any)
+		if page.PageSlug == "" {
+			page.PageSlug = def.DocsPage
+			page.Title = def.FamilyTitle
+			page.Summary = "Reference for the `" + def.FamilyTitle + "` family of typed workflow steps."
+		}
+		page.Variants = append(page.Variants, VariantInput{
+			Kind:        def.Kind,
+			Title:       def.FamilyTitle,
+			Description: def.Summary,
+			SchemaPath:  filepath.ToSlash(filepath.Join("schemas", "tools", def.SchemaFile)),
+			Schema:      schema,
+			Meta:        ToolMeta(def.Kind),
+			Required:    toRequiredStrings(spec["required"]),
+			Spec:        spec,
+			Outputs:     append([]string(nil), def.Outputs...),
+			DocsOrder:   def.DocsOrder,
+		})
 	}
-	raw, err := schemas.ToolSchema(def.SchemaFile)
-	if err != nil {
-		t.Fatalf("ToolSchema(%q): %v", def.SchemaFile, err)
+	if page.PageSlug == "" {
+		t.Fatalf("missing test page for family %s", family)
 	}
-	var schema map[string]any
-	if err := json.Unmarshal(raw, &schema); err != nil {
-		t.Fatalf("unmarshal tool schema %q: %v", def.SchemaFile, err)
+	return page
+}
+
+func toRequiredStrings(value any) []string {
+	items, _ := value.([]any)
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		text, _ := item.(string)
+		if text != "" {
+			out = append(out, text)
+		}
 	}
-	properties, _ := schema["properties"].(map[string]any)
-	spec, _ := properties["spec"].(map[string]any)
-	actions := make([]string, 0, len(def.Actions))
-	for _, action := range def.Actions {
-		actions = append(actions, action.Name)
-	}
-	return PageInput{
-		Kind:       kind,
-		PageSlug:   strings.TrimSuffix(def.SchemaFile, ".schema.json"),
-		Title:      kind,
-		SchemaPath: filepath.ToSlash(filepath.Join("schemas", "tools", def.SchemaFile)),
-		Schema:     schema,
-		Meta:       ToolMeta(kind),
-		Actions:    actions,
-		Spec:       spec,
-	}
+	return out
 }

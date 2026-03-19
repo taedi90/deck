@@ -13,9 +13,8 @@ version: v1alpha1
 steps:
   - id: write-config
     apiVersion: deck/v1alpha1
-    kind: File
+    kind: FileWrite
     spec:
-      action: write
       path: /etc/example.conf
       content: hello
 ```

@@ -1,242 +1,221 @@
 package main
 
-import (
-	jsonschema "github.com/invopop/jsonschema"
-
-	"github.com/taedi90/deck/internal/schemamodel"
-	"github.com/taedi90/deck/internal/workflowexec"
-)
-
-func generateFileToolSchema() (map[string]any, error) {
-	reflector := jsonschema.Reflector{DoNotReference: true, ExpandedStruct: true}
-	root, err := schemaToMap(reflector.Reflect(&schemamodel.FileStepDocument{}))
-	if err != nil {
-		return nil, err
-	}
-	root["$schema"] = "https://json-schema.org/draft/2020-12/schema"
-	root["$id"] = "https://deck.local/schemas/tools/file.schema.json"
-	root["title"] = "FileStep"
-	root["description"] = "Manages file operations through action-specific modes."
-	root["x-deck-visibility"] = "public"
-	root["type"] = "object"
-	root["additionalProperties"] = false
-	root["required"] = []any{"id", "kind", "spec"}
-
+func generateFileDownloadToolSchema() map[string]any {
+	root := stepEnvelopeSchema("FileDownload", "FileDownloadStep", "Downloads or stages a file into bundle output storage.", "public")
 	props := propertyMap(root)
-	setMap(props, "id", map[string]any{"type": "string"})
-	setMap(props, "apiVersion", map[string]any{"const": "deck/v1alpha1"})
-	setMap(props, "kind", map[string]any{"const": "File"})
-	mergeMap(props, "metadata", map[string]any{"type": "object", "additionalProperties": true})
-	mergeMap(props, "when", map[string]any{"type": "string"})
-	mergeMap(props, "retry", map[string]any{"type": "integer", "minimum": 0})
-	mergeMap(props, "timeout", map[string]any{"type": "string", "pattern": "^[0-9]+(ms|s|m|h)$"})
-	setMap(props, "register", map[string]any{
+	setMap(props, "spec", map[string]any{
 		"type":                 "object",
-		"propertyNames":        map[string]any{"pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
-		"additionalProperties": map[string]any{"type": "string"},
+		"additionalProperties": false,
+		"required":             []any{"source"},
+		"properties": map[string]any{
+			"source": fileSourceSchema(),
+			"fetch":  fileFetchSchema(),
+			"output": fileOutputSchema(),
+		},
 	})
-	patchFileSpec(props["spec"])
-
-	return root, nil
+	return root
 }
 
-func generateWaitToolSchema() (map[string]any, error) {
-	reflector := jsonschema.Reflector{DoNotReference: true, ExpandedStruct: true}
-	root, err := schemaToMap(reflector.Reflect(&schemamodel.WaitStepDocument{}))
-	if err != nil {
-		return nil, err
-	}
-	root["$schema"] = "https://json-schema.org/draft/2020-12/schema"
-	root["$id"] = "https://deck.local/schemas/tools/wait.schema.json"
-	root["title"] = "WaitStep"
-	root["description"] = "Waits for healthcheck-style conditions through action-specific polling."
-	root["x-deck-visibility"] = "public"
-	root["type"] = "object"
-	root["additionalProperties"] = false
-	root["required"] = []any{"id", "kind", "spec"}
-
+func generateFileWriteToolSchema() map[string]any {
+	root := stepEnvelopeSchema("FileWrite", "FileWriteStep", "Writes inline or templated content to a node path.", "public")
 	props := propertyMap(root)
-	setMap(props, "id", map[string]any{"type": "string"})
-	setMap(props, "apiVersion", map[string]any{"const": "deck/v1alpha1"})
-	setMap(props, "kind", map[string]any{"const": "Wait"})
-	mergeMap(props, "metadata", map[string]any{"type": "object", "additionalProperties": true})
-	mergeMap(props, "when", map[string]any{"type": "string"})
-	mergeMap(props, "retry", map[string]any{"type": "integer", "minimum": 0})
-	mergeMap(props, "timeout", map[string]any{"type": "string", "pattern": "^[0-9]+(ms|s|m|h)$"})
-	setMap(props, "register", map[string]any{
+	setMap(props, "spec", map[string]any{
 		"type":                 "object",
-		"propertyNames":        map[string]any{"pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
-		"additionalProperties": map[string]any{"type": "string"},
+		"additionalProperties": false,
+		"required":             []any{"path"},
+		"properties": map[string]any{
+			"path":                minLenStringSchema(),
+			"content":             map[string]any{"type": "string"},
+			"contentFromTemplate": map[string]any{"type": "string"},
+			"mode":                modeSchema(),
+		},
+		"oneOf": []any{
+			map[string]any{"required": []any{"content"}, "not": map[string]any{"required": []any{"contentFromTemplate"}}},
+			map[string]any{"required": []any{"contentFromTemplate"}, "not": map[string]any{"required": []any{"content"}}},
+		},
 	})
-	patchWaitSpec(props["spec"])
-
-	return root, nil
+	return root
 }
 
-func patchFileSpec(node any) {
-	spec, ok := node.(map[string]any)
-	if !ok {
-		return
+func generateFileCopyToolSchema() map[string]any {
+	root := stepEnvelopeSchema("FileCopy", "FileCopyStep", "Copies a file already present on the node.", "public")
+	props := propertyMap(root)
+	setMap(props, "spec", map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"required":             []any{"src", "dest"},
+		"properties": map[string]any{
+			"src":  minLenStringSchema(),
+			"dest": minLenStringSchema(),
+			"mode": modeSchema(),
+		},
+	})
+	return root
+}
+
+func generateFileEditToolSchema() map[string]any {
+	root := stepEnvelopeSchema("FileEdit", "FileEditStep", "Edits an existing file in place.", "public")
+	props := propertyMap(root)
+	setMap(props, "spec", map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"required":             []any{"path", "edits"},
+		"properties": map[string]any{
+			"path":   minLenStringSchema(),
+			"backup": map[string]any{"type": "boolean"},
+			"edits":  fileEditsSchema(),
+			"mode":   modeSchema(),
+		},
+	})
+	return root
+}
+
+func fileSourceSchema() map[string]any {
+	return map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"properties": map[string]any{
+			"url":    minLenStringSchema(),
+			"path":   minLenStringSchema(),
+			"sha256": sha256Schema(),
+			"bundle": bundleRefSchema(),
+		},
+		"anyOf": []any{
+			map[string]any{"required": []any{"url"}},
+			map[string]any{"required": []any{"path"}},
+			map[string]any{"required": []any{"bundle"}},
+		},
 	}
-	spec["type"] = "object"
-	spec["additionalProperties"] = false
-	spec["required"] = []any{"action"}
-	props := propertyMap(spec)
-	setMap(props, "action", map[string]any{"type": "string", "enum": []any{"download", "write", "copy", "edit"}})
-	mergeMap(props, "mode", map[string]any{"type": "string", "pattern": "^[0-7]{4}$"})
-	delete(props, "owner")
-	delete(props, "group")
-	patchFileEditRules(props["edits"])
-	patchFileSource(props["source"])
-	patchFileOutput(props["output"])
-	allowedByAction := registryActionFields("File")
-	allFields := []string{"action", "path", "content", "contentFromTemplate", "mode", "src", "dest", "backup", "edits", "source", "fetch", "output"}
-	spec["allOf"] = []any{
-		restrictActionFields(allowedByAction, allFields),
-		conditionalRequired("download", []string{"source"}, nil),
-		map[string]any{
-			"if": map[string]any{
-				"properties": map[string]any{"action": map[string]any{"const": "write"}},
-				"required":   []any{"action"},
-			},
-			"then": map[string]any{
-				"required": []any{"path"},
-				"oneOf": []any{
-					map[string]any{"required": []any{"content"}, "not": map[string]any{"required": []any{"contentFromTemplate"}}},
-					map[string]any{"required": []any{"contentFromTemplate"}, "not": map[string]any{"required": []any{"content"}}},
+}
+
+func fileFetchSchema() map[string]any {
+	return map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"properties": map[string]any{
+			"offlineOnly": map[string]any{"type": "boolean"},
+			"sources": map[string]any{
+				"type": "array",
+				"items": map[string]any{
+					"type":                 "object",
+					"additionalProperties": false,
+					"required":             []any{"type"},
+					"anyOf": []any{
+						map[string]any{"required": []any{"path"}},
+						map[string]any{"required": []any{"url"}},
+					},
+					"properties": map[string]any{
+						"type": enumStringSchema("local", "bundle", "repo", "online"),
+						"path": minLenStringSchema(),
+						"url":  minLenStringSchema(),
+					},
 				},
 			},
 		},
-		conditionalRequired("copy", []string{"src", "dest"}, nil),
-		conditionalRequired("edit", []string{"path", "edits"}, nil),
 	}
 }
 
-func patchWaitSpec(node any) {
-	spec, ok := node.(map[string]any)
-	if !ok {
-		return
-	}
-	spec["type"] = "object"
-	spec["additionalProperties"] = false
-	spec["required"] = []any{"action"}
-	props := propertyMap(spec)
-	setMap(props, "action", map[string]any{"type": "string", "enum": []any{"serviceActive", "commandSuccess", "fileExists", "fileAbsent", "tcpPortClosed", "tcpPortOpen"}})
-	delete(props, "state")
-	mergeMap(props, "interval", map[string]any{"type": "string", "pattern": "^[0-9]+(ms|s|m|h)$"})
-	mergeMap(props, "initialDelay", map[string]any{"type": "string", "pattern": "^[0-9]+(ms|s|m|h)$"})
-	mergeMap(props, "timeout", map[string]any{"type": "string", "pattern": "^[0-9]+(ms|s|m|h)$"})
-	mergeMap(props, "pollInterval", map[string]any{"type": "string", "pattern": "^[0-9]+(ms|s|m|h)$"})
-	setMap(props, "type", map[string]any{"type": "string", "enum": []any{"any", "file", "dir"}})
-	setMap(props, "command", map[string]any{"type": "array", "minItems": 1, "items": map[string]any{"type": "string"}})
-	allowedByAction := registryActionFields("Wait")
-	allFields := []string{"action", "interval", "initialDelay", "name", "command", "path", "type", "nonEmpty", "address", "port", "timeout", "pollInterval"}
-	spec["allOf"] = []any{
-		restrictActionFields(allowedByAction, allFields),
-		conditionalEnumRequired([]string{"serviceActive"}, []string{"name"}),
-		conditionalEnumRequired([]string{"commandSuccess"}, []string{"command"}),
-		conditionalEnumRequired([]string{"fileExists", "fileAbsent"}, []string{"path"}),
-		conditionalEnumRequired([]string{"tcpPortClosed", "tcpPortOpen"}, []string{"port"}),
-	}
-}
-
-func registryActionFields(kind string) map[string][]string {
-	def, ok := workflowexec.StepDefinitionForKind(kind)
-	if !ok {
-		return nil
-	}
-	fields := make(map[string][]string, len(def.Actions))
-	for _, action := range def.Actions {
-		fields[action.Name] = append([]string(nil), action.Fields...)
-	}
-	return fields
-}
-
-func patchFileEditRules(node any) {
-	edits, ok := node.(map[string]any)
-	if !ok {
-		return
-	}
-	edits["type"] = "array"
-	edits["minItems"] = 1
-	edits["items"] = map[string]any{
+func fileOutputSchema() map[string]any {
+	return map[string]any{
 		"type":                 "object",
 		"additionalProperties": false,
-		"required":             []any{"match"},
 		"properties": map[string]any{
-			"match": map[string]any{"type": "string"},
-			"with":  map[string]any{"type": "string"},
-			"op":    enumStringSchema("replace", "append"),
+			"path":  minLenStringSchema(),
+			"chmod": modeSchema(),
 		},
 	}
 }
 
-func patchFileSource(node any) {
-	source, ok := node.(map[string]any)
-	if !ok {
-		return
-	}
-	source["type"] = "object"
-	source["additionalProperties"] = false
-	mergeMap(source, "properties", map[string]any{})
-	props := propertyMap(source)
-	mergeMap(props, "url", map[string]any{"type": "string", "minLength": 1})
-	mergeMap(props, "path", map[string]any{"type": "string", "minLength": 1})
-	setMap(props, "sha256", map[string]any{"type": "string", "pattern": "^[a-fA-F0-9]{64}$"})
-	setMap(props, "bundle", map[string]any{
-		"type":                 "object",
-		"additionalProperties": false,
-		"required":             []any{"root", "path"},
-		"properties": map[string]any{
-			"root": map[string]any{"type": "string", "enum": []any{"files", "images", "packages"}},
-			"path": map[string]any{"type": "string", "minLength": 1},
+func fileEditsSchema() map[string]any {
+	return map[string]any{
+		"type":     "array",
+		"minItems": 1,
+		"items": map[string]any{
+			"type":                 "object",
+			"additionalProperties": false,
+			"required":             []any{"match"},
+			"properties": map[string]any{
+				"match": map[string]any{"type": "string"},
+				"with":  map[string]any{"type": "string"},
+				"op":    enumStringSchema("replace", "append"),
+			},
 		},
+	}
+}
+
+func generateWaitServiceActiveToolSchema() map[string]any {
+	return generateWaitToolSchema("WaitServiceActive", "WaitServiceActiveStep", "Waits until a systemd service reports active.", []string{"name"}, map[string]any{
+		"interval":     durationStringSchema(),
+		"initialDelay": durationStringSchema(),
+		"name":         minLenStringSchema(),
+		"timeout":      durationStringSchema(),
+		"pollInterval": durationStringSchema(),
 	})
-	source["anyOf"] = []any{
-		map[string]any{"required": []any{"url"}},
-		map[string]any{"required": []any{"path"}},
-		map[string]any{"required": []any{"bundle"}},
-	}
 }
 
-func patchFileOutput(node any) {
-	output, ok := node.(map[string]any)
-	if !ok {
-		return
-	}
-	output["type"] = "object"
-	output["additionalProperties"] = false
-	delete(output, "required")
-	output["properties"] = map[string]any{
-		"path":  map[string]any{"type": "string", "minLength": 1},
-		"chmod": map[string]any{"type": "string", "pattern": "^[0-7]{4}$"},
-	}
+func generateWaitCommandSuccessToolSchema() map[string]any {
+	return generateWaitToolSchema("WaitCommandSuccess", "WaitCommandSuccessStep", "Waits until a command exits successfully.", []string{"command"}, map[string]any{
+		"interval":     durationStringSchema(),
+		"initialDelay": durationStringSchema(),
+		"command":      stringArraySchema(1, false),
+		"timeout":      durationStringSchema(),
+		"pollInterval": durationStringSchema(),
+	})
 }
 
-func conditionalRequired(action string, required []string, extra any) map[string]any {
-	then := map[string]any{"required": toAnySlice(required)}
-	if extra != nil {
-		then["anyOf"] = extra
-	}
-	return map[string]any{
-		"if": map[string]any{
-			"properties": map[string]any{
-				"action": map[string]any{"const": action},
-			},
-			"required": []any{"action"},
-		},
-		"then": then,
-	}
+func generateWaitFileExistsToolSchema() map[string]any {
+	return generateWaitToolSchema("WaitFileExists", "WaitFileExistsStep", "Waits until a file or directory exists.", []string{"path"}, map[string]any{
+		"interval":     durationStringSchema(),
+		"initialDelay": durationStringSchema(),
+		"path":         minLenStringSchema(),
+		"type":         enumStringSchema("any", "file", "dir"),
+		"nonEmpty":     map[string]any{"type": "boolean"},
+		"timeout":      durationStringSchema(),
+		"pollInterval": durationStringSchema(),
+	})
 }
 
-func conditionalEnumRequired(actions []string, required []string) map[string]any {
-	return map[string]any{
-		"if": map[string]any{
-			"properties": map[string]any{
-				"action": map[string]any{"enum": toAnySlice(actions)},
-			},
-			"required": []any{"action"},
-		},
-		"then": map[string]any{"required": toAnySlice(required)},
-	}
+func generateWaitFileAbsentToolSchema() map[string]any {
+	return generateWaitToolSchema("WaitFileAbsent", "WaitFileAbsentStep", "Waits until a file or directory is absent.", []string{"path"}, map[string]any{
+		"interval":     durationStringSchema(),
+		"initialDelay": durationStringSchema(),
+		"path":         minLenStringSchema(),
+		"type":         enumStringSchema("any", "file", "dir"),
+		"timeout":      durationStringSchema(),
+		"pollInterval": durationStringSchema(),
+	})
+}
+
+func generateWaitTCPPortOpenToolSchema() map[string]any {
+	return generateWaitToolSchema("WaitTCPPortOpen", "WaitTCPPortOpenStep", "Waits until a TCP port becomes reachable.", []string{"port"}, map[string]any{
+		"interval":     durationStringSchema(),
+		"initialDelay": durationStringSchema(),
+		"address":      minLenStringSchema(),
+		"port":         minLenStringSchema(),
+		"timeout":      durationStringSchema(),
+		"pollInterval": durationStringSchema(),
+	})
+}
+
+func generateWaitTCPPortClosedToolSchema() map[string]any {
+	return generateWaitToolSchema("WaitTCPPortClosed", "WaitTCPPortClosedStep", "Waits until a TCP port becomes unreachable.", []string{"port"}, map[string]any{
+		"interval":     durationStringSchema(),
+		"initialDelay": durationStringSchema(),
+		"address":      minLenStringSchema(),
+		"port":         minLenStringSchema(),
+		"timeout":      durationStringSchema(),
+		"pollInterval": durationStringSchema(),
+	})
+}
+
+func generateWaitToolSchema(kind, title, description string, required []string, properties map[string]any) map[string]any {
+	root := stepEnvelopeSchema(kind, title, description, "public")
+	props := propertyMap(root)
+	setMap(props, "spec", map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"required":             toAnySlice(required),
+		"properties":           properties,
+	})
+	return root
 }

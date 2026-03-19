@@ -1,8 +1,7 @@
 steps:
   - id: bootstrap-reset-preflight
-    kind: Kubeadm
+    kind: KubeadmReset
     spec:
-      action: reset
       force: true
       ignoreErrors: true
       criSocket: unix:///run/containerd/containerd.sock
@@ -65,10 +64,9 @@ steps:
           systemctl enable --now kubelet
           systemctl is-active --quiet kubelet
   - id: bootstrap-init
-    kind: Kubeadm
+    kind: KubeadmInit
     timeout: 20m
     spec:
-      action: init
       configTemplate: default
       configFile: /tmp/deck/kubeadm-init.yaml
       pullImages: true
@@ -83,15 +81,13 @@ steps:
     spec:
       path: /tmp/deck/server-root/files/cluster
   - id: bootstrap-publish-join
-    kind: File
+    kind: FileCopy
     spec:
-      action: copy
       src: /tmp/deck/join.txt
       dest: /tmp/deck/server-root/files/cluster/join.txt
   - id: bootstrap-kubeconfig-ready
-    kind: Wait
+    kind: WaitFileExists
     spec:
-      action: fileExists
       timeout: 5m
       path: /etc/kubernetes/admin.conf
       type: file

@@ -142,22 +142,11 @@
             "if": {
               "properties": {
                 "kind": {
-                  "const": "File"
-                },
-                "spec": {
-                  "properties": {
-                    "action": {
-                      "const": "copy"
-                    }
-                  },
-                  "required": [
-                    "action"
-                  ]
+                  "const": "FileCopy"
                 }
               },
               "required": [
-                "kind",
-                "spec"
+                "kind"
               ]
             },
             "then": {
@@ -180,22 +169,11 @@
             "if": {
               "properties": {
                 "kind": {
-                  "const": "File"
-                },
-                "spec": {
-                  "properties": {
-                    "action": {
-                      "const": "download"
-                    }
-                  },
-                  "required": [
-                    "action"
-                  ]
+                  "const": "FileDownload"
                 }
               },
               "required": [
-                "kind",
-                "spec"
+                "kind"
               ]
             },
             "then": {
@@ -219,22 +197,11 @@
             "if": {
               "properties": {
                 "kind": {
-                  "const": "File"
-                },
-                "spec": {
-                  "properties": {
-                    "action": {
-                      "const": "edit"
-                    }
-                  },
-                  "required": [
-                    "action"
-                  ]
+                  "const": "FileEdit"
                 }
               },
               "required": [
-                "kind",
-                "spec"
+                "kind"
               ]
             },
             "then": {
@@ -257,22 +224,11 @@
             "if": {
               "properties": {
                 "kind": {
-                  "const": "File"
-                },
-                "spec": {
-                  "properties": {
-                    "action": {
-                      "const": "write"
-                    }
-                  },
-                  "required": [
-                    "action"
-                  ]
+                  "const": "FileWrite"
                 }
               },
               "required": [
-                "kind",
-                "spec"
+                "kind"
               ]
             },
             "then": {
@@ -295,22 +251,11 @@
             "if": {
               "properties": {
                 "kind": {
-                  "const": "Image"
-                },
-                "spec": {
-                  "properties": {
-                    "action": {
-                      "const": "download"
-                    }
-                  },
-                  "required": [
-                    "action"
-                  ]
+                  "const": "ImageDownload"
                 }
               },
               "required": [
-                "kind",
-                "spec"
+                "kind"
               ]
             },
             "then": {
@@ -333,22 +278,11 @@
             "if": {
               "properties": {
                 "kind": {
-                  "const": "Image"
-                },
-                "spec": {
-                  "properties": {
-                    "action": {
-                      "const": "verify"
-                    }
-                  },
-                  "required": [
-                    "action"
-                  ]
+                  "const": "ImageVerify"
                 }
               },
               "required": [
-                "kind",
-                "spec"
+                "kind"
               ]
             },
             "then": {
@@ -396,22 +330,11 @@
             "if": {
               "properties": {
                 "kind": {
-                  "const": "Kubeadm"
-                },
-                "spec": {
-                  "properties": {
-                    "action": {
-                      "const": "init"
-                    }
-                  },
-                  "required": [
-                    "action"
-                  ]
+                  "const": "KubeadmInit"
                 }
               },
               "required": [
-                "kind",
-                "spec"
+                "kind"
               ]
             },
             "then": {
@@ -434,22 +357,11 @@
             "if": {
               "properties": {
                 "kind": {
-                  "const": "Kubeadm"
-                },
-                "spec": {
-                  "properties": {
-                    "action": {
-                      "const": "join"
-                    }
-                  },
-                  "required": [
-                    "action"
-                  ]
+                  "const": "KubeadmJoin"
                 }
               },
               "required": [
-                "kind",
-                "spec"
+                "kind"
               ]
             },
             "then": {
@@ -469,22 +381,11 @@
             "if": {
               "properties": {
                 "kind": {
-                  "const": "Kubeadm"
-                },
-                "spec": {
-                  "properties": {
-                    "action": {
-                      "const": "reset"
-                    }
-                  },
-                  "required": [
-                    "action"
-                  ]
+                  "const": "KubeadmReset"
                 }
               },
               "required": [
-                "kind",
-                "spec"
+                "kind"
               ]
             },
             "then": {
@@ -528,22 +429,11 @@
             "if": {
               "properties": {
                 "kind": {
-                  "const": "Packages"
-                },
-                "spec": {
-                  "properties": {
-                    "action": {
-                      "const": "download"
-                    }
-                  },
-                  "required": [
-                    "action"
-                  ]
+                  "const": "PackagesDownload"
                 }
               },
               "required": [
-                "kind",
-                "spec"
+                "kind"
               ]
             },
             "then": {
@@ -566,22 +456,11 @@
             "if": {
               "properties": {
                 "kind": {
-                  "const": "Packages"
-                },
-                "spec": {
-                  "properties": {
-                    "action": {
-                      "const": "install"
-                    }
-                  },
-                  "required": [
-                    "action"
-                  ]
+                  "const": "PackagesInstall"
                 }
               },
               "required": [
-                "kind",
-                "spec"
+                "kind"
               ]
             },
             "then": {
@@ -602,21 +481,10 @@
               "properties": {
                 "kind": {
                   "const": "Repository"
-                },
-                "spec": {
-                  "properties": {
-                    "action": {
-                      "const": "configure"
-                    }
-                  },
-                  "required": [
-                    "action"
-                  ]
                 }
               },
               "required": [
-                "kind",
-                "spec"
+                "kind"
               ]
             },
             "then": {
@@ -769,22 +637,11 @@
             "if": {
               "properties": {
                 "kind": {
-                  "const": "Wait"
-                },
-                "spec": {
-                  "properties": {
-                    "action": {
-                      "const": "commandSuccess"
-                    }
-                  },
-                  "required": [
-                    "action"
-                  ]
+                  "const": "WaitCommandSuccess"
                 }
               },
               "required": [
-                "kind",
-                "spec"
+                "kind"
               ]
             },
             "then": {
@@ -804,22 +661,11 @@
             "if": {
               "properties": {
                 "kind": {
-                  "const": "Wait"
-                },
-                "spec": {
-                  "properties": {
-                    "action": {
-                      "const": "fileAbsent"
-                    }
-                  },
-                  "required": [
-                    "action"
-                  ]
+                  "const": "WaitFileAbsent"
                 }
               },
               "required": [
-                "kind",
-                "spec"
+                "kind"
               ]
             },
             "then": {
@@ -839,22 +685,11 @@
             "if": {
               "properties": {
                 "kind": {
-                  "const": "Wait"
-                },
-                "spec": {
-                  "properties": {
-                    "action": {
-                      "const": "fileExists"
-                    }
-                  },
-                  "required": [
-                    "action"
-                  ]
+                  "const": "WaitFileExists"
                 }
               },
               "required": [
-                "kind",
-                "spec"
+                "kind"
               ]
             },
             "then": {
@@ -874,22 +709,11 @@
             "if": {
               "properties": {
                 "kind": {
-                  "const": "Wait"
-                },
-                "spec": {
-                  "properties": {
-                    "action": {
-                      "const": "serviceActive"
-                    }
-                  },
-                  "required": [
-                    "action"
-                  ]
+                  "const": "WaitServiceActive"
                 }
               },
               "required": [
-                "kind",
-                "spec"
+                "kind"
               ]
             },
             "then": {
@@ -909,22 +733,11 @@
             "if": {
               "properties": {
                 "kind": {
-                  "const": "Wait"
-                },
-                "spec": {
-                  "properties": {
-                    "action": {
-                      "const": "tcpPortClosed"
-                    }
-                  },
-                  "required": [
-                    "action"
-                  ]
+                  "const": "WaitTCPPortClosed"
                 }
               },
               "required": [
-                "kind",
-                "spec"
+                "kind"
               ]
             },
             "then": {
@@ -944,22 +757,11 @@
             "if": {
               "properties": {
                 "kind": {
-                  "const": "Wait"
-                },
-                "spec": {
-                  "properties": {
-                    "action": {
-                      "const": "tcpPortOpen"
-                    }
-                  },
-                  "required": [
-                    "action"
-                  ]
+                  "const": "WaitTCPPortOpen"
                 }
               },
               "required": [
-                "kind",
-                "spec"
+                "kind"
               ]
             },
             "then": {
@@ -992,19 +794,31 @@
               "Command",
               "Containerd",
               "Directory",
-              "File",
-              "Image",
+              "FileCopy",
+              "FileDownload",
+              "FileEdit",
+              "FileWrite",
+              "ImageDownload",
+              "ImageVerify",
               "KernelModule",
-              "Kubeadm",
+              "KubeadmInit",
+              "KubeadmJoin",
+              "KubeadmReset",
               "PackageCache",
-              "Packages",
+              "PackagesDownload",
+              "PackagesInstall",
               "Repository",
               "Service",
               "Swap",
               "Symlink",
               "Sysctl",
               "SystemdUnit",
-              "Wait"
+              "WaitCommandSuccess",
+              "WaitFileAbsent",
+              "WaitFileExists",
+              "WaitServiceActive",
+              "WaitTCPPortClosed",
+              "WaitTCPPortOpen"
             ],
             "type": "string"
           },

@@ -40,16 +40,5 @@ func TestRegisterableOutputsCoveredByContracts(t *testing.T) {
 				t.Fatalf("missing top-level output %q for %s", output, def.Kind)
 			}
 		}
-		for _, action := range def.Actions {
-			actionContract, ok := contract.Actions[action.Name]
-			if !ok {
-				t.Fatalf("missing action contract for %s.%s", def.Kind, action.Name)
-			}
-			for _, output := range action.Outputs {
-				if !actionContract.Outputs[output] {
-					t.Fatalf("missing action output %q for %s.%s", output, def.Kind, action.Name)
-				}
-			}
-		}
 	}
 }

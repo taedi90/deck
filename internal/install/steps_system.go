@@ -325,12 +325,12 @@ func kernelModuleNames(spec kernelModuleSpec) []string {
 
 func runSysctlApply(ctx context.Context, spec map[string]any) error {
 	file := stringValue(spec, "file")
-	args := stringSlice(spec["command"])
+	args := stringSlice(spec["Command"])
 	if len(args) == 0 {
 		if file != "" {
-			args = []string{"sysctl", "-p", file}
+			args = []string{"Sysctl", "-p", file}
 		} else {
-			args = []string{"sysctl", "--system"}
+			args = []string{"Sysctl", "--system"}
 		}
 	}
 	return runTimedCommandWithContext(ctx, args[0], args[1:], commandTimeoutWithDefault(spec, 30*time.Second))

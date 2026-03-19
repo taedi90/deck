@@ -31,9 +31,8 @@ phases:
   - name: prepare
     steps:
       - id: p1
-        kind: File
+        kind: FileDownload
         spec:
-          action: download
           source:
             path: files/source.bin
           fetch:
@@ -237,9 +236,8 @@ phases:
   - name: prepare
     steps:
       - id: p1
-        kind: File
+        kind: FileDownload
         spec:
-          action: download
           source:
             path: files/source.bin
           fetch:

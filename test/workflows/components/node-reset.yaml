@@ -1,9 +1,8 @@
 steps:
   - id: reset-node
-    kind: Kubeadm
+    kind: KubeadmReset
     when: vars.allowDestructive == "true"
     spec:
-      action: reset
       force: true
       criSocket: unix:///run/containerd/containerd.sock
       removePaths:

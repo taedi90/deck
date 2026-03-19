@@ -1,0 +1,96 @@
+{
+  "$id": "https://deck.local/schemas/tools/file.edit.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Edits an existing file in place.",
+  "properties": {
+    "apiVersion": {
+      "const": "deck/v1alpha1"
+    },
+    "id": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "FileEdit"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "register": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      },
+      "type": "object"
+    },
+    "retry": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "spec": {
+      "additionalProperties": false,
+      "properties": {
+        "backup": {
+          "type": "boolean"
+        },
+        "edits": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "match": {
+                "type": "string"
+              },
+              "op": {
+                "enum": [
+                  "replace",
+                  "append"
+                ],
+                "type": "string"
+              },
+              "with": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "match"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "mode": {
+          "pattern": "^[0-7]{4}$",
+          "type": "string"
+        },
+        "path": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "edits"
+      ],
+      "type": "object"
+    },
+    "timeout": {
+      "pattern": "^[0-9]+(ms|s|m|h)$",
+      "type": "string"
+    },
+    "when": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "kind",
+    "spec"
+  ],
+  "title": "FileEditStep",
+  "type": "object",
+  "x-deck-visibility": "public"
+}

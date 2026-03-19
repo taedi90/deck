@@ -1,0 +1,83 @@
+{
+  "$id": "https://deck.local/schemas/tools/kubeadm.join.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Runs kubeadm join.",
+  "properties": {
+    "apiVersion": {
+      "const": "deck/v1alpha1"
+    },
+    "id": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "KubeadmJoin"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "register": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      },
+      "type": "object"
+    },
+    "retry": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "spec": {
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "joinFile"
+          ]
+        },
+        {
+          "required": [
+            "configFile"
+          ]
+        }
+      ],
+      "properties": {
+        "asControlPlane": {
+          "default": false,
+          "type": "boolean"
+        },
+        "configFile": {
+          "type": "string"
+        },
+        "extraArgs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "joinFile": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "timeout": {
+      "pattern": "^[0-9]+(ms|s|m|h)$",
+      "type": "string"
+    },
+    "when": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "kind",
+    "spec"
+  ],
+  "title": "KubeadmJoinStep",
+  "type": "object",
+  "x-deck-visibility": "public"
+}

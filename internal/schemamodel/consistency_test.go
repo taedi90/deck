@@ -10,17 +10,33 @@ import (
 )
 
 func TestFileSchemaModelMatchesToolSchema(t *testing.T) {
-	schema := loadToolSchemaMap(t, "file.schema.json")
-	assertStructFieldsPresent(t, reflect.TypeOf(FileStepSpec{}), schemaAtPath(t, schema, "properties.spec.properties"))
-	assertStructFieldsPresent(t, reflect.TypeOf(FileEditRule{}), schemaAtPath(t, schema, "properties.spec.properties.edits.items.properties"))
-	assertStructFieldsPresent(t, reflect.TypeOf(FileSource{}), schemaAtPath(t, schema, "properties.spec.properties.source.properties"))
-	assertStructFieldsPresent(t, reflect.TypeOf(FileBundleRef{}), schemaAtPath(t, schema, "properties.spec.properties.source.properties.bundle.properties"))
-	assertStructFieldsPresent(t, reflect.TypeOf(FileOutputTarget{}), schemaAtPath(t, schema, "properties.spec.properties.output.properties"))
+	download := loadToolSchemaMap(t, "file.download.schema.json")
+	assertStructFieldsPresent(t, reflect.TypeOf(FileDownloadStepSpec{}), schemaAtPath(t, download, "properties.spec.properties"))
+	assertStructFieldsPresent(t, reflect.TypeOf(FileSource{}), schemaAtPath(t, download, "properties.spec.properties.source.properties"))
+	assertStructFieldsPresent(t, reflect.TypeOf(FileBundleRef{}), schemaAtPath(t, download, "properties.spec.properties.source.properties.bundle.properties"))
+	assertStructFieldsPresent(t, reflect.TypeOf(FileOutputTarget{}), schemaAtPath(t, download, "properties.spec.properties.output.properties"))
+
+	edit := loadToolSchemaMap(t, "file.edit.schema.json")
+	assertStructFieldsPresent(t, reflect.TypeOf(FileEditStepSpec{}), schemaAtPath(t, edit, "properties.spec.properties"))
+	assertStructFieldsPresent(t, reflect.TypeOf(FileEditRule{}), schemaAtPath(t, edit, "properties.spec.properties.edits.items.properties"))
 }
 
 func TestWaitSchemaModelMatchesToolSchema(t *testing.T) {
-	schema := loadToolSchemaMap(t, "wait.schema.json")
-	assertStructFieldsPresent(t, reflect.TypeOf(WaitStepSpec{}), schemaAtPath(t, schema, "properties.spec.properties"))
+	tests := []struct {
+		file string
+		typ  reflect.Type
+	}{
+		{file: "wait.service-active.schema.json", typ: reflect.TypeOf(WaitServiceActiveStepSpec{})},
+		{file: "wait.command-success.schema.json", typ: reflect.TypeOf(WaitCommandSuccessStepSpec{})},
+		{file: "wait.file-exists.schema.json", typ: reflect.TypeOf(WaitFileExistsStepSpec{})},
+		{file: "wait.file-absent.schema.json", typ: reflect.TypeOf(WaitFileAbsentStepSpec{})},
+		{file: "wait.tcp-port-open.schema.json", typ: reflect.TypeOf(WaitTCPPortStepSpec{})},
+		{file: "wait.tcp-port-closed.schema.json", typ: reflect.TypeOf(WaitTCPPortStepSpec{})},
+	}
+	for _, tc := range tests {
+		schema := loadToolSchemaMap(t, tc.file)
+		assertStructFieldsPresent(t, tc.typ, schemaAtPath(t, schema, "properties.spec.properties"))
+	}
 }
 
 func loadToolSchemaMap(t *testing.T, name string) map[string]any {

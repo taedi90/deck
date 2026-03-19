@@ -10,9 +10,8 @@ Reference for reusable workflow component fragments located under `workflows/com
 ```yaml
 steps:
   - id: write-config
-    kind: File
+    kind: FileWrite
     spec:
-      action: write
       path: /etc/example.conf
       content: hello
   - id: restart-service

@@ -1,0 +1,97 @@
+{
+  "$id": "https://deck.local/schemas/tools/kubeadm.reset.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Runs kubeadm reset and optional cleanup steps.",
+  "properties": {
+    "apiVersion": {
+      "const": "deck/v1alpha1"
+    },
+    "id": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "KubeadmReset"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "register": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      },
+      "type": "object"
+    },
+    "retry": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "spec": {
+      "additionalProperties": false,
+      "properties": {
+        "cleanupContainers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "criSocket": {
+          "type": "string"
+        },
+        "extraArgs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "force": {
+          "default": false,
+          "type": "boolean"
+        },
+        "ignoreErrors": {
+          "default": false,
+          "type": "boolean"
+        },
+        "removeFiles": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "removePaths": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "restartRuntimeService": {
+          "type": "string"
+        },
+        "stopKubelet": {
+          "default": true,
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "timeout": {
+      "pattern": "^[0-9]+(ms|s|m|h)$",
+      "type": "string"
+    },
+    "when": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "kind",
+    "spec"
+  ],
+  "title": "KubeadmResetStep",
+  "type": "object",
+  "x-deck-visibility": "public"
+}

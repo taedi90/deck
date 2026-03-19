@@ -32,29 +32,7 @@
     },
     "spec": {
       "additionalProperties": false,
-      "allOf": [
-        {
-          "if": {
-            "properties": {
-              "action": {
-                "const": "configure"
-              }
-            }
-          },
-          "then": {
-            "required": [
-              "repositories"
-            ]
-          }
-        }
-      ],
       "properties": {
-        "action": {
-          "enum": [
-            "configure"
-          ],
-          "type": "string"
-        },
         "backupPaths": {
           "items": {
             "type": "string"
@@ -113,7 +91,7 @@
         }
       },
       "required": [
-        "action"
+        "repositories"
       ],
       "type": "object"
     },

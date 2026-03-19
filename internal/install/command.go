@@ -17,7 +17,7 @@ import (
 var ErrStepCommandTimeout = errors.New("step command timeout")
 
 type runCommandSpec struct {
-	Command []string          `json:"command"`
+	Command []string          `json:"Command"`
 	Env     map[string]string `json:"env"`
 	Sudo    bool              `json:"sudo"`
 	Timeout string            `json:"timeout"`

@@ -293,9 +293,8 @@ phases:
   - name: prepare
     steps:
       - id: seed-file
-        kind: File
+        kind: FileDownload
         spec:
-          action: download
           source:
             path: files/source.bin
           fetch:

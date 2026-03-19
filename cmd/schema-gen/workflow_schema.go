@@ -149,35 +149,15 @@ func registerContractClauses() []any {
 	defs := workflowexec.StepDefinitions()
 	clauses := make([]any, 0, len(defs))
 	for _, def := range defs {
-		if len(def.Actions) == 0 {
-			clauses = append(clauses, map[string]any{
-				"if": map[string]any{
-					"properties": map[string]any{"kind": map[string]any{"const": def.Kind}},
-					"required":   []any{"kind"},
-				},
-				"then": map[string]any{
-					"properties": map[string]any{"register": registerValueSchema(def.Outputs)},
-				},
-			})
-			continue
-		}
-		for _, action := range def.Actions {
-			clauses = append(clauses, map[string]any{
-				"if": map[string]any{
-					"properties": map[string]any{
-						"kind": map[string]any{"const": def.Kind},
-						"spec": map[string]any{
-							"properties": map[string]any{"action": map[string]any{"const": action.Name}},
-							"required":   []any{"action"},
-						},
-					},
-					"required": []any{"kind", "spec"},
-				},
-				"then": map[string]any{
-					"properties": map[string]any{"register": registerValueSchema(action.Outputs)},
-				},
-			})
-		}
+		clauses = append(clauses, map[string]any{
+			"if": map[string]any{
+				"properties": map[string]any{"kind": map[string]any{"const": def.Kind}},
+				"required":   []any{"kind"},
+			},
+			"then": map[string]any{
+				"properties": map[string]any{"register": registerValueSchema(def.Outputs)},
+			},
+		})
 	}
 	return clauses
 }
