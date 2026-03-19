@@ -11,7 +11,19 @@ import (
 	"time"
 )
 
+func nilContextForTest() context.Context { return nil }
+
 func TestResolveBytes(t *testing.T) {
+	t.Run("rejects nil context", func(t *testing.T) {
+		_, err := ResolveBytes(nilContextForTest(), "files/a.txt", nil, ResolveOptions{})
+		if err == nil {
+			t.Fatalf("expected nil context error")
+		}
+		if !strings.Contains(err.Error(), "context is nil") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
 	t.Run("uses local source first", func(t *testing.T) {
 		local := t.TempDir()
 		if err := os.MkdirAll(filepath.Join(local, "files"), 0o755); err != nil {

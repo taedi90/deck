@@ -15,7 +15,7 @@ import (
 
 func runInstallPackages(ctx context.Context, spec map[string]any) error {
 	if ctx == nil {
-		ctx = context.Background()
+		return fmt.Errorf("context is nil")
 	}
 
 	pkgs := stringSlice(spec["packages"])

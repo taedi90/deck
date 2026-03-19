@@ -101,19 +101,11 @@ func resolveStateReadPath(wf *config.Workflow, preferredPath string) (string, er
 	if wf == nil || strings.TrimSpace(wf.StateKey) == "" {
 		return resolved, nil
 	}
-	legacyPath, err := LegacyStatePath(wf)
+	legacyPath, _, err := resolveLegacyStateReadPath(wf, resolved)
 	if err != nil {
 		return "", err
 	}
-	if legacyPath == resolved {
-		return resolved, nil
-	}
-	if _, err := os.Stat(legacyPath); err == nil {
-		return legacyPath, nil
-	} else if err != nil && !os.IsNotExist(err) {
-		return "", fmt.Errorf("stat legacy state file: %w", err)
-	}
-	return resolved, nil
+	return legacyPath, nil
 }
 
 func ResolveStateReadPathForWorkflow(wf *config.Workflow, preferredPath string) (string, error) {

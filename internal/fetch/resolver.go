@@ -31,7 +31,7 @@ const (
 
 func ResolveBytes(ctx context.Context, relPath string, sources []SourceConfig, opts ResolveOptions) ([]byte, error) {
 	if ctx == nil {
-		ctx = context.Background()
+		return nil, fmt.Errorf("context is nil")
 	}
 	if strings.TrimSpace(relPath) == "" {
 		return nil, fmt.Errorf("relative path is empty")
@@ -84,7 +84,7 @@ func ResolveBytes(ctx context.Context, relPath string, sources []SourceConfig, o
 
 func readHTTP(ctx context.Context, url string, opts ResolveOptions) ([]byte, error) {
 	if ctx == nil {
-		ctx = context.Background()
+		return nil, fmt.Errorf("context is nil")
 	}
 	maxBytes := opts.MaxBytes
 	if maxBytes <= 0 {

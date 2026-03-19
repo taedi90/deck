@@ -7,7 +7,7 @@ import (
 	"github.com/taedi90/deck/internal/workflowexec"
 )
 
-func executeStep(ctx context.Context, kind string, spec map[string]any, bundleRoot string) error {
+func executeStep(ctx context.Context, kind string, spec map[string]any, execCtx ExecutionContext) error {
 	if !workflowexec.StepAllowedForRole("apply", kind, spec) {
 		return fmt.Errorf("%s: unsupported step kind %s", errCodeInstallKindUnsupported, kind)
 	}
@@ -18,39 +18,51 @@ func executeStep(ctx context.Context, kind string, spec map[string]any, bundleRo
 	case "Packages":
 		return runPackages(ctx, spec)
 	case "File":
-		if stringValue(spec, "action") == "download" {
-			_, err := runFileDownload(ctx, bundleRoot, spec)
+		action, err := decodeStepAction(spec)
+		if err != nil {
+			return fmt.Errorf("decode File action: %w", err)
+		}
+		if action == "download" {
+			_, err := runFileDownload(ctx, execCtx.BundleRoot, spec)
 			return err
 		}
-		return runFile(spec)
+		return runFileAction(action, spec)
 	case "Sysctl":
-		return runSysctl(spec)
+		return runSysctl(ctx, spec)
 	case "Service":
-		return runService(spec)
+		return runService(ctx, spec)
 	case "Directory":
 		return runEnsureDir(spec)
 	case "Symlink":
 		return runSymlink(spec)
 	case "SystemdUnit":
-		return runSystemdUnit(spec)
+		return runSystemdUnit(ctx, spec)
 	case "Repository":
-		return runRepository(spec)
+		return runRepository(ctx, spec)
 	case "PackageCache":
-		return runPackageCache(spec)
+		return runPackageCache(ctx, spec)
 	case "Containerd":
 		return runContainerdConfig(ctx, spec)
 	case "Swap":
-		return runSwap(spec)
+		return runSwap(ctx, spec)
 	case "KernelModule":
-		return runKernelModule(spec)
+		return runKernelModule(ctx, spec)
 	case "Command":
-		return runCommand(ctx, spec)
+		decoded, err := workflowexec.DecodeSpec[runCommandSpec](spec)
+		if err != nil {
+			return fmt.Errorf("decode Command spec: %w", err)
+		}
+		return runCommandDecoded(ctx, decoded)
 	case "Image":
 		return runImage(ctx, spec)
 	case "Kubeadm":
 		return runKubeadm(ctx, spec)
 	case "Wait":
-		return runWait(ctx, spec)
+		decoded, err := workflowexec.DecodeSpec[waitSpec](spec)
+		if err != nil {
+			return fmt.Errorf("decode Wait spec: %w", err)
+		}
+		return runWaitDecoded(ctx, decoded, commandTimeout(spec))
 	case "Checks":
 		return fmt.Errorf("%s: unsupported step kind %s for apply", errCodeInstallKindUnsupported, kind)
 	default:

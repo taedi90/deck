@@ -23,11 +23,14 @@ Phase imports resolve from `workflows/components/`. Write component-relative pat
 
 ## Variables
 
-Variables flow from three sources, in order of precedence:
+Variables and runtime values come from distinct sources:
+
+Static `vars` flow from two sources, in order of precedence:
 
 1. `vars:` block in the scenario file (highest)
 2. `workflows/vars.yaml` (shared defaults)
-3. runtime-registered step outputs via `register`
+
+Runtime values flow separately through `register` outputs and built-in runtime facts such as `runtime.host`.
 
 **`workflows/vars.yaml`** — define shared defaults once:
 
@@ -56,7 +59,7 @@ vars:
     content: "{{ .vars.clusterName }}\n"
 ```
 
-**CEL expressions** — use `vars.NAME` (no braces) in `when:` conditions:
+**CEL expressions** — use `vars.NAME` and `runtime.NAME` (no braces) in `when:` conditions:
 
 ```yaml
 - id: install-rhel-packages
@@ -114,7 +117,7 @@ Optional execution controls:
 
 ### `when` — conditional execution
 
-`when` takes a CEL expression. Use `vars.` to reference variables defined in `vars:` or `vars.yaml`.
+`when` takes a CEL expression. Use `vars.` to reference input variables defined in `vars:` or `vars.yaml`, and `runtime.` to reference step outputs registered earlier in the run.
 
 ```yaml
 steps:
@@ -137,7 +140,7 @@ steps:
 
 ### `register` — capture step output
 
-`register` maps a variable name to a step output key. The exported value is available to later steps via `vars.`.
+`register` maps a runtime variable name to a step output key. The exported value is available to later steps via `runtime.` in CEL and `.runtime` in templates.
 
 ```yaml
 steps:
@@ -153,7 +156,7 @@ steps:
     kind: Kubeadm
     spec:
       action: join
-      joinFile: "{{ .vars.joinFile }}"
+      joinFile: "{{ .runtime.joinFile }}"
       extraArgs: ["--cri-socket", "unix:///run/containerd/containerd.sock", "--ignore-preflight-errors=Swap,FileExisting-crictl,FileExisting-conntrack,FileExisting-socat"]
 ```
 

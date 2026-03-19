@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/taedi90/deck/internal/executil"
-	"github.com/taedi90/deck/internal/workflowexec"
 )
 
 type waitSpec struct {
@@ -26,11 +25,7 @@ type waitSpec struct {
 	Timeout      string   `json:"timeout"`
 }
 
-func runWait(parent context.Context, spec map[string]any) error {
-	decoded, err := workflowexec.DecodeSpec[waitSpec](spec)
-	if err != nil {
-		return fmt.Errorf("decode Wait spec: %w", err)
-	}
+func runWaitDecoded(parent context.Context, decoded waitSpec, timeout time.Duration) error {
 	action := decoded.Action
 	if action == "" {
 		return fmt.Errorf("wait requires action")
@@ -52,9 +47,9 @@ func runWait(parent context.Context, spec map[string]any) error {
 		initialDelay = parsed
 	}
 	if parent == nil {
-		parent = context.Background()
+		return fmt.Errorf("context is nil")
 	}
-	ctx, cancel := context.WithTimeout(parent, commandTimeout(spec))
+	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 	if initialDelay > 0 {
 		select {
@@ -81,7 +76,7 @@ func runWait(parent context.Context, spec map[string]any) error {
 					detail = fmt.Sprintf("%s (%s)", action, p)
 				}
 			}
-			return fmt.Errorf("%s: timed out after %s for %s", errCodeInstallWaitTimeout, commandTimeout(spec), detail)
+			return fmt.Errorf("%s: timed out after %s for %s", errCodeInstallWaitTimeout, timeout, detail)
 		case <-time.After(interval):
 		}
 	}

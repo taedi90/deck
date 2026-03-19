@@ -1,13 +1,14 @@
 package install
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
 )
 
-func runSystemdUnit(spec map[string]any) error {
+func runSystemdUnit(ctx context.Context, spec map[string]any) error {
 	path := stringValue(spec, "path")
 	if path == "" {
 		return fmt.Errorf("%s: SystemdUnit requires path", errCodeInstallSystemdUnitPath)
@@ -34,7 +35,7 @@ func runSystemdUnit(spec map[string]any) error {
 	}
 
 	if boolValue(spec, "daemonReload") {
-		if err := runTimedCommand("systemctl", []string{"daemon-reload"}, commandTimeoutWithDefault(spec, 30*time.Second)); err != nil {
+		if err := runTimedCommandWithContext(ctx, "systemctl", []string{"daemon-reload"}, commandTimeoutWithDefault(spec, 30*time.Second)); err != nil {
 			return err
 		}
 	}
@@ -67,7 +68,7 @@ func runSystemdUnit(spec map[string]any) error {
 		serviceSpec["timeout"] = timeout
 	}
 
-	return runService(serviceSpec)
+	return runService(ctx, serviceSpec)
 }
 
 func inferSystemdServiceName(path string) string {

@@ -448,7 +448,7 @@ func generateWithValidation(ctx context.Context, client askprovider.Client, req 
 			return askcontract.GenerationResponse{}, lastValidation, lastCritic, attempt - 1, fmt.Errorf("ask generation returned invalid JSON: %s", lastValidation)
 		}
 		logger.logf("debug", "[ask][phase:semantic-validate] attempt=%d/%d\n", attempt, attempts)
-		lintSummary, critic, err := validateGeneration(root, gen, decision, plan)
+		lintSummary, critic, err := validateGeneration(ctx, root, gen, decision, plan)
 		lastCritic = critic
 		if err == nil {
 			return gen, lintSummary, critic, attempt - 1, nil
@@ -484,7 +484,7 @@ func repairableValidationError(message string) bool {
 	return true
 }
 
-func validateGeneration(root string, gen askcontract.GenerationResponse, decision askintent.Decision, plan askcontract.PlanResponse) (string, askcontract.CriticResponse, error) {
+func validateGeneration(ctx context.Context, root string, gen askcontract.GenerationResponse, decision askintent.Decision, plan askcontract.PlanResponse) (string, askcontract.CriticResponse, error) {
 	if len(gen.Files) == 0 {
 		critic := askcontract.CriticResponse{Blocking: []string{"response did not include any files"}, MissingFiles: filePathsFromPlan(plan), RequiredFixes: []string{"Return the planned workflow files"}}
 		return "", critic, fmt.Errorf("response did not include any files")
@@ -504,7 +504,7 @@ func validateGeneration(root string, gen askcontract.GenerationResponse, decisio
 	entrypoints := scenarioPaths(staged, paths)
 	validated := make([]string, 0, len(entrypoints))
 	for _, path := range entrypoints {
-		files, err := validate.Entrypoint(path)
+		files, err := validate.EntrypointWithContext(ctx, path)
 		if err != nil {
 			return "", askcontract.CriticResponse{Blocking: []string{err.Error()}, RequiredFixes: []string{"Fix workflow lint and schema errors"}}, err
 		}

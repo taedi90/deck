@@ -48,7 +48,7 @@ type ExecutionRequest struct {
 
 func ResolveExecutionRequest(ctx context.Context, opts ExecutionRequestOptions) (ExecutionRequest, error) {
 	if ctx == nil {
-		ctx = context.Background()
+		return ExecutionRequest{}, fmt.Errorf("context is nil")
 	}
 	workflowPath := strings.TrimSpace(opts.WorkflowPath)
 	if workflowPath == "" && opts.DiscoverWorkflow != nil {
@@ -82,7 +82,7 @@ func ResolveExecutionRequest(ctx context.Context, opts ExecutionRequestOptions) 
 			}
 			workflowPath = resolvedWorkflowPath
 		}
-		if err := validate.File(workflowPath); err != nil {
+		if err := validate.FileWithContext(ctx, workflowPath); err != nil {
 			return ExecutionRequest{}, err
 		}
 	}
@@ -163,7 +163,7 @@ func IsHTTPWorkflowPath(raw string) bool {
 
 func FetchWorkflowForValidation(ctx context.Context, rawURL string) ([]byte, error) {
 	if ctx == nil {
-		ctx = context.Background()
+		return nil, fmt.Errorf("context is nil")
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
@@ -182,109 +182,6 @@ func FetchWorkflowForValidation(ctx context.Context, rawURL string) ([]byte, err
 		return nil, fmt.Errorf("read workflow url: %w", err)
 	}
 	return body, nil
-}
-
-func ResolveWorkflowAndBundle(ctx context.Context, fileFlagValue string, positionalArgs []string) (string, string, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	workflowPath := strings.TrimSpace(fileFlagValue)
-	positionalWorkflow := ""
-	positionalBundle := ""
-
-	if workflowPath != "" {
-		if len(positionalArgs) == 2 {
-			return "", "", fmt.Errorf("apply accepts at most one positional bundle path when --file is set")
-		}
-		if len(positionalArgs) == 1 {
-			positionalBundle = strings.TrimSpace(positionalArgs[0])
-		}
-	} else {
-		if len(positionalArgs) == 1 {
-			arg0 := strings.TrimSpace(positionalArgs[0])
-			if looksLikeWorkflowReference(arg0) {
-				positionalWorkflow = arg0
-			} else {
-				positionalBundle = arg0
-			}
-		}
-		if len(positionalArgs) == 2 {
-			arg0 := strings.TrimSpace(positionalArgs[0])
-			arg1 := strings.TrimSpace(positionalArgs[1])
-			if !looksLikeWorkflowReference(arg0) {
-				return "", "", fmt.Errorf("apply with two positional arguments requires [workflow] [bundle]")
-			}
-			positionalWorkflow = arg0
-			positionalBundle = arg1
-		}
-	}
-
-	if workflowPath == "" {
-		workflowPath = positionalWorkflow
-	}
-
-	isRemoteWorkflow := IsHTTPWorkflowPath(workflowPath)
-	bundleRoot := ""
-
-	if !isRemoteWorkflow {
-		resolvedBundleRoot, err := ResolveBundleRoot(positionalBundle)
-		if err != nil {
-			return "", "", err
-		}
-		bundleRoot = resolvedBundleRoot
-
-		if workflowPath == "" {
-			resolvedWorkflowPath, err := DiscoverApplyWorkflow(ctx, bundleRoot)
-			if err != nil {
-				return "", "", err
-			}
-			workflowPath = resolvedWorkflowPath
-		} else {
-			resolvedWorkflowPath, err := filepath.Abs(workflowPath)
-			if err != nil {
-				return "", "", fmt.Errorf("resolve workflow path: %w", err)
-			}
-			workflowPath = resolvedWorkflowPath
-		}
-	}
-
-	if workflowPath == "" {
-		resolvedBundleRoot, err := ResolveBundleRoot(positionalBundle)
-		if err != nil {
-			return "", "", err
-		}
-		bundleRoot = resolvedBundleRoot
-		resolvedWorkflowPath, err := DiscoverApplyWorkflow(ctx, bundleRoot)
-		if err != nil {
-			return "", "", err
-		}
-		workflowPath = resolvedWorkflowPath
-	}
-
-	return workflowPath, bundleRoot, nil
-}
-
-func looksLikeWorkflowReference(raw string) bool {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return false
-	}
-	if IsHTTPWorkflowPath(trimmed) {
-		return true
-	}
-	lower := strings.ToLower(trimmed)
-	if strings.HasSuffix(lower, ".yaml") || strings.HasSuffix(lower, ".yml") {
-		return true
-	}
-	resolved, err := filepath.Abs(trimmed)
-	if err != nil {
-		return false
-	}
-	info, statErr := os.Stat(resolved)
-	if statErr != nil {
-		return false
-	}
-	return !info.IsDir()
 }
 
 func ResolveBundleRoot(positionalBundle string) (string, error) {
@@ -404,7 +301,7 @@ func hasWorkflowDir(root string) bool {
 
 func DiscoverApplyWorkflow(ctx context.Context, bundleRoot string) (string, error) {
 	if ctx == nil {
-		ctx = context.Background()
+		return "", fmt.Errorf("context is nil")
 	}
 	root, err := fsutil.NewBundleRoot(bundleRoot)
 	if err != nil {

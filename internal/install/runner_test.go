@@ -23,6 +23,35 @@ import (
 	"github.com/taedi90/deck/internal/config"
 )
 
+func useStubKubeadmInitJoin(t *testing.T) {
+	t.Helper()
+	origInit := kubeadmInitExecutor
+	origJoin := kubeadmJoinExecutor
+	t.Cleanup(func() {
+		kubeadmInitExecutor = origInit
+		kubeadmJoinExecutor = origJoin
+	})
+	kubeadmInitExecutor = func(_ context.Context, spec kubeadmInitSpec) error {
+		return runKubeadmInitStub(spec)
+	}
+	kubeadmJoinExecutor = func(_ context.Context, spec kubeadmJoinSpec) error {
+		return runKubeadmJoinStub(spec)
+	}
+}
+
+func useStubKubeadmReset(t *testing.T) {
+	t.Helper()
+	origReset := kubeadmResetExecutor
+	t.Cleanup(func() {
+		kubeadmResetExecutor = origReset
+	})
+	kubeadmResetExecutor = func(_ context.Context, spec kubeadmResetSpec) error {
+		return runKubeadmResetStub(spec)
+	}
+}
+
+func nilContextForInstallTest() context.Context { return nil }
+
 func TestRun_InstallTools(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state", "state.json")
@@ -56,6 +85,7 @@ func TestRun_InstallTools(t *testing.T) {
 	}
 	originalPath := os.Getenv("PATH")
 	t.Setenv("PATH", fmt.Sprintf("%s:%s", binDir, originalPath))
+	useStubKubeadmInitJoin(t)
 
 	wf := &config.Workflow{
 		Version: "v1",
@@ -75,7 +105,7 @@ func TestRun_InstallTools(t *testing.T) {
 		}},
 	}
 
-	if err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, StatePath: statePath, kubeadmMode: "stub"}); err != nil {
+	if err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, StatePath: statePath}); err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
 
@@ -1657,8 +1687,9 @@ func TestRun_WhenAndRegisterSemantics(t *testing.T) {
 			},
 		}},
 	}
+	useStubKubeadmInitJoin(t)
 
-	if err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, StatePath: statePath, kubeadmMode: "stub"}); err != nil {
+	if err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, StatePath: statePath}); err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
 
@@ -2058,6 +2089,26 @@ func TestCommandOutputWithContext_TimeoutReturnsSentinel(t *testing.T) {
 	}
 }
 
+func TestCommandOutputWithContext_RejectsNilContext(t *testing.T) {
+	_, err := runCommandOutputWithContext(nilContextForInstallTest(), []string{"true"}, time.Second)
+	if err == nil {
+		t.Fatalf("expected nil context error")
+	}
+	if !strings.Contains(err.Error(), "context is nil") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestExecuteStep_FileActionDecodeError(t *testing.T) {
+	err := executeStep(context.Background(), "File", map[string]any{"action": 42}, ExecutionContext{})
+	if err == nil {
+		t.Fatalf("expected decode error")
+	}
+	if !strings.Contains(err.Error(), "decode File action") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestRun_ContainerdDefaultGenerationRespectsParentContext(t *testing.T) {
 	dir := t.TempDir()
 	bundle := filepath.Join(dir, "bundle")
@@ -2198,9 +2249,7 @@ func TestRun_WhenInvalidExpression(t *testing.T) {
 func TestWhen_NamespaceEnforced(t *testing.T) {
 	vars := map[string]any{"nodeRole": "worker"}
 	runtimeVars := map[string]any{"hostPassed": true}
-	ctx := map[string]any{"nodeRole": "worker"}
-
-	ok, err := EvaluateWhen("vars.nodeRole == \"worker\"", vars, runtimeVars, ctx)
+	ok, err := EvaluateWhen("vars.nodeRole == \"worker\"", vars, runtimeVars)
 	if err != nil {
 		t.Fatalf("expected vars namespace expression to pass, got %v", err)
 	}
@@ -2208,7 +2257,7 @@ func TestWhen_NamespaceEnforced(t *testing.T) {
 		t.Fatalf("expected vars namespace expression to be true")
 	}
 
-	_, err = EvaluateWhen("nodeRole == \"worker\"", vars, runtimeVars, ctx)
+	_, err = EvaluateWhen("nodeRole == \"worker\"", vars, runtimeVars)
 	if err == nil {
 		t.Fatalf("expected bare identifier to fail")
 	}
@@ -2216,7 +2265,7 @@ func TestWhen_NamespaceEnforced(t *testing.T) {
 		t.Fatalf("expected bare identifier guidance, got %v", err)
 	}
 
-	_, err = EvaluateWhen("context.nodeRole == \"worker\"", vars, runtimeVars, ctx)
+	_, err = EvaluateWhen("context.nodeRole == \"worker\"", vars, runtimeVars)
 	if err == nil {
 		t.Fatalf("expected context namespace to fail")
 	}
@@ -2224,7 +2273,7 @@ func TestWhen_NamespaceEnforced(t *testing.T) {
 		t.Fatalf("expected namespace restriction message, got %v", err)
 	}
 
-	_, err = EvaluateWhen("other.nodeRole == \"worker\"", vars, runtimeVars, ctx)
+	_, err = EvaluateWhen("other.nodeRole == \"worker\"", vars, runtimeVars)
 	if err == nil {
 		t.Fatalf("expected unknown dotted namespace to fail")
 	}
@@ -2792,7 +2841,7 @@ func TestServiceStep(t *testing.T) {
 		t.Setenv("SYSTEMCTL_EXISTING_UNITS", "")
 		t.Setenv("SYSTEMCTL_MISSING_UNITS", "")
 
-		if err := runService(map[string]any{"name": "containerd", "enabled": true, "state": "started"}); err != nil {
+		if err := runService(context.Background(), map[string]any{"name": "containerd", "enabled": true, "state": "started"}); err != nil {
 			t.Fatalf("runService failed: %v", err)
 		}
 
@@ -2809,7 +2858,7 @@ func TestServiceStep(t *testing.T) {
 		t.Setenv("SYSTEMCTL_EXISTING_UNITS", "")
 		t.Setenv("SYSTEMCTL_MISSING_UNITS", "")
 
-		if err := runService(map[string]any{"names": []any{"firewalld", "ufw"}, "enabled": false, "state": "stopped"}); err != nil {
+		if err := runService(context.Background(), map[string]any{"names": []any{"firewalld", "ufw"}, "enabled": false, "state": "stopped"}); err != nil {
 			t.Fatalf("runService failed: %v", err)
 		}
 
@@ -2829,7 +2878,7 @@ func TestServiceStep(t *testing.T) {
 		t.Setenv("SYSTEMCTL_EXISTING_UNITS", "")
 		t.Setenv("SYSTEMCTL_MISSING_UNITS", "")
 
-		if err := runService(map[string]any{"name": "containerd", "daemonReload": true, "state": "restarted"}); err != nil {
+		if err := runService(context.Background(), map[string]any{"name": "containerd", "daemonReload": true, "state": "restarted"}); err != nil {
 			t.Fatalf("runService failed: %v", err)
 		}
 
@@ -2852,7 +2901,7 @@ func TestServiceStep(t *testing.T) {
 		t.Setenv("SYSTEMCTL_EXISTING_UNITS", "firewalld.service")
 		t.Setenv("SYSTEMCTL_MISSING_UNITS", "")
 
-		if err := runService(map[string]any{"names": []any{"firewalld", "ufw"}, "state": "stopped", "ifExists": true}); err != nil {
+		if err := runService(context.Background(), map[string]any{"names": []any{"firewalld", "ufw"}, "state": "stopped", "ifExists": true}); err != nil {
 			t.Fatalf("runService failed: %v", err)
 		}
 
@@ -2872,7 +2921,7 @@ func TestServiceStep(t *testing.T) {
 		t.Setenv("SYSTEMCTL_EXISTING_UNITS", "firewalld.service")
 		t.Setenv("SYSTEMCTL_MISSING_UNITS", "ufw")
 
-		if err := runService(map[string]any{"names": []any{"firewalld", "ufw"}, "state": "started", "ignoreMissing": true}); err != nil {
+		if err := runService(context.Background(), map[string]any{"names": []any{"firewalld", "ufw"}, "state": "started", "ignoreMissing": true}); err != nil {
 			t.Fatalf("runService failed: %v", err)
 		}
 
@@ -3259,7 +3308,7 @@ func TestSystemdUnitStep(t *testing.T) {
 	t.Run("writes unit file with content", func(t *testing.T) {
 		dir := t.TempDir()
 		target := filepath.Join(dir, "systemd", "demo.service")
-		if err := runSystemdUnit(map[string]any{"path": target, "content": "[Unit]\nDescription=demo"}); err != nil {
+		if err := runSystemdUnit(context.Background(), map[string]any{"path": target, "content": "[Unit]\nDescription=demo"}); err != nil {
 			t.Fatalf("runSystemdUnit failed: %v", err)
 		}
 		raw, err := os.ReadFile(target)
@@ -3274,7 +3323,7 @@ func TestSystemdUnitStep(t *testing.T) {
 	t.Run("writes unit file from template content", func(t *testing.T) {
 		dir := t.TempDir()
 		target := filepath.Join(dir, "systemd", "templated.service")
-		if err := runSystemdUnit(map[string]any{"path": target, "contentFromTemplate": "[Service]\nExecStart=/usr/bin/true"}); err != nil {
+		if err := runSystemdUnit(context.Background(), map[string]any{"path": target, "contentFromTemplate": "[Service]\nExecStart=/usr/bin/true"}); err != nil {
 			t.Fatalf("runSystemdUnit failed: %v", err)
 		}
 		raw, err := os.ReadFile(target)
@@ -3289,7 +3338,7 @@ func TestSystemdUnitStep(t *testing.T) {
 	t.Run("creates parent directories", func(t *testing.T) {
 		dir := t.TempDir()
 		target := filepath.Join(dir, "etc", "systemd", "system", "kubelet.service")
-		if err := runSystemdUnit(map[string]any{"path": target, "content": "[Install]"}); err != nil {
+		if err := runSystemdUnit(context.Background(), map[string]any{"path": target, "content": "[Install]"}); err != nil {
 			t.Fatalf("runSystemdUnit failed: %v", err)
 		}
 		if _, err := os.Stat(filepath.Dir(target)); err != nil {
@@ -3320,7 +3369,7 @@ func TestSystemdUnitStep(t *testing.T) {
 				"state": "restarted",
 			},
 		}
-		if err := runSystemdUnit(spec); err != nil {
+		if err := runSystemdUnit(context.Background(), spec); err != nil {
 			t.Fatalf("runSystemdUnit failed: %v", err)
 		}
 
@@ -3363,7 +3412,7 @@ func TestSystemdUnitStep(t *testing.T) {
 				"state":   "restarted",
 			},
 		}
-		if err := runSystemdUnit(spec); err != nil {
+		if err := runSystemdUnit(context.Background(), spec); err != nil {
 			t.Fatalf("runSystemdUnit failed: %v", err)
 		}
 
@@ -3401,7 +3450,7 @@ func TestSystemdUnitStep(t *testing.T) {
 				"state": "restarted",
 			},
 		}
-		if err := runSystemdUnit(spec); err != nil {
+		if err := runSystemdUnit(context.Background(), spec); err != nil {
 			t.Fatalf("runSystemdUnit failed: %v", err)
 		}
 
@@ -3430,7 +3479,7 @@ func TestRepoConfigStep(t *testing.T) {
 				"gpgcheck": false,
 			}},
 		}
-		if err := runRepoConfig(spec); err != nil {
+		if err := runRepoConfig(context.Background(), spec); err != nil {
 			t.Fatalf("runRepoConfig failed: %v", err)
 		}
 		raw, err := os.ReadFile(target)
@@ -3456,7 +3505,7 @@ func TestRepoConfigStep(t *testing.T) {
 				"component": "main",
 			}},
 		}
-		if err := runRepoConfig(spec); err != nil {
+		if err := runRepoConfig(context.Background(), spec); err != nil {
 			t.Fatalf("runRepoConfig failed: %v", err)
 		}
 		raw, err := os.ReadFile(target)
@@ -3493,7 +3542,7 @@ func TestRepoConfigStep(t *testing.T) {
 				"baseurl": "http://repo.local/apt/bookworm",
 			}},
 		}
-		if err := runRepoConfig(spec); err != nil {
+		if err := runRepoConfig(context.Background(), spec); err != nil {
 			t.Fatalf("runRepoConfig failed: %v", err)
 		}
 		raw, err := os.ReadFile(target)
@@ -3527,7 +3576,7 @@ func TestRepoConfigStep(t *testing.T) {
 				"baseurl": "file:///srv/repo",
 			}},
 		}
-		if err := runRepoConfig(spec); err != nil {
+		if err := runRepoConfig(context.Background(), spec); err != nil {
 			t.Fatalf("runRepoConfig failed: %v", err)
 		}
 		if _, err := os.Stat(legacyA + ".deck.bak"); err != nil {
@@ -3562,7 +3611,7 @@ func TestRepoConfigStep(t *testing.T) {
 				"baseurl": "file:///srv/repo",
 			}},
 		}
-		if err := runRepoConfig(spec); err != nil {
+		if err := runRepoConfig(context.Background(), spec); err != nil {
 			t.Fatalf("runRepoConfig failed: %v", err)
 		}
 
@@ -3592,7 +3641,7 @@ func TestRepoConfigStep(t *testing.T) {
 				"baseurl": "http://repo.local/apt/bookworm",
 			}},
 		}
-		if err := runRepoConfig(spec); err != nil {
+		if err := runRepoConfig(context.Background(), spec); err != nil {
 			t.Fatalf("runRepoConfig failed: %v", err)
 		}
 
@@ -3618,7 +3667,7 @@ func TestRepoConfigStep(t *testing.T) {
 		origRun := repoConfigRunTimedCommand
 		t.Cleanup(func() { repoConfigRunTimedCommand = origRun })
 		calls := make([]string, 0)
-		repoConfigRunTimedCommand = func(name string, args []string, timeout time.Duration) error {
+		repoConfigRunTimedCommand = func(_ context.Context, name string, args []string, timeout time.Duration) error {
 			calls = append(calls, name+" "+strings.Join(args, " "))
 			if timeout < time.Second {
 				t.Fatalf("unexpected timeout: %s", timeout)
@@ -3637,7 +3686,7 @@ func TestRepoConfigStep(t *testing.T) {
 				"baseurl": "http://repo.local/apt/bookworm",
 			}},
 		}
-		if err := runRepoConfig(spec); err != nil {
+		if err := runRepoConfig(context.Background(), spec); err != nil {
 			t.Fatalf("runRepoConfig failed: %v", err)
 		}
 		if len(calls) != 2 || calls[0] != "apt-get clean" || calls[1] != "apt-get update" {
@@ -3651,7 +3700,7 @@ func TestRepoConfigStep(t *testing.T) {
 		origRun := repoConfigRunTimedCommand
 		t.Cleanup(func() { repoConfigRunTimedCommand = origRun })
 		calls := make([]string, 0)
-		repoConfigRunTimedCommand = func(name string, args []string, timeout time.Duration) error {
+		repoConfigRunTimedCommand = func(_ context.Context, name string, args []string, timeout time.Duration) error {
 			calls = append(calls, name+" "+strings.Join(args, " "))
 			return nil
 		}
@@ -3667,7 +3716,7 @@ func TestRepoConfigStep(t *testing.T) {
 				"baseurl": "http://repo.local/apt/bookworm",
 			}},
 		}
-		if err := runRepoConfig(spec); err != nil {
+		if err := runRepoConfig(context.Background(), spec); err != nil {
 			t.Fatalf("runRepoConfig failed: %v", err)
 		}
 		if len(calls) != 1 || calls[0] != "apt-get clean" {
@@ -3917,7 +3966,7 @@ func TestSwapStep(t *testing.T) {
 	if err := os.WriteFile(fstab, []byte(content), 0o644); err != nil {
 		t.Fatalf("write fstab: %v", err)
 	}
-	if err := runSwap(map[string]any{"disable": false, "persist": true, "fstabPath": fstab}); err != nil {
+	if err := runSwap(context.Background(), map[string]any{"disable": false, "persist": true, "fstabPath": fstab}); err != nil {
 		t.Fatalf("runSwap failed: %v", err)
 	}
 	raw, err := os.ReadFile(fstab)
@@ -3933,10 +3982,10 @@ func TestKernelModuleStep(t *testing.T) {
 	dir := t.TempDir()
 	persistPath := filepath.Join(dir, "modules-load.d", "k8s.conf")
 	spec := map[string]any{"name": "overlay", "load": false, "persist": true, "persistFile": persistPath}
-	if err := runKernelModule(spec); err != nil {
+	if err := runKernelModule(context.Background(), spec); err != nil {
 		t.Fatalf("runKernelModule failed: %v", err)
 	}
-	if err := runKernelModule(spec); err != nil {
+	if err := runKernelModule(context.Background(), spec); err != nil {
 		t.Fatalf("runKernelModule second pass failed: %v", err)
 	}
 	raw, err := os.ReadFile(persistPath)
@@ -3949,7 +3998,7 @@ func TestKernelModuleStep(t *testing.T) {
 
 	multiPersistPath := filepath.Join(dir, "modules-load.d", "multi.conf")
 	multiSpec := map[string]any{"names": []any{"overlay", "br_netfilter", "overlay"}, "load": false, "persist": true, "persistFile": multiPersistPath}
-	if err := runKernelModule(multiSpec); err != nil {
+	if err := runKernelModule(context.Background(), multiSpec); err != nil {
 		t.Fatalf("runKernelModule multi failed: %v", err)
 	}
 	multiRaw, err := os.ReadFile(multiPersistPath)
@@ -4027,7 +4076,7 @@ func TestSysctlApplyStep(t *testing.T) {
 	}
 	t.Setenv("PATH", fmt.Sprintf("%s:%s", binDir, os.Getenv("PATH")))
 
-	if err := runSysctlApply(map[string]any{"file": "/etc/sysctl.d/99-kubernetes-cri.conf"}); err != nil {
+	if err := runSysctlApply(context.Background(), map[string]any{"file": "/etc/sysctl.d/99-kubernetes-cri.conf"}); err != nil {
 		t.Fatalf("runSysctlApply failed: %v", err)
 	}
 	raw, err := os.ReadFile(logPath)
@@ -4320,8 +4369,9 @@ func TestRun_Kubeadm(t *testing.T) {
 				}},
 			}},
 		}
+		useStubKubeadmReset(t)
 
-		if err := Run(context.Background(), wf, RunOptions{StatePath: statePath, kubeadmMode: "stub"}); err != nil {
+		if err := Run(context.Background(), wf, RunOptions{StatePath: statePath}); err != nil {
 			t.Fatalf("expected stub reset success, got %v", err)
 		}
 

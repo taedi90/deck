@@ -28,13 +28,17 @@ func runCommand(ctx context.Context, spec map[string]any) error {
 	if err != nil {
 		return fmt.Errorf("decode Command spec: %w", err)
 	}
+	return runCommandDecoded(ctx, decoded)
+}
+
+func runCommandDecoded(ctx context.Context, decoded runCommandSpec) error {
 	cmdArgs := decoded.Command
 	if len(cmdArgs) == 0 {
 		return fmt.Errorf("%s: Command requires command", errCodeInstallCommandMissing)
 	}
 	timeout := parseStepTimeout(decoded.Timeout, 30*time.Second)
 
-	err = runTimedCommandSpecWithContext(ctx, cmdArgs, decoded.Env, decoded.Sudo, timeout, os.Stdout, os.Stderr)
+	err := runTimedCommandSpecWithContext(ctx, cmdArgs, decoded.Env, decoded.Sudo, timeout, os.Stdout, os.Stderr)
 	if err == nil {
 		return nil
 	}
@@ -66,10 +70,6 @@ func parseStepTimeout(raw string, def time.Duration) time.Duration {
 	return timeout
 }
 
-func runTimedCommand(name string, args []string, timeout time.Duration) error {
-	return runTimedCommandWithContext(context.Background(), name, args, timeout)
-}
-
 func runTimedCommandWithContext(parent context.Context, name string, args []string, timeout time.Duration) error {
 	return runTimedCommandSpecWithContext(parent, append([]string{name}, args...), nil, false, timeout, os.Stdout, os.Stderr)
 }
@@ -79,7 +79,7 @@ func runTimedCommandSpecWithContext(parent context.Context, cmdArgs []string, en
 		return fmt.Errorf("empty command")
 	}
 	if parent == nil {
-		parent = context.Background()
+		return fmt.Errorf("context is nil")
 	}
 	if err := parent.Err(); err != nil {
 		return err
@@ -127,7 +127,7 @@ func runCommandOutputWithContext(parent context.Context, cmdArgs []string, timeo
 	}
 
 	if parent == nil {
-		parent = context.Background()
+		return "", fmt.Errorf("context is nil")
 	}
 	if err := parent.Err(); err != nil {
 		return "", err

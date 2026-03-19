@@ -21,7 +21,10 @@ import (
 	"github.com/taedi90/deck/internal/server"
 )
 
-func executeServe(root string, addr string, auditMaxSizeMB int, auditMaxFiles int, tlsCert string, tlsKey string, tlsSelfSigned bool) error {
+func executeServe(ctx context.Context, root string, addr string, auditMaxSizeMB int, auditMaxFiles int, tlsCert string, tlsKey string, tlsSelfSigned bool) error {
+	if ctx == nil {
+		return fmt.Errorf("context is nil")
+	}
 	resolvedRoot := strings.TrimSpace(root)
 	if resolvedRoot == "" {
 		resolvedRoot = "."
@@ -68,7 +71,7 @@ func executeServe(root string, addr string, auditMaxSizeMB int, auditMaxFiles in
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	errCh := make(chan error, 1)
 	go func() {
@@ -114,7 +117,10 @@ type healthReport struct {
 	HTTPStatus int    `json:"httpStatus"`
 }
 
-func executeHealth(server string, output string) error {
+func executeHealth(ctx context.Context, server string, output string) error {
+	if ctx == nil {
+		return fmt.Errorf("context is nil")
+	}
 	resolvedOutput, err := resolveOutputFormat(output)
 	if err != nil {
 		return err
@@ -132,7 +138,7 @@ func executeHealth(server string, output string) error {
 	if err := verbosef(2, "deck: server health url=%s\n", healthURL); err != nil {
 		return err
 	}
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, healthURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
 	if err != nil {
 		return fmt.Errorf("health: build request: %w", err)
 	}
@@ -159,7 +165,10 @@ func executeHealth(server string, output string) error {
 	return stdoutPrintf("health: ok (%s)\n", report.Server)
 }
 
-func executeLogs(root string, source string, path string, unit string, output string) error {
+func executeLogs(ctx context.Context, root string, source string, path string, unit string, output string) error {
+	if ctx == nil {
+		return fmt.Errorf("context is nil")
+	}
 	resolvedSource := strings.ToLower(strings.TrimSpace(source))
 	resolvedOutput, err := resolveOutputFormat(output)
 	if err != nil {
@@ -198,7 +207,7 @@ func executeLogs(root string, source string, path string, unit string, output st
 		if err := verbosef(1, "deck: server logs unit=%s\n", resolvedUnit); err != nil {
 			return err
 		}
-		journalRecords, err := readControlLogsJournal(resolvedUnit, 50, 0)
+		journalRecords, err := readControlLogsJournal(ctx, resolvedUnit, 50, 0)
 		if err != nil {
 			return fmt.Errorf("logs: %w\nsuggestion: %s", err, suggestJournalctlCommand(resolvedUnit))
 		}
@@ -274,12 +283,15 @@ func readLogsFile(path string) ([]ctrllogs.LogRecord, error) {
 	return records, nil
 }
 
-func readControlLogsJournal(unit string, tail int, since time.Duration) ([]ctrllogs.LogRecord, error) {
+func readControlLogsJournal(ctx context.Context, unit string, tail int, since time.Duration) ([]ctrllogs.LogRecord, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("context is nil")
+	}
 	args := []string{"-u", unit, "-o", "json", "--no-pager", "-n", strconv.Itoa(tail)}
 	if since > 0 {
 		args = append(args, "--since", formatJournalSince(since))
 	}
-	raw, err := executil.CombinedOutputJournalctl(context.Background(), args...)
+	raw, err := executil.CombinedOutputJournalctl(ctx, args...)
 	if err != nil {
 		return nil, classifyJournalctlError(err, strings.TrimSpace(string(raw)))
 	}

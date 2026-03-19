@@ -98,14 +98,12 @@ func defaultDeckCacheRoot() (string, error) {
 	} else if err != nil && !os.IsNotExist(err) {
 		return "", fmt.Errorf("stat cache root: %w", err)
 	}
-	legacyRoot, err := userdirs.LegacyCacheRoot()
+	legacyRoot, found, err := resolveLegacyDeckCacheRoot()
 	if err != nil {
 		return "", err
 	}
-	if _, err := os.Stat(legacyRoot); err == nil {
+	if found {
 		return legacyRoot, nil
-	} else if err != nil && !os.IsNotExist(err) {
-		return "", fmt.Errorf("stat legacy cache root: %w", err)
 	}
 	return root, nil
 }

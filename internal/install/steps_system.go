@@ -1,6 +1,7 @@
 package install
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -20,7 +21,7 @@ type kernelModuleSpec struct {
 	PersistFile string   `json:"persistFile"`
 }
 
-func runSysctl(spec map[string]any) error {
+func runSysctl(ctx context.Context, spec map[string]any) error {
 	path := stringValue(spec, "writeFile")
 	if path == "" {
 		return fmt.Errorf("%s: Sysctl requires writeFile", errCodeInstallSysctlPathMiss)
@@ -48,12 +49,12 @@ func runSysctl(spec map[string]any) error {
 		if timeout := stringValue(spec, "timeout"); timeout != "" {
 			applySpec["timeout"] = timeout
 		}
-		return runSysctlApply(applySpec)
+		return runSysctlApply(ctx, applySpec)
 	}
 	return nil
 }
 
-func runService(spec map[string]any) error {
+func runService(ctx context.Context, spec map[string]any) error {
 	name := stringValue(spec, "name")
 	names := stringSlice(spec["names"])
 	if name == "" && len(names) == 0 {
@@ -68,7 +69,7 @@ func runService(spec map[string]any) error {
 
 	timeout := commandTimeoutWithDefault(spec, 30*time.Second)
 	if boolValue(spec, "daemonReload") {
-		if err := runTimedCommand("systemctl", []string{"daemon-reload"}, timeout); err != nil {
+		if err := runTimedCommandWithContext(ctx, "systemctl", []string{"daemon-reload"}, timeout); err != nil {
 			return err
 		}
 	}
@@ -77,7 +78,7 @@ func runService(spec map[string]any) error {
 
 	for _, serviceName := range names {
 		if ifExists {
-			exists, err := serviceUnitExists(serviceName, timeout)
+			exists, err := serviceUnitExists(ctx, serviceName, timeout)
 			if err != nil {
 				return err
 			}
@@ -87,7 +88,7 @@ func runService(spec map[string]any) error {
 		}
 
 		if enabled, ok := spec["enabled"].(bool); ok {
-			isEnabled, err := isServiceEnabled(serviceName, timeout)
+			isEnabled, err := isServiceEnabled(ctx, serviceName, timeout)
 			if err != nil {
 				return err
 			}
@@ -96,7 +97,7 @@ func runService(spec map[string]any) error {
 				if enabled {
 					action = "enable"
 				}
-				if err := runServiceCommand(serviceName, []string{action, serviceName}, timeout, ignoreMissing); err != nil {
+				if err := runServiceCommand(ctx, serviceName, []string{action, serviceName}, timeout, ignoreMissing); err != nil {
 					return err
 				}
 			}
@@ -107,33 +108,33 @@ func runService(spec map[string]any) error {
 		case "", "unchanged":
 			continue
 		case "started":
-			active, err := isServiceActive(serviceName, timeout)
+			active, err := isServiceActive(ctx, serviceName, timeout)
 			if err != nil {
 				return err
 			}
 			if active {
 				continue
 			}
-			if err := runServiceCommand(serviceName, []string{"start", serviceName}, timeout, ignoreMissing); err != nil {
+			if err := runServiceCommand(ctx, serviceName, []string{"start", serviceName}, timeout, ignoreMissing); err != nil {
 				return err
 			}
 		case "stopped":
-			active, err := isServiceActive(serviceName, timeout)
+			active, err := isServiceActive(ctx, serviceName, timeout)
 			if err != nil {
 				return err
 			}
 			if !active {
 				continue
 			}
-			if err := runServiceCommand(serviceName, []string{"stop", serviceName}, timeout, ignoreMissing); err != nil {
+			if err := runServiceCommand(ctx, serviceName, []string{"stop", serviceName}, timeout, ignoreMissing); err != nil {
 				return err
 			}
 		case "restarted":
-			if err := runServiceCommand(serviceName, []string{"restart", serviceName}, timeout, ignoreMissing); err != nil {
+			if err := runServiceCommand(ctx, serviceName, []string{"restart", serviceName}, timeout, ignoreMissing); err != nil {
 				return err
 			}
 		case "reloaded":
-			if err := runServiceCommand(serviceName, []string{"reload", serviceName}, timeout, ignoreMissing); err != nil {
+			if err := runServiceCommand(ctx, serviceName, []string{"reload", serviceName}, timeout, ignoreMissing); err != nil {
 				return err
 			}
 		default:
@@ -144,12 +145,12 @@ func runService(spec map[string]any) error {
 	return nil
 }
 
-func runServiceCommand(name string, args []string, timeout time.Duration, ignoreMissing bool) error {
-	err := runTimedCommand("systemctl", args, timeout)
+func runServiceCommand(ctx context.Context, name string, args []string, timeout time.Duration, ignoreMissing bool) error {
+	err := runTimedCommandWithContext(ctx, "systemctl", args, timeout)
 	if err == nil || !ignoreMissing {
 		return err
 	}
-	exists, existsErr := serviceUnitExists(name, timeout)
+	exists, existsErr := serviceUnitExists(ctx, name, timeout)
 	if existsErr != nil {
 		return err
 	}
@@ -159,7 +160,7 @@ func runServiceCommand(name string, args []string, timeout time.Duration, ignore
 	return err
 }
 
-func runSwap(spec map[string]any) error {
+func runSwap(ctx context.Context, spec map[string]any) error {
 	disable := true
 	if v, ok := spec["disable"].(bool); ok {
 		disable = v
@@ -175,7 +176,7 @@ func runSwap(spec map[string]any) error {
 			return err
 		}
 		if active {
-			if err := runTimedCommand("swapoff", []string{"-a"}, commandTimeoutWithDefault(spec, 30*time.Second)); err != nil {
+			if err := runTimedCommandWithContext(ctx, "swapoff", []string{"-a"}, commandTimeoutWithDefault(spec, 30*time.Second)); err != nil {
 				return err
 			}
 		}
@@ -224,7 +225,7 @@ func runSwap(spec map[string]any) error {
 	return nil
 }
 
-func runKernelModule(spec map[string]any) error {
+func runKernelModule(ctx context.Context, spec map[string]any) error {
 	decoded, err := workflowexec.DecodeSpec[kernelModuleSpec](spec)
 	if err != nil {
 		return fmt.Errorf("decode KernelModule spec: %w", err)
@@ -294,7 +295,7 @@ func runKernelModule(spec map[string]any) error {
 				return err
 			}
 			if !loaded {
-				if err := runTimedCommand("modprobe", []string{module}, commandTimeoutWithDefault(spec, 30*time.Second)); err != nil {
+				if err := runTimedCommandWithContext(ctx, "modprobe", []string{module}, commandTimeoutWithDefault(spec, 30*time.Second)); err != nil {
 					return err
 				}
 			}
@@ -322,7 +323,7 @@ func kernelModuleNames(spec kernelModuleSpec) []string {
 	return items
 }
 
-func runSysctlApply(spec map[string]any) error {
+func runSysctlApply(ctx context.Context, spec map[string]any) error {
 	file := stringValue(spec, "file")
 	args := stringSlice(spec["command"])
 	if len(args) == 0 {
@@ -332,7 +333,7 @@ func runSysctlApply(spec map[string]any) error {
 			args = []string{"sysctl", "--system"}
 		}
 	}
-	return runTimedCommand(args[0], args[1:], commandTimeoutWithDefault(spec, 30*time.Second))
+	return runTimedCommandWithContext(ctx, args[0], args[1:], commandTimeoutWithDefault(spec, 30*time.Second))
 }
 
 func swapActive() (bool, error) {

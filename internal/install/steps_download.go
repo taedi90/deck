@@ -57,7 +57,7 @@ type fileDownloadSpec struct {
 
 func runFileDownload(ctx context.Context, bundleRoot string, spec map[string]any) (string, error) {
 	if ctx == nil {
-		ctx = context.Background()
+		return "", fmt.Errorf("context is nil")
 	}
 	decoded, err := workflowexec.DecodeSpec[fileDownloadSpec](spec)
 	if err != nil {
@@ -160,7 +160,7 @@ func runFileDownload(ctx context.Context, bundleRoot string, spec map[string]any
 
 func downloadURLToFile(ctx context.Context, target *os.File, url string, timeout time.Duration) error {
 	if ctx == nil {
-		ctx = context.Background()
+		return fmt.Errorf("context is nil")
 	}
 	client := &http.Client{Timeout: timeout}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)

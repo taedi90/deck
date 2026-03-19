@@ -409,15 +409,12 @@ func preparePackageCacheMounts(family string, cacheKey string) ([]packageCacheMo
 		if !os.IsNotExist(err) {
 			return nil, fmt.Errorf("stat package cache root: %w", err)
 		}
-		legacyRoot, legacyErr := userdirs.LegacyCacheRoot()
+		legacyPath, ok, legacyErr := resolveLegacyPackageCacheRoot(cacheKey)
 		if legacyErr != nil {
 			return nil, legacyErr
 		}
-		legacyPath := filepath.Join(legacyRoot, "packages", cacheKey)
-		if _, legacyStatErr := os.Stat(legacyPath); legacyStatErr == nil {
+		if ok {
 			root = legacyPath
-		} else if legacyStatErr != nil && !os.IsNotExist(legacyStatErr) {
-			return nil, fmt.Errorf("stat legacy package cache root: %w", legacyStatErr)
 		}
 	}
 	if strings.TrimSpace(family) == "rhel" {

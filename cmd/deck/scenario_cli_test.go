@@ -38,7 +38,7 @@ func TestCompleteScenarioNamesMergesLocalAndServerForAll(t *testing.T) {
 		t.Fatalf("saveSourceDefaults: %v", err)
 	}
 
-	got := completeScenarioNames(scenarioSourceAll, root, "")
+	got := completeScenarioNames(context.Background(), scenarioSourceAll, root, "")
 	want := []string{"apply", "nested/only-local", "server-only"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("unexpected completion candidates\nwant: %#v\ngot:  %#v", want, got)
@@ -56,12 +56,12 @@ func TestCompleteScenarioNamesRemoteFailureFailsClosed(t *testing.T) {
 		t.Fatalf("saveSourceDefaults: %v", err)
 	}
 
-	got := completeScenarioNames(scenarioSourceServer, root, "")
+	got := completeScenarioNames(context.Background(), scenarioSourceServer, root, "")
 	if len(got) != 0 {
 		t.Fatalf("expected empty candidates on remote failure, got %#v", got)
 	}
 
-	got = completeScenarioNames(scenarioSourceAll, root, "")
+	got = completeScenarioNames(context.Background(), scenarioSourceAll, root, "")
 	if len(got) != 0 {
 		t.Fatalf("expected no noisy remote candidates when local is empty, got %#v", got)
 	}

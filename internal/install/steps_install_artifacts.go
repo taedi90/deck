@@ -80,7 +80,7 @@ func runInstallArtifacts(ctx context.Context, spec map[string]any) error {
 
 func runInstallArtifactsWithHostFactDetector(ctx context.Context, spec map[string]any, hostFactDetector func() map[string]any) error {
 	if ctx == nil {
-		ctx = context.Background()
+		return fmt.Errorf("context is nil")
 	}
 
 	decoded, err := workflowexec.DecodeSpec[installArtifactsSpec](spec)

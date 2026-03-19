@@ -1,6 +1,7 @@
 package install
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -9,8 +10,13 @@ import (
 
 const defaultPackageCacheTimeout = 2 * time.Minute
 
-func runPackageCache(spec map[string]any) error {
-	return runPackageCacheWithRunner(spec, runTimedCommand)
+func runPackageCache(ctx context.Context, spec map[string]any) error {
+	if ctx == nil {
+		return fmt.Errorf("context is nil")
+	}
+	return runPackageCacheWithRunner(spec, func(name string, args []string, timeout time.Duration) error {
+		return runTimedCommandWithContext(ctx, name, args, timeout)
+	})
 }
 
 func runPackageCacheWithRunner(spec map[string]any, runner func(name string, args []string, timeout time.Duration) error) error {

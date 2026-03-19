@@ -36,11 +36,7 @@ type checksSpec struct {
 	FailFast *bool    `json:"failFast"`
 }
 
-func runChecks(runner CommandRunner, spec map[string]any, deps checksRuntime) (map[string]any, error) {
-	decoded, err := workflowexec.DecodeSpec[checksSpec](spec)
-	if err != nil {
-		return nil, fmt.Errorf("decode Checks spec: %w", err)
-	}
+func runChecksDecoded(runner CommandRunner, decoded checksSpec, deps checksRuntime) (map[string]any, error) {
 	checks := decoded.Checks
 	if len(checks) == 0 {
 		return nil, fmt.Errorf("%s: Checks requires checks", errCodePrepareChecksFailed)

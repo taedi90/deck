@@ -155,7 +155,7 @@ func runFileDownload(ctx context.Context, bundleRoot string, spec map[string]any
 
 func downloadURLToFile(ctx context.Context, target *os.File, url string) error {
 	if ctx == nil {
-		ctx = context.Background()
+		return fmt.Errorf("context is nil")
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

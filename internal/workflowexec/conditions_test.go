@@ -9,15 +9,15 @@ func TestEvaluateWhen_AndBindsTighterThanOr(t *testing.T) {
 		"c": false,
 	}
 
-	result, err := EvaluateWhen("runtime.a or runtime.b and runtime.c", nil, runtimeVars, nil, "E_TEST")
+	result, err := EvaluateWhen("runtime.a || runtime.b && runtime.c", nil, runtimeVars, "E_TEST")
 	if err != nil {
 		t.Fatalf("EvaluateWhen returned error: %v", err)
 	}
 	if !result {
-		t.Fatalf("expected true when and binds tighter than or")
+		t.Fatalf("expected true when && binds tighter than ||")
 	}
 
-	parenthesized, err := EvaluateWhen("(runtime.a or runtime.b) and runtime.c", nil, runtimeVars, nil, "E_TEST")
+	parenthesized, err := EvaluateWhen("(runtime.a || runtime.b) && runtime.c", nil, runtimeVars, "E_TEST")
 	if err != nil {
 		t.Fatalf("EvaluateWhen with parentheses returned error: %v", err)
 	}

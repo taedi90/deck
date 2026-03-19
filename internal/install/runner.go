@@ -12,13 +12,10 @@ import (
 )
 
 type RunOptions struct {
-	BundleRoot  string
-	StatePath   string
-	EventSink   StepEventSink
-	kubeadmMode string
+	BundleRoot string
+	StatePath  string
+	EventSink  StepEventSink
 }
-
-type kubeadmModeContextKey struct{}
 
 const (
 	errCodeInstallKindUnsupported   = "E_INSTALL_KIND_UNSUPPORTED"
@@ -86,9 +83,8 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 		return fmt.Errorf("workflow is nil")
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		return fmt.Errorf("context is nil")
 	}
-	ctx = context.WithValue(ctx, kubeadmModeContextKey{}, strings.TrimSpace(opts.kubeadmMode))
 
 	if len(wf.Phases) == 0 {
 		return fmt.Errorf("no phases found")
@@ -133,7 +129,8 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 		skipped[id] = true
 	}
 
-	ctxData := map[string]any{"bundleRoot": bundleRoot, "stateFile": statePath}
+	execCtx := ExecutionContext{BundleRoot: bundleRoot, StatePath: statePath}
+	ctxData := execCtx.RenderContext()
 	for _, phase := range wf.Phases {
 		st.Phase = phase.Name
 		for _, step := range phase.Steps {
@@ -142,7 +139,7 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 				continue
 			}
 
-			ok, err := evaluateWhen(step.When, wf.Vars, runtimeVars, ctxData)
+			ok, err := evaluateWhen(step.When, wf.Vars, runtimeVars)
 			if err != nil {
 				st.FailedStep = step.ID
 				st.Error = err.Error()
@@ -185,7 +182,7 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 						rendered["timeout"] = strings.TrimSpace(step.Timeout)
 					}
 				}
-				execErr = executeStep(ctx, step.Kind, rendered, bundleRoot)
+				execErr = executeStep(ctx, step.Kind, rendered, execCtx)
 				if execErr == nil {
 					if err := applyRegister(step, rendered, runtimeVars); err != nil {
 						execErr = err

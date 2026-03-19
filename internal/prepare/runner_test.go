@@ -23,6 +23,8 @@ import (
 	"github.com/taedi90/deck/internal/config"
 )
 
+func nilContextForPrepareTest() context.Context { return nil }
+
 func TestRun_PrepareArtifactsAndManifest(t *testing.T) {
 	imageOps := stubImageDownloadOps()
 
@@ -820,9 +822,7 @@ func TestRun_WhenInvalidExpression(t *testing.T) {
 func TestWhen_NamespaceEnforced(t *testing.T) {
 	vars := map[string]any{"nodeRole": "worker"}
 	runtimeVars := map[string]any{"hostPassed": true}
-	ctx := map[string]any{"nodeRole": "worker"}
-
-	ok, err := EvaluateWhen("vars.nodeRole == \"worker\"", vars, runtimeVars, ctx)
+	ok, err := EvaluateWhen("vars.nodeRole == \"worker\"", vars, runtimeVars)
 	if err != nil {
 		t.Fatalf("expected vars namespace expression to pass, got %v", err)
 	}
@@ -830,7 +830,7 @@ func TestWhen_NamespaceEnforced(t *testing.T) {
 		t.Fatalf("expected vars namespace expression to be true")
 	}
 
-	_, err = EvaluateWhen("nodeRole == \"worker\"", vars, runtimeVars, ctx)
+	_, err = EvaluateWhen("nodeRole == \"worker\"", vars, runtimeVars)
 	if err == nil {
 		t.Fatalf("expected bare identifier to fail")
 	}
@@ -838,7 +838,7 @@ func TestWhen_NamespaceEnforced(t *testing.T) {
 		t.Fatalf("expected bare identifier guidance, got %v", err)
 	}
 
-	_, err = EvaluateWhen("context.nodeRole == \"worker\"", vars, runtimeVars, ctx)
+	_, err = EvaluateWhen("context.nodeRole == \"worker\"", vars, runtimeVars)
 	if err == nil {
 		t.Fatalf("expected context namespace to fail")
 	}
@@ -846,12 +846,35 @@ func TestWhen_NamespaceEnforced(t *testing.T) {
 		t.Fatalf("expected namespace restriction message, got %v", err)
 	}
 
-	_, err = EvaluateWhen("other.nodeRole == \"worker\"", vars, runtimeVars, ctx)
+	_, err = EvaluateWhen("other.nodeRole == \"worker\"", vars, runtimeVars)
 	if err == nil {
 		t.Fatalf("expected unknown dotted namespace to fail")
 	}
 	if !strings.Contains(err.Error(), "unknown identifier \"other.nodeRole\"; supported prefixes are vars. and runtime") {
 		t.Fatalf("expected namespace restriction message, got %v", err)
+	}
+}
+
+func TestRunPrepareStep_FileActionDecodeError(t *testing.T) {
+	_, _, err := runPrepareStep(context.Background(), &fakeRunner{}, t.TempDir(), "File", map[string]any{"action": 42}, RunOptions{})
+	if err == nil {
+		t.Fatalf("expected decode error")
+	}
+	if !strings.Contains(err.Error(), "decode File action") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestDownloadURLToFile_RejectsNilContext(t *testing.T) {
+	target, err := os.CreateTemp(t.TempDir(), "download-*.txt")
+	if err != nil {
+		t.Fatalf("create temp file: %v", err)
+	}
+	defer func() { _ = target.Close() }()
+	if err := downloadURLToFile(nilContextForPrepareTest(), target, "https://example.invalid/file"); err == nil {
+		t.Fatalf("expected nil context error")
+	} else if !strings.Contains(err.Error(), "context is nil") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -876,7 +899,7 @@ func TestRun_ChecksStep(t *testing.T) {
 					{
 						ID:   "runtime-branch",
 						Kind: "Packages",
-						When: "runtime.hostPassed == true and vars.want == \"ok\" and runtime.host.os.family == \"debian\" and runtime.host.arch == \"arm64\"",
+						When: "runtime.hostPassed == true && vars.want == \"ok\" && runtime.host.os.family == \"debian\" && runtime.host.arch == \"arm64\"",
 						Spec: map[string]any{
 							"action":   "download",
 							"packages": []any{"containerd"},

@@ -24,10 +24,6 @@ func sourceDefaultsPath() (string, error) {
 	return userdirs.ConfigFile("source.json")
 }
 
-func legacySourceDefaultsPath() (string, error) {
-	return userdirs.LegacyConfigFile("server.json")
-}
-
 func resolveSourceURL(explicit string) (string, string, error) {
 	if trimmed := strings.TrimRight(strings.TrimSpace(explicit), "/"); trimmed != "" {
 		if err := validateSourceURL(trimmed); err != nil {
@@ -76,17 +72,14 @@ func loadSourceDefaults() (sourceDefaults, error) {
 			if strings.TrimSpace(os.Getenv("DECK_SERVER_CONFIG_PATH")) != "" {
 				return sourceDefaults{}, nil
 			}
-			legacyPath, legacyErr := legacySourceDefaultsPath()
+			legacyDefaults, found, legacyErr := loadLegacySourceDefaults()
 			if legacyErr != nil {
 				return sourceDefaults{}, legacyErr
 			}
-			raw, err = fsutil.ReadFile(legacyPath)
-			if err != nil {
-				if os.IsNotExist(err) {
-					return sourceDefaults{}, nil
-				}
-				return sourceDefaults{}, fmt.Errorf("read legacy source defaults: %w", err)
+			if !found {
+				return sourceDefaults{}, nil
 			}
+			return legacyDefaults, nil
 		} else {
 			return sourceDefaults{}, fmt.Errorf("read source defaults: %w", err)
 		}

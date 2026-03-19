@@ -1,6 +1,7 @@
 package install
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/taedi90/deck/internal/filemode"
 	"github.com/taedi90/deck/internal/fsutil"
@@ -17,7 +19,7 @@ import (
 
 var (
 	repoConfigDetectHostFacts = detectHostFacts
-	repoConfigRunTimedCommand = runTimedCommand
+	repoConfigRunTimedCommand = runTimedCommandWithContext
 	repoConfigDefaultPathFunc = defaultRepoConfigPath
 )
 
@@ -283,7 +285,10 @@ func runTemplateFile(spec map[string]any) error {
 	})
 }
 
-func runRepoConfig(spec map[string]any) error {
+func runRepoConfig(ctx context.Context, spec map[string]any) error {
+	if ctx == nil {
+		return fmt.Errorf("context is nil")
+	}
 	format, err := resolveRepoConfigFormat(spec)
 	if err != nil {
 		return err
@@ -357,7 +362,7 @@ func runRepoConfig(spec map[string]any) error {
 			return err
 		}
 	}
-	if err := refreshRepoMetadata(spec, format); err != nil {
+	if err := refreshRepoMetadata(ctx, spec, format); err != nil {
 		return err
 	}
 
@@ -653,7 +658,7 @@ func disableYumRepoPaths(patterns []string, keepPath string) error {
 	return nil
 }
 
-func refreshRepoMetadata(spec map[string]any, format string) error {
+func refreshRepoMetadata(ctx context.Context, spec map[string]any, format string) error {
 	refresh, ok := spec["refreshCache"].(map[string]any)
 	if !ok {
 		return nil
@@ -679,7 +684,9 @@ func refreshRepoMetadata(spec map[string]any, format string) error {
 		update,
 		packageRepoPolicy{},
 		commandTimeoutWithDefault(spec, defaultPackageCacheTimeout),
-		repoConfigRunTimedCommand,
+		func(name string, args []string, timeout time.Duration) error {
+			return repoConfigRunTimedCommand(ctx, name, args, timeout)
+		},
 		"repo metadata refresh",
 	)
 }

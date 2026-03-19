@@ -61,7 +61,7 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 		return fmt.Errorf("workflow is nil")
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		return fmt.Errorf("context is nil")
 	}
 
 	bundleRoot := strings.TrimSpace(opts.BundleRoot)
@@ -144,7 +144,7 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 	}
 
 	for _, step := range prepareSteps {
-		ok, err := evaluateWhen(step.When, wf.Vars, runtimeVars, ctxData)
+		ok, err := evaluateWhen(step.When, wf.Vars, runtimeVars)
 		if err != nil {
 			return fmt.Errorf("step %s (%s): %w", step.ID, step.Kind, err)
 		}
@@ -224,12 +224,12 @@ func applyRegister(step config.Step, outputs map[string]any, runtimeVars map[str
 	return workflowexec.ApplyRegister(step, outputs, runtimeVars, errCodePrepareRegisterMissing)
 }
 
-func evaluateWhen(expr string, vars map[string]any, runtime map[string]any, ctx map[string]any) (bool, error) {
-	return workflowexec.EvaluateWhen(expr, vars, runtime, ctx, errCodePrepareConditionEval)
+func evaluateWhen(expr string, vars map[string]any, runtime map[string]any) (bool, error) {
+	return workflowexec.EvaluateWhen(expr, vars, runtime, errCodePrepareConditionEval)
 }
 
-func EvaluateWhen(expr string, vars map[string]any, runtime map[string]any, ctx map[string]any) (bool, error) {
-	return evaluateWhen(expr, vars, runtime, ctx)
+func EvaluateWhen(expr string, vars map[string]any, runtime map[string]any) (bool, error) {
+	return evaluateWhen(expr, vars, runtime)
 }
 
 func findPhase(wf *config.Workflow, name string) (config.Phase, bool) {

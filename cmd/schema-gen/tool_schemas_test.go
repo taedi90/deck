@@ -9,13 +9,25 @@ import (
 func TestToolSchemaGeneratorsCoverStepDefinitions(t *testing.T) {
 	generators := toolSchemaGenerators()
 	for _, def := range workflowexec.StepDefinitions() {
-		if _, ok := generators[def.Kind]; !ok {
-			t.Fatalf("missing generator for %s", def.Kind)
+		generatorName := def.ToolSchemaGenerator
+		if generatorName == "" {
+			generatorName = def.Kind
+		}
+		if _, ok := generators[generatorName]; !ok {
+			t.Fatalf("missing generator %q for %s", generatorName, def.Kind)
 		}
 	}
-	for kind := range generators {
-		if _, ok := workflowexec.StepContractForKind(kind); !ok {
-			t.Fatalf("generator registered for unknown kind %s", kind)
+	usedGenerators := map[string]bool{}
+	for _, def := range workflowexec.StepDefinitions() {
+		generatorName := def.ToolSchemaGenerator
+		if generatorName == "" {
+			generatorName = def.Kind
+		}
+		usedGenerators[generatorName] = true
+	}
+	for name := range generators {
+		if !usedGenerators[name] {
+			t.Fatalf("generator registered but unused: %s", name)
 		}
 	}
 }

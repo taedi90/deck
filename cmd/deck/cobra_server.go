@@ -76,7 +76,7 @@ func newServerUpCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return executeServerUp(serverUpOptions{
+			return executeServerUp(cmd.Context(), serverUpOptions{
 				root:          root,
 				addr:          addr,
 				auditMaxSize:  auditMaxSize,
@@ -111,7 +111,7 @@ func newServerDownCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return executeServerDown(unit)
+			return executeServerDown(cmd.Context(), unit)
 		},
 	}
 	cmd.Flags().String("unit", "deck-server", "systemd unit name to stop")
@@ -132,7 +132,7 @@ func newServerHealthCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return executeHealth(server, output)
+			return executeHealth(cmd.Context(), server, output)
 		},
 	}
 	cmd.Flags().String("server", "", "server base URL (defaults to the saved remote server URL)")
@@ -166,7 +166,7 @@ func newServerLogsCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return executeLogs(root, source, path, unit, output)
+			return executeLogs(cmd.Context(), root, source, path, unit, output)
 		},
 	}
 	cmd.Flags().String("root", ".", "serve root directory")
@@ -300,19 +300,25 @@ type serverUpOptions struct {
 	unit          string
 }
 
-func executeServerUp(opts serverUpOptions) error {
+func executeServerUp(ctx context.Context, opts serverUpOptions) error {
+	if ctx == nil {
+		return fmt.Errorf("context is nil")
+	}
 	if err := validateServerUpDaemonMode(opts); err != nil {
 		return err
 	}
 	if !opts.daemon {
-		return executeServe(opts.root, opts.addr, opts.auditMaxSize, opts.auditMaxFiles, opts.tlsCert, opts.tlsKey, opts.tlsSelfSigned)
+		return executeServe(ctx, opts.root, opts.addr, opts.auditMaxSize, opts.auditMaxFiles, opts.tlsCert, opts.tlsKey, opts.tlsSelfSigned)
 	}
-	return runServerDaemon(opts)
+	return runServerDaemon(ctx, opts)
 }
 
-func executeServerDown(unit string) error {
+func executeServerDown(ctx context.Context, unit string) error {
+	if ctx == nil {
+		return fmt.Errorf("context is nil")
+	}
 	resolvedUnit := normalizeServerUnitName(unit)
-	raw, err := executil.CombinedOutputSystemctl(context.Background(), "stop", resolvedUnit)
+	raw, err := executil.CombinedOutputSystemctl(ctx, "stop", resolvedUnit)
 	if err != nil {
 		msg := strings.TrimSpace(string(raw))
 		if msg == "" {
@@ -323,7 +329,10 @@ func executeServerDown(unit string) error {
 	return stdoutPrintf("server down: ok (%s)\n", resolvedUnit)
 }
 
-func runServerDaemon(opts serverUpOptions) error {
+func runServerDaemon(ctx context.Context, opts serverUpOptions) error {
+	if ctx == nil {
+		return fmt.Errorf("context is nil")
+	}
 	resolvedUnit := normalizeServerUnitBaseName(opts.unit)
 	execPath, err := os.Executable()
 	if err != nil {
@@ -353,7 +362,7 @@ func runServerDaemon(opts serverUpOptions) error {
 	if opts.tlsSelfSigned {
 		args = append(args, "--tls-self-signed")
 	}
-	raw, err := executil.CombinedOutputSystemdRun(context.Background(), args...)
+	raw, err := executil.CombinedOutputSystemdRun(ctx, args...)
 	if err != nil {
 		msg := strings.TrimSpace(string(raw))
 		if msg == "" {

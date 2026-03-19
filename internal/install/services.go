@@ -1,14 +1,15 @@
 package install
 
 import (
+	"context"
 	"strings"
 	"time"
 
 	"github.com/taedi90/deck/internal/executil"
 )
 
-func isServiceEnabled(name string, timeout time.Duration) (bool, error) {
-	err := runTimedCommand("systemctl", []string{"is-enabled", name}, timeout)
+func isServiceEnabled(ctx context.Context, name string, timeout time.Duration) (bool, error) {
+	err := runTimedCommandWithContext(ctx, "systemctl", []string{"is-enabled", name}, timeout)
 	if err == nil {
 		return true, nil
 	}
@@ -18,8 +19,8 @@ func isServiceEnabled(name string, timeout time.Duration) (bool, error) {
 	return false, err
 }
 
-func isServiceActive(name string, timeout time.Duration) (bool, error) {
-	err := runTimedCommand("systemctl", []string{"is-active", "--quiet", name}, timeout)
+func isServiceActive(ctx context.Context, name string, timeout time.Duration) (bool, error) {
+	err := runTimedCommandWithContext(ctx, "systemctl", []string{"is-active", "--quiet", name}, timeout)
 	if err == nil {
 		return true, nil
 	}
@@ -29,8 +30,8 @@ func isServiceActive(name string, timeout time.Duration) (bool, error) {
 	return false, err
 }
 
-func serviceUnitExists(name string, timeout time.Duration) (bool, error) {
-	err := runTimedCommand("systemctl", []string{"list-unit-files", serviceUnitLookupName(name)}, timeout)
+func serviceUnitExists(ctx context.Context, name string, timeout time.Duration) (bool, error) {
+	err := runTimedCommandWithContext(ctx, "systemctl", []string{"list-unit-files", serviceUnitLookupName(name)}, timeout)
 	if err == nil {
 		return true, nil
 	}

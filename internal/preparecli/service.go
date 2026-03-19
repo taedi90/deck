@@ -44,7 +44,7 @@ type preparedManifestEntry struct {
 
 func Run(ctx context.Context, opts Options) error {
 	if ctx == nil {
-		ctx = context.Background()
+		return fmt.Errorf("context is nil")
 	}
 	prepareWorkflowPath, err := discoverPrepareWorkflow(ctx)
 	if err != nil {

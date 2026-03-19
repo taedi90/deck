@@ -17,6 +17,7 @@ import (
 	"github.com/taedi90/deck/internal/config"
 	"github.com/taedi90/deck/internal/fsutil"
 	"github.com/taedi90/deck/internal/workflowexec"
+	"github.com/taedi90/deck/internal/workflowexpr"
 	deckschemas "github.com/taedi90/deck/schemas"
 )
 
@@ -37,7 +38,15 @@ type componentFragment struct {
 }
 
 // File validates workflow structure and semantic rules.
+// It is a convenience wrapper for CLI-style callers that do not own a request context.
 func File(path string) error {
+	return FileWithContext(context.Background(), path)
+}
+
+func FileWithContext(ctx context.Context, path string) error {
+	if ctx == nil {
+		return fmt.Errorf("context is nil")
+	}
 	if path == "" {
 		return fmt.Errorf("file path is empty")
 	}
@@ -48,7 +57,16 @@ func File(path string) error {
 	return withWorkflowName(path, Bytes(path, content))
 }
 
+// Workspace validates every scenario entrypoint under a workflow root.
+// It is a convenience wrapper for callers that do not own a request context.
 func Workspace(root string) ([]string, error) {
+	return WorkspaceWithContext(context.Background(), root)
+}
+
+func WorkspaceWithContext(ctx context.Context, root string) ([]string, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("context is nil")
+	}
 	resolvedRoot := strings.TrimSpace(root)
 	if resolvedRoot == "" {
 		resolvedRoot = "."
@@ -103,7 +121,7 @@ func Workspace(root string) ([]string, error) {
 	validated := make([]string, 0)
 	visited := map[string]bool{}
 	for _, path := range files {
-		validatedFiles, err := lintLocalEntrypoint(path, nil, visited)
+		validatedFiles, err := lintLocalEntrypoint(ctx, path, nil, visited)
 		if err != nil {
 			return nil, err
 		}
@@ -112,12 +130,21 @@ func Workspace(root string) ([]string, error) {
 	return dedupeAndSort(validated), nil
 }
 
+// Entrypoint validates a scenario entrypoint and its imported components.
+// It is a convenience wrapper for callers that do not own a request context.
 func Entrypoint(path string) ([]string, error) {
+	return EntrypointWithContext(context.Background(), path)
+}
+
+func EntrypointWithContext(ctx context.Context, path string) ([]string, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("context is nil")
+	}
 	absPath, err := filepath.Abs(strings.TrimSpace(path))
 	if err != nil {
 		return nil, fmt.Errorf("resolve workflow path: %w", err)
 	}
-	return lintLocalEntrypoint(absPath, nil, map[string]bool{})
+	return lintLocalEntrypoint(ctx, absPath, nil, map[string]bool{})
 }
 
 func Workflow(name string, wf *config.Workflow) error {
@@ -173,7 +200,7 @@ func withWorkflowName(name string, err error) error {
 	return fmt.Errorf("%s%w", prefix, err)
 }
 
-func lintLocalEntrypoint(path string, inheritedVars map[string]any, visiting map[string]bool) ([]string, error) {
+func lintLocalEntrypoint(ctx context.Context, path string, inheritedVars map[string]any, visiting map[string]bool) ([]string, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return nil, fmt.Errorf("resolve workflow path: %w", err)
@@ -212,7 +239,7 @@ func lintLocalEntrypoint(path string, inheritedVars map[string]any, visiting map
 	}
 
 	loadOpts := config.LoadOptions{VarOverrides: cloneAnyMap(inheritedVars)}
-	wf, err := config.LoadWithOptions(context.Background(), absPath, loadOpts)
+	wf, err := config.LoadWithOptions(ctx, absPath, loadOpts)
 	if err != nil {
 		return nil, withWorkflowName(absPath, err)
 	}
@@ -224,7 +251,7 @@ func lintLocalEntrypoint(path string, inheritedVars map[string]any, visiting map
 			if err != nil {
 				return nil, withWorkflowName(absPath, err)
 			}
-			files, err := lintLocalEntrypoint(child, wf.Vars, visiting)
+			files, err := lintLocalEntrypoint(ctx, child, wf.Vars, visiting)
 			if err != nil {
 				return nil, err
 			}
@@ -505,6 +532,11 @@ func validateSemantics(wf *config.Workflow) error {
 			}
 		}
 
+		if strings.TrimSpace(step.When) != "" {
+			if _, err := workflowexpr.CompileWhen(step.When); err != nil {
+				return fmt.Errorf("E_SCHEMA_INVALID: step %s (%s): invalid when expression: %v", step.ID, step.Kind, err)
+			}
+		}
 		if step.ID == "" {
 			continue
 		}

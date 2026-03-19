@@ -24,7 +24,7 @@ func Load(ctx context.Context, source string) (*Workflow, error) {
 
 func LoadWithOptions(ctx context.Context, source string, opts LoadOptions) (*Workflow, error) {
 	if ctx == nil {
-		ctx = context.Background()
+		return nil, fmt.Errorf("context is nil")
 	}
 	source = strings.TrimSpace(source)
 	if source == "" {

@@ -13,9 +13,13 @@ func toolSchemaDefinitions() (map[string]map[string]any, error) {
 	generated := make(map[string]map[string]any, len(defs))
 	generators := toolSchemaGenerators()
 	for _, def := range defs {
-		generator, ok := generators[def.Kind]
+		generatorName := def.ToolSchemaGenerator
+		if generatorName == "" {
+			generatorName = def.Kind
+		}
+		generator, ok := generators[generatorName]
 		if !ok {
-			return nil, fmt.Errorf("missing tool schema generator for %s", def.Kind)
+			return nil, fmt.Errorf("missing tool schema generator %q for %s", generatorName, def.Kind)
 		}
 		schema, err := generator()
 		if err != nil {
@@ -23,9 +27,17 @@ func toolSchemaDefinitions() (map[string]map[string]any, error) {
 		}
 		generated[def.SchemaFile] = schema
 	}
-	for kind := range generators {
-		if _, ok := workflowexec.StepContractForKind(kind); !ok {
-			return nil, fmt.Errorf("tool schema generator registered for unknown kind %s", kind)
+	usedGenerators := map[string]bool{}
+	for _, def := range defs {
+		name := def.ToolSchemaGenerator
+		if name == "" {
+			name = def.Kind
+		}
+		usedGenerators[name] = true
+	}
+	for name := range generators {
+		if !usedGenerators[name] {
+			return nil, fmt.Errorf("tool schema generator registered but unused: %s", name)
 		}
 	}
 	return generated, nil

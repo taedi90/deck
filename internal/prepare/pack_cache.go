@@ -118,20 +118,14 @@ func loadPackCacheState(path string) (packCacheState, error) {
 	raw, err := fsutil.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			legacyPath := ""
-			base := filepath.Base(path)
-			workflowSHA := strings.TrimSuffix(base, filepath.Ext(base))
-			legacyPath, err = legacyPackCacheStatePath(workflowSHA)
-			if err != nil {
-				return packCacheState{}, err
+			legacyRaw, found, legacyErr := loadLegacyPackCacheState(path)
+			if legacyErr != nil {
+				return packCacheState{}, legacyErr
 			}
-			raw, err = fsutil.ReadFile(legacyPath)
-			if err != nil {
-				if os.IsNotExist(err) {
-					return packCacheState{Artifacts: []packCacheArtifactState{}}, nil
-				}
-				return packCacheState{}, fmt.Errorf("read legacy pack cache state: %w", err)
+			if !found {
+				return packCacheState{Artifacts: []packCacheArtifactState{}}, nil
 			}
+			raw = legacyRaw
 		} else {
 			return packCacheState{}, fmt.Errorf("read pack cache state: %w", err)
 		}

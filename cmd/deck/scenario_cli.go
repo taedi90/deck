@@ -40,7 +40,7 @@ func newListCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return executeList(strings.TrimSpace(source), strings.TrimSpace(output))
+			return executeList(cmd.Context(), strings.TrimSpace(source), strings.TrimSpace(output))
 		},
 	}
 	cmd.Flags().String("source", scenarioSourceAll, "scenario source (local|server|all)")
@@ -49,7 +49,10 @@ func newListCommand() *cobra.Command {
 	return cmd
 }
 
-func executeList(source, output string) error {
+func executeList(ctx context.Context, source, output string) error {
+	if ctx == nil {
+		return fmt.Errorf("context is nil")
+	}
 	resolvedSource, err := normalizeScenarioSource(source, true)
 	if err != nil {
 		return err
@@ -62,7 +65,7 @@ func executeList(source, output string) error {
 		return err
 	}
 
-	entries, err := discoverScenarioEntries(resolvedSource)
+	entries, err := discoverScenarioEntries(ctx, resolvedSource)
 	if err != nil {
 		return err
 	}
@@ -84,7 +87,7 @@ func executeList(source, output string) error {
 	return nil
 }
 
-func discoverScenarioEntries(source string) ([]scenarioEntry, error) {
+func discoverScenarioEntries(ctx context.Context, source string) ([]scenarioEntry, error) {
 	entries := make([]scenarioEntry, 0)
 
 	if source == scenarioSourceLocal || source == scenarioSourceAll {
@@ -108,7 +111,7 @@ func discoverScenarioEntries(source string) ([]scenarioEntry, error) {
 			}
 			_ = verbosef(2, "deck: list server skipped error=%v\n", err)
 		case strings.TrimSpace(serverURL) != "":
-			serverEntries, err := discoverServerScenarioEntries(serverURL)
+			serverEntries, err := discoverServerScenarioEntries(ctx, serverURL)
 			if err != nil {
 				if source != scenarioSourceAll {
 					return nil, err
@@ -172,8 +175,8 @@ func discoverLocalScenarioEntries(root string) ([]scenarioEntry, error) {
 	return items, nil
 }
 
-func discoverServerScenarioEntries(serverURL string) ([]scenarioEntry, error) {
-	items, err := fetchScenarioIndexFromServer(serverURL)
+func discoverServerScenarioEntries(ctx context.Context, serverURL string) ([]scenarioEntry, error) {
+	items, err := fetchScenarioIndexFromServer(ctx, serverURL)
 	if err != nil {
 		return nil, err
 	}
@@ -270,10 +273,13 @@ func buildServerScenarioWorkflowURL(serverURL, scenario string) string {
 	return strings.TrimRight(strings.TrimSpace(serverURL), "/") + "/workflows/scenarios/" + strings.TrimLeft(scenario, "/") + ".yaml"
 }
 
-func fetchScenarioIndexFromServer(server string) ([]string, error) {
+func fetchScenarioIndexFromServer(ctx context.Context, server string) ([]string, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("context is nil")
+	}
 	trimmed := strings.TrimRight(server, "/")
 	indexURL := trimmed + "/workflows/index.json"
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, indexURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, indexURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("scenario list: build request: %w", err)
 	}
@@ -328,12 +334,12 @@ func registerScenarioNameCompletion(cmd *cobra.Command, flagName, sourceFlagName
 			}
 		}
 
-		items := completeScenarioNames(resolvedSource, localRoot, toComplete)
+		items := completeScenarioNames(cmd.Context(), resolvedSource, localRoot, toComplete)
 		return items, cobra.ShellCompDirectiveNoFileComp
 	})
 }
 
-func completeScenarioNames(source, localRoot, toComplete string) []string {
+func completeScenarioNames(ctx context.Context, source, localRoot, toComplete string) []string {
 	candidates := map[string]bool{}
 	if source == scenarioSourceLocal || source == scenarioSourceAll {
 		if entries, err := discoverLocalScenarioEntries(localRoot); err == nil {
@@ -346,7 +352,7 @@ func completeScenarioNames(source, localRoot, toComplete string) []string {
 	}
 	if source == scenarioSourceServer || source == scenarioSourceAll {
 		if serverURL, _, err := resolveSourceURL(""); err == nil && strings.TrimSpace(serverURL) != "" {
-			if entries, err := discoverServerScenarioEntries(serverURL); err == nil {
+			if entries, err := discoverServerScenarioEntries(ctx, serverURL); err == nil {
 				for _, entry := range entries {
 					if strings.HasPrefix(entry.Name, toComplete) {
 						candidates[entry.Name] = true

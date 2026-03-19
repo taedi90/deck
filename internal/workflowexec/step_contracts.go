@@ -91,10 +91,11 @@ func InferStepAction(kind string, spec map[string]any) string {
 }
 
 func inferContractAction(kind string, spec map[string]any) string {
-	if spec != nil {
-		if raw, ok := spec["action"].(string); ok && raw != "" {
-			return raw
-		}
+	decoded, err := DecodeSpec[struct {
+		Action string `json:"action"`
+	}](spec)
+	if err == nil && decoded.Action != "" {
+		return decoded.Action
 	}
 	return ""
 }
