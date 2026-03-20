@@ -79,7 +79,7 @@ func TestAskConfigShowIncludesStoredAugmentSettings(t *testing.T) {
 		Model:    "gpt-5.4",
 		APIKey:   "secret-token",
 		LogLevel: "trace",
-		MCP:      askconfig.MCP{Enabled: true, Servers: []askconfig.MCPServer{{Name: "context7", command: "context7-mcp"}}},
+		MCP:      askconfig.MCP{Enabled: true, Servers: []askconfig.MCPServer{{Name: "context7", RunCommand: "context7-mcp"}}},
 		LSP:      askconfig.LSP{Enabled: true, YAML: askconfig.LSPEntry{RunCommand: "yaml-language-server", Args: []string{"--stdio"}}},
 	}); err != nil {
 		t.Fatalf("save stored config: %v", err)

@@ -46,9 +46,9 @@ func buildManifest() Manifest {
 			ComponentDir:      pathJoin(workspacepaths.WorkflowRootDir, workspacepaths.WorkflowComponentsDir),
 			VarsPath:          pathJoin(workspacepaths.WorkflowRootDir, workspacepaths.WorkflowVarsRel),
 			AllowedPaths:      AllowedGeneratedPathPatterns(),
-			CanonicalPrepare:  pathJoin(workspacepaths.WorkflowRootDir, workspacepaths.CanonicalPrepareWorkflowRel),
+			CanonicalPrepare:  workspacepaths.CanonicalPrepareWorkflowRel,
 			CanonicalApply:    pathJoin(workspacepaths.WorkflowRootDir, workspacepaths.CanonicalApplyWorkflowRel),
-			GeneratedPathNote: "New ask-generated files must stay under workflows/scenarios/, workflows/components/, or workflows/vars.yaml.",
+			GeneratedPathNote: "New ask-generated files must stay under prepare.yaml, workflows/scenarios/, workflows/components/, or workflows/vars.yaml.",
 		},
 		Workflow: WorkflowRules{
 			Summary:          workflow.Summary,
@@ -63,9 +63,9 @@ func buildManifest() Manifest {
 				Role:        "prepare",
 				Summary:     "Prepare collects online inputs and produces offline-ready artifacts.",
 				WhenToUse:   "Use prepare when the request needs downloads, mirrored images, package caches, or bundle content created before apply.",
-				Prefer:      []string{"artifacts for bundle inventory", "download-oriented File or Image steps", "variables shared by later apply steps"},
+				Prefer:      []string{"download-oriented File, Image, and Package steps", "variables shared by later apply steps", "named phases when collection has multiple stages"},
 				Avoid:       []string{"live node reconfiguration that belongs in apply", "service management on the target node"},
-				OutputFiles: []string{pathJoin(workspacepaths.WorkflowRootDir, workspacepaths.CanonicalPrepareWorkflowRel), pathJoin(workspacepaths.WorkflowRootDir, workspacepaths.WorkflowVarsRel)},
+				OutputFiles: []string{workspacepaths.CanonicalPrepareWorkflowRel, pathJoin(workspacepaths.WorkflowRootDir, workspacepaths.WorkflowVarsRel)},
 			},
 			{
 				Role:        "apply",
@@ -95,7 +95,7 @@ func buildManifest() Manifest {
 }
 
 func AllowedGeneratedPathPatterns() []string {
-	return []string{"workflows/scenarios/*.yaml", "workflows/components/*.yaml", "workflows/vars.yaml"}
+	return []string{"prepare.yaml", "workflows/scenarios/*.yaml", "workflows/components/*.yaml", "workflows/vars.yaml"}
 }
 
 func AllowedGeneratedPath(path string) bool {
@@ -103,7 +103,7 @@ func AllowedGeneratedPath(path string) bool {
 	if clean == "" || strings.Contains(clean, "..") {
 		return false
 	}
-	return strings.HasPrefix(clean, "workflows/scenarios/") || strings.HasPrefix(clean, "workflows/components/") || clean == "workflows/vars.yaml"
+	return clean == "prepare.yaml" || strings.HasPrefix(clean, "workflows/scenarios/") || strings.HasPrefix(clean, "workflows/components/") || clean == "workflows/vars.yaml"
 }
 
 func buildStepKinds() []StepKindContext {
