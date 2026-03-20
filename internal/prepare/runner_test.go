@@ -26,7 +26,7 @@ import (
 func nilContextForPrepareTest() context.Context { return nil }
 
 func TestRun_PrepareArtifactAndManifest(t *testing.T) {
-	imageOps := stubImageDownloadOps()
+	imageOps := stubDownloadImageOps()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("hello-download-file"))
@@ -46,29 +46,29 @@ func TestRun_PrepareArtifactAndManifest(t *testing.T) {
 				Steps: []config.Step{
 					{
 						ID:   "download-file",
-						Kind: "FileDownload",
+						Kind: "DownloadFile",
 						Spec: map[string]any{
-							"source": map[string]any{"url": server.URL + "/artifact"},
-							"output": map[string]any{"path": "files/artifact.bin"},
+							"source":     map[string]any{"url": server.URL + "/artifact"},
+							"outputPath": "files/artifact.bin",
 						},
 					},
 					{
 						ID:   "download-os-packages",
-						Kind: "PackageDownload",
+						Kind: "DownloadPackage",
 						Spec: map[string]any{
 							"packages": []any{"containerd", "iptables"},
 						},
 					},
 					{
 						ID:   "download-k8s-packages",
-						Kind: "PackageDownload",
+						Kind: "DownloadPackage",
 						Spec: map[string]any{
 							"packages": []any{"kubelet"},
 						},
 					},
 					{
 						ID:   "download-images",
-						Kind: "ImageDownload",
+						Kind: "DownloadImage",
 						Spec: map[string]any{
 							"images": []any{"registry.k8s.io/kube-apiserver:{{ .vars.kubernetesVersion }}"},
 						},
@@ -130,68 +130,15 @@ func TestRun_PrepareArtifactAndManifest(t *testing.T) {
 	}
 }
 
-func TestRun_PrepareArtifactGroupsExecution(t *testing.T) {
-	imageOps := stubImageDownloadOps()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte("hello-artifact-group"))
-	}))
-	defer server.Close()
-
-	bundle := t.TempDir()
-	wf := &config.Workflow{
-		Version: "v1",
-		Artifact: &config.ArtifactSpec{
-			Files: []config.ArtifactFileGroup{{
-				Group:     "binaries",
-				Execution: &config.ArtifactExecutionSpec{Parallelism: 2, Retry: 1},
-				Items: []config.ArtifactFileItem{{
-					ID:     "tool",
-					Source: config.ArtifactSource{URL: server.URL + "/tool"},
-					Output: config.ArtifactFileOutput{Path: "bin/tool"},
-				}},
-			}},
-			Images: []config.ArtifactImageGroup{{
-				Group:     "images",
-				Execution: &config.ArtifactExecutionSpec{Parallelism: 2},
-				Items:     []config.ArtifactImageItem{{Image: "registry.k8s.io/pause:3.9"}, {Image: "registry.k8s.io/coredns:v1.11.1"}},
-			}},
-			Packages: []config.ArtifactPackageGroup{{
-				Group:     "packages",
-				Execution: &config.ArtifactExecutionSpec{Parallelism: 2, Retry: 1},
-				Targets:   []config.ArtifactTarget{{OSFamily: "rhel", Release: "8"}, {OSFamily: "rhel", Release: "9"}},
-				Items:     []config.ArtifactPackageItem{{Name: "containerd"}},
-				Backend:   map[string]any{"mode": "container", "runtime": "docker", "image": "rockylinux:9"},
-				Repo:      map[string]any{"type": "yum"},
-			}},
-		},
-	}
-
-	if err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, CommandRunner: &fakeRunner{}, imageDownloadOps: imageOps}); err != nil {
-		t.Fatalf("Run failed: %v", err)
-	}
-
-	for _, rel := range []string{
-		"files/bin/tool",
-		"images/registry.k8s.io_pause_3.9.tar",
-		"images/registry.k8s.io_coredns_v1.11.1.tar",
-		"packages/yum/8/mock-package.rpm",
-		"packages/yum/9/mock-package.rpm",
-	} {
-		if _, err := os.Stat(filepath.Join(bundle, filepath.FromSlash(rel))); err != nil {
-			t.Fatalf("expected artifact %s: %v", rel, err)
-		}
-	}
-}
-
-func TestRun_NoPreparePhase(t *testing.T) {
+func TestRun_NoPrepareSteps(t *testing.T) {
 	wf := &config.Workflow{Version: "v1", Phases: []config.Phase{{Name: "install"}}}
 	if err := Run(context.Background(), wf, RunOptions{BundleRoot: t.TempDir()}); err == nil {
-		t.Fatalf("expected error when prepare phase is missing")
+		t.Fatalf("expected error when prepare workflow has no steps")
 	}
 }
 
 func TestRun_ContainerBackendsWithFakeRunner(t *testing.T) {
-	imageOps := stubImageDownloadOps()
+	imageOps := stubDownloadImageOps()
 
 	bundle := t.TempDir()
 	r := &fakeRunner{}
@@ -203,7 +150,7 @@ func TestRun_ContainerBackendsWithFakeRunner(t *testing.T) {
 			Steps: []config.Step{
 				{
 					ID:   "pkg",
-					Kind: "PackageDownload",
+					Kind: "DownloadPackage",
 					Spec: map[string]any{
 						"packages": []any{"containerd"},
 						"backend": map[string]any{
@@ -215,7 +162,7 @@ func TestRun_ContainerBackendsWithFakeRunner(t *testing.T) {
 				},
 				{
 					ID:   "img",
-					Kind: "ImageDownload",
+					Kind: "DownloadImage",
 					Spec: map[string]any{
 						"images": []any{"registry.k8s.io/kube-apiserver:v1.30.1"},
 						"backend": map[string]any{
@@ -239,19 +186,19 @@ func TestRun_ContainerBackendsWithFakeRunner(t *testing.T) {
 	}
 }
 
-func TestRun_ImageDownloadUsesOutputDir(t *testing.T) {
+func TestRun_DownloadImageUsesOutputDir(t *testing.T) {
 	bundle := t.TempDir()
-	imageOps := stubImageDownloadOps()
+	imageOps := stubDownloadImageOps()
 	wf := &config.Workflow{
 		Version: "v1",
 		Phases: []config.Phase{{
 			Name: "prepare",
 			Steps: []config.Step{{
 				ID:   "img",
-				Kind: "ImageDownload",
+				Kind: "DownloadImage",
 				Spec: map[string]any{
-					"images": []any{"registry.k8s.io/kube-apiserver:v1.30.1"},
-					"output": map[string]any{"dir": "images/control-plane"},
+					"images":    []any{"registry.k8s.io/kube-apiserver:v1.30.1"},
+					"outputDir": "images/control-plane",
 				},
 			}},
 		}},
@@ -265,7 +212,7 @@ func TestRun_ImageDownloadUsesOutputDir(t *testing.T) {
 	}
 }
 
-func stubImageDownloadOps() imageDownloadOps {
+func stubDownloadImageOps() imageDownloadOps {
 	return imageDownloadOps{
 		parseReference: func(v string) (name.Reference, error) {
 			return name.ParseReference(v, name.WeakValidation)
@@ -290,7 +237,7 @@ func TestRun_PackagesContainerBackend(t *testing.T) {
 			Steps: []config.Step{
 				{
 					ID:   "k8s-pkgs",
-					Kind: "PackageDownload",
+					Kind: "DownloadPackage",
 					Spec: map[string]any{
 						"packages": []any{"kubelet", "kubeadm"},
 						"backend": map[string]any{
@@ -323,7 +270,7 @@ func TestRun_PackagesContainerRuntimeMissing(t *testing.T) {
 			Steps: []config.Step{
 				{
 					ID:   "pkg",
-					Kind: "PackageDownload",
+					Kind: "DownloadPackage",
 					Spec: map[string]any{
 						"packages": []any{"containerd"},
 						"backend": map[string]any{
@@ -356,7 +303,7 @@ func TestRun_PackagesContainerNoArtifact(t *testing.T) {
 			Steps: []config.Step{
 				{
 					ID:   "pkg",
-					Kind: "PackageDownload",
+					Kind: "DownloadPackage",
 					Spec: map[string]any{
 						"packages": []any{"containerd"},
 						"backend": map[string]any{
@@ -379,7 +326,7 @@ func TestRun_PackagesContainerNoArtifact(t *testing.T) {
 	}
 }
 
-func TestRun_PackageDownloadUsesOutputDir(t *testing.T) {
+func TestRun_DownloadPackageUsesOutputDir(t *testing.T) {
 	bundle := t.TempDir()
 	wf := &config.Workflow{
 		Version: "v1",
@@ -387,10 +334,10 @@ func TestRun_PackageDownloadUsesOutputDir(t *testing.T) {
 			Name: "prepare",
 			Steps: []config.Step{{
 				ID:   "pkg",
-				Kind: "PackageDownload",
+				Kind: "DownloadPackage",
 				Spec: map[string]any{
-					"packages": []any{"containerd"},
-					"output":   map[string]any{"dir": "packages/custom"},
+					"packages":  []any{"containerd"},
+					"outputDir": "packages/custom",
 				},
 			}},
 		}},
@@ -425,7 +372,7 @@ func TestRun_FileFallbackLocalThenBundle(t *testing.T) {
 			Name: "prepare",
 			Steps: []config.Step{{
 				ID:   "download-file",
-				Kind: "FileDownload",
+				Kind: "DownloadFile",
 				Spec: map[string]any{
 					"source": map[string]any{
 						"path":   relSource,
@@ -438,7 +385,7 @@ func TestRun_FileFallbackLocalThenBundle(t *testing.T) {
 							map[string]any{"type": "bundle", "path": bundleCache},
 						},
 					},
-					"output": map[string]any{"path": "files/fetched.bin"},
+					"outputPath": "files/fetched.bin",
 				},
 			}},
 		}},
@@ -466,7 +413,7 @@ func TestRun_FileFallbackSourceMissing(t *testing.T) {
 			Name: "prepare",
 			Steps: []config.Step{{
 				ID:   "download-file",
-				Kind: "FileDownload",
+				Kind: "DownloadFile",
 				Spec: map[string]any{
 					"source": map[string]any{
 						"path": "files/missing.bin",
@@ -475,7 +422,7 @@ func TestRun_FileFallbackSourceMissing(t *testing.T) {
 						"strategy": "fallback",
 						"sources":  []any{map[string]any{"type": "local", "path": t.TempDir()}},
 					},
-					"output": map[string]any{"path": "files/out.bin"},
+					"outputPath": "files/out.bin",
 				},
 			}},
 		}},
@@ -539,7 +486,7 @@ func TestRun_FileFallbackRepoThenOnline(t *testing.T) {
 			Name: "prepare",
 			Steps: []config.Step{{
 				ID:   "download-file",
-				Kind: "FileDownload",
+				Kind: "DownloadFile",
 				Spec: map[string]any{
 					"source": map[string]any{
 						"path": "files/remote.bin",
@@ -551,7 +498,7 @@ func TestRun_FileFallbackRepoThenOnline(t *testing.T) {
 							map[string]any{"type": "online", "url": online.URL},
 						},
 					},
-					"output": map[string]any{"path": "files/fetched-online.bin"},
+					"outputPath": "files/fetched-online.bin",
 				},
 			}},
 		}},
@@ -584,7 +531,7 @@ func TestRun_FileOfflinePolicyBlocksOnlineFallback(t *testing.T) {
 			Name: "prepare",
 			Steps: []config.Step{{
 				ID:   "download-file",
-				Kind: "FileDownload",
+				Kind: "DownloadFile",
 				Spec: map[string]any{
 					"source": map[string]any{
 						"path": "files/not-found.bin",
@@ -595,7 +542,7 @@ func TestRun_FileOfflinePolicyBlocksOnlineFallback(t *testing.T) {
 						"strategy":    "fallback",
 						"sources":     []any{map[string]any{"type": "online", "url": server.URL}},
 					},
-					"output": map[string]any{"path": "files/out.bin"},
+					"outputPath": "files/out.bin",
 				},
 			}},
 		}},
@@ -624,11 +571,11 @@ func TestRun_FileOfflinePolicyBlocksDirectURL(t *testing.T) {
 			Name: "prepare",
 			Steps: []config.Step{{
 				ID:   "download-file",
-				Kind: "FileDownload",
+				Kind: "DownloadFile",
 				Spec: map[string]any{
-					"source": map[string]any{"url": server.URL + "/files/a.bin"},
-					"fetch":  map[string]any{"offlineOnly": true},
-					"output": map[string]any{"path": "files/out.bin"},
+					"source":     map[string]any{"url": server.URL + "/files/a.bin"},
+					"fetch":      map[string]any{"offlineOnly": true},
+					"outputPath": "files/out.bin",
 				},
 			}},
 		}},
@@ -664,32 +611,32 @@ func TestRun_WhenAndRegisterSemantics(t *testing.T) {
 			Steps: []config.Step{
 				{
 					ID:   "download-a",
-					Kind: "FileDownload",
+					Kind: "DownloadFile",
 					Spec: map[string]any{
-						"source": map[string]any{"path": sourceRel},
-						"fetch":  map[string]any{"sources": []any{map[string]any{"type": "local", "path": localCache}}},
-						"output": map[string]any{"path": "files/a-out.bin"},
+						"source":     map[string]any{"path": sourceRel},
+						"fetch":      map[string]any{"sources": []any{map[string]any{"type": "local", "path": localCache}}},
+						"outputPath": "files/a-out.bin",
 					},
-					Register: map[string]string{"downloaded": "path"},
+					Register: map[string]string{"downloaded": "outputPath"},
 				},
 				{
 					ID:   "download-b",
-					Kind: "FileDownload",
+					Kind: "DownloadFile",
 					When: "vars.role == \"control-plane\"",
 					Spec: map[string]any{
-						"source": map[string]any{"path": "{{ .runtime.downloaded }}"},
-						"fetch":  map[string]any{"sources": []any{map[string]any{"type": "bundle", "path": bundle}}},
-						"output": map[string]any{"path": "files/b-out.bin"},
+						"source":     map[string]any{"path": "{{ .runtime.downloaded }}"},
+						"fetch":      map[string]any{"sources": []any{map[string]any{"type": "bundle", "path": bundle}}},
+						"outputPath": "files/b-out.bin",
 					},
 				},
 				{
 					ID:   "skip-worker-only",
-					Kind: "FileDownload",
+					Kind: "DownloadFile",
 					When: "vars.role == \"worker\"",
 					Spec: map[string]any{
-						"source": map[string]any{"path": sourceRel},
-						"fetch":  map[string]any{"sources": []any{map[string]any{"type": "local", "path": localCache}}},
-						"output": map[string]any{"path": "files/skip.bin"},
+						"source":     map[string]any{"path": sourceRel},
+						"fetch":      map[string]any{"sources": []any{map[string]any{"type": "local", "path": localCache}}},
+						"outputPath": "files/skip.bin",
 					},
 				},
 			},
@@ -721,7 +668,7 @@ func TestRun_RetrySemantics(t *testing.T) {
 				Name: "prepare",
 				Steps: []config.Step{{
 					ID:    "retry-packages",
-					Kind:  "PackageDownload",
+					Kind:  "DownloadPackage",
 					Retry: 1,
 					Spec: map[string]any{
 						"packages": []any{"containerd"},
@@ -752,12 +699,12 @@ func TestRun_RetrySemantics(t *testing.T) {
 				Name: "prepare",
 				Steps: []config.Step{{
 					ID:    "retry-fail",
-					Kind:  "FileDownload",
+					Kind:  "DownloadFile",
 					Retry: 1,
 					Spec: map[string]any{
-						"source": map[string]any{"path": "files/missing.bin"},
-						"fetch":  map[string]any{"sources": []any{map[string]any{"type": "local", "path": t.TempDir()}}},
-						"output": map[string]any{"path": "files/retry-fail.bin"},
+						"source":     map[string]any{"path": "files/missing.bin"},
+						"fetch":      map[string]any{"sources": []any{map[string]any{"type": "local", "path": t.TempDir()}}},
+						"outputPath": "files/retry-fail.bin",
 					},
 				}},
 			}},
@@ -782,7 +729,7 @@ func TestRun_WhenInvalidExpression(t *testing.T) {
 			Name: "prepare",
 			Steps: []config.Step{{
 				ID:   "bad-when",
-				Kind: "PackageDownload",
+				Kind: "DownloadPackage",
 				When: "vars.role = \"worker\"",
 				Spec: map[string]any{"packages": []any{"containerd"}},
 			}},
@@ -834,8 +781,8 @@ func TestWhen_NamespaceEnforced(t *testing.T) {
 	}
 }
 
-func TestRunPrepareStep_FileDownloadDecodeError(t *testing.T) {
-	_, _, err := runPrepareStep(context.Background(), &fakeRunner{}, t.TempDir(), "FileDownload", map[string]any{"source": 42}, RunOptions{})
+func TestRunPrepareStep_DownloadFileDecodeError(t *testing.T) {
+	_, _, err := runPrepareStep(context.Background(), &fakeRunner{}, t.TempDir(), "DownloadFile", map[string]any{"source": 42}, RunOptions{})
 	if err == nil {
 		t.Fatalf("expected decode error")
 	}
@@ -857,7 +804,7 @@ func TestDownloadURLToFile_RejectsNilContext(t *testing.T) {
 	}
 }
 
-func TestRun_HostCheckStep(t *testing.T) {
+func TestRun_CheckHostStep(t *testing.T) {
 	t.Run("pass and register", func(t *testing.T) {
 		bundle := t.TempDir()
 		wf := &config.Workflow{
@@ -868,7 +815,7 @@ func TestRun_HostCheckStep(t *testing.T) {
 				Steps: []config.Step{
 					{
 						ID:       "host-check",
-						Kind:     "HostCheck",
+						Kind:     "CheckHost",
 						Register: map[string]string{"hostPassed": "passed"},
 						Spec: map[string]any{
 							"checks":   []any{"os", "arch", "binaries"},
@@ -877,7 +824,7 @@ func TestRun_HostCheckStep(t *testing.T) {
 					},
 					{
 						ID:   "runtime-branch",
-						Kind: "PackageDownload",
+						Kind: "DownloadPackage",
 						When: "runtime.hostPassed == true && vars.want == \"ok\" && runtime.host.os.family == \"debian\" && runtime.host.arch == \"arm64\"",
 						Spec: map[string]any{
 							"packages": []any{"containerd"},
@@ -920,7 +867,7 @@ func TestRun_HostCheckStep(t *testing.T) {
 				Name: "prepare",
 				Steps: []config.Step{{
 					ID:   "host-check",
-					Kind: "HostCheck",
+					Kind: "CheckHost",
 					Spec: map[string]any{
 						"checks":   []any{"os", "arch", "binaries", "swap", "kernelModules"},
 						"binaries": []any{"missing-bin"},
@@ -968,7 +915,7 @@ func TestRun_PackagesKubernetesSetRepoModeAptFlatGeneratesMetadata(t *testing.T)
 			Name: "prepare",
 			Steps: []config.Step{{
 				ID:   "pkgs",
-				Kind: "PackageDownload",
+				Kind: "DownloadPackage",
 				Spec: map[string]any{
 					"packages": []any{"containerd"},
 					"distro": map[string]any{
@@ -1013,7 +960,7 @@ func TestRun_PackagesKubernetesSetRepoModeYumGeneratesRepodata(t *testing.T) {
 			Name: "prepare",
 			Steps: []config.Step{{
 				ID:   "pkgs",
-				Kind: "PackageDownload",
+				Kind: "DownloadPackage",
 				Spec: map[string]any{
 					"packages": []any{"containerd"},
 					"distro": map[string]any{
@@ -1190,8 +1137,8 @@ func TestTemplate_RenderVarsAndRuntime(t *testing.T) {
 	runtimeVars := map[string]any{"downloaded": "files/a.bin"}
 
 	rendered, err := renderSpec(map[string]any{
-		"source": map[string]any{"path": "{{ .runtime.downloaded }}"},
-		"output": map[string]any{"path": "files/{{ .vars.kubernetesVersion }}.bin"},
+		"source":     map[string]any{"path": "{{ .runtime.downloaded }}"},
+		"outputPath": "files/{{ .vars.kubernetesVersion }}.bin",
 		"images": []any{
 			"{{ .vars.registry.host }}/kube-apiserver:{{ .vars.kubernetesVersion }}",
 			map[string]any{"tag": "{{ .runtime.downloaded }}"},
@@ -1206,9 +1153,9 @@ func TestTemplate_RenderVarsAndRuntime(t *testing.T) {
 	if !ok || source["path"] != "files/a.bin" {
 		t.Fatalf("unexpected rendered source: %#v", rendered["source"])
 	}
-	output, ok := rendered["output"].(map[string]any)
-	if !ok || output["path"] != "files/v1.30.1.bin" {
-		t.Fatalf("unexpected rendered output: %#v", rendered["output"])
+	outputPath, ok := rendered["outputPath"].(string)
+	if !ok || outputPath != "files/v1.30.1.bin" {
+		t.Fatalf("unexpected rendered output: %#v", rendered["outputPath"])
 	}
 	images, ok := rendered["images"].([]any)
 	if !ok {

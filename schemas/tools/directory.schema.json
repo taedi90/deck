@@ -11,7 +11,7 @@
       "type": "string"
     },
     "kind": {
-      "const": "Directory"
+      "const": "EnsureDirectory"
     },
     "metadata": {
       "additionalProperties": true,
@@ -60,7 +60,7 @@
     "kind",
     "spec"
   ],
-  "title": "DirectoryStep",
+  "title": "EnsureDirectoryStep",
   "type": "object",
   "x-deck-visibility": "public"
 }

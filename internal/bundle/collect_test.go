@@ -27,7 +27,7 @@ func TestCollectArchive(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(root, "outputs", "files", "a.txt"), []byte("hello"), 0o644); err != nil {
 			t.Fatalf("write output file: %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "apply.yaml"), []byte("role: apply\nversion: v1alpha1\nsteps: []\n"), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "apply.yaml"), []byte("version: v1alpha1\nsteps: []\n"), 0o644); err != nil {
 			t.Fatalf("write workflow: %v", err)
 		}
 		if err := os.WriteFile(filepath.Join(root, "deck"), []byte("bin"), 0o755); err != nil {

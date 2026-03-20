@@ -119,7 +119,7 @@ func TestPromptBlocksIncludeCoreAuthoringGuidance(t *testing.T) {
 		CLIHintsBlock(),
 	}
 	joined := strings.Join(blocks, "\n")
-	for _, want := range []string{"workflows/components/", "workflows/vars.yaml", "prepare", "apply", "Prefer typed steps over Command"} {
+	for _, want := range []string{"workflows/components/", "workflows/vars.yaml", "prepare", "apply", "Prefer typed steps over RunCommand"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("expected %q in prompt blocks, got %q", want, joined)
 		}
@@ -135,11 +135,11 @@ func TestRelevantStepKindsMatchesDockerRequest(t *testing.T) {
 	for _, step := range relevant {
 		joined = append(joined, step.Kind)
 	}
-	if !contains(joined, "PackageInstall") {
+	if !contains(joined, "InstallPackage") {
 		t.Fatalf("expected packages.install in relevant steps, got %v", joined)
 	}
-	if !contains(joined, "RepositoryConfigure") {
-		t.Fatalf("expected RepositoryConfigure in relevant steps, got %v", joined)
+	if !contains(joined, "ConfigureRepository") {
+		t.Fatalf("expected ConfigureRepository in relevant steps, got %v", joined)
 	}
 }
 
@@ -152,8 +152,8 @@ func TestRelevantStepKindsBlockIncludesTypedShapeGuidance(t *testing.T) {
 		"spec.repositories",
 		"spec.source",
 		"spec.format",
-		"PackageInstall",
-		"RepositoryConfigure",
+		"InstallPackage",
+		"ConfigureRepository",
 	} {
 		if !strings.Contains(block, want) {
 			t.Fatalf("expected %q in typed step guidance block, got %q", want, block)

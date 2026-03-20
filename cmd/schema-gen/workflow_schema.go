@@ -21,13 +21,12 @@ func generateWorkflowSchema() (map[string]any, error) {
 	root["description"] = "Top-level workflow schema for deck workflows."
 	root["type"] = "object"
 	root["additionalProperties"] = false
-	root["required"] = []any{"role", "version"}
+	root["required"] = []any{"version"}
 	root["not"] = map[string]any{"allOf": []any{
 		map[string]any{"required": []any{"phases"}},
 		map[string]any{"required": []any{"steps"}},
 	}}
 	root["anyOf"] = []any{
-		map[string]any{"required": []any{"artifacts"}},
 		map[string]any{"required": []any{"phases"}},
 		map[string]any{"required": []any{"steps"}},
 	}
@@ -38,13 +37,10 @@ func generateWorkflowSchema() (map[string]any, error) {
 	}
 
 	props := propertyMap(root)
-	setMap(props, "role", map[string]any{"type": "string", "enum": []any{"prepare", "apply"}})
 	setMap(props, "version", map[string]any{"type": "string", "const": "v1alpha1"})
 	mergeMap(props, "vars", map[string]any{"type": "object", "additionalProperties": true, "default": map[string]any{}})
-	mergeMap(props, "artifacts", map[string]any{"description": "Declarative prepare artifact inventory. Prefer this over legacy prepare download steps in new role: prepare workflows."})
 	setMap(props, "steps", map[string]any{"type": "array", "minItems": 1, "items": stepBaseSchema()})
 	setMap(props, "phases", map[string]any{"type": "array", "minItems": 1, "items": phases})
-	patchArtifactSchema(props["artifacts"])
 
 	return root, nil
 }
@@ -176,139 +172,6 @@ func registerValueSchema(outputs []string) map[string]any {
 	return root
 }
 
-func patchArtifactSchema(node any) {
-	artifacts, ok := node.(map[string]any)
-	if !ok {
-		return
-	}
-	artifacts["type"] = "object"
-	artifacts["additionalProperties"] = false
-	artifacts["properties"] = map[string]any{
-		"files":    map[string]any{"type": "array", "items": artifactFileGroupSchema()},
-		"images":   map[string]any{"type": "array", "items": artifactImageGroupSchema()},
-		"packages": map[string]any{"type": "array", "items": artifactPackageGroupSchema()},
-	}
-}
-
-func artifactTargetSchema() map[string]any {
-	return map[string]any{
-		"type":                 "object",
-		"additionalProperties": false,
-		"properties": map[string]any{
-			"os":       map[string]any{"type": "string", "minLength": 1},
-			"osFamily": map[string]any{"type": "string", "minLength": 1},
-			"release":  map[string]any{"type": "string", "minLength": 1},
-			"arch":     map[string]any{"type": "string", "minLength": 1},
-		},
-	}
-}
-
-func artifactFileGroupSchema() map[string]any {
-	return map[string]any{
-		"type":                 "object",
-		"additionalProperties": false,
-		"required":             []any{"group", "items"},
-		"properties": map[string]any{
-			"group":     map[string]any{"type": "string", "minLength": 1},
-			"targets":   map[string]any{"type": "array", "items": artifactTargetSchema()},
-			"items":     map[string]any{"type": "array", "minItems": 1, "items": artifactFileItemSchema()},
-			"execution": artifactExecutionSchema(),
-		},
-	}
-}
-
-func artifactFileItemSchema() map[string]any {
-	return map[string]any{
-		"description":          "One file artifact to place under the bundle files/ root.",
-		"type":                 "object",
-		"additionalProperties": false,
-		"required":             []any{"id", "source", "output"},
-		"properties": map[string]any{
-			"id": map[string]any{"type": "string", "minLength": 1},
-			"source": map[string]any{
-				"type":                 "object",
-				"additionalProperties": false,
-				"properties": map[string]any{
-					"url":    map[string]any{"type": "string", "minLength": 1},
-					"path":   map[string]any{"type": "string", "minLength": 1},
-					"sha256": map[string]any{"type": "string", "minLength": 1},
-				},
-				"oneOf": []any{
-					map[string]any{"required": []any{"url"}},
-					map[string]any{"required": []any{"path"}},
-				},
-			},
-			"output": map[string]any{
-				"description":          "Bundle file output. path is relative to the files/ root and must not start with files/.",
-				"type":                 "object",
-				"additionalProperties": false,
-				"required":             []any{"path"},
-				"properties": map[string]any{
-					"path": map[string]any{"type": "string", "minLength": 1},
-					"mode": map[string]any{"type": "string", "pattern": "^[0-7]{4}$"},
-				},
-			},
-			"checksum": map[string]any{"type": "string", "minLength": 1},
-			"mode":     map[string]any{"type": "string", "pattern": "^[0-7]{4}$"},
-		},
-	}
-}
-
-func artifactImageGroupSchema() map[string]any {
-	return map[string]any{
-		"description":          "A grouped set of images to collect during prepare.",
-		"type":                 "object",
-		"additionalProperties": false,
-		"required":             []any{"group", "items"},
-		"properties": map[string]any{
-			"group":     map[string]any{"type": "string", "minLength": 1},
-			"targets":   map[string]any{"type": "array", "items": artifactTargetSchema()},
-			"backend":   map[string]any{"type": "object", "additionalProperties": true},
-			"output":    map[string]any{"type": "object", "additionalProperties": true},
-			"execution": artifactExecutionSchema(),
-			"items": map[string]any{"type": "array", "minItems": 1, "items": map[string]any{
-				"type":                 "object",
-				"additionalProperties": false,
-				"required":             []any{"image"},
-				"properties":           map[string]any{"image": map[string]any{"type": "string", "minLength": 1}},
-			}},
-		},
-	}
-}
-
-func artifactPackageGroupSchema() map[string]any {
-	return map[string]any{
-		"description":          "A grouped set of packages for one or more OS targets to collect during prepare.",
-		"type":                 "object",
-		"additionalProperties": false,
-		"required":             []any{"group", "targets", "items"},
-		"properties": map[string]any{
-			"group":     map[string]any{"type": "string", "minLength": 1},
-			"targets":   map[string]any{"type": "array", "minItems": 1, "items": artifactTargetSchema()},
-			"repo":      map[string]any{"type": "object", "additionalProperties": true},
-			"backend":   map[string]any{"type": "object", "additionalProperties": true},
-			"execution": artifactExecutionSchema(),
-			"items": map[string]any{"type": "array", "minItems": 1, "items": map[string]any{
-				"type":                 "object",
-				"additionalProperties": false,
-				"required":             []any{"name"},
-				"properties":           map[string]any{"name": map[string]any{"type": "string", "minLength": 1}},
-			}},
-		},
-	}
-}
-
-func artifactExecutionSchema() map[string]any {
-	return map[string]any{
-		"type":                 "object",
-		"additionalProperties": false,
-		"properties": map[string]any{
-			"parallelism": map[string]any{"type": "integer", "minimum": 1},
-			"retry":       map[string]any{"type": "integer", "minimum": 0},
-		},
-	}
-}
-
 func stepEnvelopeSchema(kind, title, description, visibility string) map[string]any {
 	root := map[string]any{
 		"$schema":              "https://json-schema.org/draft/2020-12/schema",
@@ -335,98 +198,6 @@ func stepEnvelopeSchema(kind, title, description, visibility string) map[string]
 		},
 	}
 	return root
-}
-
-func artifactsToolSpecSchema() map[string]any {
-	return map[string]any{
-		"type":                 "object",
-		"additionalProperties": false,
-		"required":             []any{"artifacts"},
-		"properties": map[string]any{
-			"fetch": map[string]any{
-				"type":                 "object",
-				"additionalProperties": false,
-				"properties": map[string]any{
-					"offlineOnly": map[string]any{"type": "boolean", "default": false},
-					"strategy":    enumStringSchema("fallback"),
-					"sources": map[string]any{
-						"type": "array",
-						"items": map[string]any{
-							"type":                 "object",
-							"additionalProperties": false,
-							"required":             []any{"type"},
-							"anyOf": []any{
-								map[string]any{"required": []any{"path"}},
-								map[string]any{"required": []any{"url"}},
-							},
-							"properties": map[string]any{
-								"type": enumStringSchema("local", "bundle", "repo", "online"),
-								"path": minLenStringSchema(),
-								"url":  minLenStringSchema(),
-							},
-						},
-					},
-				},
-			},
-			"artifacts": map[string]any{
-				"type":     "array",
-				"minItems": 1,
-				"items": map[string]any{
-					"type":                 "object",
-					"additionalProperties": false,
-					"required":             []any{"source"},
-					"properties": map[string]any{
-						"source": map[string]any{
-							"type":                 "object",
-							"additionalProperties": false,
-							"required":             []any{"amd64", "arm64"},
-							"properties":           map[string]any{"amd64": map[string]any{"$ref": "#/$defs/artifactSource"}, "arm64": map[string]any{"$ref": "#/$defs/artifactSource"}},
-						},
-						"skipIfPresent": map[string]any{
-							"type":                 "object",
-							"additionalProperties": false,
-							"required":             []any{"path"},
-							"properties":           map[string]any{"path": minLenStringSchema(), "executable": map[string]any{"type": "boolean", "default": false}},
-						},
-						"install": map[string]any{
-							"type":                 "object",
-							"additionalProperties": false,
-							"required":             []any{"path"},
-							"properties":           map[string]any{"path": minLenStringSchema(), "mode": modeSchema()},
-						},
-						"extract": map[string]any{
-							"type":                 "object",
-							"additionalProperties": false,
-							"required":             []any{"destination"},
-							"properties":           map[string]any{"destination": minLenStringSchema(), "include": stringArraySchema(1, true), "mode": modeSchema()},
-						},
-					},
-					"oneOf": []any{
-						map[string]any{"required": []any{"install"}},
-						map[string]any{"required": []any{"extract"}},
-					},
-				},
-			},
-		},
-	}
-}
-
-func artifactSourceSchema() map[string]any {
-	return map[string]any{
-		"type":                 "object",
-		"additionalProperties": false,
-		"anyOf": []any{
-			map[string]any{"required": []any{"path"}},
-			map[string]any{"required": []any{"url"}},
-			map[string]any{"required": []any{"bundle"}},
-		},
-		"properties": map[string]any{
-			"path":   minLenStringSchema(),
-			"url":    minLenStringSchema(),
-			"sha256": sha256Schema(),
-			"bundle": bundleRefSchema(),
-		},
-	}
 }
 
 func bundleRefSchema() map[string]any {

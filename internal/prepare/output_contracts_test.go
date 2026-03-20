@@ -26,29 +26,29 @@ func TestRunPrepareStepOutputsCoverContracts(t *testing.T) {
 	}{
 		{
 			name:   "file download",
-			kind:   "FileDownload",
+			kind:   "DownloadFile",
 			spec:   map[string]any{"source": map[string]any{"path": localFile}},
 			runner: &noArtifactRunner{},
-			expect: []string{"path", "artifacts"},
+			expect: []string{"outputPath", "artifacts"},
 		},
 		{
 			name:   "packages download",
-			kind:   "PackageDownload",
+			kind:   "DownloadPackage",
 			spec:   map[string]any{"packages": []any{"containerd"}},
 			runner: &noArtifactRunner{},
 			expect: []string{"artifacts"},
 		},
 		{
 			name:   "image download",
-			kind:   "ImageDownload",
+			kind:   "DownloadImage",
 			spec:   map[string]any{"images": []any{"registry.k8s.io/pause:3.9"}},
 			runner: &noArtifactRunner{},
-			opts:   RunOptions{imageDownloadOps: stubImageDownloadOps()},
+			opts:   RunOptions{imageDownloadOps: stubDownloadImageOps()},
 			expect: []string{"artifacts"},
 		},
 		{
 			name:   "checks outputs",
-			kind:   "HostCheck",
+			kind:   "CheckHost",
 			spec:   map[string]any{"checks": []any{"os", "arch", "kernelModules"}},
 			runner: &noArtifactRunner{},
 			opts: RunOptions{checksRuntime: checksRuntime{

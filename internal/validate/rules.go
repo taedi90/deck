@@ -1,6 +1,6 @@
 package validate
 
-var workflowTopLevelModes = []string{"artifacts", "phases", "steps"}
+var workflowTopLevelModes = []string{"phases", "steps"}
 
 const (
 	workflowSupportedVersion = "v1alpha1"
@@ -27,9 +27,10 @@ func WorkflowImportRule() string {
 
 func WorkflowInvariantNotes() []string {
 	return []string{
-		"A workflow must define at least one of artifacts, phases, or steps.",
+		"A workflow must define at least one of phases or steps.",
 		"A workflow cannot define both top-level phases and top-level steps at the same time.",
 		workflowImportRule,
+		"Workflow mode is determined by command context or file location, not by an in-file role field.",
 		"Each step still validates against its own kind-specific schema after the top-level workflow schema passes.",
 	}
 }

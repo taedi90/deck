@@ -6,13 +6,13 @@ Reference for the `KernelModule` family of typed workflow steps.
 ## Summary
 
 - family: `kernel-module`
-- kinds: `KernelModule`
+- kinds: `ConfigureKernelModule`
 
 ## Shared Step Fields
 
 Shared step envelope fields such as `id`, `apiVersion`, `kind`, `when`, `retry`, `timeout`, `register`, and `metadata` are documented in [Workflow Schema](../workflow.md).
 
-## `KernelModule`
+## `ConfigureKernelModule`
 
 Load and persist kernel modules.
 
@@ -26,7 +26,7 @@ Use this for modules that must be present before networking or container runtime
 ### Example
 
 ```yaml
-kind: KernelModule
+kind: ConfigureKernelModule
 spec:
   name: br_netfilter
   load: true

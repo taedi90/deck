@@ -70,25 +70,6 @@ func analyzeWorkflow(path string, wf *config.Workflow) []Finding {
 	for _, phase := range wf.Phases {
 		findings = append(findings, analyzeSteps(path, phase.Name, phase.Steps)...)
 	}
-	if wf.Artifact != nil {
-		for _, group := range wf.Artifact.Files {
-			for _, item := range group.Items {
-				if strings.TrimSpace(item.Source.URL) == "" {
-					continue
-				}
-				if strings.TrimSpace(item.Source.SHA256) != "" || strings.TrimSpace(item.Checksum) != "" {
-					continue
-				}
-				findings = append(findings, Finding{
-					Severity: "warning",
-					Code:     "W_ARTIFACT_INTEGRITY_MISSING",
-					Message:  fmt.Sprintf("Remote artifact %q in group %q has no integrity check.", item.ID, group.Group),
-					Hint:     "Set source.sha256 or checksum for remote artifact inputs.",
-					Path:     path,
-				})
-			}
-		}
-	}
 	return findings
 }
 
@@ -101,13 +82,13 @@ func analyzeSteps(path string, phase string, steps []config.Step) []Finding {
 }
 
 func analyzeStep(path string, phase string, step config.Step) []Finding {
-	if !strings.EqualFold(strings.TrimSpace(step.Kind), "Command") {
+	if !strings.EqualFold(strings.TrimSpace(step.Kind), "RunCommand") {
 		return nil
 	}
 	return []Finding{{
 		Severity: "warning",
 		Code:     "W_COMMAND_OPAQUE",
-		Message:  "Command step relies on opaque shell behavior; deck cannot infer idempotency or side effects.",
+		Message:  "RunCommand step relies on opaque shell behavior; deck cannot infer idempotency or side effects.",
 		Hint:     "Prefer typed steps when available, or keep command steps small and explicit.",
 		Path:     path,
 		Phase:    strings.TrimSpace(phase),

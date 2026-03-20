@@ -63,15 +63,15 @@ func generationSystemPrompt(route askintent.Route, target askintent.Target, retr
 	b.WriteString("\n")
 	b.WriteString("- Never place summary, description, or review fields inside workflow YAML content.\n")
 	b.WriteString("- For a new workspace draft, prefer creating workflows/scenarios/apply.yaml and workflows/vars.yaml only when needed.\n")
-	b.WriteString("- If the request is simply to print text in the terminal, a minimal valid apply scenario with one Command step is acceptable.\n")
+	b.WriteString("- If the request is simply to print text in the terminal, a minimal valid apply scenario with one RunCommand step is acceptable.\n")
 	b.WriteString("- Do not use whole-value template expressions such as `{{ .vars.dockerPackages }}` for typed fields that expect arrays or objects; inline those YAML arrays or objects directly.\n")
 	b.WriteString("- Detailed topology, component/import guidance, vars guidance, and typed-step references are provided through retrieved context.\n")
 	b.WriteString("- Example valid minimal scenario YAML:\n")
-	b.WriteString("  role: apply\n")
+	b.WriteString("  ")
 	b.WriteString("  version: v1alpha1\n")
 	b.WriteString("  steps:\n")
 	b.WriteString("    - id: print-hello\n")
-	b.WriteString("      kind: Command\n")
+	b.WriteString("      kind: RunCommand\n")
 	b.WriteString("      spec:\n")
 	b.WriteString("        command:\n")
 	b.WriteString("          - echo\n")
@@ -167,7 +167,7 @@ func questionSystemPrompt(target askintent.Target, retrieval askretrieve.Retriev
 func explainSystemPrompt(target askintent.Target, retrieval askretrieve.RetrievalResult) string {
 	b := &strings.Builder{}
 	b.WriteString("You are deck ask explaining an existing deck workspace file or workflow.\n")
-	b.WriteString("Explain what the target does, how it fits into the workflow, and call out imports, phases, major step kinds, and Command usage when present.\n")
+	b.WriteString("Explain what the target does, how it fits into the workflow, and call out imports, phases, major step kinds, and RunCommand usage when present.\n")
 	b.WriteString("Do not give a shallow file count summary.\n")
 	b.WriteString("Return strict JSON with shape {\"summary\":string,\"answer\":string,\"suggestions\":[]string}.\n")
 	if target.Path != "" {

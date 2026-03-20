@@ -67,7 +67,7 @@ func TestClassifyWithLLMRetriesMalformedJSON(t *testing.T) {
 func TestGenerateWithValidationStopsOnRouteMismatch(t *testing.T) {
 	client := &stubClient{responses: []string{
 		`{"summary":"wrong route","review":[],"files":[]}`,
-		`{"summary":"should not retry","review":[],"files":[{"path":"workflows/scenarios/apply.yaml","content":"role: apply\nversion: v1alpha1\n"}]}`,
+		`{"summary":"should not retry","review":[],"files":[{"path":"workflows/scenarios/apply.yaml","content":"version: v1alpha1\n"}]}`,
 	}}
 	_, _, _, _, err := generateWithValidation(context.Background(), client, askprovider.Request{Kind: "generate", Provider: "openai", Model: "gpt-5.4", APIKey: "test-key"}, t.TempDir(), 2, newAskLogger(io.Discard, "trace"), askintent.Decision{Route: askintent.RouteDraft}, askcontract.PlanResponse{})
 	if err == nil {
@@ -84,7 +84,7 @@ func TestGenerateWithValidationStopsOnRouteMismatch(t *testing.T) {
 func TestGenerateWithValidationRetriesParseFailure(t *testing.T) {
 	client := &stubClient{responses: []string{
 		`not-json`,
-		`{"summary":"ok","review":[],"files":[{"path":"workflows/scenarios/apply.yaml","content":"role: apply\nversion: v1alpha1\nsteps:\n  - id: run\n    kind: Command\n    spec:\n      command: [\"true\"]\n"}]}`,
+		`{"summary":"ok","review":[],"files":[{"path":"workflows/scenarios/apply.yaml","content":"version: v1alpha1\nsteps:\n  - id: run\n    kind: RunCommand\n    spec:\n      command: [\"true\"]\n"}]}`,
 	}}
 	gen, _, _, retries, err := generateWithValidation(context.Background(), client, askprovider.Request{Kind: "generate", Provider: "openai", Model: "gpt-5.4", APIKey: "test-key", Prompt: "generate"}, t.TempDir(), 2, newAskLogger(io.Discard, "trace"), askintent.Decision{Route: askintent.RouteDraft}, askcontract.PlanResponse{})
 	if err != nil {
@@ -97,8 +97,8 @@ func TestGenerateWithValidationRetriesParseFailure(t *testing.T) {
 
 func TestGenerateWithValidationRepairsSemanticFailure(t *testing.T) {
 	client := &stubClient{responses: []string{
-		`{"summary":"missing vars","review":[],"files":[{"path":"workflows/scenarios/apply.yaml","content":"role: apply\nversion: v1alpha1\nsteps:\n  - id: run\n    kind: Command\n    spec:\n      command: [\"true\"]\n"}]}`,
-		`{"summary":"ok","review":[],"files":[{"path":"workflows/scenarios/apply.yaml","content":"role: apply\nversion: v1alpha1\nsteps:\n  - id: run\n    kind: Command\n    spec:\n      command: [\"true\"]\n"},{"path":"workflows/vars.yaml","content":"{}\n"}]}`,
+		`{"summary":"missing vars","review":[],"files":[{"path":"workflows/scenarios/apply.yaml","content":"version: v1alpha1\nsteps:\n  - id: run\n    kind: RunCommand\n    spec:\n      command: [\"true\"]\n"}]}`,
+		`{"summary":"ok","review":[],"files":[{"path":"workflows/scenarios/apply.yaml","content":"version: v1alpha1\nsteps:\n  - id: run\n    kind: RunCommand\n    spec:\n      command: [\"true\"]\n"},{"path":"workflows/vars.yaml","content":"{}\n"}]}`,
 	}}
 	plan := askcontract.PlanResponse{Files: []askcontract.PlanFile{{Path: "workflows/scenarios/apply.yaml", Action: "create"}, {Path: "workflows/vars.yaml", Action: "create"}}, ValidationChecklist: []string{"vars are defined"}}
 	gen, _, _, retries, err := generateWithValidation(context.Background(), client, askprovider.Request{Kind: "generate", Provider: "openai", Model: "gpt-5.4", APIKey: "test-key", Prompt: "generate"}, t.TempDir(), 2, newAskLogger(io.Discard, "trace"), askintent.Decision{Route: askintent.RouteDraft}, plan)
@@ -113,15 +113,15 @@ func TestGenerateWithValidationRepairsSemanticFailure(t *testing.T) {
 func TestLocalExplainDescribesScenarioStructure(t *testing.T) {
 	workspace := askretrieve.WorkspaceSummary{
 		Files: []askretrieve.WorkspaceFile{
-			{Path: "workflows/scenarios/apply.yaml", Content: "role: apply\nversion: v1alpha1\nphases:\n  - name: bootstrap\n    imports:\n      - path: bootstrap.yaml\n  - name: verify\n    steps:\n      - id: report\n        kind: Command\n        spec:\n          command: [bash, -lc, \"true\"]\n"},
-			{Path: "workflows/components/bootstrap.yaml", Content: "steps:\n  - id: step-one\n    kind: KubeadmInit\n    spec:\n"},
+			{Path: "workflows/scenarios/apply.yaml", Content: "version: v1alpha1\nphases:\n  - name: bootstrap\n    imports:\n      - path: bootstrap.yaml\n  - name: verify\n    steps:\n      - id: report\n        kind: RunCommand\n        spec:\n          command: [bash, -lc, \"true\"]\n"},
+			{Path: "workflows/components/bootstrap.yaml", Content: "steps:\n  - id: step-one\n    kind: InitKubeadm\n    spec:\n"},
 		},
 	}
 	summary, answer := localExplain(workspace, "explain apply", askintent.Target{Kind: "scenario", Path: "workflows/scenarios/apply.yaml", Name: "apply"})
 	if summary == "" {
 		t.Fatalf("expected explain summary")
 	}
-	for _, want := range []string{"role \"apply\"", "bootstrap, verify", "bootstrap.yaml", "Command x1", "Related component available: workflows/components/bootstrap.yaml"} {
+	for _, want := range []string{"version \"v1alpha1\"", "bootstrap, verify", "bootstrap.yaml", "RunCommand x1", "Related component available: workflows/components/bootstrap.yaml"} {
 		if !strings.Contains(answer, want) {
 			t.Fatalf("expected %q in answer, got %q", want, answer)
 		}
@@ -251,7 +251,7 @@ func TestLoadRequestTextFallsBackToPlanMarkdown(t *testing.T) {
 }
 
 func TestValidateSemanticGenerationRefineRejectsUnplannedFile(t *testing.T) {
-	gen := askcontract.GenerationResponse{Files: []askcontract.GeneratedFile{{Path: "workflows/scenarios/apply.yaml", Content: "role: apply\nversion: v1alpha1\nsteps:\n  - id: run\n    kind: Command\n    spec:\n      command: [\"true\"]\n"}, {Path: "workflows/components/new.yaml", Content: "steps: []\n"}}}
+	gen := askcontract.GenerationResponse{Files: []askcontract.GeneratedFile{{Path: "workflows/scenarios/apply.yaml", Content: "version: v1alpha1\nsteps:\n  - id: run\n    kind: RunCommand\n    spec:\n      command: [\"true\"]\n"}, {Path: "workflows/components/new.yaml", Content: "steps: []\n"}}}
 	plan := askcontract.PlanResponse{Files: []askcontract.PlanFile{{Path: "workflows/scenarios/apply.yaml", Action: "update"}}}
 	err := validateSemanticGeneration(gen, askintent.Decision{Route: askintent.RouteRefine}, plan)
 	if err == nil {
@@ -259,10 +259,10 @@ func TestValidateSemanticGenerationRefineRejectsUnplannedFile(t *testing.T) {
 	}
 }
 
-func TestRepoMapChunkIncludesImportsRoleAndKinds(t *testing.T) {
-	workspace := askretrieve.WorkspaceSummary{Files: []askretrieve.WorkspaceFile{{Path: "workflows/scenarios/apply.yaml", Content: "role: apply\nversion: v1alpha1\nphases:\n  - name: bootstrap\n    imports:\n      - path: bootstrap.yaml\nsteps:\n  - id: run\n    kind: Command\n    spec:\n      command: [\"true\"]\n"}}}
+func TestRepoMapChunkIncludesImportsModeAndKinds(t *testing.T) {
+	workspace := askretrieve.WorkspaceSummary{Files: []askretrieve.WorkspaceFile{{Path: "workflows/scenarios/apply.yaml", Content: "version: v1alpha1\nphases:\n  - name: bootstrap\n    imports:\n      - path: bootstrap.yaml\nsteps:\n  - id: run\n    kind: RunCommand\n    spec:\n      command: [\"true\"]\n"}}}
 	chunk := repoMapChunk(workspace)
-	for _, want := range []string{"role=apply", "imports=bootstrap.yaml", "steps=Command"} {
+	for _, want := range []string{"imports=bootstrap.yaml", "steps=RunCommand"} {
 		if !strings.Contains(chunk.Content, want) {
 			t.Fatalf("expected %q in repo map chunk, got %q", want, chunk.Content)
 		}
@@ -270,7 +270,7 @@ func TestRepoMapChunkIncludesImportsRoleAndKinds(t *testing.T) {
 }
 
 func TestPlanWorkspaceChunksIncludeImportedComponents(t *testing.T) {
-	workspace := askretrieve.WorkspaceSummary{Files: []askretrieve.WorkspaceFile{{Path: "workflows/scenarios/apply.yaml", Content: "role: apply\nversion: v1alpha1\nphases:\n  - name: bootstrap\n    imports:\n      - path: bootstrap.yaml\n"}, {Path: "workflows/components/bootstrap.yaml", Content: "steps:\n  - id: run\n    kind: Command\n    spec:\n      command: [\"true\"]\n"}}}
+	workspace := askretrieve.WorkspaceSummary{Files: []askretrieve.WorkspaceFile{{Path: "workflows/scenarios/apply.yaml", Content: "version: v1alpha1\nphases:\n  - name: bootstrap\n    imports:\n      - path: bootstrap.yaml\n"}, {Path: "workflows/components/bootstrap.yaml", Content: "steps:\n  - id: run\n    kind: RunCommand\n    spec:\n      command: [\"true\"]\n"}}}
 	plan := askcontract.PlanResponse{Files: []askcontract.PlanFile{{Path: "workflows/scenarios/apply.yaml", Action: "update"}}}
 	chunks := planWorkspaceChunks(plan, workspace)
 	if len(chunks) < 2 {

@@ -69,12 +69,12 @@ func newAskCommand() *cobra.Command {
 	cmd.Flags().StringVar(&planName, "plan-name", "", "optional plan artifact name used by ask plan")
 	cmd.Flags().StringVar(&planDir, "plan-dir", ".deck/plan", "directory for ask plan artifacts")
 
-	cmd.AddCommand(newAskPlanCommand())
-	cmd.AddCommand(newAskConfigCommand())
+	cmd.AddCommand(newAskPlanRunCommand())
+	cmd.AddCommand(newAskConfigRunCommand())
 	return cmd
 }
 
-func newAskPlanCommand() *cobra.Command {
+func newAskPlanRunCommand() *cobra.Command {
 	var fromPath string
 	var planName string
 	var planDir string
@@ -117,7 +117,7 @@ func newAskPlanCommand() *cobra.Command {
 	return cmd
 }
 
-func newAskConfigCommand() *cobra.Command {
+func newAskConfigRunCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
 		Short: askcontext.AskCommandMeta().Config.Short,
@@ -126,11 +126,11 @@ func newAskConfigCommand() *cobra.Command {
 			return cmd.Help()
 		},
 	}
-	cmd.AddCommand(newAskConfigSetCommand(), newAskConfigShowCommand(), newAskConfigUnsetCommand())
+	cmd.AddCommand(newAskConfigSetRunCommand(), newAskConfigShowRunCommand(), newAskConfigUnsetRunCommand())
 	return cmd
 }
 
-func newAskConfigSetCommand() *cobra.Command {
+func newAskConfigSetRunCommand() *cobra.Command {
 	var apiKey string
 	var provider string
 	var model string
@@ -183,7 +183,7 @@ func newAskConfigSetCommand() *cobra.Command {
 	return cmd
 }
 
-func newAskConfigShowCommand() *cobra.Command {
+func newAskConfigShowRunCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "show",
 		Short: "Show the effective ask provider, model, and masked key source",
@@ -229,7 +229,7 @@ func newAskConfigShowCommand() *cobra.Command {
 	return cmd
 }
 
-func newAskConfigUnsetCommand() *cobra.Command {
+func newAskConfigUnsetRunCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "unset",
 		Short: "Clear saved ask config settings from XDG config",

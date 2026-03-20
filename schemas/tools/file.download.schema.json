@@ -11,7 +11,7 @@
       "type": "string"
     },
     "kind": {
-      "const": "FileDownload"
+      "const": "DownloadFile"
     },
     "metadata": {
       "additionalProperties": true,
@@ -83,19 +83,13 @@
           },
           "type": "object"
         },
-        "output": {
-          "additionalProperties": false,
-          "properties": {
-            "chmod": {
-              "pattern": "^[0-7]{4}$",
-              "type": "string"
-            },
-            "path": {
-              "minLength": 1,
-              "type": "string"
-            }
-          },
-          "type": "object"
+        "mode": {
+          "pattern": "^[0-7]{4}$",
+          "type": "string"
+        },
+        "outputPath": {
+          "minLength": 1,
+          "type": "string"
         },
         "source": {
           "additionalProperties": false,
@@ -173,7 +167,7 @@
     "kind",
     "spec"
   ],
-  "title": "FileDownloadStep",
+  "title": "DownloadFileStep",
   "type": "object",
   "x-deck-visibility": "public"
 }

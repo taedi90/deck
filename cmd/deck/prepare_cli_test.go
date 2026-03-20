@@ -17,33 +17,8 @@ func TestRunPrepareCreatesPreparedBundleDir(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(workflowsDir, "components"), 0o755); err != nil {
 		t.Fatalf("mkdir workflows: %v", err)
 	}
-	seedDir := filepath.Join(root, "seed", "files")
-	if err := os.MkdirAll(seedDir, 0o755); err != nil {
-		t.Fatalf("mkdir seed: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(seedDir, "source.bin"), []byte("seed\n"), 0o644); err != nil {
-		t.Fatalf("write seed file: %v", err)
-	}
-	packPath := filepath.Join(workflowsDir, "scenarios", "prepare.yaml")
-	packBody := fmt.Sprintf(`role: prepare
-version: v1alpha1
-phases:
-  - name: prepare
-    steps:
-      - id: p1
-        kind: FileDownload
-        spec:
-          source:
-            path: files/source.bin
-          fetch:
-            sources:
-              - type: local
-                path: %q
-`, filepath.Join(root, "seed"))
-	if err := os.WriteFile(packPath, []byte(packBody), 0o644); err != nil {
-		t.Fatalf("write prepare workflow: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(workflowsDir, "scenarios", "apply.yaml"), []byte("role: apply\nversion: v1alpha1\nsteps: []\n"), 0o644); err != nil {
+	writePrepareDownloadWorkflowFixture(t, root, "files/source.bin")
+	if err := os.WriteFile(filepath.Join(workflowsDir, "scenarios", "apply.yaml"), []byte("version: v1alpha1\nsteps: []\n"), 0o644); err != nil {
 		t.Fatalf("write apply workflow: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(workflowsDir, "vars.yaml"), []byte("kubernetesVersion: v1.30.1\n"), 0o644); err != nil {
@@ -53,7 +28,7 @@ phases:
 	if err := os.MkdirAll(fragmentDir, 0o755); err != nil {
 		t.Fatalf("mkdir fragment dir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(fragmentDir, "apply-common.yaml"), []byte("role: apply\nversion: v1alpha1\nsteps: []\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(fragmentDir, "apply-common.yaml"), []byte("version: v1alpha1\nsteps: []\n"), 0o644); err != nil {
 		t.Fatalf("write workflow fragment: %v", err)
 	}
 
@@ -79,7 +54,7 @@ phases:
 			t.Fatalf("missing prepared path %s: %v", required, err)
 		}
 	}
-	for _, required := range []string{"deck", filepath.Join(".deck", "manifest.json"), filepath.Join("workflows", "scenarios", "prepare.yaml")} {
+	for _, required := range []string{"deck", filepath.Join(".deck", "manifest.json"), "prepare.yaml"} {
 		if _, err := os.Stat(filepath.Join(root, required)); err != nil {
 			t.Fatalf("missing workspace path %s: %v", required, err)
 		}
@@ -92,10 +67,8 @@ func TestRunPrepareDryRunDoesNotWrite(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(workflowsDir, "scenarios"), 0o755); err != nil {
 		t.Fatalf("mkdir workflows: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(workflowsDir, "scenarios", "prepare.yaml"), []byte("role: prepare\nversion: v1alpha1\nartifacts:\n  files:\n    - group: base\n      items:\n        - id: seed\n          source:\n            path: files/source.bin\n          output:\n            path: seed.bin\n"), 0o644); err != nil {
-		t.Fatalf("write prepare workflow: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(workflowsDir, "scenarios", "apply.yaml"), []byte("role: apply\nversion: v1alpha1\nsteps: []\n"), 0o644); err != nil {
+	writePrepareDownloadWorkflowFixture(t, root, "files/seed.bin")
+	if err := os.WriteFile(filepath.Join(workflowsDir, "scenarios", "apply.yaml"), []byte("version: v1alpha1\nsteps: []\n"), 0o644); err != nil {
 		t.Fatalf("write apply workflow: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(workflowsDir, "vars.yaml"), []byte("x: y\n"), 0o644); err != nil {
@@ -131,10 +104,8 @@ func TestRunPrepareVerboseDiagnostics(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(workflowsDir, "scenarios"), 0o755); err != nil {
 		t.Fatalf("mkdir workflows: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(workflowsDir, "scenarios", "prepare.yaml"), []byte("role: prepare\nversion: v1alpha1\nartifacts:\n  files:\n    - group: base\n      items:\n        - id: seed\n          source:\n            path: files/source.bin\n          output:\n            path: seed.bin\n"), 0o644); err != nil {
-		t.Fatalf("write prepare workflow: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(workflowsDir, "scenarios", "apply.yaml"), []byte("role: apply\nversion: v1alpha1\nsteps: []\n"), 0o644); err != nil {
+	writePrepareDownloadWorkflowFixture(t, root, "files/seed.bin")
+	if err := os.WriteFile(filepath.Join(workflowsDir, "scenarios", "apply.yaml"), []byte("version: v1alpha1\nsteps: []\n"), 0o644); err != nil {
 		t.Fatalf("write apply workflow: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(workflowsDir, "vars.yaml"), []byte("x: y\n"), 0o644); err != nil {
@@ -166,7 +137,7 @@ func TestRunPrepareVerboseDiagnostics(t *testing.T) {
 	if res.err != nil {
 		t.Fatalf("expected success, got %v", res.err)
 	}
-	for _, want := range []string{"deck: prepare workflowIncludes=3", "deck: prepare artifactGroups=1", "deck: prepare artifactGroup kind=file name=base jobs=1 parallelism=1 retry=0", "deck: prepare cacheArtifact step=file-base-seed type=file action=FETCH", "deck: prepare cachePlan fetch=1 reuse=0"} {
+	for _, want := range []string{"deck: prepare workflowIncludes=3", "deck: prepare cacheArtifact step=seed type=file action=FETCH", "deck: prepare cachePlan fetch=1 reuse=0"} {
 		if !strings.Contains(res.stderr, want) {
 			t.Fatalf("expected %q in stderr, got %q", want, res.stderr)
 		}
@@ -179,9 +150,7 @@ func TestRunPrepareSucceedsWithoutApplyWorkflow(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(workflowsDir, "scenarios"), 0o755); err != nil {
 		t.Fatalf("mkdir workflows: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(workflowsDir, "scenarios", "prepare.yaml"), []byte("role: prepare\nversion: v1alpha1\nphases:\n  - name: prepare\n    steps: []\n"), 0o644); err != nil {
-		t.Fatalf("write prepare workflow: %v", err)
-	}
+	writePrepareDownloadWorkflowFixture(t, root, "files/seed.bin")
 	if err := os.WriteFile(filepath.Join(workflowsDir, "vars.yaml"), []byte("x: y\n"), 0o644); err != nil {
 		t.Fatalf("write vars workflow: %v", err)
 	}
@@ -219,24 +188,15 @@ func TestRunPrepareVarFlagOverridesWorkflowVars(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(workflowsDir, "components"), 0o755); err != nil {
 		t.Fatalf("mkdir workflows: %v", err)
 	}
-	seedDir := filepath.Join(root, "seed", "files")
-	if err := os.MkdirAll(seedDir, 0o755); err != nil {
-		t.Fatalf("mkdir seed: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(seedDir, "source.bin"), []byte("seed\n"), 0o644); err != nil {
-		t.Fatalf("write seed file: %v", err)
-	}
-
-	packPath := filepath.Join(workflowsDir, "scenarios", "prepare.yaml")
-	packBody := fmt.Sprintf(`role: prepare
-version: v1alpha1
+	packPath := filepath.Join(root, "prepare.yaml")
+	packBody := fmt.Sprintf(`version: v1alpha1
 vars:
   relPath: default.bin
 phases:
   - name: prepare
     steps:
       - id: p1
-        kind: FileDownload
+        kind: DownloadFile
         spec:
           source:
             path: files/source.bin
@@ -244,13 +204,19 @@ phases:
             sources:
               - type: local
                 path: %q
-          output:
-            path: files/{{ .vars.relPath  }}
+          outputPath: files/{{ .vars.relPath  }}
 `, filepath.Join(root, "seed"))
 	if err := os.WriteFile(packPath, []byte(packBody), 0o644); err != nil {
 		t.Fatalf("write prepare workflow: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(workflowsDir, "scenarios", "apply.yaml"), []byte("role: apply\nversion: v1alpha1\nsteps: []\n"), 0o644); err != nil {
+	seedDir := filepath.Join(root, "seed", "files")
+	if err := os.MkdirAll(seedDir, 0o755); err != nil {
+		t.Fatalf("mkdir seed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(seedDir, "source.bin"), []byte("seed\n"), 0o644); err != nil {
+		t.Fatalf("write seed file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(workflowsDir, "scenarios", "apply.yaml"), []byte("version: v1alpha1\nsteps: []\n"), 0o644); err != nil {
 		t.Fatalf("write apply workflow: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(workflowsDir, "vars.yaml"), []byte("kubernetesVersion: v1.30.1\n"), 0o644); err != nil {

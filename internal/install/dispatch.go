@@ -13,60 +13,61 @@ func executeStep(ctx context.Context, kind string, spec map[string]any, execCtx 
 	}
 
 	switch kind {
-	case "Artifact":
-		return runInstallArtifact(ctx, spec)
-	case "PackageInstall":
+	case "InstallPackage":
 		return runInstallPackages(ctx, spec)
-	case "FileDownload":
-		_, err := runFileDownload(ctx, execCtx.BundleRoot, spec)
-		return err
-	case "FileWrite":
+	case "WriteFile":
 		return runWriteFile(spec)
-	case "FileCopy":
-		return runCopyFile(spec)
-	case "FileEdit":
+	case "CopyFile":
+		return runCopyFile(ctx, execCtx.BundleRoot, spec)
+	case "EditFile":
 		return runEditFile(spec)
-	case "Sysctl":
-		return runSysctl(ctx, spec)
-	case "Service":
-		return runService(ctx, spec)
-	case "Directory":
+	case "ExtractArchive":
+		return runExtractArchive(ctx, spec)
+	case "ConfigureSysctl":
+		return runConfigureSysctl(ctx, spec)
+	case "ManageService":
+		return runManageService(ctx, spec)
+	case "EnsureDirectory":
 		return runEnsureDir(spec)
-	case "Symlink":
-		return runSymlink(spec)
-	case "SystemdUnit":
-		return runSystemdUnit(ctx, spec)
-	case "RepositoryConfigure":
+	case "CreateSymlink":
+		return runCreateSymlink(spec)
+	case "WriteSystemdUnit":
+		return runWriteSystemdUnit(ctx, spec)
+	case "ConfigureRepository":
 		return runRepoConfig(ctx, spec)
-	case "RepositoryRefresh":
-		return runRepositoryRefresh(ctx, spec)
-	case "Containerd":
-		return runContainerdConfig(ctx, spec)
-	case "swap":
-		return runSwap(ctx, spec)
-	case "KernelModule":
-		return runKernelModule(ctx, spec)
-	case "Command":
+	case "RefreshRepository":
+		return runRefreshRepository(ctx, spec)
+	case "WriteContainerdConfig":
+		return runWriteContainerdConfig(ctx, spec)
+	case "WriteContainerdRegistryHosts":
+		return runWriteContainerdRegistryHosts(spec)
+	case "ConfigureSwap":
+		return runConfigureSwap(ctx, spec)
+	case "ConfigureKernelModule":
+		return runConfigureKernelModule(ctx, spec)
+	case "RunCommand":
 		decoded, err := workflowexec.DecodeSpec[runCommandSpec](spec)
 		if err != nil {
 			return fmt.Errorf("decode command spec: %w", err)
 		}
 		return runCommandDecoded(ctx, decoded)
-	case "ImageVerify":
+	case "LoadImage":
+		return runLoadImage(ctx, spec)
+	case "VerifyImage":
 		return runVerifyImages(ctx, spec)
-	case "KubeadmInit":
-		return runKubeadmInit(ctx, spec)
-	case "KubeadmJoin":
-		return runKubeadmJoin(ctx, spec)
-	case "KubeadmReset":
-		return runKubeadmReset(ctx, spec)
-	case "WaitServiceActive", "WaitCommand", "WaitFileExists", "WaitFileAbsent", "WaitTCPPortOpen", "WaitTCPPortClosed":
+	case "InitKubeadm":
+		return runInitKubeadm(ctx, spec)
+	case "JoinKubeadm":
+		return runJoinKubeadm(ctx, spec)
+	case "ResetKubeadm":
+		return runResetKubeadm(ctx, spec)
+	case "WaitForService", "WaitForCommand", "WaitForFile", "WaitForMissingFile", "WaitForTCPPort", "WaitForMissingTCPPort":
 		decoded, err := workflowexec.DecodeSpec[waitSpec](spec)
 		if err != nil {
 			return fmt.Errorf("decode wait spec: %w", err)
 		}
 		return runWaitDecoded(ctx, kind, decoded, commandTimeout(spec))
-	case "HostCheck", "PackageDownload", "ImageDownload":
+	case "CheckHost", "DownloadPackage", "DownloadImage":
 		return fmt.Errorf("%s: unsupported step kind %s for apply", errCodeInstallKindUnsupported, kind)
 	default:
 		return fmt.Errorf("%s: unsupported step kind %s", errCodeInstallKindUnsupported, kind)

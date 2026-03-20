@@ -13,11 +13,10 @@ func TestPackCacheInvalidation(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	workflowBytes := []byte("role: prepare\r\nversion: v1alpha1\r\nphases: []\r\n")
+	workflowBytes := []byte("version: v1alpha1\r\nphases: []\r\n")
 	workflowSHA := computeWorkflowSHA256(workflowBytes)
 
 	wf := &config.Workflow{
-		Role:           "prepare",
 		Version:        "v1alpha1",
 		WorkflowSHA256: workflowSHA,
 		Vars: map[string]any{
@@ -29,14 +28,14 @@ func TestPackCacheInvalidation(t *testing.T) {
 			Steps: []config.Step{
 				{
 					ID:   "artifact-a",
-					Kind: "PackageDownload",
+					Kind: "DownloadPackage",
 					Spec: map[string]any{
 						"packages": []any{"containerd-{{ .vars.pkgA }}"},
 					},
 				},
 				{
 					ID:   "artifact-b",
-					Kind: "PackageDownload",
+					Kind: "DownloadPackage",
 					Spec: map[string]any{
 						"packages": []any{"iptables-{{ .vars.pkgB }}"},
 					},
@@ -81,70 +80,4 @@ func TestPackCacheInvalidation(t *testing.T) {
 	if actions["artifact-b"] != packCacheActionFetch {
 		t.Fatalf("artifact-b action = %s, want %s", actions["artifact-b"], packCacheActionFetch)
 	}
-}
-
-func TestRun_PackCacheRoleGate(t *testing.T) {
-	t.Run("apply role does not write pack cache state", func(t *testing.T) {
-		home := t.TempDir()
-		t.Setenv("HOME", home)
-
-		workflowBytes := []byte("role: apply\r\nversion: v1alpha1\r\nphases: []\r\n")
-		workflowSHA := computeWorkflowSHA256(workflowBytes)
-		wf := &config.Workflow{
-			Role:           "apply",
-			Version:        "v1alpha1",
-			WorkflowSHA256: workflowSHA,
-			Phases: []config.Phase{{
-				Name: "prepare",
-				Steps: []config.Step{{
-					ID:   "artifact-a",
-					Kind: "PackageDownload",
-					Spec: map[string]any{
-						"packages": []any{"containerd"},
-					},
-				}},
-			}},
-		}
-
-		if err := Run(context.Background(), wf, RunOptions{BundleRoot: t.TempDir()}); err != nil {
-			t.Fatalf("Run failed: %v", err)
-		}
-
-		statePath := filepath.Join(home, ".cache", "deck", "state", workflowSHA+".json")
-		if _, err := os.Stat(statePath); !os.IsNotExist(err) {
-			t.Fatalf("pack cache state must not be written for apply role, err=%v", err)
-		}
-	})
-
-	t.Run("empty role does not touch pack cache state", func(t *testing.T) {
-		home := t.TempDir()
-		t.Setenv("HOME", home)
-
-		workflowBytes := []byte("version: v1alpha1\r\nphases: []\r\n")
-		workflowSHA := computeWorkflowSHA256(workflowBytes)
-		wf := &config.Workflow{
-			Role:           "",
-			Version:        "v1alpha1",
-			WorkflowSHA256: workflowSHA,
-			Phases: []config.Phase{{
-				Name: "prepare",
-				Steps: []config.Step{{
-					ID:   "artifact-a",
-					Kind: "PackageDownload",
-					Spec: map[string]any{
-						"packages": []any{"containerd"},
-					},
-				}},
-			}},
-		}
-
-		if err := Run(context.Background(), wf, RunOptions{BundleRoot: t.TempDir()}); err != nil {
-			t.Fatalf("Run failed: %v", err)
-		}
-
-		statePath := filepath.Join(home, ".cache", "deck", "state", workflowSHA+".json")
-		if _, err := os.Stat(statePath); !os.IsNotExist(err) {
-			t.Fatalf("pack cache state must not be written for empty role, err=%v", err)
-		}
-	})
 }

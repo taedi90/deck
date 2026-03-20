@@ -11,7 +11,7 @@
       "type": "string"
     },
     "kind": {
-      "const": "Swap"
+      "const": "ConfigureSwap"
     },
     "metadata": {
       "additionalProperties": true,
@@ -60,7 +60,7 @@
     "kind",
     "spec"
   ],
-  "title": "SwapStep",
+  "title": "ConfigureSwapStep",
   "type": "object",
   "x-deck-visibility": "public"
 }

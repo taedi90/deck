@@ -11,7 +11,7 @@
       "type": "string"
     },
     "kind": {
-      "const": "Command"
+      "const": "RunCommand"
     },
     "metadata": {
       "additionalProperties": true,
@@ -73,7 +73,7 @@
     "kind",
     "spec"
   ],
-  "title": "CommandStep",
+  "title": "RunCommandStep",
   "type": "object",
   "x-deck-visibility": "public"
 }

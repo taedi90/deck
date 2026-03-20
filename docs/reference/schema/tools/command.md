@@ -6,13 +6,13 @@ Reference for the `Command` family of typed workflow steps.
 ## Summary
 
 - family: `command`
-- kinds: `Command`
+- kinds: `RunCommand`
 
 ## Shared Step Fields
 
 Shared step envelope fields such as `id`, `apiVersion`, `kind`, `when`, `retry`, `timeout`, `register`, and `metadata` are documented in [Workflow Schema](../workflow.md).
 
-## `Command`
+## `RunCommand`
 
 Run an explicit command as an escape hatch.
 
@@ -25,25 +25,22 @@ Use this only when no typed step expresses the change clearly enough.
 ### Example
 
 ```yaml
-kind: Command
+apiVersion: deck/v1alpha1
+id: example-runcommand
+kind: RunCommand
 spec:
-  command: ["systemctl", "status", "containerd"]
-  timeout: 30s
+    command:
+        - example
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.command` | `array<string>` | yes | `` | `` | Command vector to execute. The first element is the binary; remaining elements are arguments. | `[systemctl,restart,containerd]` |
-| `spec.env` | `object` | no | `` | `` | Additional environment variables passed to the command process as key-value pairs. | `{KUBECONFIG:/etc/kubernetes/admin.conf}` |
-| `spec.sudo` | `boolean` | no | `false` | `` | Prepend `sudo` before the command vector. Defaults to `false`. | `false` |
-| `spec.timeout` | `string` | no | `` | `` | Maximum duration for the command before it is killed. Overrides the step-level `timeout`. | `30s` |
-
-### Notes
-
-- Prefer a typed step kind over `Command` whenever one is available — typed steps are easier to lint, review, and evolve.
-- Use `spec.timeout` to bound commands that may hang rather than relying on the outer step timeout.
+| `spec.command` | `array<string>` | yes | `` | `` |  | `[example]` |
+| `spec.env` | `object` | no | `` | `` |  | `{...}` |
+| `spec.sudo` | `boolean` | no | `false` | `` |  | `false` |
+| `spec.timeout` | `string` | no | `` | `` |  | `example` |
 
 ## Related
 

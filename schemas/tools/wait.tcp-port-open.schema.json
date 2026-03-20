@@ -11,7 +11,7 @@
       "type": "string"
     },
     "kind": {
-      "const": "WaitTCPPortOpen"
+      "const": "WaitForTCPPort"
     },
     "metadata": {
       "additionalProperties": true,
@@ -76,7 +76,7 @@
     "kind",
     "spec"
   ],
-  "title": "WaitTCPPortOpenStep",
+  "title": "WaitForTCPPortStep",
   "type": "object",
   "x-deck-visibility": "public"
 }

@@ -17,7 +17,7 @@ func TestRenderToolPageGroupsConcreteKindsByFamily(t *testing.T) {
 	if !strings.Contains(rendered, "## Supported Kinds") {
 		t.Fatalf("expected supported kinds section:\n%s", rendered)
 	}
-	for _, kind := range []string{"FileDownload", "FileWrite", "FileCopy", "FileEdit"} {
+	for _, kind := range []string{"DownloadFile", "WriteFile", "CopyFile", "EditFile"} {
 		if !strings.Contains(rendered, "`"+kind+"`") {
 			t.Fatalf("expected grouped file kind %s:\n%s", kind, rendered)
 		}
@@ -34,17 +34,17 @@ func TestRenderToolPageConcreteKindSectionUsesNormalizedExample(t *testing.T) {
 	page := testFamilyPageInput(t, "package")
 	rendered := string(RenderToolPage(page))
 
-	if !strings.Contains(rendered, "## `PackageDownload`") || !strings.Contains(rendered, "## `PackageInstall`") {
+	if !strings.Contains(rendered, "## `DownloadPackage`") || !strings.Contains(rendered, "## `InstallPackage`") {
 		t.Fatalf("expected concrete kind sections:\n%s", rendered)
 	}
-	if !strings.Contains(rendered, "kind: PackageInstall") {
+	if !strings.Contains(rendered, "kind: InstallPackage") {
 		t.Fatalf("expected normalized concrete kind example:\n%s", rendered)
 	}
 	if strings.Contains(rendered, "action:") {
 		t.Fatalf("did not expect legacy action selector in rendered page:\n%s", rendered)
 	}
 	if !strings.Contains(rendered, "outputs: `artifacts`") {
-		t.Fatalf("expected outputs section for PackageDownload:\n%s", rendered)
+		t.Fatalf("expected outputs section for DownloadPackage:\n%s", rendered)
 	}
 }
 
@@ -59,7 +59,7 @@ func TestRenderWorkflowPageUsesConcreteKindExample(t *testing.T) {
 	}
 	rendered := string(RenderWorkflowPage("schemas/deck-workflow.schema.json", schema, WorkflowMeta()))
 
-	if !strings.Contains(rendered, "kind: FileWrite") {
+	if !strings.Contains(rendered, "kind: WriteFile") {
 		t.Fatalf("expected concrete kind workflow example:\n%s", rendered)
 	}
 	if strings.Contains(rendered, "action: write") {

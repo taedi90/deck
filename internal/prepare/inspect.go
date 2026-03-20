@@ -9,16 +9,7 @@ import (
 )
 
 type PlanDiagnostics struct {
-	ArtifactGroups []ArtifactGroupDiagnostic
-	CachePlan      PackCachePlan
-}
-
-type ArtifactGroupDiagnostic struct {
-	Kind        string
-	Name        string
-	Jobs        int
-	Parallelism int
-	Retry       int
+	CachePlan PackCachePlan
 }
 
 func InspectPlan(wf *config.Workflow, bundleRoot string, opts RunOptions) (PlanDiagnostics, error) {
@@ -26,23 +17,6 @@ func InspectPlan(wf *config.Workflow, bundleRoot string, opts RunOptions) (PlanD
 		return PlanDiagnostics{}, fmt.Errorf("workflow is nil")
 	}
 	diagnostics := PlanDiagnostics{}
-	groups, err := planArtifactJobGroups(wf, bundleRoot, opts)
-	if err != nil {
-		return diagnostics, err
-	}
-	diagnostics.ArtifactGroups = make([]ArtifactGroupDiagnostic, 0, len(groups))
-	for _, group := range groups {
-		diagnostics.ArtifactGroups = append(diagnostics.ArtifactGroups, ArtifactGroupDiagnostic{
-			Kind:        strings.TrimSpace(group.Kind),
-			Name:        strings.TrimSpace(group.Name),
-			Jobs:        len(group.Jobs),
-			Parallelism: group.Execution.Parallelism,
-			Retry:       group.Execution.Retry,
-		})
-	}
-	if strings.TrimSpace(wf.Role) != "prepare" {
-		return diagnostics, nil
-	}
 	prepareSteps, err := prepareExecutionSteps(wf)
 	if err != nil {
 		return diagnostics, err

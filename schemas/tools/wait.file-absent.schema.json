@@ -11,7 +11,7 @@
       "type": "string"
     },
     "kind": {
-      "const": "WaitFileAbsent"
+      "const": "WaitForMissingFile"
     },
     "metadata": {
       "additionalProperties": true,
@@ -80,7 +80,7 @@
     "kind",
     "spec"
   ],
-  "title": "WaitFileAbsentStep",
+  "title": "WaitForMissingFileStep",
   "type": "object",
   "x-deck-visibility": "public"
 }

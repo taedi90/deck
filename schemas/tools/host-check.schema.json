@@ -11,7 +11,7 @@
       "type": "string"
     },
     "kind": {
-      "const": "HostCheck"
+      "const": "CheckHost"
     },
     "metadata": {
       "additionalProperties": true,
@@ -76,7 +76,7 @@
     "kind",
     "spec"
   ],
-  "title": "HostCheckStep",
+  "title": "CheckHostStep",
   "type": "object",
   "x-deck-visibility": "public"
 }

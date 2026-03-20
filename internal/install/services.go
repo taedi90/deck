@@ -8,7 +8,7 @@ import (
 	"github.com/taedi90/deck/internal/executil"
 )
 
-func isServiceEnabled(ctx context.Context, name string, timeout time.Duration) (bool, error) {
+func isManageServiceEnabled(ctx context.Context, name string, timeout time.Duration) (bool, error) {
 	err := runTimedCommandWithContext(ctx, "systemctl", []string{"is-enabled", name}, timeout)
 	if err == nil {
 		return true, nil
@@ -19,7 +19,7 @@ func isServiceEnabled(ctx context.Context, name string, timeout time.Duration) (
 	return false, err
 }
 
-func isServiceActive(ctx context.Context, name string, timeout time.Duration) (bool, error) {
+func isManageServiceActive(ctx context.Context, name string, timeout time.Duration) (bool, error) {
 	err := runTimedCommandWithContext(ctx, "systemctl", []string{"is-active", "--quiet", name}, timeout)
 	if err == nil {
 		return true, nil

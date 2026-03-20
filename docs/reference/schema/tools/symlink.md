@@ -6,13 +6,13 @@ Reference for the `Symlink` family of typed workflow steps.
 ## Summary
 
 - family: `symlink`
-- kinds: `Symlink`
+- kinds: `CreateSymlink`
 
 ## Shared Step Fields
 
 Shared step envelope fields such as `id`, `apiVersion`, `kind`, `when`, `retry`, `timeout`, `register`, and `metadata` are documented in [Workflow Schema](../workflow.md).
 
-## `Symlink`
+## `CreateSymlink`
 
 Create or replace a symbolic link.
 
@@ -26,7 +26,7 @@ Use this when tools or runtimes expect a stable path alias.
 ### Example
 
 ```yaml
-kind: Symlink
+kind: CreateSymlink
 spec:
   path: /usr/bin/runc
   target: /usr/local/sbin/runc

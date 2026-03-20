@@ -1,6 +1,6 @@
 steps:
   - id: apply-offline-repo-config-debian
-    kind: RepositoryConfigure
+    kind: ConfigureRepository
     spec:
       format: apt
       path: /etc/apt/sources.list.d/offline.list
@@ -11,7 +11,7 @@ steps:
           baseurl: http://{{ .vars.serverURL  }}/packages/apt/{{ .vars.release  }}
           suite: ./
   - id: refresh-apt-package-cache
-    kind: RepositoryRefresh
+    kind: RefreshRepository
     spec:
       manager: apt
       clean: true

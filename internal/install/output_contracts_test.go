@@ -21,20 +21,21 @@ func TestStepOutputsCoverApplyContracts(t *testing.T) {
 		spec   map[string]any
 		output []string
 	}{
-		{name: "directory path", kind: "Directory", spec: map[string]any{"path": "/tmp/example"}, output: []string{"path"}},
-		{name: "symlink path", kind: "Symlink", spec: map[string]any{"path": "/usr/local/bin/kubectl", "target": "/opt/bin/kubectl"}, output: []string{"path"}},
-		{name: "systemd unit path", kind: "SystemdUnit", spec: map[string]any{"path": "/etc/systemd/system/kubelet.service"}, output: []string{"path"}},
-		{name: "containerd path", kind: "Containerd", spec: map[string]any{"path": "/etc/containerd/config.toml"}, output: []string{"path"}},
-		{name: "file write path", kind: "FileWrite", spec: map[string]any{"path": "/tmp/example", "content": "hello"}, output: []string{"path"}},
-		{name: "file copy dest", kind: "FileCopy", spec: map[string]any{"src": "/tmp/source", "dest": "/tmp/copied"}, output: []string{"dest"}},
-		{name: "file edit path", kind: "FileEdit", spec: map[string]any{"path": "/tmp/edited", "edits": []any{map[string]any{"match": "x"}}}, output: []string{"path"}},
-		{name: "file download outputs", kind: "FileDownload", spec: map[string]any{"source": map[string]any{"url": "https://example.invalid/payload.txt"}}, output: []string{"path", "artifacts"}},
-		{name: "repository path", kind: "RepositoryConfigure", spec: map[string]any{"path": "/etc/apt/sources.list.d/offline.list", "repositories": []any{map[string]any{"id": "offline"}}}, output: []string{"path"}},
-		{name: "service name", kind: "Service", spec: map[string]any{"name": "containerd"}, output: []string{"name"}},
-		{name: "service names", kind: "Service", spec: map[string]any{"names": []any{"containerd", "kubelet"}}, output: []string{"names"}},
-		{name: "kernel module name", kind: "KernelModule", spec: map[string]any{"name": "overlay"}, output: []string{"name"}},
-		{name: "kernel module names", kind: "KernelModule", spec: map[string]any{"names": []any{"overlay", "br_netfilter"}}, output: []string{"names"}},
-		{name: "kubeadm join file", kind: "KubeadmInit", spec: map[string]any{"outputJoinFile": joinPath}, output: []string{"joinFile"}},
+		{name: "directory path", kind: "EnsureDirectory", spec: map[string]any{"path": "/tmp/example"}, output: []string{"path"}},
+		{name: "symlink path", kind: "CreateSymlink", spec: map[string]any{"path": "/usr/local/bin/kubectl", "target": "/opt/bin/kubectl"}, output: []string{"path"}},
+		{name: "systemd unit path", kind: "WriteSystemdUnit", spec: map[string]any{"path": "/etc/systemd/system/kubelet.service"}, output: []string{"path"}},
+		{name: "containerd path", kind: "WriteContainerdConfig", spec: map[string]any{"path": "/etc/containerd/config.toml"}, output: []string{"path"}},
+		{name: "containerd registry hosts path", kind: "WriteContainerdRegistryHosts", spec: map[string]any{"path": "/etc/containerd/certs.d", "registryHosts": []any{map[string]any{"registry": "registry.k8s.io", "server": "https://registry.k8s.io", "host": "http://mirror.local:5000", "capabilities": []any{"pull", "resolve"}, "skipVerify": true}}}, output: []string{"path"}},
+		{name: "file write path", kind: "WriteFile", spec: map[string]any{"path": "/tmp/example", "content": "hello"}, output: []string{"path"}},
+		{name: "file copy path", kind: "CopyFile", spec: map[string]any{"source": map[string]any{"path": "/tmp/source"}, "path": "/tmp/copied"}, output: []string{"path"}},
+		{name: "file edit path", kind: "EditFile", spec: map[string]any{"path": "/tmp/edited", "edits": []any{map[string]any{"match": "x"}}}, output: []string{"path"}},
+		{name: "extract archive path", kind: "ExtractArchive", spec: map[string]any{"source": map[string]any{"path": "/tmp/source.tar.gz"}, "path": "/opt/cni/bin"}, output: []string{"path"}},
+		{name: "repository path", kind: "ConfigureRepository", spec: map[string]any{"path": "/etc/apt/sources.list.d/offline.list", "repositories": []any{map[string]any{"id": "offline"}}}, output: []string{"path"}},
+		{name: "service name", kind: "ManageService", spec: map[string]any{"name": "containerd"}, output: []string{"name"}},
+		{name: "service names", kind: "ManageService", spec: map[string]any{"names": []any{"containerd", "kubelet"}}, output: []string{"names"}},
+		{name: "kernel module name", kind: "ConfigureKernelModule", spec: map[string]any{"name": "overlay"}, output: []string{"name"}},
+		{name: "kernel module names", kind: "ConfigureKernelModule", spec: map[string]any{"names": []any{"overlay", "br_netfilter"}}, output: []string{"names"}},
+		{name: "kubeadm join file", kind: "InitKubeadm", spec: map[string]any{"outputJoinFile": joinPath}, output: []string{"joinFile"}},
 	}
 	covered := map[string]bool{}
 

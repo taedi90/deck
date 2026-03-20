@@ -14,7 +14,7 @@ import (
 	"github.com/taedi90/deck/internal/fsutil"
 )
 
-func runContainerdConfig(ctx context.Context, spec map[string]any) error {
+func runWriteContainerdConfig(ctx context.Context, spec map[string]any) error {
 	path := stringValue(spec, "path")
 	if path == "" {
 		path = "/etc/containerd/config.toml"
@@ -73,13 +73,18 @@ func runContainerdConfig(ctx context.Context, spec map[string]any) error {
 		return err
 	}
 
-	if err := writeContainerdRegistryHosts(path, spec); err != nil {
-		return err
-	}
 	return nil
 }
 
-func writeContainerdRegistryHosts(configTomlPath string, spec map[string]any) error {
+func runWriteContainerdRegistryHosts(spec map[string]any) error {
+	path := stringValue(spec, "path")
+	if path == "" {
+		path = "/etc/containerd/certs.d"
+	}
+	return writeContainerdRegistryHosts(path, spec)
+}
+
+func writeContainerdRegistryHosts(configRoot string, spec map[string]any) error {
 	rawHosts, ok := spec["registryHosts"]
 	if !ok {
 		return nil
@@ -90,10 +95,7 @@ func writeContainerdRegistryHosts(configTomlPath string, spec map[string]any) er
 		return fmt.Errorf("registryHosts must be an array")
 	}
 
-	configPath := stringValue(spec, "configPath")
-	if configPath == "" {
-		configPath = filepath.Join(filepath.Dir(configTomlPath), "certs.d")
-	}
+	configPath := configRoot
 
 	for idx, raw := range hostItems {
 		entry, ok := raw.(map[string]any)
@@ -129,7 +131,7 @@ func writeContainerdRegistryHosts(configTomlPath string, spec map[string]any) er
 			return err
 		}
 
-		content := renderContainerdHostsTOML(server, host, caps, skipVerify)
+		content := renderWriteContainerdConfigHostsTOML(server, host, caps, skipVerify)
 		if err := writeFileIfChanged(hostsPath, []byte(content), 0o644); err != nil {
 			return err
 		}
@@ -159,7 +161,7 @@ func parseContainerdHostCapabilities(raw any, idx int) ([]string, error) {
 	return capabilities, nil
 }
 
-func renderContainerdHostsTOML(server string, host string, capabilities []string, skipVerify bool) string {
+func renderWriteContainerdConfigHostsTOML(server string, host string, capabilities []string, skipVerify bool) string {
 	tomlCaps := make([]string, 0, len(capabilities))
 	for _, capability := range capabilities {
 		tomlCaps = append(tomlCaps, fmt.Sprintf("%q", capability))

@@ -20,7 +20,7 @@ func Gather(ctx context.Context, cfg askconfig.LSP, target askintent.Target, wor
 		return nil, nil
 	}
 	events := make([]string, 0)
-	if cmd := strings.TrimSpace(cfg.YAML.Command); cmd != "" {
+	if cmd := strings.TrimSpace(cfg.YAML.RunCommand); cmd != "" {
 		//nolint:gosec // LSP command is explicitly configured by the local user.
 		probe := exec.CommandContext(ctx, cmd, "--version")
 		if err := probe.Run(); err != nil {

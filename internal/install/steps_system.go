@@ -21,10 +21,10 @@ type kernelModuleSpec struct {
 	PersistFile string   `json:"persistFile"`
 }
 
-func runSysctl(ctx context.Context, spec map[string]any) error {
+func runConfigureSysctl(ctx context.Context, spec map[string]any) error {
 	path := stringValue(spec, "writeFile")
 	if path == "" {
-		return fmt.Errorf("%s: Sysctl requires writeFile", errCodeInstallSysctlPathMiss)
+		return fmt.Errorf("%s: ConfigureSysctl requires writeFile", errCodeInstallConfigureSysctlPathMiss)
 	}
 	hostPath, err := hostfs.NewHostPath(path)
 	if err != nil {
@@ -33,7 +33,7 @@ func runSysctl(ctx context.Context, spec map[string]any) error {
 
 	values, ok := spec["values"].(map[string]any)
 	if !ok || len(values) == 0 {
-		return fmt.Errorf("%s: Sysctl requires values", errCodeInstallSysctlValsMiss)
+		return fmt.Errorf("%s: ConfigureSysctl requires values", errCodeInstallConfigureSysctlValsMiss)
 	}
 
 	lines := make([]string, 0, len(values))
@@ -49,19 +49,19 @@ func runSysctl(ctx context.Context, spec map[string]any) error {
 		if timeout := stringValue(spec, "timeout"); timeout != "" {
 			applySpec["timeout"] = timeout
 		}
-		return runSysctlApply(ctx, applySpec)
+		return runConfigureSysctlApply(ctx, applySpec)
 	}
 	return nil
 }
 
-func runService(ctx context.Context, spec map[string]any) error {
+func runManageService(ctx context.Context, spec map[string]any) error {
 	name := stringValue(spec, "name")
 	names := stringSlice(spec["names"])
 	if name == "" && len(names) == 0 {
-		return fmt.Errorf("%s: Service requires name or names", errCodeInstallServiceNameMiss)
+		return fmt.Errorf("%s: ManageService requires name or names", errCodeInstallManageServiceNameMiss)
 	}
 	if name != "" && len(names) > 0 {
-		return fmt.Errorf("%s: Service accepts either name or names", errCodeInstallServiceNameMiss)
+		return fmt.Errorf("%s: ManageService accepts either name or names", errCodeInstallManageServiceNameMiss)
 	}
 	if name != "" {
 		names = []string{name}
@@ -88,7 +88,7 @@ func runService(ctx context.Context, spec map[string]any) error {
 		}
 
 		if enabled, ok := spec["enabled"].(bool); ok {
-			isEnabled, err := isServiceEnabled(ctx, serviceName, timeout)
+			isEnabled, err := isManageServiceEnabled(ctx, serviceName, timeout)
 			if err != nil {
 				return err
 			}
@@ -108,7 +108,7 @@ func runService(ctx context.Context, spec map[string]any) error {
 		case "", "unchanged":
 			continue
 		case "started":
-			active, err := isServiceActive(ctx, serviceName, timeout)
+			active, err := isManageServiceActive(ctx, serviceName, timeout)
 			if err != nil {
 				return err
 			}
@@ -119,7 +119,7 @@ func runService(ctx context.Context, spec map[string]any) error {
 				return err
 			}
 		case "stopped":
-			active, err := isServiceActive(ctx, serviceName, timeout)
+			active, err := isManageServiceActive(ctx, serviceName, timeout)
 			if err != nil {
 				return err
 			}
@@ -160,7 +160,7 @@ func runServiceCommand(ctx context.Context, name string, args []string, timeout 
 	return err
 }
 
-func runSwap(ctx context.Context, spec map[string]any) error {
+func runConfigureSwap(ctx context.Context, spec map[string]any) error {
 	disable := true
 	if v, ok := spec["disable"].(bool); ok {
 		disable = v
@@ -225,17 +225,17 @@ func runSwap(ctx context.Context, spec map[string]any) error {
 	return nil
 }
 
-func runKernelModule(ctx context.Context, spec map[string]any) error {
+func runConfigureKernelModule(ctx context.Context, spec map[string]any) error {
 	decoded, err := workflowexec.DecodeSpec[kernelModuleSpec](spec)
 	if err != nil {
-		return fmt.Errorf("decode KernelModule spec: %w", err)
+		return fmt.Errorf("decode ConfigureKernelModule spec: %w", err)
 	}
 	modules := kernelModuleNames(decoded)
 	if len(modules) == 0 {
-		return fmt.Errorf("%s: KernelModule requires name or names", errCodeInstallKernelModuleMiss)
+		return fmt.Errorf("%s: ConfigureKernelModule requires name or names", errCodeInstallConfigureKernelModuleMiss)
 	}
 	if decoded.Name != "" && len(decoded.Names) > 0 {
-		return fmt.Errorf("%s: KernelModule accepts either name or names", errCodeInstallKernelModuleMiss)
+		return fmt.Errorf("%s: ConfigureKernelModule accepts either name or names", errCodeInstallConfigureKernelModuleMiss)
 	}
 
 	load := true
@@ -323,14 +323,14 @@ func kernelModuleNames(spec kernelModuleSpec) []string {
 	return items
 }
 
-func runSysctlApply(ctx context.Context, spec map[string]any) error {
+func runConfigureSysctlApply(ctx context.Context, spec map[string]any) error {
 	file := stringValue(spec, "file")
-	args := stringSlice(spec["Command"])
+	args := stringSlice(spec["command"])
 	if len(args) == 0 {
 		if file != "" {
-			args = []string{"Sysctl", "-p", file}
+			args = []string{"sysctl", "-p", file}
 		} else {
-			args = []string{"Sysctl", "--system"}
+			args = []string{"sysctl", "--system"}
 		}
 	}
 	return runTimedCommandWithContext(ctx, args[0], args[1:], commandTimeoutWithDefault(spec, 30*time.Second))

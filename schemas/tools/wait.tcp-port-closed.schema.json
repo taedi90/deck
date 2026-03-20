@@ -11,7 +11,7 @@
       "type": "string"
     },
     "kind": {
-      "const": "WaitTCPPortClosed"
+      "const": "WaitForMissingTCPPort"
     },
     "metadata": {
       "additionalProperties": true,
@@ -76,7 +76,7 @@
     "kind",
     "spec"
   ],
-  "title": "WaitTCPPortClosedStep",
+  "title": "WaitForMissingTCPPortStep",
   "type": "object",
   "x-deck-visibility": "public"
 }

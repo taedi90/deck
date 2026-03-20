@@ -11,7 +11,7 @@
       "type": "string"
     },
     "kind": {
-      "const": "WaitServiceActive"
+      "const": "WaitForService"
     },
     "metadata": {
       "additionalProperties": true,
@@ -72,7 +72,7 @@
     "kind",
     "spec"
   ],
-  "title": "WaitServiceActiveStep",
+  "title": "WaitForServiceStep",
   "type": "object",
   "x-deck-visibility": "public"
 }

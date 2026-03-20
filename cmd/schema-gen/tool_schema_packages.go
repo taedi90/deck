@@ -1,7 +1,7 @@
 package main
 
-func generateRepositoryRefreshToolSchema() map[string]any {
-	root := stepEnvelopeSchema("RepositoryRefresh", "RepositoryRefreshStep", "Refreshes package metadata and can restrict or exclude repos during refresh.", "public")
+func generateRefreshRepositoryToolSchema() map[string]any {
+	root := stepEnvelopeSchema("RefreshRepository", "RefreshRepositoryStep", "Refreshes package metadata and can restrict or exclude repos during refresh.", "public")
 	props := propertyMap(root)
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",
@@ -21,8 +21,8 @@ func generateRepositoryRefreshToolSchema() map[string]any {
 	return root
 }
 
-func generatePackageDownloadToolSchema() map[string]any {
-	root := stepEnvelopeSchema("PackageDownload", "PackageDownloadStep", "Downloads packages into bundle output storage.", "public")
+func generateDownloadPackageToolSchema() map[string]any {
+	root := stepEnvelopeSchema("DownloadPackage", "DownloadPackageStep", "Downloads packages into bundle output storage.", "public")
 	props := propertyMap(root)
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",
@@ -63,20 +63,14 @@ func generatePackageDownloadToolSchema() map[string]any {
 					"image":   minLenStringSchema(),
 				},
 			},
-			"output": map[string]any{
-				"type":                 "object",
-				"additionalProperties": false,
-				"properties": map[string]any{
-					"dir": minLenStringSchema(),
-				},
-			},
+			"outputDir": minLenStringSchema(),
 		},
 	})
 	return root
 }
 
-func generatePackageInstallToolSchema() map[string]any {
-	root := stepEnvelopeSchema("PackageInstall", "PackageInstallStep", "Installs packages on the local node.", "public")
+func generateInstallPackageToolSchema() map[string]any {
+	root := stepEnvelopeSchema("InstallPackage", "InstallPackageStep", "Installs packages on the local node.", "public")
 	props := propertyMap(root)
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",
@@ -97,8 +91,8 @@ func generatePackageInstallToolSchema() map[string]any {
 	return root
 }
 
-func generateRepositoryConfigureToolSchema() map[string]any {
-	root := stepEnvelopeSchema("RepositoryConfigure", "RepositoryConfigureStep", "Configures repository definitions on the local node.", "public")
+func generateConfigureRepositoryToolSchema() map[string]any {
+	root := stepEnvelopeSchema("ConfigureRepository", "ConfigureRepositoryStep", "Configures repository definitions on the local node.", "public")
 	props := propertyMap(root)
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",

@@ -17,7 +17,7 @@ func TestVarsPrecedence(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "vars.yaml"), []byte("imageRepo: from-vars-file\nroleHint: from-vars-file\n"), 0o644); err != nil {
 		t.Fatalf("write vars.yaml: %v", err)
 	}
-	if err := os.WriteFile(workflowPath, []byte("role: apply\nversion: v1alpha1\nvars:\n  imageRepo: from-workflow\n  kubeVersion: v1.31.0\nphases: []\n"), 0o644); err != nil {
+	if err := os.WriteFile(workflowPath, []byte("version: v1alpha1\nvars:\n  imageRepo: from-workflow\n  kubeVersion: v1.31.0\nphases: []\n"), 0o644); err != nil {
 		t.Fatalf("write workflow: %v", err)
 	}
 
@@ -48,7 +48,7 @@ func TestVarsURLFetch(t *testing.T) {
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
 			case "/workflows/apply.yaml":
-				_, _ = w.Write([]byte("role: apply\nversion: v1alpha1\nvars:\n  fromWorkflow: true\nphases: []\n"))
+				_, _ = w.Write([]byte("version: v1alpha1\nvars:\n  fromWorkflow: true\nphases: []\n"))
 			case "/workflows/vars.yaml":
 				_, _ = w.Write([]byte("fromVarsFile: true\n"))
 			default:
@@ -74,7 +74,7 @@ func TestVarsURLFetch(t *testing.T) {
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
 			case "/workflows/apply.yaml":
-				_, _ = w.Write([]byte("role: apply\nversion: v1alpha1\nvars:\n  fromWorkflow: true\nphases: []\n"))
+				_, _ = w.Write([]byte("version: v1alpha1\nvars:\n  fromWorkflow: true\nphases: []\n"))
 			case "/workflows/vars.yaml":
 				http.NotFound(w, r)
 			default:
@@ -101,14 +101,13 @@ func TestLoadRejectsBothPhasesAndSteps(t *testing.T) {
 	dir := t.TempDir()
 	workflowPath := filepath.Join(dir, "workflow.yaml")
 
-	content := []byte(`role: apply
-version: v1alpha1
+	content := []byte(`version: v1alpha1
 phases:
   - name: phase-a
     steps: []
 steps:
   - id: step-a
-    kind: Command
+    kind: RunCommand
     spec: {}
 `)
 	if err := os.WriteFile(workflowPath, content, 0o644); err != nil {
@@ -125,7 +124,7 @@ func TestStateKey(t *testing.T) {
 	t.Run("changes when vars yaml changes", func(t *testing.T) {
 		dir := t.TempDir()
 		workflowPath := filepath.Join(dir, "apply.yaml")
-		workflowContent := []byte("role: apply\nversion: v1alpha1\nphases: []\n")
+		workflowContent := []byte("version: v1alpha1\nphases: []\n")
 		if err := os.WriteFile(workflowPath, workflowContent, 0o644); err != nil {
 			t.Fatalf("write workflow: %v", err)
 		}
@@ -154,7 +153,7 @@ func TestStateKey(t *testing.T) {
 	t.Run("changes when var override changes", func(t *testing.T) {
 		dir := t.TempDir()
 		workflowPath := filepath.Join(dir, "apply.yaml")
-		workflowContent := []byte("role: apply\nversion: v1alpha1\nvars:\n  mode: workflow\nphases: []\n")
+		workflowContent := []byte("version: v1alpha1\nvars:\n  mode: workflow\nphases: []\n")
 		if err := os.WriteFile(workflowPath, workflowContent, 0o644); err != nil {
 			t.Fatalf("write workflow: %v", err)
 		}
@@ -176,7 +175,7 @@ func TestStateKey(t *testing.T) {
 }
 
 func TestStateKeyIgnoresAssistedMetadata(t *testing.T) {
-	workflow := []byte("role: apply\nversion: v1alpha1\nphases: []\n")
+	workflow := []byte("version: v1alpha1\nphases: []\n")
 	effectiveVars := map[string]any{"mode": "manual", "region": "lab-a"}
 
 	serverA := "https://site-a.example.invalid"
@@ -206,7 +205,7 @@ func TestLoadWithPhaseImports_Local(t *testing.T) {
 	fragmentPath := filepath.Join(fragmentDir, "common.yaml")
 	fragment := []byte(`steps:
   - id: imported-step
-    kind: Command
+    kind: RunCommand
     spec:
       command: ["true"]
 `)
@@ -214,15 +213,14 @@ func TestLoadWithPhaseImports_Local(t *testing.T) {
 		t.Fatalf("write fragment: %v", err)
 	}
 
-	root := []byte(`role: apply
-version: v1alpha1
+	root := []byte(`version: v1alpha1
 phases:
   - name: bootstrap
     imports:
       - path: fragments/common.yaml
     steps:
       - id: root-step
-        kind: Command
+        kind: RunCommand
         spec:
           command: ["true"]
 `)
@@ -254,13 +252,12 @@ func TestLoadRejectsTopLevelImports(t *testing.T) {
 	}
 	workflowPath := filepath.Join(workflowsDir, "apply.yaml")
 
-	workflow := []byte(`role: apply
-version: v1alpha1
+	workflow := []byte(`version: v1alpha1
 imports:
   - legacy.yaml
 steps:
   - id: root-step
-    kind: Command
+    kind: RunCommand
     spec:
       command: ["true"]
 `)
@@ -281,22 +278,21 @@ func TestLoadWithPhaseImports_RemoteRelative(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/wf/workflows/apply.yaml":
-			_, _ = w.Write([]byte(`role: apply
-version: v1alpha1
+			_, _ = w.Write([]byte(`version: v1alpha1
 phases:
   - name: bootstrap
     imports:
       - path: fragments/common.yaml
     steps:
       - id: root-step
-        kind: Command
+        kind: RunCommand
         spec:
           command: ["true"]
 `))
 		case "/wf/workflows/components/fragments/common.yaml":
 			_, _ = w.Write([]byte(`steps:
   - id: imported-step
-    kind: Command
+    kind: RunCommand
     spec:
       command: ["true"]
 `))
@@ -340,7 +336,7 @@ func TestLoadRejectsComponentPhases(t *testing.T) {
   - name: install
     steps:
       - id: imported-step
-        kind: Command
+        kind: RunCommand
         spec:
           command: ["true"]
 `)
@@ -348,15 +344,14 @@ func TestLoadRejectsComponentPhases(t *testing.T) {
 		t.Fatalf("write fragment: %v", err)
 	}
 
-	root := []byte(`role: apply
-version: v1alpha1
+	root := []byte(`version: v1alpha1
 phases:
   - name: install
     imports:
       - path: phase-fragment.yaml
     steps:
       - id: root-step
-        kind: Command
+        kind: RunCommand
         spec:
           command: ["true"]
 `)
@@ -385,12 +380,12 @@ func TestLoadWithPhaseImports_CombinesWhenAndSteps(t *testing.T) {
 
 	fragment := []byte(`steps:
   - id: imported-a
-    kind: Command
+    kind: RunCommand
     when: vars.enableCommon == true
     spec:
       command: ["true"]
   - id: imported-b
-    kind: Command
+    kind: RunCommand
     spec:
       command: ["true"]
 `)
@@ -398,8 +393,7 @@ func TestLoadWithPhaseImports_CombinesWhenAndSteps(t *testing.T) {
 		t.Fatalf("write fragment: %v", err)
 	}
 
-	root := []byte(`role: apply
-version: v1alpha1
+	root := []byte(`version: v1alpha1
 phases:
   - name: install
     imports:
@@ -407,7 +401,7 @@ phases:
         when: vars.osFamily == "rhel"
     steps:
       - id: root-step
-        kind: Command
+        kind: RunCommand
         spec:
           command: ["true"]
 `)
@@ -446,13 +440,12 @@ func TestLoadWithVarsYAML_Precedence(t *testing.T) {
 		t.Fatalf("write vars.yaml: %v", err)
 	}
 
-	root := []byte(`role: apply
-version: v1alpha1
+	root := []byte(`version: v1alpha1
 vars:
   region: kr
 steps:
   - id: root-step
-    kind: Command
+    kind: RunCommand
     spec:
       command: ["true"]
 `)

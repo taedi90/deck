@@ -31,9 +31,8 @@ type rpmModuleSpec struct {
 	Stream string
 }
 
-func runPackageDownload(ctx context.Context, runner CommandRunner, bundleRoot string, spec map[string]any, defaultDir string, opts RunOptions) ([]string, error) {
-	output := mapValue(spec, "output")
-	dir := stringValue(output, "dir")
+func runDownloadPackage(ctx context.Context, runner CommandRunner, bundleRoot string, spec map[string]any, defaultDir string, opts RunOptions) ([]string, error) {
+	dir := stringValue(spec, "outputDir")
 	if dir == "" {
 		dir = defaultDir
 	}
@@ -96,7 +95,7 @@ func runPackageDownload(ctx context.Context, runner CommandRunner, bundleRoot st
 			return files, nil
 		}
 
-		files, err := runContainerPackageDownloadAll(ctx, runner, bundleRoot, dir, spec, repo, packages, opts)
+		files, err := runContainerDownloadPackageAll(ctx, runner, bundleRoot, dir, spec, repo, packages, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -155,11 +154,11 @@ func runContainerPackageRepoBuild(
 	if err != nil {
 		return nil, err
 	}
-	mounts, err := prepareRepositoryRefreshMounts(family, cacheKey)
+	mounts, err := prepareRefreshRepositoryMounts(family, cacheKey)
 	if err != nil {
 		return nil, err
 	}
-	if err := runPackageDownloadContainer(ctx, runner, runtimeSel, image, outAbs, cmdScript, mounts); err != nil {
+	if err := runDownloadPackageContainer(ctx, runner, runtimeSel, image, outAbs, cmdScript, mounts); err != nil {
 		return nil, fmt.Errorf("container package repo build failed: %w", err)
 	}
 
@@ -171,7 +170,7 @@ func runContainerPackageRepoBuild(
 	return files, nil
 }
 
-func runContainerPackageDownloadAll(ctx context.Context, runner CommandRunner, bundleRoot, dir string, spec map[string]any, repo map[string]any, packages []string, opts RunOptions) ([]string, error) {
+func runContainerDownloadPackageAll(ctx context.Context, runner CommandRunner, bundleRoot, dir string, spec map[string]any, repo map[string]any, packages []string, opts RunOptions) ([]string, error) {
 	backend := mapValue(spec, "backend")
 	runtimeSel, err := detectRuntime(runner, stringValue(backend, "runtime"))
 	if err != nil {
@@ -203,7 +202,7 @@ func runContainerPackageDownloadAll(ctx context.Context, runner CommandRunner, b
 	if err != nil {
 		return nil, err
 	}
-	cmdScript, err := buildPackageDownloadAllScript(family, packages, modules)
+	cmdScript, err := buildDownloadPackageAllScript(family, packages, modules)
 	if err != nil {
 		return nil, err
 	}
@@ -211,11 +210,11 @@ func runContainerPackageDownloadAll(ctx context.Context, runner CommandRunner, b
 	if err != nil {
 		return nil, err
 	}
-	mounts, err := prepareRepositoryRefreshMounts(family, cacheKey)
+	mounts, err := prepareRefreshRepositoryMounts(family, cacheKey)
 	if err != nil {
 		return nil, err
 	}
-	if err := runPackageDownloadContainer(ctx, runner, runtimeSel, image, outAbs, cmdScript, mounts); err != nil {
+	if err := runDownloadPackageContainer(ctx, runner, runtimeSel, image, outAbs, cmdScript, mounts); err != nil {
 		return nil, fmt.Errorf("container package download failed: %w", err)
 	}
 
@@ -227,7 +226,7 @@ func runContainerPackageDownloadAll(ctx context.Context, runner CommandRunner, b
 	return files, nil
 }
 
-func buildPackageDownloadAllScript(family string, packages []string, modules []rpmModuleSpec) (string, error) {
+func buildDownloadPackageAllScript(family string, packages []string, modules []rpmModuleSpec) (string, error) {
 	parts := make([]string, 0, len(packages))
 	for _, p := range packages {
 		p = strings.TrimSpace(p)
@@ -399,7 +398,7 @@ func packageDownloadCacheKey(spec map[string]any, family string, artifactRoot st
 	return hex.EncodeToString(sum[:]), nil
 }
 
-func prepareRepositoryRefreshMounts(family string, cacheKey string) ([]packageCacheMount, error) {
+func prepareRefreshRepositoryMounts(family string, cacheKey string) ([]packageCacheMount, error) {
 	cacheRoot, err := userdirs.CacheRoot()
 	if err != nil {
 		return nil, err
@@ -409,7 +408,7 @@ func prepareRepositoryRefreshMounts(family string, cacheKey string) ([]packageCa
 		if !os.IsNotExist(err) {
 			return nil, fmt.Errorf("stat package cache root: %w", err)
 		}
-		legacyPath, ok, legacyErr := resolveLegacyRepositoryRefreshRoot(cacheKey)
+		legacyPath, ok, legacyErr := resolveLegacyRefreshRepositoryRoot(cacheKey)
 		if legacyErr != nil {
 			return nil, legacyErr
 		}
@@ -438,7 +437,7 @@ func prepareRepositoryRefreshMounts(family string, cacheKey string) ([]packageCa
 	}, nil
 }
 
-func runPackageDownloadContainer(ctx context.Context, runner CommandRunner, runtimeSel, image, outAbs, script string, mounts []packageCacheMount) error {
+func runDownloadPackageContainer(ctx context.Context, runner CommandRunner, runtimeSel, image, outAbs, script string, mounts []packageCacheMount) error {
 	runArgs := []string{"run", "--rm", "-v", outAbs + ":/out"}
 	for _, mount := range mounts {
 		runArgs = append(runArgs, "-v", mount.host+":"+mount.container)

@@ -6,7 +6,7 @@ Reference for the `Wait` family of typed workflow steps.
 ## Summary
 
 - family: `wait`
-- kinds: `WaitServiceActive`, `WaitCommand`, `WaitFileExists`, `WaitFileAbsent`, `WaitTCPPortOpen`, `WaitTCPPortClosed`
+- kinds: `WaitForService`, `WaitForCommand`, `WaitForFile`, `WaitForMissingFile`, `WaitForTCPPort`, `WaitForMissingTCPPort`
 
 ## Shared Step Fields
 
@@ -14,14 +14,14 @@ Shared step envelope fields such as `id`, `apiVersion`, `kind`, `when`, `retry`,
 
 ## Supported Kinds
 
-- `WaitServiceActive`: Wait until a systemd service reports active.
-- `WaitCommand`: Wait until a command exits successfully.
-- `WaitFileExists`: Wait until a file or directory exists.
-- `WaitFileAbsent`: Wait until a file or directory is absent.
-- `WaitTCPPortOpen`: Wait until a TCP port opens.
-- `WaitTCPPortClosed`: Wait until a TCP port closes.
+- `WaitForService`: Wait until a systemd service reports active.
+- `WaitForCommand`: Wait until a command exits successfully.
+- `WaitForFile`: Wait until a file or directory exists.
+- `WaitForMissingFile`: Wait until a file or directory is absent.
+- `WaitForTCPPort`: Wait until a TCP port opens.
+- `WaitForMissingTCPPort`: Wait until a TCP port closes.
 
-## `WaitServiceActive`
+## `WaitForService`
 
 Wait until a systemd service reports active.
 
@@ -34,7 +34,7 @@ Use this after service restarts or runtime configuration changes that take time 
 ### Example
 
 ```yaml
-kind: WaitServiceActive
+kind: WaitForService
 spec:
   name: containerd
   interval: 2s
@@ -47,7 +47,7 @@ spec:
 |---|---|---:|---|---|---|---|
 | `spec.initialDelay` | `string` | no | `` | `` | Duration to wait before the first poll attempt. Useful when a service needs a moment before it becomes checkable. | `1s` |
 | `spec.interval` | `string` | no | `` | `` | Duration between poll attempts. Accepts Go duration strings. | `2s` |
-| `spec.name` | `string` | yes | `` | `` | Service name to check. Required for `serviceActive`. | `containerd` |
+| `spec.name` | `string` | yes | `` | `` | ManageService name to check. Required for `serviceActive`. | `containerd` |
 | `spec.pollInterval` | `string` | no | `` | `` | Deprecated alias for `interval`. Use `interval` instead. | `2s` |
 | `spec.timeout` | `string` | no | `` | `` | Maximum total duration to wait before failing the step. | `5m` |
 
@@ -57,7 +57,7 @@ spec:
 - Keep waits specific so failures identify exactly which dependency did not become ready within the timeout.
 - Use `initialDelay` when a service emits a transient non-active state immediately after being started.
 
-## `WaitCommand`
+## `WaitForCommand`
 
 Wait until a command exits successfully.
 
@@ -71,8 +71,8 @@ Use this when a dependent step should wait for a local command-based condition t
 
 ```yaml
 apiVersion: deck/v1alpha1
-id: example-waitcommand
-kind: WaitCommand
+id: example-waitforcommand
+kind: WaitForCommand
 spec:
     command:
         - example
@@ -82,7 +82,7 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.command` | `array<string>` | yes | `` | `` | Command vector to run on each poll attempt. Required for `commandSuccess`. The step succeeds when the command exits 0. | `[test,-f,/etc/kubernetes/admin.conf]` |
+| `spec.command` | `array<string>` | yes | `` | `` | RunCommand vector to run on each poll attempt. Required for `commandSuccess`. The step succeeds when the command exits 0. | `[test,-f,/etc/kubernetes/admin.conf]` |
 | `spec.initialDelay` | `string` | no | `` | `` | Duration to wait before the first poll attempt. Useful when a service needs a moment before it becomes checkable. | `1s` |
 | `spec.interval` | `string` | no | `` | `` | Duration between poll attempts. Accepts Go duration strings. | `2s` |
 | `spec.pollInterval` | `string` | no | `` | `` | Deprecated alias for `interval`. Use `interval` instead. | `2s` |
@@ -94,7 +94,7 @@ spec:
 - Keep waits specific so failures identify exactly which dependency did not become ready within the timeout.
 - Use `initialDelay` when a service emits a transient non-active state immediately after being started.
 
-## `WaitFileExists`
+## `WaitForFile`
 
 Wait until a file or directory exists.
 
@@ -107,7 +107,7 @@ Use this when a prior step produces a file that later steps depend on.
 ### Example
 
 ```yaml
-kind: WaitFileExists
+kind: WaitForFile
 spec:
   path: /etc/kubernetes/admin.conf
   type: file
@@ -134,7 +134,7 @@ spec:
 - Keep waits specific so failures identify exactly which dependency did not become ready within the timeout.
 - Use `initialDelay` when a service emits a transient non-active state immediately after being started.
 
-## `WaitFileAbsent`
+## `WaitForMissingFile`
 
 Wait until a file or directory is absent.
 
@@ -147,7 +147,7 @@ Use this when a cleanup step needs to finish before later steps continue.
 ### Example
 
 ```yaml
-kind: WaitFileAbsent
+kind: WaitForMissingFile
 spec:
   path: /var/lib/etcd/member
   interval: 2s
@@ -171,7 +171,7 @@ spec:
 - Keep waits specific so failures identify exactly which dependency did not become ready within the timeout.
 - Use `initialDelay` when a service emits a transient non-active state immediately after being started.
 
-## `WaitTCPPortOpen`
+## `WaitForTCPPort`
 
 Wait until a TCP port opens.
 
@@ -184,7 +184,7 @@ Use this when a service must become reachable before later steps continue.
 ### Example
 
 ```yaml
-kind: WaitTCPPortOpen
+kind: WaitForTCPPort
 spec:
   port: "6443"
   interval: 2s
@@ -208,7 +208,7 @@ spec:
 - Keep waits specific so failures identify exactly which dependency did not become ready within the timeout.
 - Use `initialDelay` when a service emits a transient non-active state immediately after being started.
 
-## `WaitTCPPortClosed`
+## `WaitForMissingTCPPort`
 
 Wait until a TCP port closes.
 
@@ -221,7 +221,7 @@ Use this when a process must fully stop before a later step continues.
 ### Example
 
 ```yaml
-kind: WaitTCPPortClosed
+kind: WaitForMissingTCPPort
 spec:
   port: "10250"
   interval: 2s

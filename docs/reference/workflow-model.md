@@ -42,7 +42,6 @@ clusterName: prod-k8s
 **Scenario `vars:` block** — override or extend for the specific scenario:
 
 ```yaml
-role: apply
 version: v1alpha1
 vars:
   clusterName: staging-k8s   # overrides vars.yaml
@@ -52,7 +51,7 @@ vars:
 
 ```yaml
 - id: write-hostname
-  kind: FileWrite
+  kind: WriteFile
   spec:
     path: /etc/hostname
     content: "{{ .vars.clusterName }}\n"
@@ -62,7 +61,7 @@ vars:
 
 ```yaml
 - id: install-rhel-packages
-  kind: PackageInstall
+  kind: InstallPackage
   spec:
     names: [kubeadm, kubelet, kubectl]
   when: vars.osFamily == "rhel"
@@ -71,11 +70,10 @@ vars:
 ## Minimal workflow
 
 ```yaml
-role: apply
 version: v1alpha1
 steps:
   - id: prepare-state-dir
-    kind: Directory
+    kind: EnsureDirectory
     spec:
       path: /var/lib/deck
       mode: "0755"
@@ -84,7 +82,6 @@ steps:
 ## Minimal prepare workflow
 
 ```yaml
-role: prepare
 version: v1alpha1
 artifacts:
   files:
@@ -93,8 +90,7 @@ artifacts:
         - id: kubeadm
           source:
             url: https://example.local/kubeadm
-          output:
-            path: bin/kubeadm
+          outputPath: bin/kubeadm
 ```
 
 ## Step shape
@@ -120,7 +116,7 @@ Optional execution controls:
 ```yaml
 steps:
   - id: add-debian-repo
-    kind: RepositoryConfigure
+    kind: ConfigureRepository
     spec:
       type: apt
       name: offline-base
@@ -128,7 +124,7 @@ steps:
     when: vars.osFamily == "debian"
 
   - id: add-rhel-repo
-    kind: RepositoryConfigure
+    kind: ConfigureRepository
     spec:
       type: yum
       name: offline-base
@@ -143,17 +139,17 @@ steps:
 ```yaml
 steps:
   - id: get-join-cmd
-    kind: KubeadmInit
+    kind: InitKubeadm
     spec:
       outputJoinFile: "{{ .vars.joinFile }}"
     register:
       joinFile: joinFile
 
   - id: join-node
-    kind: KubeadmJoin
+    kind: JoinKubeadm
     spec:
       joinFile: "{{ .runtime.joinFile }}"
-      extraArgs: ["--cri-socket", "unix:///run/containerd/containerd.sock", "--ignore-preflight-errors=Swap,FileExisting-crictl,FileExisting-conntrack,FileExisting-socat"]
+      extraArgs: ["--cri-socket", "unix:///run/containerd/containerd.sock", "--ignore-preflight-errors=ConfigureSwap,FileExisting-crictl,FileExisting-conntrack,FileExisting-socat"]
 ```
 
 ## Phases
@@ -163,7 +159,6 @@ Use phases when the procedure has natural boundaries — a host-prereqs block th
 Each phase can import component fragments, include inline steps, or both.
 
 ```yaml
-role: apply
 version: v1alpha1
 phases:
   - name: host-prereqs
@@ -176,7 +171,7 @@ phases:
   - name: verify
     steps:
       - id: check-node-ready
-        kind: Command
+        kind: RunCommand
         spec:
           command: [kubectl, get, nodes]
 ```
@@ -187,27 +182,27 @@ Import paths are relative to `workflows/components/`. Write `k8s/prereq.yaml`, n
 
 ## Step kinds
 
-Typed steps make the workflow easier to scan, validate, and evolve. Use `Command` only when no supported kind fits.
+Typed steps make the workflow easier to scan, validate, and evolve. Use `RunCommand` only when no supported kind fits.
 
 Supported kinds:
 
 - `Artifact`
-- `HostCheck`
-- `Command`
-- `Containerd`
-- `Directory`
-- `FileDownload`, `FileWrite`, `FileCopy`, `FileEdit`
-- `ImageDownload`, `ImageVerify`
-- `KernelModule`
-- `KubeadmInit`, `KubeadmJoin`, `KubeadmReset`
-- `PackageDownload`, `PackageInstall`
-- `RepositoryConfigure`, `RepositoryRefresh`
-- `Service`
-- `Swap`
-- `Symlink`
-- `Sysctl`
-- `SystemdUnit`
-- `WaitCommand`, `WaitFileExists`, `WaitFileAbsent`, `WaitServiceActive`, `WaitTCPPortOpen`, `WaitTCPPortClosed`
+- `CheckHost`
+- `RunCommand`
+- `WriteContainerdConfig`
+- `EnsureDirectory`
+- `DownloadFile`, `WriteFile`, `CopyFile`, `EditFile`
+- `DownloadImage`, `VerifyImage`
+- `ConfigureKernelModule`
+- `InitKubeadm`, `JoinKubeadm`, `ResetKubeadm`
+- `DownloadPackage`, `InstallPackage`
+- `ConfigureRepository`, `RefreshRepository`
+- `ManageService`
+- `ConfigureSwap`
+- `CreateSymlink`
+- `ConfigureSysctl`
+- `WriteSystemdUnit`
+- `WaitForCommand`, `WaitForFile`, `WaitForMissingFile`, `WaitForService`, `WaitForTCPPort`, `WaitForMissingTCPPort`
 
 ## Prepare semantics
 
@@ -218,9 +213,9 @@ Supported kinds:
 - `artifacts.packages` declares package groups per target OS family, release, and arch
 - internally, `deck` still plans typed actions, but the authoring model stays inventory-driven
 
-## When to use Command
+## When to use RunCommand
 
-Use `Command` when no supported step kind fits yet. It is the escape hatch, not the ideal authoring path. If a workflow leans heavily on `Command`, the procedure may still be too close to raw shell.
+Use `RunCommand` when no supported step kind fits yet. It is the escape hatch, not the ideal authoring path. If a workflow leans heavily on `RunCommand`, the procedure may still be too close to raw shell.
 
 ## Validation model
 

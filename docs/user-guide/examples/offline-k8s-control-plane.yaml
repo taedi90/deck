@@ -1,4 +1,3 @@
-role: apply
 version: v1alpha1
 vars:
   role: control-plane
@@ -7,13 +6,13 @@ phases:
     steps:
       - id: prep-disable-swap
         apiVersion: deck/v1alpha1
-        kind: Swap
+        kind: ConfigureSwap
         spec:
           disable: true
           persist: true
       - id: prep-kernel-module-overlay
         apiVersion: deck/v1alpha1
-        kind: KernelModule
+        kind: ConfigureKernelModule
         spec:
           name: overlay
           load: true
@@ -21,7 +20,7 @@ phases:
           persistFile: /etc/modules-load.d/k8s.conf
       - id: prep-kernel-module-br-netfilter
         apiVersion: deck/v1alpha1
-        kind: KernelModule
+        kind: ConfigureKernelModule
         spec:
           name: br_netfilter
           load: true
@@ -29,7 +28,7 @@ phases:
           persistFile: /etc/modules-load.d/k8s.conf
       - id: prep-sysctl
         apiVersion: deck/v1alpha1
-        kind: Sysctl
+        kind: ConfigureSysctl
         spec:
           writeFile: /etc/sysctl.d/99-kubernetes-cri.conf
           apply: true
@@ -39,27 +38,27 @@ phases:
             net.ipv4.ip_forward: 1
       - id: prep-containerd-config
         apiVersion: deck/v1alpha1
-        kind: Containerd
+        kind: WriteContainerdConfig
         spec:
           path: /etc/containerd/config.toml
           systemdCgroup: true
       - id: prep-containerd-runtime
         apiVersion: deck/v1alpha1
-        kind: Service
+        kind: ManageService
         spec:
           name: containerd
           enabled: true
           state: started
       - id: prep-kubelet-runtime
         apiVersion: deck/v1alpha1
-        kind: Service
+        kind: ManageService
         spec:
           name: kubelet
           enabled: true
           state: started
       - id: kubeadm-init
         apiVersion: deck/v1alpha1
-        kind: KubeadmInit
+        kind: InitKubeadm
         spec:
           outputJoinFile: /tmp/deck/join-real.txt
           podNetworkCIDR: 10.244.0.0/16
@@ -68,13 +67,14 @@ phases:
           extraArgs: ["--kubernetes-version", "v1.30.1"]
       - id: setup-kubeconfig
         apiVersion: deck/v1alpha1
-        kind: Directory
+        kind: EnsureDirectory
         spec:
           path: /home/vagrant/.kube
       - id: copy-kubeconfig
         apiVersion: deck/v1alpha1
-        kind: FileCopy
+        kind: CopyFile
         spec:
-          src: /etc/kubernetes/admin.conf
-          dest: /home/vagrant/.kube/config
+          source:
+            path: /etc/kubernetes/admin.conf
+          path: /home/vagrant/.kube/config
           mode: "0644"

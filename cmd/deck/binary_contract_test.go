@@ -29,7 +29,7 @@ func TestApplyDryRunExitCodeViaBinary(t *testing.T) {
 		t.Fatalf("mkdir workflows: %v", err)
 	}
 	workflowPath := filepath.Join(root, "apply.yaml")
-	workflowBody := "role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: dry-run-step\n        kind: Command\n        spec:\n          command: [\"true\"]\n"
+	workflowBody := "version: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: dry-run-step\n        kind: RunCommand\n        spec:\n          command: [\"true\"]\n"
 	if err := os.WriteFile(workflowPath, []byte(workflowBody), 0o644); err != nil {
 		t.Fatalf("write workflow: %v", err)
 	}
@@ -206,7 +206,7 @@ func TestCLIContractHelpRoutesViaBinary(t *testing.T) {
 	}
 }
 
-func TestCLIContractVersionCommandViaBinary(t *testing.T) {
+func TestCLIContractVersionRunCommandViaBinary(t *testing.T) {
 	binaryPath := buildDeckBinary(t, "deck-version-bin")
 	res := runDeckBinary(t, binaryPath, "version")
 	if res.exitCode != 0 {
@@ -287,13 +287,12 @@ func TestBundledApplyWorksFromBundleDir(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(seedDir, "source.bin"), []byte("seed\n"), 0o644); err != nil {
 		t.Fatalf("write seed file: %v", err)
 	}
-	packBody := fmt.Sprintf(`role: prepare
-version: v1alpha1
+	packBody := fmt.Sprintf(`version: v1alpha1
 phases:
   - name: prepare
     steps:
       - id: seed-file
-        kind: FileDownload
+        kind: DownloadFile
         spec:
           source:
             path: files/source.bin
@@ -302,17 +301,16 @@ phases:
               - type: local
                 path: %q
 `, filepath.Join(tmpRoot, "seed"))
-	if err := os.WriteFile(filepath.Join(workflowsDir, "scenarios", "prepare.yaml"), []byte(packBody), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpRoot, "prepare.yaml"), []byte(packBody), 0o644); err != nil {
 		t.Fatalf("write prepare workflow: %v", err)
 	}
 	applyLogPath := filepath.Join(tmpRoot, "apply.log")
-	applyBody := fmt.Sprintf(`role: apply
-version: v1alpha1
+	applyBody := fmt.Sprintf(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: apply-step
-        kind: Command
+        kind: RunCommand
         spec:
           command: ["sh", "-c", "echo hit >> %s"]
 `, strings.ReplaceAll(applyLogPath, "\\", "\\\\"))
@@ -368,7 +366,7 @@ phases:
 	}
 }
 
-func TestRunUnknownCommand(t *testing.T) {
+func TestRunUnknownRunCommand(t *testing.T) {
 	err := run([]string{"unknown"})
 	if err == nil {
 		t.Fatalf("expected unknown command error")

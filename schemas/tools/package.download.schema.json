@@ -11,7 +11,7 @@
       "type": "string"
     },
     "kind": {
-      "const": "PackageDownload"
+      "const": "DownloadPackage"
     },
     "metadata": {
       "additionalProperties": true,
@@ -65,15 +65,9 @@
           "additionalProperties": true,
           "type": "object"
         },
-        "output": {
-          "additionalProperties": false,
-          "properties": {
-            "dir": {
-              "minLength": 1,
-              "type": "string"
-            }
-          },
-          "type": "object"
+        "outputDir": {
+          "minLength": 1,
+          "type": "string"
         },
         "packages": {
           "items": {
@@ -145,7 +139,7 @@
     "kind",
     "spec"
   ],
-  "title": "PackageDownloadStep",
+  "title": "DownloadPackageStep",
   "type": "object",
   "x-deck-visibility": "public"
 }

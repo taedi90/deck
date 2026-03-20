@@ -6,13 +6,13 @@ Reference for the `Sysctl` family of typed workflow steps.
 ## Summary
 
 - family: `sysctl`
-- kinds: `Sysctl`
+- kinds: `ConfigureSysctl`
 
 ## Shared Step Fields
 
 Shared step envelope fields such as `id`, `apiVersion`, `kind`, `when`, `retry`, `timeout`, `register`, and `metadata` are documented in [Workflow Schema](../workflow.md).
 
-## `Sysctl`
+## `ConfigureSysctl`
 
 Write and optionally apply sysctl values.
 
@@ -25,7 +25,7 @@ Use this for kernel tunables that must survive reboot and may need immediate app
 ### Example
 
 ```yaml
-kind: Sysctl
+kind: ConfigureSysctl
 spec:
   writeFile: /etc/sysctl.d/99-kubernetes-cri.conf
   apply: true

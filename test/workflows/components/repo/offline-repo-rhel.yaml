@@ -1,6 +1,6 @@
 steps:
   - id: apply-offline-repo-config-rhel
-    kind: RepositoryConfigure
+    kind: ConfigureRepository
     spec:
       format: yum
       path: /etc/yum.repos.d/deck-offline.repo
@@ -12,7 +12,7 @@ steps:
           enabled: true
           gpgcheck: false
   - id: refresh-dnf-package-cache
-    kind: RepositoryRefresh
+    kind: RefreshRepository
     spec:
       manager: dnf
       clean: true

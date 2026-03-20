@@ -26,7 +26,7 @@ type scenarioEntry struct {
 	Workflow string `json:"workflow"`
 }
 
-func newListCommand() *cobra.Command {
+func newListRunCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List available scenarios from local workflows or the saved remote server",

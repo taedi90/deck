@@ -29,7 +29,7 @@ func buildManifest() Manifest {
 	cli := AskCommandMeta()
 	manifest := Manifest{
 		CLI: CLIContext{
-			Command:             "deck ask",
+			RunCommand:          "deck ask",
 			PlanSubcommand:      "deck ask plan",
 			ConfigSubcommand:    "deck ask config",
 			TopLevelDescription: cli.Short,
@@ -71,7 +71,7 @@ func buildManifest() Manifest {
 				Role:        "apply",
 				Summary:     "Apply changes the local node using prepared inputs and typed host actions.",
 				WhenToUse:   "Use apply for package installation, file writes, service changes, runtime config, and host convergence steps.",
-				Prefer:      []string{"typed steps such as File, RepositoryConfigure, RepositoryRefresh, Service, Containerd, and Package", "named phases for multi-step installs", "components for reusable imported logic"},
+				Prefer:      []string{"typed steps such as File, ConfigureRepository, RefreshRepository, ManageService, WriteContainerdConfig, and Package", "named phases for multi-step installs", "components for reusable imported logic"},
 				Avoid:       []string{"online collection logic that should happen during prepare", "large repeated literals that belong in vars.yaml"},
 				OutputFiles: []string{pathJoin(workspacepaths.WorkflowRootDir, workspacepaths.CanonicalApplyWorkflowRel), pathJoin(workspacepaths.WorkflowRootDir, workspacepaths.WorkflowVarsRel)},
 			},
@@ -133,15 +133,15 @@ func buildStepKinds() []StepKindContext {
 
 func buildStepKeyFields(kind string, meta schemadoc.ToolMetadata) []StepFieldContext {
 	preferred := map[string][]string{
-		"PackageDownload":     {"spec.packages", "spec.distro", "spec.repo", "spec.backend", "spec.output"},
-		"PackageInstall":      {"spec.packages", "spec.source", "spec.restrictToRepos", "spec.excludeRepos"},
-		"RepositoryConfigure": {"spec.format", "spec.path", "spec.repositories", "spec.replaceExisting", "spec.cleanupPaths"},
-		"RepositoryRefresh":   {"spec.manager", "spec.clean", "spec.update", "spec.restrictToRepos", "spec.excludeRepos"},
-		"Service":             {"spec.name", "spec.names", "spec.state", "spec.enabled"},
-		"FileDownload":        {"spec.source", "spec.fetch", "spec.output"},
-		"FileWrite":           {"spec.path", "spec.content", "spec.contentFromTemplate", "spec.mode"},
-		"FileCopy":            {"spec.src", "spec.dest", "spec.mode"},
-		"FileEdit":            {"spec.path", "spec.edits", "spec.backup", "spec.mode"},
+		"DownloadPackage":     {"spec.packages", "spec.distro", "spec.repo", "spec.backend", "spec.output"},
+		"InstallPackage":      {"spec.packages", "spec.source", "spec.restrictToRepos", "spec.excludeRepos"},
+		"ConfigureRepository": {"spec.format", "spec.path", "spec.repositories", "spec.replaceExisting", "spec.cleanupPaths"},
+		"RefreshRepository":   {"spec.manager", "spec.clean", "spec.update", "spec.restrictToRepos", "spec.excludeRepos"},
+		"ManageService":       {"spec.name", "spec.names", "spec.state", "spec.enabled"},
+		"DownloadFile":        {"spec.source", "spec.fetch", "spec.output"},
+		"WriteFile":           {"spec.path", "spec.content", "spec.template", "spec.mode"},
+		"CopyFile":            {"spec.src", "spec.dest", "spec.mode"},
+		"EditFile":            {"spec.path", "spec.edits", "spec.backup", "spec.mode"},
 	}
 	keys := preferred[kind]
 	if len(keys) == 0 {

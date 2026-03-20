@@ -1,6 +1,6 @@
 steps:
   - id: bootstrap-reset-preflight
-    kind: KubeadmReset
+    kind: ResetKubeadm
     spec:
       force: true
       ignoreErrors: true
@@ -22,7 +22,7 @@ steps:
         - etcd
       restartRuntimeService: containerd
   - id: bootstrap-runtime-ready
-    kind: Command
+    kind: RunCommand
     spec:
       timeout: 5m
       command:
@@ -64,36 +64,36 @@ steps:
           systemctl enable --now kubelet
           systemctl is-active --quiet kubelet
   - id: bootstrap-init
-    kind: KubeadmInit
+    kind: InitKubeadm
     timeout: 20m
     spec:
       configTemplate: default
       configFile: /tmp/deck/kubeadm-init.yaml
-      pullImages: true
       outputJoinFile: /tmp/deck/join.txt
       kubernetesVersion: "{{ .vars.kubernetesVersion }}"
       advertiseAddress: auto
       podNetworkCIDR: 10.244.0.0/16
       criSocket: unix:///run/containerd/containerd.sock
-      ignorePreflightErrors: [Swap, FileExisting-crictl, FileExisting-conntrack, FileExisting-socat, Port-10250]
+      ignorePreflightErrors: [ConfigureSwap, FileExisting-crictl, FileExisting-conntrack, FileExisting-socat, Port-10250]
   - id: bootstrap-publish-join-dir
-    kind: Directory
+    kind: EnsureDirectory
     spec:
       path: /tmp/deck/server-root/files/cluster
   - id: bootstrap-publish-join
-    kind: FileCopy
+    kind: CopyFile
     spec:
-      src: /tmp/deck/join.txt
-      dest: /tmp/deck/server-root/files/cluster/join.txt
+      source:
+        path: /tmp/deck/join.txt
+      path: /tmp/deck/server-root/files/cluster/join.txt
   - id: bootstrap-kubeconfig-ready
-    kind: WaitFileExists
+    kind: WaitForFile
     spec:
       timeout: 5m
       path: /etc/kubernetes/admin.conf
       type: file
       nonEmpty: true
   - id: bootstrap-offline-guard
-    kind: Command
+    kind: RunCommand
     spec:
       command:
         - bash

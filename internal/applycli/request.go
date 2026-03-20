@@ -13,8 +13,6 @@ import (
 	"sort"
 	"strings"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/taedi90/deck/internal/bundle"
 	"github.com/taedi90/deck/internal/config"
 	"github.com/taedi90/deck/internal/filemode"
@@ -65,12 +63,6 @@ func ResolveExecutionRequest(ctx context.Context, opts ExecutionRequestOptions) 
 		if err != nil {
 			return ExecutionRequest{}, err
 		}
-		var wfMeta config.Workflow
-		if err := yaml.Unmarshal(workflowBytes, &wfMeta); err == nil {
-			if strings.TrimSpace(wfMeta.Role) != "apply" {
-				return ExecutionRequest{}, fmt.Errorf("%s workflow role must be apply: %s", opts.CommandName, workflowPath)
-			}
-		}
 		if err := validate.Bytes(workflowPath, workflowBytes); err != nil {
 			return ExecutionRequest{}, err
 		}
@@ -91,10 +83,6 @@ func ResolveExecutionRequest(ctx context.Context, opts ExecutionRequestOptions) 
 	if err != nil {
 		return ExecutionRequest{}, err
 	}
-	if strings.TrimSpace(wf.Role) != "apply" {
-		return ExecutionRequest{}, fmt.Errorf("%s workflow role must be apply: %s", opts.CommandName, workflowPath)
-	}
-
 	selectedPhase := strings.TrimSpace(opts.SelectedPhase)
 	if selectedPhase == "" {
 		selectedPhase = strings.TrimSpace(opts.DefaultPhase)
@@ -319,13 +307,6 @@ func DiscoverApplyWorkflow(ctx context.Context, bundleRoot string) (string, erro
 		return "", err
 	}
 	if info, err := os.Stat(preferred); err == nil && !info.IsDir() {
-		wf, loadErr := config.Load(ctx, preferred)
-		if loadErr != nil {
-			return "", loadErr
-		}
-		if strings.TrimSpace(wf.Role) != "apply" {
-			return "", fmt.Errorf("apply workflow role must be apply: %s", preferred)
-		}
 		return preferred, nil
 	}
 	entries, err := os.ReadDir(workflowDir)
@@ -342,13 +323,7 @@ func DiscoverApplyWorkflow(ctx context.Context, bundleRoot string) (string, erro
 			continue
 		}
 		candidate := filepath.Join(workflowDir, entry.Name())
-		wf, loadErr := config.Load(ctx, candidate)
-		if loadErr != nil {
-			return "", loadErr
-		}
-		if strings.TrimSpace(wf.Role) == "apply" {
-			matches = append(matches, candidate)
-		}
+		matches = append(matches, candidate)
 	}
 	sort.Strings(matches)
 	if len(matches) == 0 {

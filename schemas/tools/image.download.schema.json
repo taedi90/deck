@@ -11,7 +11,7 @@
       "type": "string"
     },
     "kind": {
-      "const": "ImageDownload"
+      "const": "DownloadImage"
     },
     "metadata": {
       "additionalProperties": true,
@@ -86,15 +86,9 @@
           "minItems": 1,
           "type": "array"
         },
-        "output": {
-          "additionalProperties": false,
-          "properties": {
-            "dir": {
-              "minLength": 1,
-              "type": "string"
-            }
-          },
-          "type": "object"
+        "outputDir": {
+          "minLength": 1,
+          "type": "string"
         }
       },
       "required": [
@@ -115,7 +109,7 @@
     "kind",
     "spec"
   ],
-  "title": "ImageDownloadStep",
+  "title": "DownloadImageStep",
   "type": "object",
   "x-deck-visibility": "public"
 }

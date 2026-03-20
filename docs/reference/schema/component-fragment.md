@@ -10,12 +10,12 @@ Reference for reusable workflow component fragments located under `workflows/com
 ```yaml
 steps:
   - id: write-config
-    kind: FileWrite
+    kind: WriteFile
     spec:
       path: /etc/example.conf
       content: hello
   - id: restart-service
-    kind: Service
+    kind: ManageService
     spec:
       name: example
       state: restarted
@@ -25,7 +25,7 @@ steps:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `steps` | `array<object>` | yes | `` | `` | Ordered list of workflow steps contained in this fragment. | `[{id:example,kind:Command,spec:{...}}]` |
+| `steps` | `array<object>` | yes | `` | `` | Ordered list of workflow steps contained in this fragment. | `[{id:example,kind:RunCommand,spec:{...}}]` |
 
 ## Notes
 

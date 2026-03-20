@@ -22,7 +22,7 @@
 
 ## Testing
 
-| Change area | Commands |
+| Change area | RunCommands |
 |---|---|
 | Any Go change | `make test && make lint` |
 | AI build tag (`//go:build ai`) | `make test-ai` |

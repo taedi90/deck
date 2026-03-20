@@ -209,7 +209,7 @@ func executeLogs(ctx context.Context, root string, source string, path string, u
 		}
 		journalRecords, err := readControlLogsJournal(ctx, resolvedUnit, 50, 0)
 		if err != nil {
-			return fmt.Errorf("logs: %w\nsuggestion: %s", err, suggestJournalctlCommand(resolvedUnit))
+			return fmt.Errorf("logs: %w\nsuggestion: %s", err, suggestJournalctlRunCommand(resolvedUnit))
 		}
 		if err := verbosef(1, "deck: server logs journalRecords=%d\n", len(journalRecords)); err != nil {
 			return err
@@ -329,7 +329,7 @@ func classifyJournalctlError(err error, output string) error {
 	return fmt.Errorf("journalctl failed: %w", err)
 }
 
-func suggestJournalctlCommand(unit string) string {
+func suggestJournalctlRunCommand(unit string) string {
 	return fmt.Sprintf("sudo journalctl -u %s --no-pager -n 50", unit)
 }
 

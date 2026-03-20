@@ -6,15 +6,15 @@ Reference for the `SystemdUnit` family of typed workflow steps.
 ## Summary
 
 - family: `systemd-unit`
-- kinds: `SystemdUnit`
+- kinds: `WriteSystemdUnit`
 
 ## Shared Step Fields
 
 Shared step envelope fields such as `id`, `apiVersion`, `kind`, `when`, `retry`, `timeout`, `register`, and `metadata` are documented in [Workflow Schema](../workflow.md).
 
-## `SystemdUnit`
+## `WriteSystemdUnit`
 
-Write a systemd unit file and optionally manage the service.
+Write a systemd unit file on the node.
 
 - schema: `../../../schemas/tools/systemd-unit.schema.json`
 - outputs: `path`
@@ -26,14 +26,14 @@ Use this when workflows need to install or override a custom unit definition.
 ### Example
 
 ```yaml
-kind: SystemdUnit
+kind: WriteSystemdUnit
 spec:
   path: /etc/systemd/system/kubelet.service
-  contentFromTemplate: |
+  template: |
     [Unit]
     Description=Kubelet
 
-    [Service]
+    [ManageService]
     Environment=NODE_IP={{ .vars.nodeIP }}
   daemonReload: true
   service:
@@ -46,22 +46,10 @@ spec:
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
 | `spec.content` | `string` | no | `` | `` | Inline unit file content written verbatim to `path`. | `[Unit]\nDescription=kubelet` |
-| `spec.contentFromTemplate` | `string` | no | `` | `` | Inline multi-line unit content rendered with the current vars before writing. Prefer this for parameterized unit files. | `[Service]\nEnvironment=NODE_IP={{ .vars.nodeIP }}` |
 | `spec.daemonReload` | `boolean` | no | `` | `` | Run `systemctl daemon-reload` after writing the unit file so systemd picks up the change. | `true` |
 | `spec.mode` | `string` | no | `` | `` | File permissions applied to the unit file in octal notation. | `0644` |
 | `spec.path` | `string` | yes | `` | `` | Destination path for the unit file on the node. | `/etc/systemd/system/kubelet.service` |
-| `spec.service` | `object` | no | `` | `` | Optional service management block run after the unit file is written. | `{name:kubelet,enabled:true,state:started}` |
-
-### Nested Objects
-
-### `spec.service`
-
-| Key | Type | Required | Default | Enum | Description | Example |
-|---|---|---:|---|---|---|---|
-| `spec.service.enabled` | `boolean` | no | `` | `` | Whether the service should be enabled to start on boot. | `true` |
-| `spec.service.name` | `string` | no | `` | `` | Service name to manage. Defaults to the unit file basename when omitted. | `kubelet.service` |
-| `spec.service.state` | `string` | no | `` | `unchanged, started, stopped, restarted, reloaded` | Desired service state after writing the unit file. | `started` |
-
+| `spec.template` | `string` | no | `` | `` | Inline multi-line unit content rendered with the current vars before writing. Prefer this for parameterized unit files. | `[ManageService]\nEnvironment=NODE_IP={{ .vars.nodeIP }}` |
 
 ## Related
 

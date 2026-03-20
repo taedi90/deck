@@ -1,7 +1,7 @@
 package main
 
-func generateServiceToolSchema() map[string]any {
-	root := stepEnvelopeSchema("Service", "ServiceStep", "Starts, stops, enables, or disables local services.", "public")
+func generateManageServiceToolSchema() map[string]any {
+	root := stepEnvelopeSchema("ManageService", "ManageServiceStep", "Starts, stops, enables, or disables local services.", "public")
 	props := propertyMap(root)
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",
@@ -23,8 +23,8 @@ func generateServiceToolSchema() map[string]any {
 	return root
 }
 
-func generateSwapToolSchema() map[string]any {
-	root := stepEnvelopeSchema("Swap", "SwapStep", "Enables or disables swap and its persistence settings.", "public")
+func generateConfigureSwapToolSchema() map[string]any {
+	root := stepEnvelopeSchema("ConfigureSwap", "ConfigureSwapStep", "Enables or disables swap and its persistence settings.", "public")
 	props := propertyMap(root)
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",
@@ -38,8 +38,8 @@ func generateSwapToolSchema() map[string]any {
 	return root
 }
 
-func generateSymlinkToolSchema() map[string]any {
-	root := stepEnvelopeSchema("Symlink", "SymlinkStep", "Creates or replaces a symbolic link on the local node.", "public")
+func generateCreateSymlinkToolSchema() map[string]any {
+	root := stepEnvelopeSchema("CreateSymlink", "CreateSymlinkStep", "Creates or replaces a symbolic link on the local node.", "public")
 	props := propertyMap(root)
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",
@@ -56,8 +56,8 @@ func generateSymlinkToolSchema() map[string]any {
 	return root
 }
 
-func generateSysctlToolSchema() map[string]any {
-	root := stepEnvelopeSchema("Sysctl", "SysctlStep", "Writes and optionally applies sysctl values on the local node.", "public")
+func generateConfigureSysctlToolSchema() map[string]any {
+	root := stepEnvelopeSchema("ConfigureSysctl", "ConfigureSysctlStep", "Writes and optionally applies sysctl values on the local node.", "public")
 	props := propertyMap(root)
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",
@@ -81,32 +81,23 @@ func generateSysctlToolSchema() map[string]any {
 	return root
 }
 
-func generateSystemdUnitToolSchema() map[string]any {
-	root := stepEnvelopeSchema("SystemdUnit", "SystemdUnitStep", "Writes a systemd unit file and optionally manages the related service.", "public")
+func generateWriteSystemdUnitToolSchema() map[string]any {
+	root := stepEnvelopeSchema("WriteSystemdUnit", "WriteSystemdUnitStep", "Writes a systemd unit file on the node.", "public")
 	props := propertyMap(root)
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",
 		"additionalProperties": false,
 		"required":             []any{"path"},
 		"properties": map[string]any{
-			"path":                minLenStringSchema(),
-			"content":             map[string]any{"type": "string"},
-			"contentFromTemplate": map[string]any{"type": "string"},
-			"mode":                modeSchema(),
-			"daemonReload":        map[string]any{"type": "boolean"},
-			"service": map[string]any{
-				"type":                 "object",
-				"additionalProperties": false,
-				"properties": map[string]any{
-					"name":    minLenStringSchema(),
-					"enabled": map[string]any{"type": "boolean"},
-					"state":   enumStringSchema("unchanged", "started", "stopped", "restarted", "reloaded"),
-				},
-			},
+			"path":         minLenStringSchema(),
+			"content":      map[string]any{"type": "string"},
+			"template":     map[string]any{"type": "string"},
+			"mode":         modeSchema(),
+			"daemonReload": map[string]any{"type": "boolean"},
 		},
 		"oneOf": []any{
 			map[string]any{"required": []any{"content"}},
-			map[string]any{"required": []any{"contentFromTemplate"}},
+			map[string]any{"required": []any{"template"}},
 		},
 	})
 	return root

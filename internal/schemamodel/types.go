@@ -1,12 +1,10 @@
 package schemamodel
 
 type WorkflowDocument struct {
-	Role     string            `json:"role"`
-	Version  string            `json:"version"`
-	Vars     map[string]any    `json:"vars,omitempty"`
-	Artifact *ArtifactSpec     `json:"artifacts,omitempty"`
-	Phases   []WorkflowPhase   `json:"phases,omitempty"`
-	Steps    []WorkflowStepRef `json:"steps,omitempty"`
+	Version string            `json:"version"`
+	Vars    map[string]any    `json:"vars,omitempty"`
+	Phases  []WorkflowPhase   `json:"phases,omitempty"`
+	Steps   []WorkflowStepRef `json:"steps,omitempty"`
 }
 
 type ArtifactSpec struct {

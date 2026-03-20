@@ -37,9 +37,9 @@ type MCP struct {
 }
 
 type MCPServer struct {
-	Name    string   `json:"name,omitempty"`
-	Command string   `json:"command,omitempty"`
-	Args    []string `json:"args,omitempty"`
+	Name       string   `json:"name,omitempty"`
+	RunCommand string   `json:"command,omitempty"`
+	Args       []string `json:"args,omitempty"`
 }
 
 type LSP struct {
@@ -48,8 +48,8 @@ type LSP struct {
 }
 
 type LSPEntry struct {
-	Command string   `json:"command,omitempty"`
-	Args    []string `json:"args,omitempty"`
+	RunCommand string   `json:"command,omitempty"`
+	Args       []string `json:"args,omitempty"`
 }
 
 type fileConfig struct {
@@ -234,7 +234,7 @@ func normalize(settings Settings) Settings {
 	settings.LogLevel = normalizeLogLevel(settings.LogLevel)
 	for i := range settings.MCP.Servers {
 		settings.MCP.Servers[i].Name = strings.TrimSpace(settings.MCP.Servers[i].Name)
-		settings.MCP.Servers[i].Command = strings.TrimSpace(settings.MCP.Servers[i].Command)
+		settings.MCP.Servers[i].RunCommand = strings.TrimSpace(settings.MCP.Servers[i].RunCommand)
 		trimmed := make([]string, 0, len(settings.MCP.Servers[i].Args))
 		for _, arg := range settings.MCP.Servers[i].Args {
 			if value := strings.TrimSpace(arg); value != "" {
@@ -243,7 +243,7 @@ func normalize(settings Settings) Settings {
 		}
 		settings.MCP.Servers[i].Args = trimmed
 	}
-	settings.LSP.YAML.Command = strings.TrimSpace(settings.LSP.YAML.Command)
+	settings.LSP.YAML.RunCommand = strings.TrimSpace(settings.LSP.YAML.RunCommand)
 	trimmedLSP := make([]string, 0, len(settings.LSP.YAML.Args))
 	for _, arg := range settings.LSP.YAML.Args {
 		if value := strings.TrimSpace(arg); value != "" {
@@ -310,6 +310,6 @@ func isEmptyConfig(cfg fileConfig) bool {
 		!cfg.Ask.MCP.Enabled &&
 		len(cfg.Ask.MCP.Servers) == 0 &&
 		!cfg.Ask.LSP.Enabled &&
-		cfg.Ask.LSP.YAML.Command == "" &&
+		cfg.Ask.LSP.YAML.RunCommand == "" &&
 		len(cfg.Ask.LSP.YAML.Args) == 0
 }

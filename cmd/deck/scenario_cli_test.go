@@ -20,10 +20,10 @@ func TestCompleteScenarioNamesMergesLocalAndServerForAll(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, "workflows", "scenarios", "nested"), 0o755); err != nil {
 		t.Fatalf("mkdir scenarios: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "apply.yaml"), []byte("role: apply\nversion: v1alpha1\nsteps: []\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "apply.yaml"), []byte("version: v1alpha1\nsteps: []\n"), 0o644); err != nil {
 		t.Fatalf("write local apply: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "nested", "only-local.yaml"), []byte("role: apply\nversion: v1alpha1\nsteps: []\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "nested", "only-local.yaml"), []byte("version: v1alpha1\nsteps: []\n"), 0o644); err != nil {
 		t.Fatalf("write local nested: %v", err)
 	}
 
@@ -76,7 +76,7 @@ func TestResolveScenarioWorkflowReferenceRespectsExplicitSource(t *testing.T) {
 		t.Fatalf("mkdir local scenarios: %v", err)
 	}
 	localPath := filepath.Join(root, "workflows", "scenarios", "apply.yaml")
-	if err := os.WriteFile(localPath, []byte("role: apply\nversion: v1alpha1\nsteps: []\n"), 0o644); err != nil {
+	if err := os.WriteFile(localPath, []byte("version: v1alpha1\nsteps: []\n"), 0o644); err != nil {
 		t.Fatalf("write local apply: %v", err)
 	}
 
@@ -118,7 +118,7 @@ func TestListVerboseDiagnosticsDoNotPolluteJSON(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, "workflows", "scenarios"), 0o755); err != nil {
 		t.Fatalf("mkdir scenarios: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "apply.yaml"), []byte("role: apply\nversion: v1alpha1\nsteps: []\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "apply.yaml"), []byte("version: v1alpha1\nsteps: []\n"), 0o644); err != nil {
 		t.Fatalf("write scenario: %v", err)
 	}
 

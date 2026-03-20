@@ -23,7 +23,7 @@ func Gather(ctx context.Context, cfg askconfig.MCP, route askintent.Route, promp
 	chunks := make([]askretrieve.Chunk, 0)
 	events := make([]string, 0)
 	for _, server := range cfg.Servers {
-		if strings.TrimSpace(server.Command) == "" {
+		if strings.TrimSpace(server.RunCommand) == "" {
 			continue
 		}
 		chunk, event := queryServer(ctx, server, route, prompt)
@@ -40,7 +40,7 @@ func Gather(ctx context.Context, cfg askconfig.MCP, route askintent.Route, promp
 func queryServer(parent context.Context, server askconfig.MCPServer, route askintent.Route, prompt string) (*askretrieve.Chunk, string) {
 	ctx, cancel := context.WithTimeout(parent, 8*time.Second)
 	defer cancel()
-	tr := transport.NewStdio(server.Command, nil, server.Args...)
+	tr := transport.NewStdio(server.RunCommand, nil, server.Args...)
 	c := client.NewClient(tr)
 	if err := c.Start(ctx); err != nil {
 		return nil, fmt.Sprintf("mcp:%s start failed: %v", server.Name, err)

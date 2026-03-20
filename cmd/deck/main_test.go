@@ -10,7 +10,7 @@ import (
 	"github.com/taedi90/deck/internal/buildinfo"
 )
 
-func TestVersionCommand(t *testing.T) {
+func TestVersionRunCommand(t *testing.T) {
 	originalVersion := buildinfo.Version
 	originalCommit := buildinfo.Commit
 	originalDate := buildinfo.Date
@@ -39,7 +39,7 @@ func TestVersionCommand(t *testing.T) {
 	}
 }
 
-func TestVersionCommandJSON(t *testing.T) {
+func TestVersionRunCommandJSON(t *testing.T) {
 	originalVersion := buildinfo.Version
 	originalCommit := buildinfo.Commit
 	originalDate := buildinfo.Date
@@ -138,14 +138,14 @@ func TestInit(t *testing.T) {
 		t.Helper()
 		want := map[string]string{
 			filepath.Join("workflows", "vars.yaml"): wantVars,
-			filepath.Join("workflows", "scenarios", "prepare.yaml"): strings.Join([]string{
-				"role: prepare",
+			"prepare.yaml": strings.Join([]string{
 				"version: v1alpha1",
-				"artifacts: {}",
+				"phases:",
+				"  - name: prepare",
+				"    steps: []",
 				"",
 			}, "\n"),
 			filepath.Join("workflows", "scenarios", "apply.yaml"): strings.Join([]string{
-				"role: apply",
 				"version: v1alpha1",
 				"phases:",
 				"  - name: install",
@@ -221,7 +221,7 @@ func TestInit(t *testing.T) {
 
 	t.Run("fails when any target file already exists and does not overwrite", func(t *testing.T) {
 		outputDir := t.TempDir()
-		conflictDir := filepath.Join(outputDir, "workflows", "scenarios")
+		conflictDir := outputDir
 		if err := os.MkdirAll(conflictDir, 0o755); err != nil {
 			t.Fatalf("mkdir workflows: %v", err)
 		}
@@ -252,7 +252,7 @@ func TestInit(t *testing.T) {
 
 	t.Run("fails when target path exists as directory", func(t *testing.T) {
 		outputDir := t.TempDir()
-		targetDir := filepath.Join(outputDir, "workflows", "scenarios", "prepare.yaml")
+		targetDir := filepath.Join(outputDir, "prepare.yaml")
 		if err := os.MkdirAll(targetDir, 0o755); err != nil {
 			t.Fatalf("mkdir conflicting directory: %v", err)
 		}
@@ -293,7 +293,7 @@ func TestRunWorkflowRunDryRunPrintsPlan(t *testing.T) {
 	if !strings.Contains(out, "PHASE=install") {
 		t.Fatalf("expected phase line in output, got %q", out)
 	}
-	if !strings.Contains(out, "run-true Command PLAN") {
+	if !strings.Contains(out, "run-true RunCommand PLAN") {
 		t.Fatalf("expected step plan line in output, got %q", out)
 	}
 }
@@ -318,7 +318,7 @@ func TestRunWorkflowRunDryRunWithNonInstallPhaseName(t *testing.T) {
 	if !strings.Contains(out, "PHASE=bootstrap") {
 		t.Fatalf("expected bootstrap phase line in output, got %q", out)
 	}
-	if !strings.Contains(out, "run-true Command PLAN") {
+	if !strings.Contains(out, "run-true RunCommand PLAN") {
 		t.Fatalf("expected step plan line in output, got %q", out)
 	}
 
@@ -332,7 +332,7 @@ func TestRunWorkflowRunDryRunWithNonInstallPhaseName(t *testing.T) {
 	if !strings.Contains(planOut, "PLAN workflow=") {
 		t.Fatalf("expected plan header, got %q", planOut)
 	}
-	if !strings.Contains(planOut, "run-true Command RUN") {
+	if !strings.Contains(planOut, "run-true RunCommand RUN") {
 		t.Fatalf("expected plan output, got %q", planOut)
 	}
 	if !strings.Contains(planOut, "SUMMARY steps=1 run=1 skip=0") {

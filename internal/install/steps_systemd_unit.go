@@ -3,27 +3,25 @@ package install
 import (
 	"context"
 	"fmt"
-	"path/filepath"
-	"strings"
 	"time"
 )
 
-func runSystemdUnit(ctx context.Context, spec map[string]any) error {
+func runWriteSystemdUnit(ctx context.Context, spec map[string]any) error {
 	path := stringValue(spec, "path")
 	if path == "" {
-		return fmt.Errorf("%s: SystemdUnit requires path", errCodeInstallSystemdUnitPath)
+		return fmt.Errorf("%s: WriteSystemdUnit requires path", errCodeInstallWriteSystemdUnitPath)
 	}
 
 	content := stringValue(spec, "content")
-	templateContent := stringValue(spec, "contentFromTemplate")
+	templateContent := stringValue(spec, "template")
 	if content != "" && templateContent != "" {
-		return fmt.Errorf("%s: SystemdUnit accepts either content or contentFromTemplate", errCodeInstallSystemdUnitBoth)
+		return fmt.Errorf("%s: WriteSystemdUnit accepts either content or template", errCodeInstallWriteSystemdUnitBoth)
 	}
 	if content == "" {
 		content = templateContent
 	}
 	if content == "" {
-		return fmt.Errorf("%s: SystemdUnit requires content or contentFromTemplate", errCodeInstallSystemdUnitInput)
+		return fmt.Errorf("%s: WriteSystemdUnit requires content or template", errCodeInstallWriteSystemdUnitInput)
 	}
 
 	if err := runWriteFile(map[string]any{
@@ -40,41 +38,5 @@ func runSystemdUnit(ctx context.Context, spec map[string]any) error {
 		}
 	}
 
-	serviceRaw, hasService := spec["Service"]
-	if !hasService {
-		return nil
-	}
-	service, ok := serviceRaw.(map[string]any)
-	if !ok {
-		return fmt.Errorf("%s: SystemdUnit service block must be an object", errCodeInstallSystemdUnitSvc)
-	}
-
-	name := stringValue(service, "name")
-	if name == "" {
-		name = inferSystemdServiceName(path)
-	}
-	if name == "" {
-		return fmt.Errorf("%s: SystemdUnit service requires name", errCodeInstallSystemdUnitSvc)
-	}
-
-	serviceSpec := map[string]any{"name": name}
-	if enabled, exists := service["enabled"].(bool); exists {
-		serviceSpec["enabled"] = enabled
-	}
-	if state := stringValue(service, "state"); state != "" {
-		serviceSpec["state"] = state
-	}
-	if timeout := stringValue(spec, "timeout"); timeout != "" {
-		serviceSpec["timeout"] = timeout
-	}
-
-	return runService(ctx, serviceSpec)
-}
-
-func inferSystemdServiceName(path string) string {
-	base := strings.TrimSpace(filepath.Base(path))
-	if base == "" || base == "." || base == string(filepath.Separator) {
-		return ""
-	}
-	return base
+	return nil
 }

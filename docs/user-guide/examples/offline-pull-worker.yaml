@@ -1,4 +1,3 @@
-role: apply
 version: v1alpha1
 vars:
   serverURL: 192.168.56.1:8080
@@ -11,14 +10,14 @@ phases:
     steps:
       - id: prep-disable-swap
         apiVersion: deck/v1alpha1
-        kind: Swap
+        kind: ConfigureSwap
         spec:
           disable: true
           persist: false
       - id: configure-offline-repo-apt
         when: vars.osFamily == "debian"
         apiVersion: deck/v1alpha1
-        kind: RepositoryConfigure
+        kind: ConfigureRepository
         spec:
           format: apt
           replaceExisting: true
@@ -32,7 +31,7 @@ phases:
       - id: refresh-offline-repo-apt
         when: vars.osFamily == "debian"
         apiVersion: deck/v1alpha1
-        kind: RepositoryRefresh
+        kind: RefreshRepository
         spec:
           manager: apt
           clean: true
@@ -40,7 +39,7 @@ phases:
       - id: configure-offline-repo-yum
         when: vars.osFamily == "rhel"
         apiVersion: deck/v1alpha1
-        kind: RepositoryConfigure
+        kind: ConfigureRepository
         spec:
           format: yum
           replaceExisting: true
@@ -58,23 +57,28 @@ phases:
       - id: refresh-offline-repo-yum
         when: vars.osFamily == "rhel"
         apiVersion: deck/v1alpha1
-        kind: RepositoryRefresh
+        kind: RefreshRepository
         spec:
           manager: dnf
           clean: true
           update: true
       - id: install-k8s-deps
         apiVersion: deck/v1alpha1
-        kind: PackageInstall
+        kind: InstallPackage
         spec:
           packages: [containerd, kubelet, kubeadm, kubectl]
       - id: configure-containerd-runtime
         apiVersion: deck/v1alpha1
-        kind: Containerd
+        kind: WriteContainerdConfig
         spec:
           path: /etc/containerd/config.toml
           configPath: /etc/containerd/certs.d
           systemdCgroup: true
+      - id: configure-containerd-registry-hosts
+        apiVersion: deck/v1alpha1
+        kind: WriteContainerdRegistryHosts
+        spec:
+          path: /etc/containerd/certs.d
           registryHosts:
             - registry: registry.k8s.io
               server: https://registry.k8s.io
@@ -83,21 +87,21 @@ phases:
               skipVerify: true
       - id: restart-containerd
         apiVersion: deck/v1alpha1
-        kind: Service
+        kind: ManageService
         spec:
           name: containerd
           enabled: true
           state: restarted
       - id: start-kubelet
         apiVersion: deck/v1alpha1
-        kind: Service
+        kind: ManageService
         spec:
           name: kubelet
           enabled: true
           state: started
       - id: kubeadm-join
         apiVersion: deck/v1alpha1
-        kind: KubeadmJoin
+        kind: JoinKubeadm
         spec:
           joinFile: "{{ .vars.joinFile }}"
-          extraArgs: ["--cri-socket", "unix:///run/containerd/containerd.sock", "--ignore-preflight-errors=Swap"]
+          extraArgs: ["--cri-socket", "unix:///run/containerd/containerd.sock", "--ignore-preflight-errors=ConfigureSwap"]

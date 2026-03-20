@@ -18,7 +18,7 @@ func TestGatherDisabledReturnsNothing(t *testing.T) {
 
 func TestCollectYAMLDiagnosticsTargetsSelectedFile(t *testing.T) {
 	workspace := askretrieve.WorkspaceSummary{Files: []askretrieve.WorkspaceFile{
-		{Path: "workflows/scenarios/apply.yaml", Content: "role: apply\nversion: ["},
+		{Path: "workflows/scenarios/apply.yaml", Content: "version: ["},
 		{Path: "workflows/components/valid.yaml", Content: "steps: []\n"},
 	}}
 	diag := collectYAMLDiagnostics(askintent.Target{Path: "workflows/scenarios/apply.yaml"}, workspace)

@@ -11,7 +11,7 @@
       "type": "string"
     },
     "kind": {
-      "const": "FileWrite"
+      "const": "WriteFile"
     },
     "metadata": {
       "additionalProperties": true,
@@ -36,7 +36,7 @@
         {
           "not": {
             "required": [
-              "contentFromTemplate"
+              "template"
             ]
           },
           "required": [
@@ -50,15 +50,12 @@
             ]
           },
           "required": [
-            "contentFromTemplate"
+            "template"
           ]
         }
       ],
       "properties": {
         "content": {
-          "type": "string"
-        },
-        "contentFromTemplate": {
           "type": "string"
         },
         "mode": {
@@ -67,6 +64,9 @@
         },
         "path": {
           "minLength": 1,
+          "type": "string"
+        },
+        "template": {
           "type": "string"
         }
       },
@@ -88,7 +88,7 @@
     "kind",
     "spec"
   ],
-  "title": "FileWriteStep",
+  "title": "WriteFileStep",
   "type": "object",
   "x-deck-visibility": "public"
 }

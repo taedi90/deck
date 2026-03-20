@@ -32,11 +32,6 @@ type fileDownloadSourceSpec struct {
 	Bundle *fileDownloadBundleSpec `json:"bundle"`
 }
 
-type fileDownloadOutputSpec struct {
-	Path  string `json:"path"`
-	Chmod string `json:"chmod"`
-}
-
 type fileDownloadFetchSourceSpec struct {
 	Type string `json:"type"`
 	Path string `json:"path"`
@@ -49,13 +44,14 @@ type fileDownloadFetchSpec struct {
 }
 
 type fileDownloadSpec struct {
-	Source  fileDownloadSourceSpec `json:"source"`
-	Output  fileDownloadOutputSpec `json:"output"`
-	Fetch   fileDownloadFetchSpec  `json:"fetch"`
-	Timeout string                 `json:"timeout"`
+	Source     fileDownloadSourceSpec `json:"source"`
+	Fetch      fileDownloadFetchSpec  `json:"fetch"`
+	OutputPath string                 `json:"outputPath"`
+	Mode       string                 `json:"mode"`
+	Timeout    string                 `json:"timeout"`
 }
 
-func runFileDownload(ctx context.Context, bundleRoot string, spec map[string]any) (string, error) {
+func runDownloadFile(ctx context.Context, bundleRoot string, spec map[string]any) (string, error) {
 	if ctx == nil {
 		return "", fmt.Errorf("context is nil")
 	}
@@ -80,7 +76,7 @@ func runFileDownload(ctx context.Context, bundleRoot string, spec map[string]any
 	sourcePath := strings.TrimSpace(decoded.Source.Path)
 	expectedSHA := strings.ToLower(strings.TrimSpace(decoded.Source.SHA256))
 	offlineOnly := decoded.Fetch.OfflineOnly
-	outPath := strings.TrimSpace(decoded.Output.Path)
+	outPath := strings.TrimSpace(decoded.OutputPath)
 	if strings.TrimSpace(outPath) == "" {
 		outPath = filepath.ToSlash(filepath.Join("files", inferDownloadFileName(sourcePath, url)))
 	}
@@ -145,13 +141,13 @@ func runFileDownload(ctx context.Context, bundleRoot string, spec map[string]any
 		}
 	}
 
-	if modeRaw := strings.TrimSpace(decoded.Output.Chmod); modeRaw != "" {
+	if modeRaw := strings.TrimSpace(decoded.Mode); modeRaw != "" {
 		modeVal, err := strconv.ParseUint(modeRaw, 8, 32)
 		if err != nil {
-			return "", fmt.Errorf("invalid chmod: %w", err)
+			return "", fmt.Errorf("invalid mode: %w", err)
 		}
 		if err := os.Chmod(target, os.FileMode(modeVal)); err != nil {
-			return "", fmt.Errorf("apply chmod: %w", err)
+			return "", fmt.Errorf("apply mode: %w", err)
 		}
 	}
 

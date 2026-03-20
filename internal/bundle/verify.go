@@ -40,13 +40,13 @@ func VerifyManifest(bundlePath string) error {
 	}
 
 	if info.IsDir() {
-		return verifyDirectoryManifest(bundlePath)
+		return verifyEnsureDirectoryManifest(bundlePath)
 	}
 
 	return verifyTarManifest(bundlePath)
 }
 
-func verifyDirectoryManifest(bundleRoot string) error {
+func verifyEnsureDirectoryManifest(bundleRoot string) error {
 	entries, manifestPaths, err := loadManifestEntriesFromDir(bundleRoot)
 	if err != nil {
 		return err

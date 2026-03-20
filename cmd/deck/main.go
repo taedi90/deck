@@ -27,7 +27,7 @@ func run(args []string) error {
 }
 
 func execute(args []string) cliResult {
-	root := newRootCommand()
+	root := newRootRunCommand()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	setCLIWriters(&stdout, &stderr)

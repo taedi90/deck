@@ -15,7 +15,7 @@ type checksRuntime struct {
 	currentGOARCH func() string
 }
 
-func defaultHostCheckRuntime() checksRuntime {
+func defaultCheckHostRuntime() checksRuntime {
 	return checksRuntime{
 		readHostFile:  os.ReadFile,
 		currentGOOS:   func() string { return runtime.GOOS },
@@ -23,9 +23,9 @@ func defaultHostCheckRuntime() checksRuntime {
 	}
 }
 
-func resolveHostCheckRuntime(opts RunOptions) checksRuntime {
+func resolveCheckHostRuntime(opts RunOptions) checksRuntime {
 	if opts.checksRuntime.readHostFile == nil || opts.checksRuntime.currentGOOS == nil || opts.checksRuntime.currentGOARCH == nil {
-		return defaultHostCheckRuntime()
+		return defaultCheckHostRuntime()
 	}
 	return opts.checksRuntime
 }
@@ -36,10 +36,10 @@ type checksSpec struct {
 	FailFast *bool    `json:"failFast"`
 }
 
-func runHostCheckDecoded(runner CommandRunner, decoded checksSpec, deps checksRuntime) (map[string]any, error) {
+func runCheckHostDecoded(runner CommandRunner, decoded checksSpec, deps checksRuntime) (map[string]any, error) {
 	checks := decoded.Checks
 	if len(checks) == 0 {
-		return nil, fmt.Errorf("%s: HostCheck requires checks", errCodePrepareHostCheckFailed)
+		return nil, fmt.Errorf("%s: CheckHost requires checks", errCodePrepareCheckHostFailed)
 	}
 	host := detectHostFacts(deps)
 
@@ -52,7 +52,7 @@ func runHostCheckDecoded(runner CommandRunner, decoded checksSpec, deps checksRu
 	fail := func(name, reason string) error {
 		failed = append(failed, name+":"+reason)
 		if failFast {
-			return fmt.Errorf("%s: %s", errCodePrepareHostCheckFailed, strings.Join(failed, ", "))
+			return fmt.Errorf("%s: %s", errCodePrepareCheckHostFailed, strings.Join(failed, ", "))
 		}
 		return nil
 	}
@@ -127,7 +127,7 @@ func runHostCheckDecoded(runner CommandRunner, decoded checksSpec, deps checksRu
 	}
 
 	if len(failed) > 0 {
-		return map[string]any{"passed": false, "failedChecks": failed, "host": host}, fmt.Errorf("%s: %s", errCodePrepareHostCheckFailed, strings.Join(failed, ", "))
+		return map[string]any{"passed": false, "failedChecks": failed, "host": host}, fmt.Errorf("%s: %s", errCodePrepareCheckHostFailed, strings.Join(failed, ", "))
 	}
 	return map[string]any{"passed": true, "failedChecks": []string{}, "host": host}, nil
 }

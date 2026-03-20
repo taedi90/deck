@@ -18,7 +18,7 @@ type waitSpec struct {
 	Type         string   `json:"type"`
 	NonEmpty     bool     `json:"nonEmpty"`
 	Name         string   `json:"name"`
-	Command      []string `json:"Command"`
+	Command      []string `json:"command"`
 	Address      string   `json:"address"`
 	Port         string   `json:"port"`
 	Timeout      string   `json:"timeout"`
@@ -65,8 +65,8 @@ func runWaitDecoded(parent context.Context, kind string, decoded waitSpec, timeo
 		case <-ctx.Done():
 			detail := kind
 			if p := decoded.Path; p != "" {
-				if kind == "WaitFileExists" || kind == "WaitFileAbsent" {
-					detail = waitPathExpectedCondition(p, map[string]string{"WaitFileExists": "exists", "WaitFileAbsent": "absent"}[kind], waitPathType(decoded), decoded.NonEmpty)
+				if kind == "WaitForFile" || kind == "WaitForMissingFile" {
+					detail = waitPathExpectedCondition(p, map[string]string{"WaitForFile": "exists", "WaitForMissingFile": "absent"}[kind], waitPathType(decoded), decoded.NonEmpty)
 				} else {
 					detail = fmt.Sprintf("%s (%s)", kind, p)
 				}
@@ -79,11 +79,11 @@ func runWaitDecoded(parent context.Context, kind string, decoded waitSpec, timeo
 
 func waitConditionMet(ctx context.Context, kind string, spec waitSpec) (bool, error) {
 	switch kind {
-	case "WaitFileExists":
+	case "WaitForFile":
 		return waitPathConditionMet(spec.Path, "exists", waitPathType(spec), spec.NonEmpty)
-	case "WaitFileAbsent":
+	case "WaitForMissingFile":
 		return waitPathConditionMet(spec.Path, "absent", waitPathType(spec), false)
-	case "WaitServiceActive":
+	case "WaitForService":
 		name := spec.Name
 		if name == "" {
 			return false, fmt.Errorf("wait.service-active requires name")
@@ -96,7 +96,7 @@ func waitConditionMet(ctx context.Context, kind string, spec waitSpec) (bool, er
 			return false, nil
 		}
 		return false, err
-	case "WaitCommand":
+	case "WaitForCommand":
 		cmd := spec.Command
 		if len(cmd) == 0 {
 			return false, fmt.Errorf("wait.command-success requires command")
@@ -109,7 +109,7 @@ func waitConditionMet(ctx context.Context, kind string, spec waitSpec) (bool, er
 			return false, nil
 		}
 		return false, err
-	case "WaitTCPPortClosed", "WaitTCPPortOpen":
+	case "WaitForMissingTCPPort", "WaitForTCPPort":
 		address := spec.Address
 		if address == "" {
 			address = "127.0.0.1"
@@ -121,7 +121,7 @@ func waitConditionMet(ctx context.Context, kind string, spec waitSpec) (bool, er
 		conn, err := net.DialTimeout("tcp", net.JoinHostPort(address, port), 500*time.Millisecond)
 		if err == nil {
 			_ = conn.Close()
-			return kind == "WaitTCPPortOpen", nil
+			return kind == "WaitForTCPPort", nil
 		}
 		if ne, ok := err.(net.Error); ok && ne.Timeout() {
 			return false, nil
@@ -129,7 +129,7 @@ func waitConditionMet(ctx context.Context, kind string, spec waitSpec) (bool, er
 		if os.IsTimeout(err) {
 			return false, nil
 		}
-		return kind == "WaitTCPPortClosed", nil
+		return kind == "WaitForMissingTCPPort", nil
 	default:
 		return false, fmt.Errorf("unsupported wait kind %q", kind)
 	}

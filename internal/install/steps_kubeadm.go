@@ -15,16 +15,16 @@ import (
 )
 
 type kubeadmResetSpec struct {
-	Force                 bool     `json:"force"`
-	IgnoreErrors          bool     `json:"ignoreErrors"`
-	StopKubelet           *bool    `json:"stopKubelet"`
-	CriSocket             string   `json:"criSocket"`
-	ExtraArgs             []string `json:"extraArgs"`
-	RemovePaths           []string `json:"removePaths"`
-	RemoveFiles           []string `json:"removeFiles"`
-	CleanupContainers     []string `json:"cleanupContainers"`
-	RestartRuntimeService string   `json:"restartRuntimeService"`
-	Timeout               string   `json:"timeout"`
+	Force                       bool     `json:"force"`
+	IgnoreErrors                bool     `json:"ignoreErrors"`
+	StopKubelet                 *bool    `json:"stopKubelet"`
+	CriSocket                   string   `json:"criSocket"`
+	ExtraArgs                   []string `json:"extraArgs"`
+	RemovePaths                 []string `json:"removePaths"`
+	RemoveFiles                 []string `json:"removeFiles"`
+	CleanupContainers           []string `json:"cleanupContainers"`
+	RestartRuntimeManageService string   `json:"restartRuntimeService"`
+	Timeout                     string   `json:"timeout"`
 }
 
 type kubeadmInitSpec struct {
@@ -45,9 +45,9 @@ type kubeadmInitSpec struct {
 var kubeadmAdminConfPath = "/etc/kubernetes/admin.conf"
 
 var (
-	kubeadmInitExecutor  = runKubeadmInitReal
-	kubeadmJoinExecutor  = runKubeadmJoinReal
-	kubeadmResetExecutor = runKubeadmResetReal
+	kubeadmInitExecutor  = runInitKubeadmReal
+	kubeadmJoinExecutor  = runJoinKubeadmReal
+	kubeadmResetExecutor = runResetKubeadmReal
 )
 
 type kubeadmJoinSpec struct {
@@ -58,10 +58,10 @@ type kubeadmJoinSpec struct {
 	Timeout        string   `json:"timeout"`
 }
 
-func runKubeadmInit(ctx context.Context, spec map[string]any) error {
+func runInitKubeadm(ctx context.Context, spec map[string]any) error {
 	decoded, err := workflowexec.DecodeSpec[kubeadmInitSpec](spec)
 	if err != nil {
-		return fmt.Errorf("decode KubeadmInit spec: %w", err)
+		return fmt.Errorf("decode InitKubeadm spec: %w", err)
 	}
 	if ctx == nil {
 		return fmt.Errorf("context is nil")
@@ -69,10 +69,10 @@ func runKubeadmInit(ctx context.Context, spec map[string]any) error {
 	return kubeadmInitExecutor(ctx, decoded)
 }
 
-func runKubeadmJoin(ctx context.Context, spec map[string]any) error {
+func runJoinKubeadm(ctx context.Context, spec map[string]any) error {
 	decoded, err := workflowexec.DecodeSpec[kubeadmJoinSpec](spec)
 	if err != nil {
-		return fmt.Errorf("decode KubeadmJoin spec: %w", err)
+		return fmt.Errorf("decode JoinKubeadm spec: %w", err)
 	}
 	if ctx == nil {
 		return fmt.Errorf("context is nil")
@@ -80,12 +80,12 @@ func runKubeadmJoin(ctx context.Context, spec map[string]any) error {
 	return kubeadmJoinExecutor(ctx, decoded)
 }
 
-func runKubeadmInitReal(parent context.Context, spec kubeadmInitSpec) error {
+func runInitKubeadmReal(parent context.Context, spec kubeadmInitSpec) error {
 	joinFile := strings.TrimSpace(spec.OutputJoinFile)
 	if joinFile == "" {
-		return fmt.Errorf("%s: KubeadmInit requires outputJoinFile", errCodeInstallInitJoinMissing)
+		return fmt.Errorf("%s: InitKubeadm requires outputJoinFile", errCodeInstallInitJoinMissing)
 	}
-	if shouldSkipKubeadmInit(spec) {
+	if shouldSkipInitKubeadm(spec) {
 		return nil
 	}
 	timeout := parseStepTimeout(spec.Timeout, 10*time.Minute)
@@ -105,7 +105,7 @@ func runKubeadmInitReal(parent context.Context, spec kubeadmInitSpec) error {
 		}
 		configBody := configTemplate
 		if strings.EqualFold(configTemplate, "default") {
-			configBody = renderDefaultKubeadmInitConfig(
+			configBody = renderDefaultInitKubeadmConfig(
 				advertiseAddress,
 				kubernetesVersion,
 				strings.TrimSpace(spec.PodNetworkCIDR),
@@ -183,7 +183,7 @@ func runKubeadmInitReal(parent context.Context, spec kubeadmInitSpec) error {
 	return filemode.WritePrivateFile(joinFile, []byte(joinCmd+"\n"))
 }
 
-func shouldSkipKubeadmInit(spec kubeadmInitSpec) bool {
+func shouldSkipInitKubeadm(spec kubeadmInitSpec) bool {
 	skip := true
 	if spec.SkipIfAdminConfExists != nil {
 		skip = *spec.SkipIfAdminConfExists
@@ -259,7 +259,7 @@ func parseFirstGlobalIPv4(addrOut string) string {
 	return ""
 }
 
-func renderDefaultKubeadmInitConfig(advertiseAddress, kubernetesVersion, podSubnet, criSocket string) string {
+func renderDefaultInitKubeadmConfig(advertiseAddress, kubernetesVersion, podSubnet, criSocket string) string {
 	b := strings.Builder{}
 	b.WriteString("apiVersion: kubeadm.k8s.io/v1beta3\n")
 	b.WriteString("kind: InitConfiguration\n")
@@ -283,14 +283,14 @@ func renderDefaultKubeadmInitConfig(advertiseAddress, kubernetesVersion, podSubn
 	return b.String()
 }
 
-func runKubeadmJoinReal(ctx context.Context, spec kubeadmJoinSpec) error {
+func runJoinKubeadmReal(ctx context.Context, spec kubeadmJoinSpec) error {
 	joinFile := strings.TrimSpace(spec.JoinFile)
 	configFile := strings.TrimSpace(spec.ConfigFile)
 	if joinFile != "" && configFile != "" {
-		return fmt.Errorf("%s: KubeadmJoin accepts joinFile or configFile, not both", errCodeInstallJoinInputConflict)
+		return fmt.Errorf("%s: JoinKubeadm accepts joinFile or configFile, not both", errCodeInstallJoinInputConflict)
 	}
 	if joinFile == "" && configFile == "" {
-		return fmt.Errorf("%s: KubeadmJoin requires joinFile or configFile", errCodeInstallJoinPathMissing)
+		return fmt.Errorf("%s: JoinKubeadm requires joinFile or configFile", errCodeInstallJoinPathMissing)
 	}
 
 	args := []string{"kubeadm", "join"}
@@ -329,19 +329,19 @@ func runKubeadmJoinReal(ctx context.Context, spec kubeadmJoinSpec) error {
 	return nil
 }
 
-func runKubeadmReset(ctx context.Context, spec map[string]any) error {
+func runResetKubeadm(ctx context.Context, spec map[string]any) error {
 	if ctx == nil {
 		return fmt.Errorf("context is nil")
 	}
 
 	decoded, err := workflowexec.DecodeSpec[kubeadmResetSpec](spec)
 	if err != nil {
-		return fmt.Errorf("decode KubeadmReset spec: %w", err)
+		return fmt.Errorf("decode ResetKubeadm spec: %w", err)
 	}
 	return kubeadmResetExecutor(ctx, decoded)
 }
 
-func runKubeadmResetReal(ctx context.Context, decoded kubeadmResetSpec) error {
+func runResetKubeadmReal(ctx context.Context, decoded kubeadmResetSpec) error {
 	stopKubelet := true
 	if decoded.StopKubelet != nil {
 		stopKubelet = *decoded.StopKubelet
@@ -383,7 +383,7 @@ func runKubeadmResetReal(ctx context.Context, decoded kubeadmResetSpec) error {
 		}
 	}
 
-	restartRuntime := strings.TrimSpace(decoded.RestartRuntimeService)
+	restartRuntime := strings.TrimSpace(decoded.RestartRuntimeManageService)
 	if restartRuntime != "" {
 		if err := runTimedCommandWithContext(ctx, "systemctl", []string{"restart", restartRuntime}, parseStepTimeout(decoded.Timeout, 2*time.Minute)); err != nil {
 			if errors.Is(err, ErrStepCommandTimeout) {

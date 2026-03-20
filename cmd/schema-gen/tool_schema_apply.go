@@ -1,15 +1,7 @@
 package main
 
-func generateArtifactToolSchema() map[string]any {
-	root := stepEnvelopeSchema("Artifact", "ArtifactStep", "Installs or extracts per-architecture artifacts during apply.", "public")
-	props := propertyMap(root)
-	setMap(props, "spec", artifactsToolSpecSchema())
-	root["$defs"] = map[string]any{"artifactSource": artifactSourceSchema()}
-	return root
-}
-
-func generateCommandToolSchema() map[string]any {
-	root := stepEnvelopeSchema("Command", "CommandStep", "Escape hatch for commands that are not yet covered by typed steps.", "public")
+func generateRunCommandToolSchema() map[string]any {
+	root := stepEnvelopeSchema("RunCommand", "RunCommandStep", "Escape hatch for commands that are not yet covered by typed steps.", "public")
 	props := propertyMap(root)
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",
@@ -25,8 +17,8 @@ func generateCommandToolSchema() map[string]any {
 	return root
 }
 
-func generateContainerdToolSchema() map[string]any {
-	root := stepEnvelopeSchema("Containerd", "ContainerdStep", "Configures containerd defaults and registry host settings during apply.", "public")
+func generateWriteContainerdConfigToolSchema() map[string]any {
+	root := stepEnvelopeSchema("WriteContainerdConfig", "WriteContainerdConfigStep", "Writes the containerd config.toml file on the node.", "public")
 	props := propertyMap(root)
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",
@@ -36,7 +28,21 @@ func generateContainerdToolSchema() map[string]any {
 			"configPath":    minLenStringSchema(),
 			"systemdCgroup": map[string]any{"type": "boolean"},
 			"createDefault": map[string]any{"type": "boolean", "default": true},
-			"registryHosts": map[string]any{"type": "array", "items": map[string]any{
+		},
+	})
+	return root
+}
+
+func generateWriteContainerdRegistryHostsToolSchema() map[string]any {
+	root := stepEnvelopeSchema("WriteContainerdRegistryHosts", "WriteContainerdRegistryHostsStep", "Writes containerd registry host configuration for mirrors and trust policy.", "public")
+	props := propertyMap(root)
+	setMap(props, "spec", map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"required":             []any{"path", "registryHosts"},
+		"properties": map[string]any{
+			"path": minLenStringSchema(),
+			"registryHosts": map[string]any{"type": "array", "minItems": 1, "items": map[string]any{
 				"type":                 "object",
 				"additionalProperties": false,
 				"required":             []any{"registry", "server", "host", "capabilities", "skipVerify"},
@@ -53,8 +59,8 @@ func generateContainerdToolSchema() map[string]any {
 	return root
 }
 
-func generateDirectoryToolSchema() map[string]any {
-	root := stepEnvelopeSchema("Directory", "DirectoryStep", "Ensures a directory exists on the local node.", "public")
+func generateEnsureDirectoryToolSchema() map[string]any {
+	root := stepEnvelopeSchema("EnsureDirectory", "EnsureDirectoryStep", "Ensures a directory exists on the local node.", "public")
 	props := propertyMap(root)
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",
@@ -65,25 +71,42 @@ func generateDirectoryToolSchema() map[string]any {
 	return root
 }
 
-func generateImageDownloadToolSchema() map[string]any {
-	root := stepEnvelopeSchema("ImageDownload", "ImageDownloadStep", "Downloads images into bundle output storage.", "public")
+func generateDownloadImageToolSchema() map[string]any {
+	root := stepEnvelopeSchema("DownloadImage", "DownloadImageStep", "Downloads images into bundle output storage.", "public")
 	props := propertyMap(root)
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",
 		"additionalProperties": false,
 		"required":             []any{"images"},
 		"properties": map[string]any{
-			"images":  stringArraySchema(1, false),
-			"auth":    imageAuthSchema(),
-			"backend": imageBackendSchema(),
-			"output":  imageOutputSchema(),
+			"images":    stringArraySchema(1, false),
+			"auth":      imageAuthSchema(),
+			"backend":   imageBackendSchema(),
+			"outputDir": minLenStringSchema(),
 		},
 	})
 	return root
 }
 
-func generateImageVerifyToolSchema() map[string]any {
-	root := stepEnvelopeSchema("ImageVerify", "ImageVerifyStep", "Verifies that required images already exist on the node.", "public")
+func generateImageLoadToolSchema() map[string]any {
+	root := stepEnvelopeSchema("LoadImage", "LoadImageStep", "Loads prepared image archives into the local container runtime.", "public")
+	props := propertyMap(root)
+	setMap(props, "spec", map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"required":             []any{"images"},
+		"properties": map[string]any{
+			"images":    stringArraySchema(1, false),
+			"sourceDir": minLenStringSchema(),
+			"runtime":   enumStringSchema("auto", "ctr", "docker", "podman"),
+			"command":   stringArraySchema(1, false),
+		},
+	})
+	return root
+}
+
+func generateVerifyImageToolSchema() map[string]any {
+	root := stepEnvelopeSchema("VerifyImage", "VerifyImageStep", "Verifies that required images already exist on the node.", "public")
 	props := propertyMap(root)
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",
@@ -131,18 +154,8 @@ func imageBackendSchema() map[string]any {
 	}
 }
 
-func imageOutputSchema() map[string]any {
-	return map[string]any{
-		"type":                 "object",
-		"additionalProperties": false,
-		"properties": map[string]any{
-			"dir": minLenStringSchema(),
-		},
-	}
-}
-
-func generateHostCheckToolSchema() map[string]any {
-	root := stepEnvelopeSchema("HostCheck", "HostCheckStep", "Runs host checks before prepare execution.", "public")
+func generateCheckHostToolSchema() map[string]any {
+	root := stepEnvelopeSchema("CheckHost", "CheckHostStep", "Runs host checks before prepare execution.", "public")
 	props := propertyMap(root)
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",
@@ -157,8 +170,8 @@ func generateHostCheckToolSchema() map[string]any {
 	return root
 }
 
-func generateKernelModuleToolSchema() map[string]any {
-	root := stepEnvelopeSchema("KernelModule", "KernelModuleStep", "Loads and persists required kernel modules on the local node.", "public")
+func generateConfigureKernelModuleToolSchema() map[string]any {
+	root := stepEnvelopeSchema("ConfigureKernelModule", "ConfigureKernelModuleStep", "Loads and persists required kernel modules on the local node.", "public")
 	props := propertyMap(root)
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",
@@ -178,8 +191,8 @@ func generateKernelModuleToolSchema() map[string]any {
 	return root
 }
 
-func generateKubeadmInitToolSchema() map[string]any {
-	root := stepEnvelopeSchema("KubeadmInit", "KubeadmInitStep", "Runs kubeadm init and writes a join command file.", "public")
+func generateInitKubeadmToolSchema() map[string]any {
+	root := stepEnvelopeSchema("InitKubeadm", "InitKubeadmStep", "Runs kubeadm init and writes a join command file.", "public")
 	props := propertyMap(root)
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",
@@ -188,7 +201,6 @@ func generateKubeadmInitToolSchema() map[string]any {
 		"properties": map[string]any{
 			"configFile":            map[string]any{"type": "string"},
 			"configTemplate":        map[string]any{"type": "string"},
-			"pullImages":            map[string]any{"type": "boolean"},
 			"outputJoinFile":        map[string]any{"type": "string"},
 			"kubernetesVersion":     map[string]any{"type": "string"},
 			"advertiseAddress":      map[string]any{"type": "string"},
@@ -202,8 +214,8 @@ func generateKubeadmInitToolSchema() map[string]any {
 	return root
 }
 
-func generateKubeadmJoinToolSchema() map[string]any {
-	root := stepEnvelopeSchema("KubeadmJoin", "KubeadmJoinStep", "Runs kubeadm join.", "public")
+func generateJoinKubeadmToolSchema() map[string]any {
+	root := stepEnvelopeSchema("JoinKubeadm", "JoinKubeadmStep", "Runs kubeadm join.", "public")
 	props := propertyMap(root)
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",
@@ -222,8 +234,8 @@ func generateKubeadmJoinToolSchema() map[string]any {
 	return root
 }
 
-func generateKubeadmResetToolSchema() map[string]any {
-	root := stepEnvelopeSchema("KubeadmReset", "KubeadmResetStep", "Runs kubeadm reset and optional cleanup steps.", "public")
+func generateResetKubeadmToolSchema() map[string]any {
+	root := stepEnvelopeSchema("ResetKubeadm", "ResetKubeadmStep", "Runs kubeadm reset and optional cleanup steps.", "public")
 	props := propertyMap(root)
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",

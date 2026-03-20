@@ -12,20 +12,18 @@ func TestFile(t *testing.T) {
 	t.Run("valid yaml", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "cluster.yaml")
-		content := []byte(`role: prepare
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: prepare
     steps:
       - id: prepare-images
         apiVersion: deck/v1alpha1
-        kind: ImageDownload
+        kind: DownloadImage
         spec:
           images: [registry.k8s.io/kube-apiserver:v1.30.1]
           backend:
             engine: go-containerregistry
-          output:
-            dir: images
+          outputDir: images
 `)
 		if err := os.WriteFile(path, content, 0o644); err != nil {
 			t.Fatalf("write file: %v", err)
@@ -39,14 +37,13 @@ phases:
 	t.Run("tool schema valid Image download with auth", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: prepare
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: prepare
     steps:
       - id: pull-private-images
         apiVersion: deck/v1alpha1
-        kind: ImageDownload
+        kind: DownloadImage
         spec:
           images:
             - registry.example.com/team/app:1.0.0
@@ -68,8 +65,7 @@ phases:
 	t.Run("tool schema rejects Image without explicit action", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: prepare
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: prepare
     steps:
@@ -96,14 +92,13 @@ phases:
 	t.Run("tool schema rejects Image verify with auth", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: apply
     steps:
       - id: verify-private-images
         apiVersion: deck/v1alpha1
-        kind: ImageVerify
+        kind: VerifyImage
         spec:
           images:
             - registry.example.com/team/app:1.0.0
@@ -129,14 +124,13 @@ phases:
 	t.Run("tool schema rejects Image verify with backend", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: apply
     steps:
       - id: verify-images
         apiVersion: deck/v1alpha1
-        kind: ImageVerify
+        kind: VerifyImage
         spec:
           images:
             - registry.k8s.io/pause:3.9
@@ -159,14 +153,13 @@ phases:
 	t.Run("tool schema valid InstallPackages without source", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: install-packages
         apiVersion: deck/v1alpha1
-        kind: PackageInstall
+        kind: InstallPackage
         spec:
           packages: [containerd]
 `)
@@ -182,8 +175,7 @@ phases:
 	t.Run("tool schema rejects removed Package family kind", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
@@ -209,14 +201,13 @@ phases:
 	t.Run("tool schema rejects Package download with install-only source", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: prepare
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: prepare
     steps:
       - id: download-packages
         apiVersion: deck/v1alpha1
-        kind: PackageDownload
+        kind: DownloadPackage
         spec:
           packages: [containerd]
           source:
@@ -239,14 +230,13 @@ phases:
 	t.Run("tool schema rejects Package install with download-only backend", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: install-packages
         apiVersion: deck/v1alpha1
-        kind: PackageInstall
+        kind: InstallPackage
         spec:
           packages: [containerd]
           backend:
@@ -267,17 +257,16 @@ phases:
 		}
 	})
 
-	t.Run("tool schema valid RepositoryRefresh", func(t *testing.T) {
+	t.Run("tool schema valid RefreshRepository", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: refresh-cache
         apiVersion: deck/v1alpha1
-        kind: RepositoryRefresh
+        kind: RefreshRepository
         spec:
           manager: auto
           clean: true
@@ -292,94 +281,16 @@ phases:
 		}
 	})
 
-	t.Run("tool schema valid InstallArtifact", func(t *testing.T) {
+	t.Run("tool schema rejects invalid RefreshRepository", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
-phases:
-  - name: install
-    steps:
-      - id: install-artifacts
-        apiVersion: deck/v1alpha1
-        kind: Artifact
-        spec:
-          artifacts:
-            - source:
-                amd64:
-                  url: http://repo.local/bin/linux/amd64/kubelet
-                arm64:
-                  url: http://repo.local/bin/linux/arm64/kubelet
-              skipIfPresent:
-                path: /usr/bin/kubelet
-                executable: true
-              install:
-                path: /usr/bin/kubelet
-                mode: "0755"
-            - source:
-                amd64:
-                  path: files/bin/linux/amd64/crictl.tar.gz
-                arm64:
-                  path: files/bin/linux/arm64/crictl.tar.gz
-              extract:
-                destination: /usr/bin
-                include: [crictl]
-                mode: "0755"
-`)
-		if err := os.WriteFile(path, content, 0o644); err != nil {
-			t.Fatalf("write file: %v", err)
-		}
-
-		if err := File(path); err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
-	})
-
-	t.Run("tool schema rejects invalid InstallArtifact", func(t *testing.T) {
-		dir := t.TempDir()
-		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
-phases:
-  - name: install
-    steps:
-      - id: bad-install-artifacts
-        apiVersion: deck/v1alpha1
-        kind: Artifact
-        spec:
-          artifacts:
-            - source:
-                amd64:
-                  url: http://repo.local/bin/linux/amd64/kubelet
-              install:
-                path: /usr/bin/kubelet
-              extract:
-                destination: /usr/bin
-`)
-		if err := os.WriteFile(path, content, 0o644); err != nil {
-			t.Fatalf("write file: %v", err)
-		}
-
-		err := File(path)
-		if err == nil {
-			t.Fatalf("expected tool schema validation error")
-		}
-		if got := err.Error(); !strings.Contains(got, "E_SCHEMA_INVALID") {
-			t.Fatalf("expected E_SCHEMA_INVALID, got %v", err)
-		}
-	})
-
-	t.Run("tool schema rejects invalid RepositoryRefresh", func(t *testing.T) {
-		dir := t.TempDir()
-		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: bad-cache
         apiVersion: deck/v1alpha1
-        kind: RepositoryRefresh
+        kind: RefreshRepository
         spec:
           manager: yum
 `)
@@ -399,14 +310,13 @@ phases:
 	t.Run("install phase accepts InstallPackages with only spec.packages", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: install-packages-curl
         apiVersion: deck/v1alpha1
-        kind: PackageInstall
+        kind: InstallPackage
         spec:
           packages: [curl]
 `)
@@ -419,17 +329,16 @@ phases:
 		}
 	})
 
-	t.Run("tool schema rejects RepositoryConfigure refreshCache block", func(t *testing.T) {
+	t.Run("tool schema rejects ConfigureRepository refreshCache block", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: repo-apt
         apiVersion: deck/v1alpha1
-        kind: RepositoryConfigure
+        kind: ConfigureRepository
         spec:
           format: apt
           replaceExisting: true
@@ -455,93 +364,6 @@ phases:
 		}
 	})
 
-	t.Run("prepare artifacts allow execution settings", func(t *testing.T) {
-		dir := t.TempDir()
-		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: prepare
-version: v1alpha1
-artifacts:
-  files:
-    - group: binaries
-      execution:
-        parallelism: 2
-        retry: 1
-      items:
-        - id: crictl
-          source:
-            url: https://example.invalid/crictl
-          output:
-            path: bin/crictl
-  images:
-    - group: control-plane
-      execution:
-        parallelism: 3
-        retry: 2
-      items:
-        - image: registry.k8s.io/pause:3.9
-  packages:
-    - group: runtimes
-      execution:
-        parallelism: 2
-        retry: 1
-      targets:
-        - osFamily: rhel
-          release: "9"
-      items:
-        - name: containerd
-`)
-		if err := os.WriteFile(path, content, 0o644); err != nil {
-			t.Fatalf("write file: %v", err)
-		}
-
-		if err := File(path); err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
-	})
-
-	t.Run("prepare artifacts reject duplicate package roots", func(t *testing.T) {
-		dir := t.TempDir()
-		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: prepare
-version: v1alpha1
-artifacts:
-  packages:
-    - group: rhel-a
-      targets:
-        - osFamily: rhel
-          release: "9"
-      items:
-        - name: containerd
-      repo:
-        type: yum
-      backend:
-        mode: container
-        image: rockylinux:9
-    - group: rhel-b
-      targets:
-        - osFamily: rhel
-          release: "9"
-      items:
-        - name: cri-tools
-      repo:
-        type: yum
-      backend:
-        mode: container
-        image: rockylinux:9
-`)
-		if err := os.WriteFile(path, content, 0o644); err != nil {
-			t.Fatalf("write file: %v", err)
-		}
-
-		err := File(path)
-		if err == nil {
-			t.Fatalf("expected duplicate package root error")
-		}
-		if !strings.Contains(err.Error(), "duplicate package artifact root") {
-			t.Fatalf("expected duplicate package artifact root, got %v", err)
-		}
-	})
-
 	t.Run("missing file", func(t *testing.T) {
 		if err := File("does-not-exist.yaml"); err == nil {
 			t.Fatalf("expected error for missing file")
@@ -551,7 +373,7 @@ artifacts:
 	t.Run("invalid yaml", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "invalid.yaml")
-		if err := os.WriteFile(path, []byte("role: apply\nversion: ["), 0o644); err != nil {
+		if err := os.WriteFile(path, []byte("version: ["), 0o644); err != nil {
 			t.Fatalf("write file: %v", err)
 		}
 
@@ -563,7 +385,7 @@ artifacts:
 	t.Run("unsupported version", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		if err := os.WriteFile(path, []byte("role: apply\nversion: v2\nphases: []\n"), 0o644); err != nil {
+		if err := os.WriteFile(path, []byte("version: v2\nphases: []\n"), 0o644); err != nil {
 			t.Fatalf("write file: %v", err)
 		}
 
@@ -575,8 +397,7 @@ artifacts:
 	t.Run("schema invalid kind", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: prepare
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: prepare
     steps:
@@ -597,24 +418,22 @@ phases:
 	t.Run("duplicate step id", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: prepare
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: prepare
     steps:
       - id: dup-id
         apiVersion: deck/v1alpha1
-        kind: FileDownload
+        kind: DownloadFile
         spec:
           source:
             url: https://example.local/a
-          output:
-            path: files/a
+          outputPath: files/a
   - name: install
     steps:
       - id: dup-id
         apiVersion: deck/v1alpha1
-        kind: Command
+        kind: RunCommand
         spec:
           command: ["true"]
 `)
@@ -630,31 +449,28 @@ phases:
 	t.Run("runtime register redefinition", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: prepare
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: prepare
     steps:
       - id: s1
         apiVersion: deck/v1alpha1
-        kind: FileDownload
+        kind: DownloadFile
         register:
           token: outputA
         spec:
           source:
             url: https://example.local/a
-          output:
-            path: files/a
+          outputPath: files/a
       - id: s2
         apiVersion: deck/v1alpha1
-        kind: FileDownload
+        kind: DownloadFile
         register:
           token: outputB
         spec:
           source:
             url: https://example.local/b
-          output:
-            path: files/b
+          outputPath: files/b
 `)
 		if err := os.WriteFile(path, content, 0o644); err != nil {
 			t.Fatalf("write file: %v", err)
@@ -668,19 +484,19 @@ phases:
 	t.Run("tool schema rejects invalid register output key for action", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: copy-file
         apiVersion: deck/v1alpha1
-        kind: FileCopy
+        kind: CopyFile
         register:
-          copiedPath: path
+          copiedPath: dest
         spec:
-          src: /tmp/source.txt
-          dest: /tmp/dest.txt
+          source:
+            path: /tmp/source.txt
+          path: /tmp/dest.txt
 `)
 		if err := os.WriteFile(path, content, 0o644); err != nil {
 			t.Fatalf("write file: %v", err)
@@ -698,14 +514,13 @@ phases:
 	t.Run("tool schema invalid step spec", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: bad-run-command
         apiVersion: deck/v1alpha1
-        kind: Command
+        kind: RunCommand
         spec:
           command: []
 `)
@@ -725,14 +540,13 @@ phases:
 	t.Run("file error includes workflow path", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: bad-run-command
         apiVersion: deck/v1alpha1
-        kind: Command
+        kind: RunCommand
         spec:
           command: []
 `)
@@ -752,14 +566,13 @@ phases:
 	t.Run("tool schema valid WaitPath", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: wait-admin-conf
         apiVersion: deck/v1alpha1
-        kind: WaitFileExists
+        kind: WaitForFile
         spec:
           path: /etc/kubernetes/admin.conf
           type: file
@@ -779,8 +592,7 @@ phases:
 	t.Run("tool schema rejects Wait without explicit action", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
@@ -806,14 +618,13 @@ phases:
 	t.Run("tool schema rejects WaitPath nonEmpty with absent state", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: bad-wait
         apiVersion: deck/v1alpha1
-        kind: WaitFileAbsent
+        kind: WaitForMissingFile
         spec:
           path: /tmp/old-file
           nonEmpty: true
@@ -834,14 +645,13 @@ phases:
 	t.Run("tool schema rejects WaitPath invalid type", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: bad-wait-type
         apiVersion: deck/v1alpha1
-        kind: WaitFileExists
+        kind: WaitForFile
         spec:
           path: /tmp/target
           type: socket
@@ -862,14 +672,13 @@ phases:
 	t.Run("tool schema rejects Wait fileExists with tcp fields", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: bad-wait-mix
         apiVersion: deck/v1alpha1
-        kind: WaitFileExists
+        kind: WaitForFile
         spec:
           path: /tmp/target
           port: "6443"
@@ -887,17 +696,16 @@ phases:
 		}
 	})
 
-	t.Run("tool schema valid Symlink", func(t *testing.T) {
+	t.Run("tool schema valid CreateSymlink", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: symlink-runc
         apiVersion: deck/v1alpha1
-        kind: Symlink
+        kind: CreateSymlink
         spec:
           path: /usr/bin/runc
           target: /usr/local/sbin/runc
@@ -917,14 +725,13 @@ phases:
 	t.Run("tool schema valid repository without legacy action", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: repo-config
         apiVersion: deck/v1alpha1
-        kind: RepositoryConfigure
+        kind: ConfigureRepository
         spec:
           format: apt
           repositories:
@@ -940,17 +747,16 @@ phases:
 		}
 	})
 
-	t.Run("tool schema valid KernelModule names", func(t *testing.T) {
+	t.Run("tool schema valid ConfigureKernelModule names", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: load-modules
         apiVersion: deck/v1alpha1
-        kind: KernelModule
+        kind: ConfigureKernelModule
         spec:
           names: [overlay, br_netfilter]
           load: true
@@ -965,17 +771,16 @@ phases:
 		}
 	})
 
-	t.Run("tool schema rejects Symlink missing target", func(t *testing.T) {
+	t.Run("tool schema rejects CreateSymlink missing target", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: symlink-runc
         apiVersion: deck/v1alpha1
-        kind: Symlink
+        kind: CreateSymlink
         spec:
           path: /usr/bin/runc
 `)
@@ -992,28 +797,23 @@ phases:
 		}
 	})
 
-	t.Run("tool schema valid SystemdUnit", func(t *testing.T) {
+	t.Run("tool schema valid WriteSystemdUnit", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: install-kubelet-unit
         apiVersion: deck/v1alpha1
-        kind: SystemdUnit
+        kind: WriteSystemdUnit
         spec:
           path: /etc/systemd/system/kubelet.service
           mode: "0644"
-          contentFromTemplate: |
+          template: |
             [Unit]
             Description=kubelet
           daemonReload: true
-          service:
-            name: kubelet
-            enabled: true
-            state: started
 `)
 		if err := os.WriteFile(path, content, 0o644); err != nil {
 			t.Fatalf("write file: %v", err)
@@ -1024,25 +824,21 @@ phases:
 		}
 	})
 
-	t.Run("tool schema valid SystemdUnit without explicit service name", func(t *testing.T) {
+	t.Run("tool schema valid WriteSystemdUnit without explicit service name", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: install-kubelet-unit
         apiVersion: deck/v1alpha1
-        kind: SystemdUnit
+        kind: WriteSystemdUnit
         spec:
           path: /etc/systemd/system/kubelet.service
           content: |
             [Unit]
             Description=kubelet
-          service:
-            enabled: true
-            state: started
 `)
 		if err := os.WriteFile(path, content, 0o644); err != nil {
 			t.Fatalf("write file: %v", err)
@@ -1056,14 +852,13 @@ phases:
 	t.Run("tool schema valid File download without output path", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: prepare
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: prepare
     steps:
       - id: download-runc
         apiVersion: deck/v1alpha1
-        kind: FileDownload
+        kind: DownloadFile
         spec:
           source:
             url: https://example.invalid/runc
@@ -1080,8 +875,7 @@ phases:
 	t.Run("tool schema rejects File without explicit action", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: prepare
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: prepare
     steps:
@@ -1108,18 +902,17 @@ phases:
 	t.Run("tool schema rejects File write with both content fields", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: write-file
         apiVersion: deck/v1alpha1
-        kind: FileWrite
+        kind: WriteFile
         spec:
           path: /etc/example.conf
           content: plain text
-          contentFromTemplate: |
+          template: |
             templated {{ .vars.role }}
 `)
 		if err := os.WriteFile(path, content, 0o644); err != nil {
@@ -1138,14 +931,13 @@ phases:
 	t.Run("tool schema rejects File write with copy-only fields", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: write-file
         apiVersion: deck/v1alpha1
-        kind: FileWrite
+        kind: WriteFile
         spec:
           path: /etc/example.conf
           content: plain text
@@ -1167,18 +959,16 @@ phases:
 	t.Run("tool schema valid Image download output dir", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: prepare
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: prepare
     steps:
       - id: download-images
         apiVersion: deck/v1alpha1
-        kind: ImageDownload
+        kind: DownloadImage
         spec:
           images: [registry.k8s.io/pause:3.9]
-          output:
-            dir: images/core
+          outputDir: images/core
 `)
 		if err := os.WriteFile(path, content, 0o644); err != nil {
 			t.Fatalf("write file: %v", err)
@@ -1192,18 +982,16 @@ phases:
 	t.Run("tool schema valid Package download output dir", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: prepare
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: prepare
     steps:
       - id: download-packages
         apiVersion: deck/v1alpha1
-        kind: PackageDownload
+        kind: DownloadPackage
         spec:
           packages: [containerd]
-          output:
-            dir: packages/custom
+          outputDir: packages/custom
 `)
 		if err := os.WriteFile(path, content, 0o644); err != nil {
 			t.Fatalf("write file: %v", err)
@@ -1214,23 +1002,22 @@ phases:
 		}
 	})
 
-	t.Run("tool schema rejects invalid SystemdUnit", func(t *testing.T) {
+	t.Run("tool schema rejects invalid WriteSystemdUnit", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: bad-systemd-unit
         apiVersion: deck/v1alpha1
-        kind: SystemdUnit
+        kind: WriteSystemdUnit
         spec:
           path: /etc/systemd/system/kubelet.service
           content: |
             [Unit]
             Description=kubelet
-          contentFromTemplate: |
+          template: |
             [Unit]
             Description=kubelet-alt
           service:
@@ -1249,17 +1036,16 @@ phases:
 		}
 	})
 
-	t.Run("tool schema valid KubeadmReset", func(t *testing.T) {
+	t.Run("tool schema valid ResetKubeadm", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: reset-node
         apiVersion: deck/v1alpha1
-        kind: KubeadmReset
+        kind: ResetKubeadm
         spec:
           force: true
           ignoreErrors: true
@@ -1279,22 +1065,20 @@ phases:
 		}
 	})
 
-	t.Run("tool schema valid expanded KubeadmInit", func(t *testing.T) {
+	t.Run("tool schema valid expanded InitKubeadm", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: kubeadm-init
         apiVersion: deck/v1alpha1
-        kind: KubeadmInit
+        kind: InitKubeadm
         spec:
           outputJoinFile: /tmp/deck/join.txt
           configFile: /tmp/deck/kubeadm-init.yaml
           configTemplate: default
-          pullImages: true
           kubernetesVersion: v1.30.14
           advertiseAddress: auto
           podNetworkCIDR: 10.244.0.0/16
@@ -1310,17 +1094,16 @@ phases:
 		}
 	})
 
-	t.Run("tool schema rejects invalid expanded KubeadmInit shape", func(t *testing.T) {
+	t.Run("tool schema rejects invalid expanded InitKubeadm shape", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: kubeadm-init
         apiVersion: deck/v1alpha1
-        kind: KubeadmInit
+        kind: InitKubeadm
         spec:
           outputJoinFile: /tmp/deck/join.txt
           pullImages: "yes"
@@ -1341,14 +1124,13 @@ phases:
 	t.Run("tool schema rejects Kubeadm stub mode", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: kubeadm-init
         apiVersion: deck/v1alpha1
-        kind: KubeadmInit
+        kind: InitKubeadm
         spec:
           mode: stub
           outputJoinFile: /tmp/deck/join.txt
@@ -1366,17 +1148,16 @@ phases:
 		}
 	})
 
-	t.Run("tool schema valid expanded KubeadmJoin with configFile", func(t *testing.T) {
+	t.Run("tool schema valid expanded JoinKubeadm with configFile", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: kubeadm-join
         apiVersion: deck/v1alpha1
-        kind: KubeadmJoin
+        kind: JoinKubeadm
         spec:
           configFile: /tmp/deck/kubeadm-join.yaml
           asControlPlane: true
@@ -1391,17 +1172,16 @@ phases:
 		}
 	})
 
-	t.Run("tool schema rejects KubeadmJoin with both joinFile and configFile", func(t *testing.T) {
+	t.Run("tool schema rejects JoinKubeadm with both joinFile and configFile", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: kubeadm-join
         apiVersion: deck/v1alpha1
-        kind: KubeadmJoin
+        kind: JoinKubeadm
         spec:
           joinFile: /tmp/deck/join.txt
           configFile: /tmp/deck/kubeadm-join.yaml
@@ -1422,8 +1202,7 @@ phases:
 	t.Run("tool schema rejects Kubeadm without explicit action", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
@@ -1446,17 +1225,16 @@ phases:
 		}
 	})
 
-	t.Run("tool schema rejects reset-only fields on KubeadmJoin", func(t *testing.T) {
+	t.Run("tool schema rejects reset-only fields on JoinKubeadm", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: kubeadm-join
         apiVersion: deck/v1alpha1
-        kind: KubeadmJoin
+        kind: JoinKubeadm
         spec:
           joinFile: /tmp/deck/join.txt
           force: true
@@ -1474,17 +1252,16 @@ phases:
 		}
 	})
 
-	t.Run("tool schema rejects join-only fields on KubeadmInit", func(t *testing.T) {
+	t.Run("tool schema rejects join-only fields on InitKubeadm", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: kubeadm-init
         apiVersion: deck/v1alpha1
-        kind: KubeadmInit
+        kind: InitKubeadm
         spec:
           outputJoinFile: /tmp/deck/join.txt
           asControlPlane: true
@@ -1502,17 +1279,16 @@ phases:
 		}
 	})
 
-	t.Run("tool schema rejects init-only fields on KubeadmReset", func(t *testing.T) {
+	t.Run("tool schema rejects init-only fields on ResetKubeadm", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: reset-node
         apiVersion: deck/v1alpha1
-        kind: KubeadmReset
+        kind: ResetKubeadm
         spec:
           outputJoinFile: /tmp/deck/join.txt
 `)
@@ -1529,17 +1305,16 @@ phases:
 		}
 	})
 
-	t.Run("tool schema rejects invalid KubeadmReset", func(t *testing.T) {
+	t.Run("tool schema rejects invalid ResetKubeadm", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: reset-node
         apiVersion: deck/v1alpha1
-        kind: KubeadmReset
+        kind: ResetKubeadm
         spec:
           cleanupContainers: kube-apiserver
 `)
@@ -1559,14 +1334,13 @@ phases:
 	t.Run("register output key invalid for kind", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: w1
         apiVersion: deck/v1alpha1
-        kind: FileWrite
+        kind: WriteFile
         register:
           x: notARealOutput
         spec:
@@ -1589,21 +1363,19 @@ phases:
 	t.Run("register output key valid for kind", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: prepare
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: prepare
     steps:
       - id: d1
         apiVersion: deck/v1alpha1
-        kind: FileDownload
+        kind: DownloadFile
         register:
-          fetched: path
+          fetched: outputPath
         spec:
           source:
             url: https://example.local/a
-          output:
-            path: files/a
+          outputPath: files/a
 `)
 		if err := os.WriteFile(path, content, 0o644); err != nil {
 			t.Fatalf("write file: %v", err)
@@ -1617,14 +1389,13 @@ phases:
 	t.Run("register output key valid for checkhost", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: prepare
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: prepare
     steps:
       - id: c1
         apiVersion: deck/v1alpha1
-        kind: HostCheck
+        kind: CheckHost
         register:
           hostOk: passed
         spec:
@@ -1642,14 +1413,13 @@ phases:
 	t.Run("register output key valid for symlink", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: apply
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: install
     steps:
       - id: s1
         apiVersion: deck/v1alpha1
-        kind: Symlink
+        kind: CreateSymlink
         register:
           linkPath: path
         spec:
@@ -1668,14 +1438,13 @@ phases:
 	t.Run("reserved runtime host key is rejected", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
-		content := []byte(`role: prepare
-version: v1alpha1
+		content := []byte(`version: v1alpha1
 phases:
   - name: prepare
     steps:
       - id: c1
         apiVersion: deck/v1alpha1
-        kind: HostCheck
+        kind: CheckHost
         register:
           host: passed
         spec:
@@ -1698,11 +1467,10 @@ phases:
 func TestSchema_ApiVersionOptional(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "workflow.yaml")
-	content := []byte(`role: apply
-version: v1alpha1
+	content := []byte(`version: v1alpha1
 steps:
   - id: run-without-api-version
-    kind: Command
+    kind: RunCommand
     spec:
       command: ["true"]
 `)
@@ -1718,11 +1486,10 @@ steps:
 func TestValidate_SingleBraceTemplateShowsLine(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "workflow.yaml")
-	content := []byte(`role: apply
-version: v1alpha1
+	content := []byte(`version: v1alpha1
 steps:
   - id: bad-template
-    kind: Command
+    kind: RunCommand
     spec:
       command:
         - "echo"
@@ -1740,7 +1507,7 @@ steps:
 	if got := err.Error(); !strings.Contains(got, "E_TEMPLATE_SINGLE_BRACE") {
 		t.Fatalf("expected E_TEMPLATE_SINGLE_BRACE, got %v", err)
 	}
-	if got := err.Error(); !strings.Contains(got, fmt.Sprintf("%s:%d", path, 9)) {
+	if got := err.Error(); !strings.Contains(got, fmt.Sprintf("%s:%d", path, 8)) {
 		t.Fatalf("expected file and line in error, got %v", err)
 	}
 }
@@ -1748,13 +1515,12 @@ steps:
 func TestSchema_RejectsTopLevelImports(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "workflow.yaml")
-	content := []byte(`role: apply
-version: v1alpha1
+	content := []byte(`version: v1alpha1
 imports:
   - ./legacy.yaml
 steps:
   - id: ok-step
-    kind: Command
+    kind: RunCommand
     spec:
       command: ["true"]
 `)
@@ -1774,8 +1540,7 @@ steps:
 func TestSchema_AcceptsPhaseImports(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "workflow.yaml")
-	content := []byte(`role: apply
-version: v1alpha1
+	content := []byte(`version: v1alpha1
 phases:
   - name: install
     imports:
@@ -1800,8 +1565,8 @@ func TestSchema_AcceptsComponentFragment(t *testing.T) {
 	path := filepath.Join(componentsDir, "prereq.yaml")
 	content := []byte(`steps:
   - id: prep-disable-swap
-    kind: Swap
-    when: vars.enableSwap == "false"
+    kind: ConfigureSwap
+    when: vars.enableConfigureSwap == "false"
     spec:
       disable: true
       persist: false
@@ -1826,7 +1591,7 @@ func TestSchema_RejectsComponentFragmentVars(t *testing.T) {
   osFamily: debian
 steps:
   - id: prep-disable-swap
-    kind: Swap
+    kind: ConfigureSwap
     spec:
       disable: true
       persist: false
@@ -1855,7 +1620,7 @@ func TestSchema_RejectsComponentFragmentPhases(t *testing.T) {
   - name: install
     steps:
       - id: prep-disable-swap
-        kind: Swap
+        kind: ConfigureSwap
         spec:
           disable: true
           persist: false
@@ -1876,13 +1641,12 @@ func TestSchema_RejectsComponentFragmentPhases(t *testing.T) {
 func TestSchema_RejectsContext(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "workflow.yaml")
-	content := []byte(`role: apply
-version: v1alpha1
+	content := []byte(`version: v1alpha1
 context:
   bundleRoot: /tmp/bundle
 steps:
   - id: ok-step
-    kind: Command
+    kind: RunCommand
     spec:
       command: ["true"]
 `)
@@ -1902,17 +1666,16 @@ steps:
 func TestValidateToolSchemas(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "workflow.yaml")
-	content := []byte(`role: apply
-version: v1alpha1
+	content := []byte(`version: v1alpha1
 steps:
   - id: svc
-    kind: Service
+    kind: ManageService
     spec:
       name: containerd
       enabled: true
       state: started
   - id: svc-many
-    kind: Service
+    kind: ManageService
     spec:
       names: [firewalld, ufw]
       daemonReload: true
@@ -1920,24 +1683,24 @@ steps:
       ignoreMissing: true
       state: stopped
   - id: ensure-dir
-    kind: Directory
+    kind: EnsureDirectory
     spec:
       path: /etc/containerd/certs.d
       mode: "0755"
   - id: install-file
-    kind: FileWrite
+    kind: WriteFile
     spec:
       path: /etc/modules-load.d/k8s.conf
       content: |
         overlay
   - id: template-file
-    kind: FileWrite
+    kind: WriteFile
     spec:
       path: /etc/containerd/certs.d/registry.k8s.io/hosts.toml
-      contentFromTemplate: |
+      template: |
         server = "http://registry.local"
   - id: repo-config
-    kind: RepositoryConfigure
+    kind: ConfigureRepository
     spec:
       path: /etc/yum.repos.d/offline.repo
       repositories:
@@ -1946,11 +1709,15 @@ steps:
           enabled: true
           gpgcheck: false
   - id: containerd-config
-    kind: Containerd
+    kind: WriteContainerdConfig
     spec:
       path: /etc/containerd/config.toml
       configPath: /etc/containerd/certs.d
       systemdCgroup: true
+  - id: containerd-registry-hosts
+    kind: WriteContainerdRegistryHosts
+    spec:
+      path: /etc/containerd/certs.d
       registryHosts:
         - registry: registry.k8s.io
           server: https://registry.k8s.io
@@ -1958,25 +1725,25 @@ steps:
           capabilities: [pull, resolve]
           skipVerify: true
   - id: swap
-    kind: Swap
+    kind: ConfigureSwap
     spec:
       disable: true
       persist: true
   - id: kernel-module
-    kind: KernelModule
+    kind: ConfigureKernelModule
     spec:
       name: br_netfilter
       load: true
       persist: true
   - id: sysctl-apply
-    kind: Sysctl
+    kind: ConfigureSysctl
     spec:
       values:
         net.ipv4.ip_forward: 1
       writeFile: /etc/sysctl.d/99-kubernetes-cri.conf
       apply: true
   - id: run-cmd
-    kind: Command
+    kind: RunCommand
     spec:
       command: ["true"]
 `)
@@ -1988,14 +1755,13 @@ steps:
 	}
 
 	invalidPath := filepath.Join(dir, "invalid.yaml")
-	invalid := []byte(`role: apply
-version: v1alpha1
+	invalid := []byte(`version: v1alpha1
 steps:
   - id: bad-service
-    kind: Service
+    kind: ManageService
     spec: {}
   - id: bad-service-both
-    kind: Service
+    kind: ManageService
     spec:
       name: containerd
       names: [containerd]

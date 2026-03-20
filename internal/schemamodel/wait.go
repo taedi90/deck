@@ -1,18 +1,18 @@
 package schemamodel
 
-type WaitServiceActiveStepDocument struct {
-	ID         string                    `json:"id"`
-	APIVersion string                    `json:"apiVersion"`
-	Kind       string                    `json:"kind"`
-	Metadata   map[string]any            `json:"metadata,omitempty"`
-	When       string                    `json:"when,omitempty"`
-	Register   map[string]string         `json:"register,omitempty"`
-	Retry      int                       `json:"retry,omitempty"`
-	Timeout    string                    `json:"timeout,omitempty"`
-	Spec       WaitServiceActiveStepSpec `json:"spec"`
+type WaitForServiceStepDocument struct {
+	ID         string                 `json:"id"`
+	APIVersion string                 `json:"apiVersion"`
+	Kind       string                 `json:"kind"`
+	Metadata   map[string]any         `json:"metadata,omitempty"`
+	When       string                 `json:"when,omitempty"`
+	Register   map[string]string      `json:"register,omitempty"`
+	Retry      int                    `json:"retry,omitempty"`
+	Timeout    string                 `json:"timeout,omitempty"`
+	Spec       WaitForServiceStepSpec `json:"spec"`
 }
 
-type WaitServiceActiveStepSpec struct {
+type WaitForServiceStepSpec struct {
 	Interval     string `json:"interval,omitempty"`
 	InitialDelay string `json:"initialDelay,omitempty"`
 	Name         string `json:"name,omitempty"`
@@ -20,7 +20,7 @@ type WaitServiceActiveStepSpec struct {
 	PollInterval string `json:"pollInterval,omitempty"`
 }
 
-type WaitCommandStepSpec struct {
+type WaitForCommandStepSpec struct {
 	Interval     string   `json:"interval,omitempty"`
 	InitialDelay string   `json:"initialDelay,omitempty"`
 	Command      []string `json:"command,omitempty"`
@@ -28,7 +28,7 @@ type WaitCommandStepSpec struct {
 	PollInterval string   `json:"pollInterval,omitempty"`
 }
 
-type WaitFileExistsStepSpec struct {
+type WaitForFileStepSpec struct {
 	Interval     string `json:"interval,omitempty"`
 	InitialDelay string `json:"initialDelay,omitempty"`
 	Path         string `json:"path,omitempty"`
@@ -38,7 +38,7 @@ type WaitFileExistsStepSpec struct {
 	PollInterval string `json:"pollInterval,omitempty"`
 }
 
-type WaitFileAbsentStepSpec struct {
+type WaitForMissingFileStepSpec struct {
 	Interval     string `json:"interval,omitempty"`
 	InitialDelay string `json:"initialDelay,omitempty"`
 	Path         string `json:"path,omitempty"`

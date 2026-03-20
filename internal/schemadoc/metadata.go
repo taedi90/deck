@@ -39,7 +39,7 @@ type PageMetadata struct {
 var commonFieldDocs = map[string]FieldDoc{
 	"apiVersion": {Description: "Optional step API version. When omitted, deck uses the current default. When set, it must be a supported deck step API version.", Example: "deck/v1alpha1"},
 	"id":         {Description: "Unique identifier for the step within the workflow. Used in logs and plan output.", Example: "configure-containerd"},
-	"kind":       {Description: "Concrete typed step kind. Determines which schema is applied to `spec`.", Example: "FileWrite"},
+	"kind":       {Description: "Concrete typed step kind. Determines which schema is applied to `spec`.", Example: "WriteFile"},
 	"spec":       {Description: "Step-specific configuration payload. Shape depends on the chosen `kind`.", Example: "{...}"},
 	"when":       {Description: workflowcontract.WhenDescription(), Example: workflowcontract.WhenExample()},
 	"retry":      {Description: "Number of times to retry the step after a failure before marking it as failed.", Example: "3"},
@@ -74,7 +74,7 @@ var toolMetadata = map[string]ToolMetadata{
 			"spec.artifacts[].install.path":             {Description: "Destination path on the node for the installed file.", Example: "/usr/local/sbin/runc"},
 			"spec.artifacts[].install.mode":             {Description: "File permissions applied to the installed file in octal notation.", Example: "0755"},
 			"spec.artifacts[].extract":                  {Description: "Extract the artifact archive into a directory. Use `install` or `extract`, not both.", Example: "{destination:/opt/cni/bin}"},
-			"spec.artifacts[].extract.destination":      {Description: "Directory on the node where archive contents are extracted.", Example: "/opt/cni/bin"},
+			"spec.artifacts[].extract.destination":      {Description: "EnsureDirectory on the node where archive contents are extracted.", Example: "/opt/cni/bin"},
 			"spec.artifacts[].extract.include":          {Description: "Optional list of paths to extract from the archive. Extracts all files when omitted.", Example: "[loopback,bridge]"},
 			"spec.artifacts[].extract.mode":             {Description: "File permissions applied to extracted files in octal notation.", Example: "0755"},
 			"spec.artifacts[].skipIfPresent":            {Description: "Skip this artifact entry if a file already exists at the given path.", Example: "{path:/usr/local/sbin/runc,executable:true}"},
@@ -92,25 +92,25 @@ var toolMetadata = map[string]ToolMetadata{
 		},
 	},
 
-	"Command": {
-		Example: "kind: Command\nspec:\n  command: [\"systemctl\", \"status\", \"containerd\"]\n  timeout: 30s\n",
+	"command": {
+		Example: "kind: RunCommand\nspec:\n  command: [\"systemctl\", \"status\", \"containerd\"]\n  timeout: 30s\n",
 		FieldDocs: map[string]FieldDoc{
-			"spec.command": {Description: "Command vector to execute. The first element is the binary; remaining elements are arguments.", Example: "[systemctl,restart,containerd]"},
+			"spec.command": {Description: "RunCommand vector to execute. The first element is the binary; remaining elements are arguments.", Example: "[systemctl,restart,containerd]"},
 			"spec.env":     {Description: "Additional environment variables passed to the command process as key-value pairs.", Example: "{KUBECONFIG:/etc/kubernetes/admin.conf}"},
 			"spec.sudo":    {Description: "Prepend `sudo` before the command vector. Defaults to `false`.", Example: "false"},
 			"spec.timeout": {Description: "Maximum duration for the command before it is killed. Overrides the step-level `timeout`.", Example: "30s"},
 		},
 		Notes: []string{
-			"Prefer a typed step kind over `Command` whenever one is available — typed steps are easier to lint, review, and evolve.",
+			"Prefer a typed step kind over `RunCommand` whenever one is available — typed steps are easier to lint, review, and evolve.",
 			"Use `spec.timeout` to bound commands that may hang rather than relying on the outer step timeout.",
 		},
 	},
 
-	"Containerd": {
-		Example: "kind: Containerd\nspec:\n  path: /etc/containerd/config.toml\n  systemdCgroup: true\n  registryHosts:\n    - registry: registry.k8s.io\n      server: https://registry.k8s.io\n      host: http://registry.local:5000\n      capabilities: [pull, resolve]\n      skipVerify: true\n",
+	"WriteContainerdConfig": {
+		Example: "kind: WriteContainerdConfig\nspec:\n  path: /etc/containerd/config.toml\n  systemdCgroup: true\n  registryHosts:\n    - registry: registry.k8s.io\n      server: https://registry.k8s.io\n      host: http://registry.local:5000\n      capabilities: [pull, resolve]\n      skipVerify: true\n",
 		FieldDocs: map[string]FieldDoc{
 			"spec.path":                         {Description: "Destination path for the generated `config.toml`. Defaults to `/etc/containerd/config.toml`.", Example: "/etc/containerd/config.toml"},
-			"spec.configPath":                   {Description: "Directory for per-registry `hosts.toml` files, used by containerd's registry host configuration model.", Example: "/etc/containerd/certs.d"},
+			"spec.configPath":                   {Description: "EnsureDirectory for per-registry `hosts.toml` files, used by containerd's registry host configuration model.", Example: "/etc/containerd/certs.d"},
 			"spec.systemdCgroup":                {Description: "Enable systemd cgroup driver in the generated config. Required for Kubernetes nodes managed by systemd.", Example: "true"},
 			"spec.createDefault":                {Description: "Write a minimal default config when no explicit config exists. Defaults to `true`.", Example: "true"},
 			"spec.registryHosts":                {Description: "Per-registry host entries written as `hosts.toml` files under `configPath`. Each entry redirects a registry to a local mirror.", Example: "[{registry:registry.k8s.io,host:http://mirror.local:5000}]"},
@@ -126,11 +126,11 @@ var toolMetadata = map[string]ToolMetadata{
 		},
 	},
 
-	"Directory": {
-		Example: "kind: Directory\nspec:\n  path: /home/vagrant/.kube\n  mode: \"0755\"\n",
+	"EnsureDirectory": {
+		Example: "kind: EnsureDirectory\nspec:\n  path: /home/vagrant/.kube\n  mode: \"0755\"\n",
 		FieldDocs: map[string]FieldDoc{
-			"spec.path": {Description: "Directory path to create if it does not already exist. Parent directories are created as needed.", Example: "/var/lib/deck"},
-			"spec.mode": {Description: "Directory permissions in octal notation. Applied after ensuring the directory exists, including on existing directories.", Example: "0755"},
+			"spec.path": {Description: "EnsureDirectory path to create if it does not already exist. Parent directories are created as needed.", Example: "/var/lib/deck"},
+			"spec.mode": {Description: "EnsureDirectory permissions in octal notation. Applied after ensuring the directory exists, including on existing directories.", Example: "0755"},
 		},
 	},
 
@@ -143,39 +143,39 @@ var toolMetadata = map[string]ToolMetadata{
 		},
 		ActionExamples: map[string]string{
 			"download": "kind: File\nspec:\n  action: download\n  source:\n    bundle:\n      root: files\n      path: upstream/runc\n  output:\n    path: files/bin/runc\n",
-			"write":    "kind: File\nspec:\n  action: write\n  path: /etc/containerd/config.toml\n  contentFromTemplate: |\n    [plugins.\"io.containerd.grpc.v1.cri\".containerd.runtimes.runc.options]\n      SystemdCgroup = {{ .vars.systemdCgroup }}\n  mode: \"0644\"\n",
+			"write":    "kind: File\nspec:\n  action: write\n  path: /etc/containerd/config.toml\n  template: |\n    [plugins.\"io.containerd.grpc.v1.cri\".containerd.runtimes.runc.options]\n      SystemdCgroup = {{ .vars.systemdCgroup }}\n  mode: \"0644\"\n",
 			"copy":     "kind: File\nspec:\n  action: copy\n  src: /etc/kubernetes/admin.conf\n  dest: /home/vagrant/.kube/config\n  mode: \"0644\"\n",
 			"edit":     "kind: File\nspec:\n  action: edit\n  path: /etc/containerd/config.toml\n  edits:\n    - match: SystemdCgroup = false\n      with: SystemdCgroup = true\n",
 		},
 		FieldDocs: map[string]FieldDoc{
-			"spec.action":              {Description: "Selects the file operation. Each action changes which sibling fields are required.", Example: "copy"},
-			"spec.path":                {Description: "Destination path on the node. Required for `write` and `edit`.", Example: "/etc/containerd/config.toml"},
-			"spec.content":             {Description: "Inline file content written verbatim to `path`. Used with `write`.", Example: "[offline-base]\\nbaseurl=http://repo.local"},
-			"spec.contentFromTemplate": {Description: "Inline multi-line content rendered with the current vars before writing. Use this instead of `content` when the body includes template expressions such as `{{ .vars.* }}`.", Example: "[Service]\\nEnvironment=ROLE={{ .vars.role }}"},
-			"spec.mode":                {Description: "File permissions in octal notation applied after `write`, `copy`, or `edit` actions complete.", Example: "0644"},
-			"spec.backup":              {Description: "Create a `.bak` copy of the original file before overwriting it.", Example: "true"},
-			"spec.src":                 {Description: "Source path already present on the node. Required for `copy`.", Example: "/etc/kubernetes/admin.conf"},
-			"spec.dest":                {Description: "Destination path on the node. Required for `copy`.", Example: "/home/vagrant/.kube/config"},
-			"spec.source":              {Description: "Download source descriptor. `path` or `bundle` may be combined with `url` to allow an online fallback when local resolution fails.", Example: "{url:https://example.invalid/file.tar.gz}"},
-			"spec.source.url":          {Description: "URL to fetch the file from during prepare.", Example: "https://mirror.example.com/runc"},
-			"spec.source.path":         {Description: "Local filesystem path to use as the source during prepare.", Example: "/opt/cache/runc"},
-			"spec.source.sha256":       {Description: "Expected SHA-256 checksum. Fails the step if the fetched file does not match.", Example: "abc123..."},
-			"spec.source.bundle":       {Description: "Reference to a file already inside the bundle. Used to stage a bundle-resident file into a new output location.", Example: "{root:files,path:bin/linux/amd64/runc}"},
-			"spec.source.bundle.root":  {Description: "Bundle root category to read from (`files`, `images`, or `package`).", Example: "files"},
-			"spec.source.bundle.path":  {Description: "Relative path within the bundle root to the source file.", Example: "bin/linux/amd64/runc"},
-			"spec.output":              {Description: "Optional output target inside the bundle for the downloaded file. When omitted, deck writes to `files/<basename>`.", Example: "{path:files/bin/runc}"},
-			"spec.output.path":         {Description: "Bundle-relative path where the downloaded file is written. Defaults to `files/<basename>` when omitted.", Example: "files/bin/runc"},
-			"spec.output.chmod":        {Description: "File permissions applied to the downloaded output file in octal notation.", Example: "0755"},
-			"spec.edits":               {Description: "Ordered list of match/replace rules applied sequentially to the file. Required for `edit`.", Example: "[{match:SystemdCgroup = false,with:SystemdCgroup = true}]"},
-			"spec.edits[].match":       {Description: "Literal string or pattern to search for in the file.", Example: "SystemdCgroup = false"},
-			"spec.edits[].with":        {Description: "Replacement string. Substituted wherever `match` is found.", Example: "SystemdCgroup = true"},
-			"spec.edits[].op":          {Description: "Edit operation type. `replace` substitutes all matches; `append` keeps the match text and adds `with` after each match. Defaults to `replace`.", Example: "replace"},
-			"spec.fetch":               {Description: "Optional download transport settings applied to `download` fetches.", Example: "{offlineOnly:true}"},
+			"spec.action":             {Description: "Selects the file operation. Each action changes which sibling fields are required.", Example: "copy"},
+			"spec.path":               {Description: "Destination path on the node. Required for `write` and `edit`.", Example: "/etc/containerd/config.toml"},
+			"spec.content":            {Description: "Inline file content written verbatim to `path`. Used with `write`.", Example: "[offline-base]\\nbaseurl=http://repo.local"},
+			"spec.template":           {Description: "Inline multi-line content rendered with the current vars before writing. Use this instead of `content` when the body includes template expressions such as `{{ .vars.* }}`.", Example: "[ManageService]\\nEnvironment=ROLE={{ .vars.role }}"},
+			"spec.mode":               {Description: "File permissions in octal notation applied after `write`, `copy`, or `edit` actions complete.", Example: "0644"},
+			"spec.backup":             {Description: "Create a `.bak` copy of the original file before overwriting it.", Example: "true"},
+			"spec.src":                {Description: "Source path already present on the node. Required for `copy`.", Example: "/etc/kubernetes/admin.conf"},
+			"spec.dest":               {Description: "Destination path on the node. Required for `copy`.", Example: "/home/vagrant/.kube/config"},
+			"spec.source":             {Description: "Download source descriptor. `path` or `bundle` may be combined with `url` to allow an online fallback when local resolution fails.", Example: "{url:https://example.invalid/file.tar.gz}"},
+			"spec.source.url":         {Description: "URL to fetch the file from during prepare.", Example: "https://mirror.example.com/runc"},
+			"spec.source.path":        {Description: "Local filesystem path to use as the source during prepare.", Example: "/opt/cache/runc"},
+			"spec.source.sha256":      {Description: "Expected SHA-256 checksum. Fails the step if the fetched file does not match.", Example: "abc123..."},
+			"spec.source.bundle":      {Description: "Reference to a file already inside the bundle. Used to stage a bundle-resident file into a new output location.", Example: "{root:files,path:bin/linux/amd64/runc}"},
+			"spec.source.bundle.root": {Description: "Bundle root category to read from (`files`, `images`, or `package`).", Example: "files"},
+			"spec.source.bundle.path": {Description: "Relative path within the bundle root to the source file.", Example: "bin/linux/amd64/runc"},
+			"spec.output":             {Description: "Optional output target inside the bundle for the downloaded file. When omitted, deck writes to `files/<basename>`.", Example: "{path:files/bin/runc}"},
+			"spec.output.path":        {Description: "Bundle-relative path where the downloaded file is written. Defaults to `files/<basename>` when omitted.", Example: "files/bin/runc"},
+			"spec.output.chmod":       {Description: "File permissions applied to the downloaded output file in octal notation.", Example: "0755"},
+			"spec.edits":              {Description: "Ordered list of match/replace rules applied sequentially to the file. Required for `edit`.", Example: "[{match:SystemdCgroup = false,with:SystemdCgroup = true}]"},
+			"spec.edits[].match":      {Description: "Literal string or pattern to search for in the file.", Example: "SystemdCgroup = false"},
+			"spec.edits[].with":       {Description: "Replacement string. Substituted wherever `match` is found.", Example: "SystemdCgroup = true"},
+			"spec.edits[].op":         {Description: "Edit operation type. `replace` substitutes all matches; `append` keeps the match text and adds `with` after each match. Defaults to `replace`.", Example: "replace"},
+			"spec.fetch":              {Description: "Optional download transport settings applied to `download` fetches.", Example: "{offlineOnly:true}"},
 		},
 		Notes: []string{
 			"`File` is usually the best first choice for host file changes because it stays declarative and validates action-specific inputs.",
 			"`download` writes into a bundle output target during prepare, while `copy`, `write`, and `edit` operate on live node paths during apply.",
-			"Use `contentFromTemplate` instead of `content` when the body includes variable substitution.",
+			"Use `template` instead of `content` when the body includes variable substitution.",
 		},
 	},
 
@@ -209,8 +209,8 @@ var toolMetadata = map[string]ToolMetadata{
 		},
 	},
 
-	"HostCheck": {
-		Example: "kind: HostCheck\nspec:\n  checks: [os, arch, swap]\n  failFast: true\n",
+	"CheckHost": {
+		Example: "kind: CheckHost\nspec:\n  checks: [os, arch, swap]\n  failFast: true\n",
 		FieldDocs: map[string]FieldDoc{
 			"spec.checks":   {Description: "Named checks to run. Supported values include `os`, `arch`, `swap`, `kernelModules`, and `binaries`.", Example: "[os,arch,swap]"},
 			"spec.binaries": {Description: "Binary names to verify are present in `PATH`. Used when `host-check` includes `binaries`.", Example: "[kubeadm,kubelet,kubectl]"},
@@ -218,8 +218,8 @@ var toolMetadata = map[string]ToolMetadata{
 		},
 	},
 
-	"KernelModule": {
-		Example: "kind: KernelModule\nspec:\n  name: br_netfilter\n  load: true\n  persist: true\n  persistFile: /etc/modules-load.d/k8s.conf\n",
+	"ConfigureKernelModule": {
+		Example: "kind: ConfigureKernelModule\nspec:\n  name: br_netfilter\n  load: true\n  persist: true\n  persistFile: /etc/modules-load.d/k8s.conf\n",
 		FieldDocs: map[string]FieldDoc{
 			"spec.name":        {Description: "Single module name to load. Use `name` or `names`, not both.", Example: "br_netfilter"},
 			"spec.names":       {Description: "Multiple module names to load in a single step. Use `name` or `names`, not both.", Example: "[overlay,br_netfilter]"},
@@ -267,12 +267,12 @@ var toolMetadata = map[string]ToolMetadata{
 			"The action controls the contract: `init` requires `outputJoinFile`, `join` requires exactly one of `joinFile` or `configFile`, and `reset` focuses on cleanup fields.",
 			"Kubeadm fields are action-scoped: validation rejects `join`-only fields on `init`, `init`-only fields on `reset`, and other cross-action mixes.",
 			"When `skipIfAdminConfExists` skips `init`, deck does not create a new join artifact and registered `joinFile` outputs are unavailable unless the file already exists.",
-			"Place host preparation steps (`Containerd`, `Swap`, `KernelModule`, `Sysctl`) before `Kubeadm` so bootstrap failures point to the correct step.",
+			"Place host preparation steps (`WriteContainerdConfig`, `ConfigureSwap`, `ConfigureKernelModule`, `ConfigureSysctl`) before `Kubeadm` so bootstrap failures point to the correct step.",
 		},
 	},
 
-	"RepositoryRefresh": {
-		Example: "kind: RepositoryRefresh\nspec:\n  manager: apt\n  clean: true\n  update: true\n  restrictToRepos:\n    - /etc/apt/sources.list.d/offline.list\n",
+	"RefreshRepository": {
+		Example: "kind: RefreshRepository\nspec:\n  manager: apt\n  clean: true\n  update: true\n  restrictToRepos:\n    - /etc/apt/sources.list.d/offline.list\n",
 		FieldDocs: map[string]FieldDoc{
 			"spec.manager":         {Description: "Package manager to use. `auto` detects from the host OS. Supports `apt` and `dnf`.", Example: "apt"},
 			"spec.clean":           {Description: "Run a cache clean before updating metadata (`apt clean` / `dnf clean all`).", Example: "true"},
@@ -314,7 +314,7 @@ var toolMetadata = map[string]ToolMetadata{
 			"spec.output.dir":            {Description: "Bundle-relative directory used by `download` for downloaded package artifacts. Defaults to `packages` or a repo-derived path when omitted.", Example: "packages/kubernetes"},
 		},
 		Notes: []string{
-			"Use `PackageDownload` and `PackageInstall` with `RepositoryConfigure` and `RepositoryRefresh` for a complete typed package-management flow.",
+			"Use `DownloadPackage` and `InstallPackage` with `ConfigureRepository` and `RefreshRepository` for a complete typed package-management flow.",
 			"Keeping the same package list across `download` and `install` helps maintain offline parity.",
 			"Use `restrictToRepos` on the `install` step to prevent the node's default online repos from being consulted during an offline apply.",
 			"When `repo` is set for `download`, deck expects `repo.type` and `distro.release` so it can build an apt-flat or yum-style repository layout.",
@@ -328,8 +328,8 @@ var toolMetadata = map[string]ToolMetadata{
 			"refresh":   "`refresh` updates package metadata from configured repositories using explicit repo policy controls.",
 		},
 		ActionExamples: map[string]string{
-			"configure": "kind: RepositoryConfigure\nspec:\n  action: configure\n  format: apt\n  path: /etc/apt/sources.list.d/offline.list\n  repositories:\n    - id: offline\n      baseurl: http://repo.local/debian\n      trusted: true\n",
-			"refresh":   "kind: RepositoryRefresh\nspec:\n  manager: apt\n  clean: true\n  update: true\n  restrictToRepos:\n    - /etc/apt/sources.list.d/offline.list\n",
+			"configure": "kind: ConfigureRepository\nspec:\n  action: configure\n  format: apt\n  path: /etc/apt/sources.list.d/offline.list\n  repositories:\n    - id: offline\n      baseurl: http://repo.local/debian\n      trusted: true\n",
+			"refresh":   "kind: RefreshRepository\nspec:\n  manager: apt\n  clean: true\n  update: true\n  restrictToRepos:\n    - /etc/apt/sources.list.d/offline.list\n",
 		},
 		FieldDocs: map[string]FieldDoc{
 			"spec.format":          {Description: "Repository file format to write. `auto` detects from the host family, `apt` produces a sources.list entry, and `yum` produces a `.repo` file.", Example: "apt"},
@@ -347,13 +347,13 @@ var toolMetadata = map[string]ToolMetadata{
 			"spec.excludeRepos":    {Description: "Repository selectors to skip during metadata update. For apt, selectors match repo file paths; for dnf, they match repo IDs.", Example: "[updates]"},
 		},
 		Notes: []string{
-			"`RepositoryConfigure` only writes repository definition files. Use `RepositoryRefresh` when the package manager needs an explicit metadata refresh.",
+			"`ConfigureRepository` only writes repository definition files. Use `RefreshRepository` when the package manager needs an explicit metadata refresh.",
 			"Keep repository definitions mirror-specific rather than mutating the host's default online sources.",
 		},
 	},
 
-	"Service": {
-		Example: "kind: Service\nspec:\n  name: containerd\n  enabled: true\n  state: started\n",
+	"ManageService": {
+		Example: "kind: ManageService\nspec:\n  name: containerd\n  enabled: true\n  state: started\n",
 		FieldDocs: map[string]FieldDoc{
 			"spec.name":          {Description: "Single service name to manage. Use `name` or `names`, not both.", Example: "containerd"},
 			"spec.names":         {Description: "Multiple service names to manage in one step. Use `name` or `names`, not both.", Example: "[firewalld,ufw]"},
@@ -365,8 +365,8 @@ var toolMetadata = map[string]ToolMetadata{
 		},
 	},
 
-	"Swap": {
-		Example: "kind: Swap\nspec:\n  disable: true\n  persist: true\n",
+	"ConfigureSwap": {
+		Example: "kind: ConfigureSwap\nspec:\n  disable: true\n  persist: true\n",
 		FieldDocs: map[string]FieldDoc{
 			"spec.disable":   {Description: "Disable all active swap devices with `swapoff -a`. Defaults to `true`.", Example: "true"},
 			"spec.persist":   {Description: "Comment out swap entries in `/etc/fstab` so swap stays off after reboot. Defaults to `true`.", Example: "true"},
@@ -374,8 +374,8 @@ var toolMetadata = map[string]ToolMetadata{
 		},
 	},
 
-	"Symlink": {
-		Example: "kind: Symlink\nspec:\n  path: /usr/bin/runc\n  target: /usr/local/sbin/runc\n  force: true\n",
+	"CreateSymlink": {
+		Example: "kind: CreateSymlink\nspec:\n  path: /usr/bin/runc\n  target: /usr/local/sbin/runc\n  force: true\n",
 		FieldDocs: map[string]FieldDoc{
 			"spec.path":          {Description: "Path where the symbolic link will be created.", Example: "/usr/bin/runc"},
 			"spec.target":        {Description: "Path that the symbolic link points to.", Example: "/usr/local/sbin/runc"},
@@ -385,8 +385,8 @@ var toolMetadata = map[string]ToolMetadata{
 		},
 	},
 
-	"Sysctl": {
-		Example: "kind: Sysctl\nspec:\n  writeFile: /etc/sysctl.d/99-kubernetes-cri.conf\n  apply: true\n  values:\n    net.ipv4.ip_forward: 1\n",
+	"ConfigureSysctl": {
+		Example: "kind: ConfigureSysctl\nspec:\n  writeFile: /etc/sysctl.d/99-kubernetes-cri.conf\n  apply: true\n  values:\n    net.ipv4.ip_forward: 1\n",
 		FieldDocs: map[string]FieldDoc{
 			"spec.writeFile": {Description: "Path to the sysctl file written with the given values. A drop-in under `/etc/sysctl.d/` is the common choice.", Example: "/etc/sysctl.d/99-k8s.conf"},
 			"spec.values":    {Description: "Map of sysctl key-value pairs to write and optionally apply.", Example: "{net.ipv4.ip_forward:1,net.bridge.bridge-nf-call-iptables:1}"},
@@ -394,18 +394,18 @@ var toolMetadata = map[string]ToolMetadata{
 		},
 	},
 
-	"SystemdUnit": {
-		Example: "kind: SystemdUnit\nspec:\n  path: /etc/systemd/system/kubelet.service\n  contentFromTemplate: |\n    [Unit]\n    Description=Kubelet\n\n    [Service]\n    Environment=NODE_IP={{ .vars.nodeIP }}\n  daemonReload: true\n  service:\n    enabled: true\n    state: started\n",
+	"WriteSystemdUnit": {
+		Example: "kind: WriteSystemdUnit\nspec:\n  path: /etc/systemd/system/kubelet.service\n  template: |\n    [Unit]\n    Description=Kubelet\n\n    [ManageService]\n    Environment=NODE_IP={{ .vars.nodeIP }}\n  daemonReload: true\n  service:\n    enabled: true\n    state: started\n",
 		FieldDocs: map[string]FieldDoc{
-			"spec.path":                {Description: "Destination path for the unit file on the node.", Example: "/etc/systemd/system/kubelet.service"},
-			"spec.content":             {Description: "Inline unit file content written verbatim to `path`.", Example: "[Unit]\\nDescription=kubelet"},
-			"spec.contentFromTemplate": {Description: "Inline multi-line unit content rendered with the current vars before writing. Prefer this for parameterized unit files.", Example: "[Service]\\nEnvironment=NODE_IP={{ .vars.nodeIP }}"},
-			"spec.mode":                {Description: "File permissions applied to the unit file in octal notation.", Example: "0644"},
-			"spec.daemonReload":        {Description: "Run `systemctl daemon-reload` after writing the unit file so systemd picks up the change.", Example: "true"},
-			"spec.service":             {Description: "Optional service management block run after the unit file is written.", Example: "{name:kubelet,enabled:true,state:started}"},
-			"spec.service.name":        {Description: "Service name to manage. Defaults to the unit file basename when omitted.", Example: "kubelet.service"},
-			"spec.service.enabled":     {Description: "Whether the service should be enabled to start on boot.", Example: "true"},
-			"spec.service.state":       {Description: "Desired service state after writing the unit file.", Example: "started"},
+			"spec.path":            {Description: "Destination path for the unit file on the node.", Example: "/etc/systemd/system/kubelet.service"},
+			"spec.content":         {Description: "Inline unit file content written verbatim to `path`.", Example: "[Unit]\\nDescription=kubelet"},
+			"spec.template":        {Description: "Inline multi-line unit content rendered with the current vars before writing. Prefer this for parameterized unit files.", Example: "[ManageService]\\nEnvironment=NODE_IP={{ .vars.nodeIP }}"},
+			"spec.mode":            {Description: "File permissions applied to the unit file in octal notation.", Example: "0644"},
+			"spec.daemonReload":    {Description: "Run `systemctl daemon-reload` after writing the unit file so systemd picks up the change.", Example: "true"},
+			"spec.service":         {Description: "Optional service management block run after the unit file is written.", Example: "{name:kubelet,enabled:true,state:started}"},
+			"spec.service.name":    {Description: "ManageService name to manage. Defaults to the unit file basename when omitted.", Example: "kubelet.service"},
+			"spec.service.enabled": {Description: "Whether the service should be enabled to start on boot.", Example: "true"},
+			"spec.service.state":   {Description: "Desired service state after writing the unit file.", Example: "started"},
 		},
 	},
 
@@ -428,8 +428,8 @@ var toolMetadata = map[string]ToolMetadata{
 		},
 		FieldDocs: map[string]FieldDoc{
 			"spec.action":       {Description: "Selects the condition to poll: `serviceActive`, `commandSuccess`, `fileExists`, `fileAbsent`, `tcpPortOpen`, or `tcpPortClosed`.", Example: "fileExists"},
-			"spec.name":         {Description: "Service name to check. Required for `serviceActive`.", Example: "containerd"},
-			"spec.command":      {Description: "Command vector to run on each poll attempt. Required for `commandSuccess`. The step succeeds when the command exits 0.", Example: "[test,-f,/etc/kubernetes/admin.conf]"},
+			"spec.name":         {Description: "ManageService name to check. Required for `serviceActive`.", Example: "containerd"},
+			"spec.command":      {Description: "RunCommand vector to run on each poll attempt. Required for `commandSuccess`. The step succeeds when the command exits 0.", Example: "[test,-f,/etc/kubernetes/admin.conf]"},
 			"spec.path":         {Description: "Filesystem path to check. Required for `fileExists` and `fileAbsent`.", Example: "/etc/kubernetes/admin.conf"},
 			"spec.type":         {Description: "Restricts the path check to a specific filesystem entry type. `file` matches regular files only, `dir` matches directories, `any` matches either. Defaults to `any`.", Example: "file"},
 			"spec.nonEmpty":     {Description: "For `fileExists`, also assert that the file has non-zero size. Useful when waiting for a file that is written progressively.", Example: "true"},
@@ -537,7 +537,7 @@ func WorkflowMeta() PageMetadata {
 	return PageMetadata{
 		Title:   "Workflow Schema",
 		Summary: "Top-level workflow authoring reference for deck workflows.",
-		Example: "role: apply\nversion: v1alpha1\nsteps:\n  - id: write-config\n    apiVersion: deck/v1alpha1\n    kind: FileWrite\n    spec:\n      path: /etc/example.conf\n      content: hello\n",
+		Example: "version: v1alpha1\nsteps:\n  - id: write-config\n    apiVersion: deck/v1alpha1\n    kind: WriteFile\n    spec:\n      path: /etc/example.conf\n      content: hello\n",
 		FieldDocs: map[string]FieldDoc{
 			"role":                           {Description: "Workflow role. `prepare` builds offline artifacts; `apply` changes the local node.", Example: "apply"},
 			"artifacts":                      {Description: "Declarative prepare inventory that replaces legacy prepare download steps.", Example: "{files:[...],images:[...],packages:[...]}"},
@@ -545,8 +545,8 @@ func WorkflowMeta() PageMetadata {
 			"artifacts.images[].execution":   {Description: "Optional execution controls for image artifact jobs. `parallelism` bounds concurrent image pulls and `retry` applies per image job.", Example: "{parallelism:3,retry:1}"},
 			"artifacts.packages[].execution": {Description: "Optional execution controls for package artifact jobs. `parallelism` runs different target/container jobs concurrently and `retry` applies per target job.", Example: "{parallelism:2,retry:1}"},
 			"phases":                         {Description: "Ordered execution phases. Each phase can contain imports, steps, or both.", Example: "[{name:install,steps:[...]}]"},
-			"steps":                          {Description: "Flat step list for workflows that do not need named phases.", Example: "[{id:configure-runtime,kind:Containerd,spec:{...}}]"},
-			"steps[].kind":                   {Description: "Typed step kind selected from the shipped public step inventory.", Example: "FileWrite"},
+			"steps":                          {Description: "Flat step list for workflows that do not need named phases.", Example: "[{id:configure-runtime,kind:WriteContainerdConfig,spec:{...}}]"},
+			"steps[].kind":                   {Description: "Typed step kind selected from the shipped public step inventory.", Example: "WriteFile"},
 			"steps[].spec":                   {Description: "Step payload validated against the schema for the chosen kind.", Example: "{path:/etc/example.conf,content:hello}"},
 			"steps[].when":                   {Description: workflowcontract.WhenDescription(), Example: `vars.skipSetup != "true"`},
 			"steps[].retry":                  {Description: "Number of times to retry the step after a failure before marking it as failed.", Example: "3"},
@@ -591,9 +591,9 @@ func ComponentFragmentMeta() PageMetadata {
 	return PageMetadata{
 		Title:   "Component Fragment Schema",
 		Summary: "Reference for reusable workflow component fragments located under `workflows/components/`.",
-		Example: "steps:\n  - id: write-config\n    kind: FileWrite\n    spec:\n      path: /etc/example.conf\n      content: hello\n  - id: restart-service\n    kind: Service\n    spec:\n      name: example\n      state: restarted\n",
+		Example: "steps:\n  - id: write-config\n    kind: WriteFile\n    spec:\n      path: /etc/example.conf\n      content: hello\n  - id: restart-service\n    kind: ManageService\n    spec:\n      name: example\n      state: restarted\n",
 		FieldDocs: map[string]FieldDoc{
-			"steps": {Description: "Ordered list of workflow steps contained in this fragment.", Example: "[{id:example,kind:Command,spec:{...}}]"},
+			"steps": {Description: "Ordered list of workflow steps contained in this fragment.", Example: "[{id:example,kind:RunCommand,spec:{...}}]"},
 		},
 		Notes: []string{
 			"Component fragments are stored in the `workflows/components/` directory of your workspace.",

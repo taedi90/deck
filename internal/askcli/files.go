@@ -471,15 +471,6 @@ func semanticCritic(gen askcontract.GenerationResponse, decision askintent.Decis
 			critic.RequiredFixes = append(critic.RequiredFixes, "Keep generated files under allowed workflow paths only")
 		}
 		if strings.HasPrefix(filepath.ToSlash(strings.TrimSpace(file.Path)), "workflows/scenarios/") {
-			role := localRole(file.Content)
-			switch {
-			case role == "":
-				critic.Blocking = append(critic.Blocking, fmt.Sprintf("scenario missing role: %s", file.Path))
-			case strings.HasSuffix(filepath.ToSlash(strings.TrimSpace(file.Path)), "/apply.yaml") && role != "apply":
-				critic.Blocking = append(critic.Blocking, fmt.Sprintf("scenario role/path mismatch: %s should use role apply", file.Path))
-			case strings.HasSuffix(filepath.ToSlash(strings.TrimSpace(file.Path)), "/prepare.yaml") && role != "prepare":
-				critic.Blocking = append(critic.Blocking, fmt.Sprintf("scenario role/path mismatch: %s should use role prepare", file.Path))
-			}
 			for _, importPath := range localImportPaths(file.Content) {
 				resolved := filepath.ToSlash(filepath.Join("workflows/components", importPath))
 				if _, ok := generated[resolved]; !ok {

@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newLintCommand() *cobra.Command {
+func newLintRunCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "lint [scenario]",
 		Short: "Lint the workflow tree or a single workflow file",
@@ -38,7 +38,7 @@ func newLintCommand() *cobra.Command {
 	return cmd
 }
 
-func newInitCommand() *cobra.Command {
+func newInitRunCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Scaffold starter deck files",
@@ -56,7 +56,7 @@ func newInitCommand() *cobra.Command {
 	return cmd
 }
 
-func newCacheListCommand() *cobra.Command {
+func newCacheListRunCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "Show cached files",
@@ -73,7 +73,7 @@ func newCacheListCommand() *cobra.Command {
 	return cmd
 }
 
-func newCacheCleanCommand() *cobra.Command {
+func newCacheCleanRunCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "clean",
 		Short: "Delete cached entries, optionally by age",

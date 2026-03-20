@@ -1,8 +1,8 @@
 {
-  "$id": "https://deck.local/schemas/tools/containerd.schema.json",
+  "$id": "https://deck.local/schemas/tools/containerd.registry-hosts.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Configures containerd defaults and registry host settings during apply.",
+  "description": "Writes containerd registry host configuration for mirrors and trust policy.",
   "properties": {
     "apiVersion": {
       "const": "deck/v1alpha1"
@@ -11,7 +11,7 @@
       "type": "string"
     },
     "kind": {
-      "const": "Containerd"
+      "const": "WriteContainerdRegistryHosts"
     },
     "metadata": {
       "additionalProperties": true,
@@ -33,14 +33,6 @@
     "spec": {
       "additionalProperties": false,
       "properties": {
-        "configPath": {
-          "minLength": 1,
-          "type": "string"
-        },
-        "createDefault": {
-          "default": true,
-          "type": "boolean"
-        },
         "path": {
           "minLength": 1,
           "type": "string"
@@ -82,12 +74,14 @@
             ],
             "type": "object"
           },
+          "minItems": 1,
           "type": "array"
-        },
-        "systemdCgroup": {
-          "type": "boolean"
         }
       },
+      "required": [
+        "path",
+        "registryHosts"
+      ],
       "type": "object"
     },
     "timeout": {
@@ -103,7 +97,7 @@
     "kind",
     "spec"
   ],
-  "title": "ContainerdStep",
+  "title": "WriteContainerdRegistryHostsStep",
   "type": "object",
   "x-deck-visibility": "public"
 }

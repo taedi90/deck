@@ -1,69 +1,53 @@
 steps:
-  - id: install-runtime-deps-debian
-    kind: Artifact
+  - id: extract-containerd-runtime-debian
+    kind: ExtractArchive
     timeout: 20m
     spec:
-      artifacts:
-        - source:
-            amd64:
-              url: http://{{ .vars.serverURL }}/files/bin/linux/amd64/containerd.tar.gz
-            arm64:
-              url: http://{{ .vars.serverURL }}/files/bin/linux/arm64/containerd.tar.gz
-          skipIfPresent:
-            path: /usr/local/bin/containerd
-            executable: true
-          extract:
-            destination: /usr/local
-        - source:
-            amd64:
-              path: /usr/local/bin/containerd
-            arm64:
-              path: /usr/local/bin/containerd
-          install:
-            path: /usr/bin/containerd
-            mode: "0755"
-        - source:
-            amd64:
-              path: /usr/local/bin/ctr
-            arm64:
-              path: /usr/local/bin/ctr
-          install:
-            path: /usr/bin/ctr
-            mode: "0755"
-        - source:
-            amd64:
-              path: /usr/local/bin/containerd-shim-runc-v2
-            arm64:
-              path: /usr/local/bin/containerd-shim-runc-v2
-          install:
-            path: /usr/bin/containerd-shim-runc-v2
-            mode: "0755"
-        - source:
-            amd64:
-              url: http://{{ .vars.serverURL }}/files/bin/linux/amd64/runc
-            arm64:
-              url: http://{{ .vars.serverURL }}/files/bin/linux/arm64/runc
-          skipIfPresent:
-            path: /usr/local/sbin/runc
-            executable: true
-          install:
-            path: /usr/local/sbin/runc
-            mode: "0755"
-        - source:
-            amd64:
-              url: http://{{ .vars.serverURL }}/files/bin/linux/amd64/cni-plugins.tgz
-            arm64:
-              url: http://{{ .vars.serverURL }}/files/bin/linux/arm64/cni-plugins.tgz
-          extract:
-            destination: /opt/cni/bin
+      source:
+        url: http://{{ .vars.serverURL }}/files/bin/linux/{{ .runtime.host.arch }}/containerd.tar.gz
+      path: /usr/local
+  - id: install-containerd-debian
+    kind: CopyFile
+    spec:
+      source:
+        path: /usr/local/bin/containerd
+      path: /usr/bin/containerd
+      mode: "0755"
+  - id: install-ctr-debian
+    kind: CopyFile
+    spec:
+      source:
+        path: /usr/local/bin/ctr
+      path: /usr/bin/ctr
+      mode: "0755"
+  - id: install-containerd-shim-runc-v2-debian
+    kind: CopyFile
+    spec:
+      source:
+        path: /usr/local/bin/containerd-shim-runc-v2
+      path: /usr/bin/containerd-shim-runc-v2
+      mode: "0755"
+  - id: install-runc-debian
+    kind: CopyFile
+    spec:
+      source:
+        url: http://{{ .vars.serverURL }}/files/bin/linux/{{ .runtime.host.arch }}/runc
+      path: /usr/local/sbin/runc
+      mode: "0755"
+  - id: extract-cni-plugins-debian
+    kind: ExtractArchive
+    spec:
+      source:
+        url: http://{{ .vars.serverURL }}/files/bin/linux/{{ .runtime.host.arch }}/cni-plugins.tgz
+      path: /opt/cni/bin
   - id: symlink-runc-debian
-    kind: Symlink
+    kind: CreateSymlink
     spec:
       path: /usr/bin/runc
       target: /usr/local/sbin/runc
       force: true
   - id: write-containerd-unit-debian
-    kind: SystemdUnit
+    kind: WriteSystemdUnit
     spec:
       path: /etc/systemd/system/containerd.service
       mode: "0644"

@@ -4,7 +4,7 @@ This document describes the standard directory structure of a `deck` project. Us
 
 A `deck` workspace is organized into three main functional areas: **Workflows**, **Artifact**, and **Metadata**.
 
-## Directory Structure
+## EnsureDirectory Structure
 
 ```text
 .

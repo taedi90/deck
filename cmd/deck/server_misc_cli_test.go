@@ -112,7 +112,7 @@ func TestHealth(t *testing.T) {
 	})
 }
 
-func TestServerRemoteCommands(t *testing.T) {
+func TestServerRemoteRunCommands(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "server.json")
 	t.Setenv("DECK_SERVER_CONFIG_PATH", configPath)
 
@@ -300,7 +300,7 @@ func TestLogs(t *testing.T) {
 		if err := os.MkdirAll(filepath.Join(root, "workflows", "scenarios"), 0o755); err != nil {
 			t.Fatalf("mkdir scenarios: %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "apply.yaml"), []byte("role: apply\nversion: v1alpha1\nsteps: []\n"), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "apply.yaml"), []byte("version: v1alpha1\nsteps: []\n"), 0o644); err != nil {
 			t.Fatalf("write scenario: %v", err)
 		}
 		oldWD, err := os.Getwd()
@@ -445,8 +445,8 @@ func TestRunServerAuditRotationFlagValidation(t *testing.T) {
 	}
 }
 
-func TestRunLegacyTopLevelCommandsAreRemoved(t *testing.T) {
-	for _, cmd := range []string{"run", "resume", "diagnose", "agent", "workflow", "control", "strategy", "Service", "serve", "health", "logs"} {
+func TestRunLegacyTopLevelRunCommandsAreRemoved(t *testing.T) {
+	for _, cmd := range []string{"run", "resume", "diagnose", "agent", "workflow", "control", "strategy", "ManageService", "serve", "health", "logs"} {
 		t.Run(cmd, func(t *testing.T) {
 			err := run([]string{cmd})
 			if err == nil {
@@ -461,12 +461,12 @@ func TestRunLegacyTopLevelCommandsAreRemoved(t *testing.T) {
 	}
 }
 
-func TestLegacyServiceSurfaceRemoved(t *testing.T) {
-	err := run([]string{"Service"})
+func TestLegacyManageServiceSurfaceRemoved(t *testing.T) {
+	err := run([]string{"ManageService"})
 	if err == nil {
 		t.Fatalf("expected unknown command error")
 	}
-	if !strings.Contains(err.Error(), `unknown command "Service" for "deck"`) {
+	if !strings.Contains(err.Error(), `unknown command "ManageService" for "deck"`) {
 		t.Fatalf("unexpected error: %q", err.Error())
 	}
 }
@@ -481,7 +481,7 @@ func TestServerRemoteUsage(t *testing.T) {
 	}
 }
 
-func TestSourceCommandRemoved(t *testing.T) {
+func TestSourceRunCommandRemoved(t *testing.T) {
 	err := run([]string{"source"})
 	if err == nil {
 		t.Fatalf("expected unknown command error")
@@ -499,7 +499,7 @@ func TestRunWorkflowLintAndLegacyValidateMigration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected success, got %v", err)
 		}
-		if out != fmt.Sprintf("lint: ok (%s)\nSUMMARY mode=file workflows=1 warnings=1 errors=0 supportedVersion=v1alpha1 roles=prepare,apply topLevelModes=artifacts,phases,steps\n", wf) {
+		if out != fmt.Sprintf("lint: ok (%s)\nSUMMARY mode=file workflows=1 warnings=1 errors=0 supportedVersion=v1alpha1 roles=prepare,apply topLevelModes=phases,steps\n", wf) {
 			t.Fatalf("unexpected output: %q", out)
 		}
 	})
@@ -509,7 +509,7 @@ func TestRunWorkflowLintAndLegacyValidateMigration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected success, got %v", err)
 		}
-		if out != fmt.Sprintf("lint: ok (%s)\nSUMMARY mode=file workflows=1 warnings=1 errors=0 supportedVersion=v1alpha1 roles=prepare,apply topLevelModes=artifacts,phases,steps\n", wf) {
+		if out != fmt.Sprintf("lint: ok (%s)\nSUMMARY mode=file workflows=1 warnings=1 errors=0 supportedVersion=v1alpha1 roles=prepare,apply topLevelModes=phases,steps\n", wf) {
 			t.Fatalf("unexpected output: %q", out)
 		}
 	})
@@ -550,7 +550,7 @@ func TestRunWorkflowLintAndLegacyValidateMigration(t *testing.T) {
 		if len(payload.Workflows) != 1 || payload.Workflows[0] != wf {
 			t.Fatalf("unexpected workflows: %+v", payload.Workflows)
 		}
-		if payload.Contracts.SupportedVersion != "v1alpha1" || len(payload.Contracts.SupportedRoles) != 2 || len(payload.Contracts.TopLevelModes) != 3 || len(payload.Contracts.InvariantNotes) == 0 {
+		if payload.Contracts.SupportedVersion != "v1alpha1" || len(payload.Contracts.SupportedRoles) != 2 || len(payload.Contracts.TopLevelModes) != 2 || len(payload.Contracts.InvariantNotes) == 0 {
 			t.Fatalf("unexpected contracts: %+v", payload.Contracts)
 		}
 		if len(payload.Findings) != 1 {
@@ -560,7 +560,7 @@ func TestRunWorkflowLintAndLegacyValidateMigration(t *testing.T) {
 		if !ok {
 			t.Fatalf("unexpected finding payload type: %#v", payload.Findings[0])
 		}
-		if finding["code"] != "W_COMMAND_OPAQUE" || finding["severity"] != "warning" || finding["stepId"] != "validate-run" || finding["kind"] != "Command" {
+		if finding["code"] != "W_COMMAND_OPAQUE" || finding["severity"] != "warning" || finding["stepId"] != "validate-run" || finding["kind"] != "RunCommand" {
 			t.Fatalf("unexpected finding payload: %+v", finding)
 		}
 		if res.stderr != "" {
@@ -573,7 +573,7 @@ func TestRunWorkflowLintAndLegacyValidateMigration(t *testing.T) {
 		if res.err != nil {
 			t.Fatalf("expected success, got %v", res.err)
 		}
-		if res.stdout != fmt.Sprintf("lint: ok (%s)\nSUMMARY mode=file workflows=1 warnings=1 errors=0 supportedVersion=v1alpha1 roles=prepare,apply topLevelModes=artifacts,phases,steps\n", wf) {
+		if res.stdout != fmt.Sprintf("lint: ok (%s)\nSUMMARY mode=file workflows=1 warnings=1 errors=0 supportedVersion=v1alpha1 roles=prepare,apply topLevelModes=phases,steps\n", wf) {
 			t.Fatalf("unexpected stdout: %q", res.stdout)
 		}
 		for _, want := range []string{"deck: lint root=", "scenario=", fmt.Sprintf("deck: lint workflow=%s", wf), "deck: lint finding code=W_COMMAND_OPAQUE severity=warning"} {
@@ -594,12 +594,15 @@ func TestRunWorkflowLintAndLegacyValidateMigration(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(root, "workflows", "vars.yaml"), []byte("{}\n"), 0o644); err != nil {
 			t.Fatalf("write vars: %v", err)
 		}
-		preparePath := filepath.Join(root, "workflows", "scenarios", "prepare.yaml")
-		if err := os.WriteFile(preparePath, []byte("role: prepare\nversion: v1alpha1\nphases:\n  - name: prepare\n    imports:\n      - path: shared/checks.yaml\n"), 0o644); err != nil {
+		applyPath := filepath.Join(root, "workflows", "scenarios", "apply.yaml")
+		if err := os.WriteFile(applyPath, []byte("version: v1alpha1\nphases:\n  - name: install\n    imports:\n      - path: shared/checks.yaml\n"), 0o644); err != nil {
+			t.Fatalf("write apply: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "prepare.yaml"), []byte("version: v1alpha1\nphases:\n  - name: prepare\n    imports:\n      - path: shared/checks.yaml\n"), 0o644); err != nil {
 			t.Fatalf("write prepare: %v", err)
 		}
 		componentPath := filepath.Join(root, "workflows", "components", "shared", "checks.yaml")
-		if err := os.WriteFile(componentPath, []byte("steps:\n  - id: imported-file\n    kind: FileDownload\n    spec:\n      source:\n        path: files/source.bin\n      output:\n        path: imported.bin\n"), 0o644); err != nil {
+		if err := os.WriteFile(componentPath, []byte("steps:\n  - id: imported-check\n    kind: RunCommand\n    spec:\n      command: [\"true\"]\n"), 0o644); err != nil {
 			t.Fatalf("write component: %v", err)
 		}
 
@@ -612,11 +615,11 @@ func TestRunWorkflowLintAndLegacyValidateMigration(t *testing.T) {
 		}
 		defer func() { _ = os.Chdir(oldWD) }()
 
-		res := execute([]string{"lint", "prepare", "--root", root, "--v=2"})
+		res := execute([]string{"lint", "--file", applyPath, "--root", root, "--v=2"})
 		if res.err != nil {
 			t.Fatalf("expected success, got %v", res.err)
 		}
-		for _, want := range []string{"deck: lint workflow=", filepath.ToSlash(preparePath), filepath.ToSlash(componentPath)} {
+		for _, want := range []string{"deck: lint workflow=", filepath.ToSlash(applyPath), filepath.ToSlash(componentPath)} {
 			if !strings.Contains(res.stderr, want) {
 				t.Fatalf("expected %q in stderr, got %q", want, res.stderr)
 			}
@@ -631,7 +634,10 @@ func TestRunWorkflowLintAndLegacyValidateMigration(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(root, "workflows", "vars.yaml"), []byte("{}\n"), 0o644); err != nil {
 			t.Fatalf("write vars: %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "prepare.yaml"), []byte("role: prepare\nversion: v1alpha1\nphases:\n  - name: prepare\n    steps: []\n"), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "apply.yaml"), []byte("version: v1alpha1\nphases:\n  - name: install\n    steps: []\n"), 0o644); err != nil {
+			t.Fatalf("write apply: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "prepare.yaml"), []byte("version: v1alpha1\nphases:\n  - name: prepare\n    steps: []\n"), 0o644); err != nil {
 			t.Fatalf("write prepare: %v", err)
 		}
 
@@ -648,7 +654,7 @@ func TestRunWorkflowLintAndLegacyValidateMigration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected success, got %v", err)
 		}
-		if out != "lint: ok (1 workflows)\nSUMMARY mode=workspace workflows=1 warnings=0 errors=0 supportedVersion=v1alpha1 roles=prepare,apply topLevelModes=artifacts,phases,steps\n" {
+		if out != "lint: ok (1 workflows)\nSUMMARY mode=workspace workflows=1 warnings=0 errors=0 supportedVersion=v1alpha1 roles=prepare,apply topLevelModes=phases,steps\n" {
 			t.Fatalf("unexpected output: %q", out)
 		}
 	})
@@ -661,23 +667,26 @@ func TestRunWorkflowLintAndLegacyValidateMigration(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(root, "workflows", "vars.yaml"), []byte("{}\n"), 0o644); err != nil {
 			t.Fatalf("write vars: %v", err)
 		}
-		preparePath := filepath.Join(root, "workflows", "scenarios", "prepare.yaml")
-		if err := os.WriteFile(preparePath, []byte("role: prepare\nversion: v1alpha1\nphases:\n  - name: prepare\n    steps: []\n"), 0o644); err != nil {
+		applyPath := filepath.Join(root, "workflows", "scenarios", "apply.yaml")
+		if err := os.WriteFile(applyPath, []byte("version: v1alpha1\nphases:\n  - name: install\n    steps: []\n"), 0o644); err != nil {
+			t.Fatalf("write apply: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "prepare.yaml"), []byte("version: v1alpha1\nphases:\n  - name: prepare\n    steps: []\n"), 0o644); err != nil {
 			t.Fatalf("write prepare: %v", err)
 		}
 
-		out, err := runWithCapturedStdout([]string{"lint", "prepare", "--root", root})
+		out, err := runWithCapturedStdout([]string{"lint", "apply", "--root", root})
 		if err != nil {
 			t.Fatalf("expected success, got %v", err)
 		}
-		if out != "lint: ok (1 workflows)\nSUMMARY mode=scenario workflows=1 warnings=0 errors=0 supportedVersion=v1alpha1 roles=prepare,apply topLevelModes=artifacts,phases,steps\n" {
+		if out != "lint: ok (1 workflows)\nSUMMARY mode=scenario workflows=1 warnings=0 errors=0 supportedVersion=v1alpha1 roles=prepare,apply topLevelModes=phases,steps\n" {
 			t.Fatalf("unexpected output: %q", out)
 		}
 	})
 
-	t.Run("lint warns about remote artifact integrity gaps", func(t *testing.T) {
+	t.Run("lint does not emit legacy artifact integrity warnings for DownloadFile steps", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "prepare.yaml")
-		writeWorkflowYAML(t, path, "role: prepare\nversion: v1alpha1\nartifacts:\n  files:\n    - group: base\n      items:\n        - id: rpm\n          source:\n            url: https://example.com/pkg.rpm\n          output:\n            path: pkg.rpm\n")
+		writeWorkflowYAML(t, path, "version: v1alpha1\nphases:\n  - name: prepare\n    steps:\n      - id: rpm\n        kind: DownloadFile\n        spec:\n          source:\n            url: https://example.com/pkg.rpm\n          outputPath: pkg.rpm\n")
 
 		res := execute([]string{"lint", "--file", path, "-o", "json"})
 		if res.err != nil {
@@ -692,10 +701,10 @@ func TestRunWorkflowLintAndLegacyValidateMigration(t *testing.T) {
 		if err := json.Unmarshal([]byte(res.stdout), &payload); err != nil {
 			t.Fatalf("parse lint json: %v stdout=%q", err, res.stdout)
 		}
-		if payload.Summary.WarningCount != 1 {
+		if payload.Summary.WarningCount != 0 {
 			t.Fatalf("unexpected warning count: %+v", payload.Summary)
 		}
-		if len(payload.Findings) != 1 || payload.Findings[0]["code"] != "W_ARTIFACT_INTEGRITY_MISSING" {
+		if len(payload.Findings) != 0 {
 			t.Fatalf("unexpected findings: %+v", payload.Findings)
 		}
 	})
@@ -706,7 +715,7 @@ func TestRunWorkflowLintAndLegacyValidateMigration(t *testing.T) {
 		if err := os.MkdirAll(filepath.Dir(componentPath), 0o755); err != nil {
 			t.Fatalf("mkdir component dir: %v", err)
 		}
-		if err := os.WriteFile(componentPath, []byte("role: apply\nversion: v1alpha1\nsteps: []\n"), 0o644); err != nil {
+		if err := os.WriteFile(componentPath, []byte("version: v1alpha1\nsteps: []\n"), 0o644); err != nil {
 			t.Fatalf("write component: %v", err)
 		}
 		_, err := runWithCapturedStdout([]string{"lint", "--file", componentPath})

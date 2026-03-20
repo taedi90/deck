@@ -12,8 +12,6 @@ import (
 	"sort"
 	"strings"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/taedi90/deck/internal/config"
 	"github.com/taedi90/deck/internal/filemode"
 	"github.com/taedi90/deck/internal/fsutil"
@@ -53,10 +51,8 @@ func Run(ctx context.Context, opts Options) error {
 	if err := emitDiagnostic(opts, 1, "deck: prepare workflow=%s\n", filepath.ToSlash(prepareWorkflowPath)); err != nil {
 		return err
 	}
-	workflowRootDirPath, err := workspacepaths.LocateWorkflowTreeRoot(prepareWorkflowPath)
-	if err != nil {
-		return err
-	}
+	workspaceRoot := filepath.Dir(prepareWorkflowPath)
+	workflowRootDirPath := filepath.Join(workspaceRoot, workspacepaths.WorkflowRootDir)
 	varsWorkflowPath, err := resolveOptionalVarsWorkflowPath(workflowRootDirPath)
 	if err != nil {
 		return err
@@ -98,33 +94,12 @@ func Run(ctx context.Context, opts Options) error {
 	if err != nil {
 		return err
 	}
-	if strings.TrimSpace(prepareWorkflow.Role) != "prepare" {
-		return fmt.Errorf("prepare workflow role must be prepare: %s", prepareWorkflowPath)
-	}
-	if err := emitDiagnostic(opts, 1, "deck: prepare role=%s refresh=%t clean=%t\n", strings.TrimSpace(prepareWorkflow.Role), opts.Refresh, opts.Clean); err != nil {
+	if err := emitDiagnostic(opts, 1, "deck: prepare refresh=%t clean=%t\n", opts.Refresh, opts.Clean); err != nil {
 		return err
 	}
 	planDiagnostics, err := prepare.InspectPlan(prepareWorkflow, preparedRoot.Abs(), prepare.RunOptions{BundleRoot: preparedRoot.Abs(), ForceRedownload: opts.Refresh})
 	if err != nil {
 		return err
-	}
-	artifactGroups := summarizeArtifactGroups(prepareWorkflow)
-	if len(artifactGroups) == 0 {
-		fallbackGroups, err := summarizeArtifactGroupsFromFile(prepareWorkflowPath)
-		if err != nil {
-			return err
-		}
-		artifactGroups = fallbackGroups
-	}
-	if len(artifactGroups) > 0 {
-		if err := emitDiagnostic(opts, 2, "deck: prepare artifactGroups=%d\n", len(artifactGroups)); err != nil {
-			return err
-		}
-		for _, group := range artifactGroups {
-			if err := emitDiagnostic(opts, 2, "deck: prepare artifactGroup kind=%s name=%s jobs=%d parallelism=%d retry=%d\n", group.Kind, group.Name, group.Jobs, group.Parallelism, group.Retry); err != nil {
-				return err
-			}
-		}
 	}
 	if len(planDiagnostics.CachePlan.Artifact) > 0 {
 		fetchCount := 0
@@ -209,8 +184,8 @@ func Run(ctx context.Context, opts Options) error {
 	if err != nil {
 		return fmt.Errorf("read deck binary: %w", err)
 	}
-	workspaceRoot := filepath.Dir(preparedRoot.Abs())
-	if err := writeBytes(filepath.Join(workspaceRoot, "deck"), binaryBytes, 0o755); err != nil {
+	preparedWorkspaceRoot := filepath.Dir(preparedRoot.Abs())
+	if err := writeBytes(filepath.Join(preparedWorkspaceRoot, "deck"), binaryBytes, 0o755); err != nil {
 		return err
 	}
 
@@ -218,13 +193,13 @@ func Run(ctx context.Context, opts Options) error {
 	if err != nil {
 		return err
 	}
-	if err := writePreparedManifest(filepath.Join(workspaceRoot, ".deck", "manifest.json"), manifest); err != nil {
+	if err := writePreparedManifest(filepath.Join(preparedWorkspaceRoot, ".deck", "manifest.json"), manifest); err != nil {
 		return err
 	}
-	if err := emitDiagnostic(opts, 1, "deck: prepare manifestEntries=%d workspaceRoot=%s\n", len(manifest.Entries), filepath.ToSlash(workspaceRoot)); err != nil {
+	if err := emitDiagnostic(opts, 1, "deck: prepare manifestEntries=%d workspaceRoot=%s\n", len(manifest.Entries), filepath.ToSlash(preparedWorkspaceRoot)); err != nil {
 		return err
 	}
-	if err := emitDiagnostic(opts, 2, "deck: prepare manifestPath=%s\n", filepath.ToSlash(filepath.Join(workspaceRoot, ".deck", "manifest.json"))); err != nil {
+	if err := emitDiagnostic(opts, 2, "deck: prepare manifestPath=%s\n", filepath.ToSlash(filepath.Join(preparedWorkspaceRoot, ".deck", "manifest.json"))); err != nil {
 		return err
 	}
 
@@ -247,77 +222,6 @@ func workflowIncludeCount(prepareWorkflowPath, varsWorkflowPath, applyWorkflowPa
 		count++
 	}
 	return count
-}
-
-func summarizeArtifactGroups(wf *config.Workflow) []prepare.ArtifactGroupDiagnostic {
-	if wf == nil || wf.Artifact == nil {
-		return nil
-	}
-	summary := make([]prepare.ArtifactGroupDiagnostic, 0, len(wf.Artifact.Files)+len(wf.Artifact.Images)+len(wf.Artifact.Packages))
-	for _, group := range wf.Artifact.Files {
-		summary = append(summary, prepare.ArtifactGroupDiagnostic{
-			Kind:        "file",
-			Name:        strings.TrimSpace(group.Group),
-			Jobs:        len(expandPrepareTargets(group.Targets)) * len(group.Items),
-			Parallelism: normalizeParallelism(group.Execution),
-			Retry:       normalizeRetry(group.Execution),
-		})
-	}
-	for _, group := range wf.Artifact.Images {
-		summary = append(summary, prepare.ArtifactGroupDiagnostic{
-			Kind:        "image",
-			Name:        strings.TrimSpace(group.Group),
-			Jobs:        len(expandPrepareTargets(group.Targets)) * len(group.Items),
-			Parallelism: normalizeParallelism(group.Execution),
-			Retry:       normalizeRetry(group.Execution),
-		})
-	}
-	for _, group := range wf.Artifact.Packages {
-		summary = append(summary, prepare.ArtifactGroupDiagnostic{
-			Kind:        "package",
-			Name:        strings.TrimSpace(group.Group),
-			Jobs:        len(expandPrepareTargets(group.Targets)),
-			Parallelism: normalizeParallelism(group.Execution),
-			Retry:       normalizeRetry(group.Execution),
-		})
-	}
-	return summary
-}
-
-func expandPrepareTargets(targets []config.ArtifactTarget) []config.ArtifactTarget {
-	if len(targets) == 0 {
-		return []config.ArtifactTarget{{}}
-	}
-	return targets
-}
-
-func normalizeParallelism(spec *config.ArtifactExecutionSpec) int {
-	if spec == nil || spec.Parallelism < 1 {
-		return 1
-	}
-	return spec.Parallelism
-}
-
-func normalizeRetry(spec *config.ArtifactExecutionSpec) int {
-	if spec == nil || spec.Retry < 0 {
-		return 0
-	}
-	return spec.Retry
-}
-
-func summarizeArtifactGroupsFromFile(path string) ([]prepare.ArtifactGroupDiagnostic, error) {
-	raw, err := fsutil.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read workflow file: %w", err)
-	}
-	var partial struct {
-		Artifact *config.ArtifactSpec `yaml:"artifacts"`
-	}
-	dec := yaml.NewDecoder(strings.NewReader(string(raw)))
-	if err := dec.Decode(&partial); err != nil {
-		return nil, fmt.Errorf("parse workflow artifacts: %w", err)
-	}
-	return summarizeArtifactGroups(&config.Workflow{Artifact: partial.Artifact}), nil
 }
 
 func printLine(w io.Writer, line string) error {
@@ -344,12 +248,8 @@ func discoverPrepareWorkflow(ctx context.Context) (string, error) {
 	if statErr != nil || preferredInfo.IsDir() {
 		return "", fmt.Errorf("prepare workflow not found: %s", preferred)
 	}
-	wf, loadErr := config.Load(ctx, preferred)
-	if loadErr != nil {
+	if _, loadErr := config.Load(ctx, preferred); loadErr != nil {
 		return "", loadErr
-	}
-	if strings.TrimSpace(wf.Role) != "prepare" {
-		return "", fmt.Errorf("prepare workflow role must be prepare: %s", preferred)
 	}
 	return preferred, nil
 }

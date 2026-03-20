@@ -133,7 +133,7 @@ func writeInstallTrueWorkflowFixture(t *testing.T) string {
 func writeApplyTrueWorkflowFixture(t *testing.T, phaseName string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "install-true.yaml")
-	content := fmt.Sprintf("role: apply\nversion: v1alpha1\nphases:\n  - name: %s\n    steps:\n      - id: run-true\n        kind: Command\n        spec:\n          command: [\"true\"]\n", phaseName)
+	content := fmt.Sprintf("version: v1alpha1\nphases:\n  - name: %s\n    steps:\n      - id: run-true\n        kind: RunCommand\n        spec:\n          command: [\"true\"]\n", phaseName)
 	writeWorkflowYAML(t, path, content)
 	return path
 }
@@ -141,7 +141,22 @@ func writeApplyTrueWorkflowFixture(t *testing.T, phaseName string) string {
 func writeValidateWorkflowFixture(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "validate-workflow.yaml")
-	content := "role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: validate-run\n        apiVersion: deck/v1alpha1\n        kind: Command\n        spec:\n          command: [\"true\"]\n"
+	content := "version: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: validate-run\n        apiVersion: deck/v1alpha1\n        kind: RunCommand\n        spec:\n          command: [\"true\"]\n"
+	writeWorkflowYAML(t, path, content)
+	return path
+}
+
+func writePrepareDownloadWorkflowFixture(t *testing.T, root string, relOutputPath string) string {
+	t.Helper()
+	seedDir := filepath.Join(root, "seed", "files")
+	if err := os.MkdirAll(seedDir, 0o755); err != nil {
+		t.Fatalf("mkdir seed dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(seedDir, "source.bin"), []byte("seed\n"), 0o644); err != nil {
+		t.Fatalf("write seed source: %v", err)
+	}
+	path := filepath.Join(root, "prepare.yaml")
+	content := fmt.Sprintf("version: v1alpha1\nphases:\n  - name: prepare\n    steps:\n      - id: seed\n        kind: DownloadFile\n        spec:\n          source:\n            path: files/source.bin\n          fetch:\n            sources:\n              - type: local\n                path: %q\n          outputPath: %s\n", filepath.Join(root, "seed"), relOutputPath)
 	writeWorkflowYAML(t, path, content)
 	return path
 }
@@ -168,15 +183,6 @@ func createValidBundleManifest(t *testing.T, bundleRoot string) {
 	}
 }
 
-func sliceContains(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
-}
-
 func writeApplyBundleTarFixture(t *testing.T, archivePath string) {
 	t.Helper()
 	f, err := os.Create(archivePath)
@@ -195,7 +201,7 @@ func writeApplyBundleTarFixture(t *testing.T, archivePath string) {
 	}{
 		{name: "bundle/workflows/", mode: 0o755},
 		{name: "bundle/workflows/scenarios/", mode: 0o755},
-		{name: "bundle/workflows/scenarios/apply.yaml", body: []byte("role: apply\nversion: v1alpha1\nsteps: []\n"), mode: 0o644},
+		{name: "bundle/workflows/scenarios/apply.yaml", body: []byte("version: v1alpha1\nsteps: []\n"), mode: 0o644},
 		{name: "bundle/workflows/vars.yaml", body: []byte("{}\n"), mode: 0o644},
 	}
 

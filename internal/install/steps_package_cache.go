@@ -8,19 +8,19 @@ import (
 	"time"
 )
 
-const defaultRepositoryRefreshTimeout = 2 * time.Minute
+const defaultRefreshRepositoryTimeout = 2 * time.Minute
 
-func runRepositoryRefresh(ctx context.Context, spec map[string]any) error {
+func runRefreshRepository(ctx context.Context, spec map[string]any) error {
 	if ctx == nil {
 		return fmt.Errorf("context is nil")
 	}
-	return runRepositoryRefreshWithRunner(spec, func(name string, args []string, timeout time.Duration) error {
+	return runRefreshRepositoryWithRunner(spec, func(name string, args []string, timeout time.Duration) error {
 		return runTimedCommandWithContext(ctx, name, args, timeout)
 	})
 }
 
-func runRepositoryRefreshWithRunner(spec map[string]any, runner func(name string, args []string, timeout time.Duration) error) error {
-	manager, err := resolveRepositoryRefreshManager(spec)
+func runRefreshRepositoryWithRunner(spec map[string]any, runner func(name string, args []string, timeout time.Duration) error) error {
+	manager, err := resolveRefreshRepositoryManager(spec)
 	if err != nil {
 		return err
 	}
@@ -28,21 +28,21 @@ func runRepositoryRefreshWithRunner(spec map[string]any, runner func(name string
 	clean := boolValue(spec, "clean")
 	update := boolValue(spec, "update")
 	if !clean && !update {
-		return fmt.Errorf("%s: RepositoryRefresh requires clean and/or update", errCodeInstallRepositoryRefreshMgr)
+		return fmt.Errorf("%s: RefreshRepository requires clean and/or update", errCodeInstallRefreshRepositoryMgr)
 	}
 
-	return runRepositoryRefreshCommands(
+	return runRefreshRepositoryRunCommands(
 		manager,
 		clean,
 		update,
 		packageRepoPolicyFromSpec(spec),
-		commandTimeoutWithDefault(spec, defaultRepositoryRefreshTimeout),
+		commandTimeoutWithDefault(spec, defaultRefreshRepositoryTimeout),
 		runner,
 		"package cache refresh",
 	)
 }
 
-func resolveRepositoryRefreshManager(spec map[string]any) (string, error) {
+func resolveRefreshRepositoryManager(spec map[string]any) (string, error) {
 	manager := stringValue(spec, "manager")
 	if manager == "" {
 		manager = "auto"
@@ -58,7 +58,7 @@ func resolveRepositoryRefreshManager(spec map[string]any) (string, error) {
 		}
 		return repoConfigFormatToPackageManager(autoFormat), nil
 	default:
-		return "", fmt.Errorf("%s: RepositoryRefresh manager must be one of auto, apt, dnf", errCodeInstallRepositoryRefreshMgr)
+		return "", fmt.Errorf("%s: RefreshRepository manager must be one of auto, apt, dnf", errCodeInstallRefreshRepositoryMgr)
 	}
 }
 
@@ -69,7 +69,7 @@ func repoConfigFormatToPackageManager(format string) string {
 	return "dnf"
 }
 
-func runRepositoryRefreshCommands(
+func runRefreshRepositoryRunCommands(
 	manager string,
 	clean bool,
 	update bool,
@@ -127,7 +127,7 @@ func runRepositoryRefreshCommands(
 			}
 		}
 	default:
-		return fmt.Errorf("%s: unsupported package cache manager %q", errCodeInstallRepositoryRefreshMgr, manager)
+		return fmt.Errorf("%s: unsupported package cache manager %q", errCodeInstallRefreshRepositoryMgr, manager)
 	}
 
 	return nil

@@ -32,7 +32,7 @@ func InvariantPromptBlock() PromptBlock {
 func PolicyPromptBlock() PromptBlock {
 	b := &strings.Builder{}
 	b.WriteString("Workflow authoring policy:\n")
-	b.WriteString("- Prefer typed steps over Command whenever a typed step expresses the change clearly.\n")
+	b.WriteString("- Prefer typed steps over RunCommand whenever a typed step expresses the change clearly.\n")
 	b.WriteString("- Prefer workflows/vars.yaml for repeated configurable values instead of scattering literals across steps.\n")
 	b.WriteString("- Do not replace schema-typed arrays or objects with string templates. Keep arrays as YAML arrays and objects as YAML objects so schema validation still passes.\n")
 	b.WriteString("- Split repeated logic into reusable components and import them under phases[].imports.\n")
@@ -143,7 +143,7 @@ func CLIHintsBlock() string {
 	b := &strings.Builder{}
 	b.WriteString("Relevant CLI usage:\n")
 	b.WriteString("- ")
-	b.WriteString(manifest.CLI.Command)
+	b.WriteString(manifest.CLI.RunCommand)
 	b.WriteString(" previews by default; add --write to write files.\n")
 	b.WriteString("- ")
 	b.WriteString(manifest.CLI.PlanSubcommand)
@@ -198,11 +198,11 @@ func RelevantStepKindsBlock(prompt string) string {
 			}
 			b.WriteString("\n")
 		}
-		if step.Kind == "PackageInstall" || step.Kind == "PackageDownload" {
+		if step.Kind == "InstallPackage" || step.Kind == "DownloadPackage" {
 			b.WriteString("  - spec.packages must stay a real YAML array, not a quoted template string.\n")
 			b.WriteString("  - Do not set spec.packages to `{{ .vars.* }}` or any other whole-value template expression; inline the package list as YAML items instead.\n")
 		}
-		if step.Kind == "RepositoryConfigure" {
+		if step.Kind == "ConfigureRepository" {
 			b.WriteString("  - spec.repositories must stay a real YAML array of repository objects, not a scalar shortcut.\n")
 			b.WriteString("  - Do not set spec.repositories to `{{ .vars.* }}` or any other whole-value template expression; inline repository objects as YAML list items instead.\n")
 		}
@@ -277,17 +277,17 @@ func RelevantStepKinds(prompt string) []StepKindContext {
 			}
 		}
 		if strings.Contains(lower, "repo") || strings.Contains(lower, "Repository") {
-			if step.Kind == "RepositoryConfigure" || step.Kind == "RepositoryRefresh" {
+			if step.Kind == "ConfigureRepository" || step.Kind == "RefreshRepository" {
 				score += 60
 			}
 		}
 		if strings.Contains(lower, "docker") || strings.Contains(lower, "package") || strings.Contains(lower, "dnf") {
-			if step.Kind == "PackageInstall" || step.Kind == "PackageDownload" || step.Kind == "RepositoryConfigure" || step.Kind == "RepositoryRefresh" || step.Kind == "Service" {
+			if step.Kind == "InstallPackage" || step.Kind == "DownloadPackage" || step.Kind == "ConfigureRepository" || step.Kind == "RefreshRepository" || step.Kind == "ManageService" {
 				score += 30
 			}
 		}
 		if strings.Contains(lower, "file") || strings.Contains(lower, "config") {
-			if strings.HasPrefix(step.Kind, "File") || step.Kind == "Directory" {
+			if strings.HasPrefix(step.Kind, "File") || step.Kind == "EnsureDirectory" {
 				score += 20
 			}
 		}
@@ -311,7 +311,7 @@ func RelevantStepKinds(prompt string) []StepKindContext {
 	}
 	if len(out) == 0 {
 		for _, kind := range manifest.StepKinds {
-			if kind.Kind == "FileWrite" || kind.Kind == "RepositoryConfigure" || kind.Kind == "Service" || kind.Kind == "Command" {
+			if kind.Kind == "WriteFile" || kind.Kind == "ConfigureRepository" || kind.Kind == "ManageService" || kind.Kind == "RunCommand" {
 				out = append(out, kind)
 			}
 		}

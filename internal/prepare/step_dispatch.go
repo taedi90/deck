@@ -13,30 +13,30 @@ func runPrepareStep(ctx context.Context, runner CommandRunner, bundleRoot, kind 
 	}
 
 	switch kind {
-	case "FileDownload":
-		f, err := runFileDownload(ctx, bundleRoot, rendered, opts)
+	case "DownloadFile":
+		f, err := runDownloadFile(ctx, bundleRoot, rendered, opts)
 		if err != nil {
 			return nil, nil, err
 		}
-		return []string{f}, map[string]any{"path": f, "artifacts": []string{f}}, nil
-	case "PackageDownload":
-		files, err := runPackageDownload(ctx, runner, bundleRoot, rendered, "packages", opts)
-		if err != nil {
-			return nil, nil, err
-		}
-		return files, map[string]any{"artifacts": files}, nil
-	case "ImageDownload":
-		files, err := runImageDownload(ctx, runner, bundleRoot, rendered, opts)
+		return []string{f}, map[string]any{"outputPath": f, "artifacts": []string{f}}, nil
+	case "DownloadPackage":
+		files, err := runDownloadPackage(ctx, runner, bundleRoot, rendered, "packages", opts)
 		if err != nil {
 			return nil, nil, err
 		}
 		return files, map[string]any{"artifacts": files}, nil
-	case "HostCheck":
+	case "DownloadImage":
+		files, err := runDownloadImage(ctx, runner, bundleRoot, rendered, opts)
+		if err != nil {
+			return nil, nil, err
+		}
+		return files, map[string]any{"artifacts": files}, nil
+	case "CheckHost":
 		decoded, err := workflowexec.DecodeSpec[checksSpec](rendered)
 		if err != nil {
 			return nil, nil, fmt.Errorf("decode checks spec: %w", err)
 		}
-		outputs, err := runHostCheckDecoded(runner, decoded, resolveHostCheckRuntime(opts))
+		outputs, err := runCheckHostDecoded(runner, decoded, resolveCheckHostRuntime(opts))
 		if err != nil {
 			return nil, nil, err
 		}

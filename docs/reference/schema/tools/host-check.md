@@ -6,13 +6,13 @@ Reference for the `HostCheck` family of typed workflow steps.
 ## Summary
 
 - family: `host-check`
-- kinds: `HostCheck`
+- kinds: `CheckHost`
 
 ## Shared Step Fields
 
 Shared step envelope fields such as `id`, `apiVersion`, `kind`, `when`, `retry`, `timeout`, `register`, and `metadata` are documented in [Workflow Schema](../workflow.md).
 
-## `HostCheck`
+## `CheckHost`
 
 Run host checks before prepare execution.
 
@@ -26,7 +26,7 @@ Use this at the start of prepare workflows to fail early on unsupported hosts.
 ### Example
 
 ```yaml
-kind: HostCheck
+kind: CheckHost
 spec:
   checks: [os, arch, swap]
   failFast: true

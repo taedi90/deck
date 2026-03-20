@@ -256,7 +256,7 @@ func repoMapChunk(workspace askretrieve.WorkspaceSummary) askretrieve.Chunk {
 		if !strings.HasPrefix(clean, "workflows/") {
 			continue
 		}
-		lines = append(lines, repoLine{path: clean, imports: localImportPaths(file.Content), steps: localStepKinds(file.Content), role: localRole(file.Content)})
+		lines = append(lines, repoLine{path: clean, imports: localImportPaths(file.Content), steps: localStepKinds(file.Content), role: localWorkflowMode(clean, file.Content)})
 	}
 	sort.Slice(lines, func(i, j int) bool { return lines[i].path < lines[j].path })
 	for _, line := range lines {
@@ -292,7 +292,7 @@ func projectContextChunk(root string) askretrieve.Chunk {
 		b.WriteString(text)
 		b.WriteString("\n")
 	}
-	b.WriteString("Authoring defaults: Prefer typed steps over Command; keep changes surgical and goal-driven.\n")
+	b.WriteString("Authoring defaults: Prefer typed steps over RunCommand; keep changes surgical and goal-driven.\n")
 	b.WriteString("Planner defaults: use retrieved context for workspace topology, component imports, vars placement, and relevant typed steps.\n")
 	return askretrieve.Chunk{ID: "project-context", Source: "project", Label: "project-context", Topic: askcontext.TopicProjectPhilosophy, Content: b.String(), Score: 70}
 }
@@ -392,7 +392,14 @@ func localStepKinds(content string) []string {
 	return dedupe(kinds)
 }
 
-func localRole(content string) string {
+func localWorkflowMode(path string, content string) string {
+	clean := filepath.ToSlash(strings.TrimSpace(path))
+	if filepath.Base(clean) == "prepare.yaml" {
+		return "prepare"
+	}
+	if strings.Contains(clean, "/workflows/scenarios/") || strings.HasPrefix(clean, "workflows/scenarios/") {
+		return "apply"
+	}
 	return strings.TrimSpace(parseWorkflowOutline(content).Role)
 }
 

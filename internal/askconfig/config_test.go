@@ -9,7 +9,7 @@ import (
 
 func TestSaveStoredAndLoadStored(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "config"))
-	settings := Settings{Provider: "openrouter", Model: "anthropic/claude-3.5-sonnet", APIKey: "secret-token", Endpoint: "https://example.invalid/v1", LogLevel: "trace", MCP: MCP{Enabled: true, Servers: []MCPServer{{Name: "web-search", Command: "node", Args: []string{"mcp.js"}}}}, LSP: LSP{Enabled: true, YAML: LSPEntry{Command: "yaml-language-server", Args: []string{"--stdio"}}}}
+	settings := Settings{Provider: "openrouter", Model: "anthropic/claude-3.5-sonnet", APIKey: "secret-token", Endpoint: "https://example.invalid/v1", LogLevel: "trace", MCP: MCP{Enabled: true, Servers: []MCPServer{{Name: "web-search", RunCommand: "node", Args: []string{"mcp.js"}}}}, LSP: LSP{Enabled: true, YAML: LSPEntry{RunCommand: "yaml-language-server", Args: []string{"--stdio"}}}}
 	if err := SaveStored(settings); err != nil {
 		t.Fatalf("save stored: %v", err)
 	}
@@ -40,8 +40,8 @@ func TestResolveEffectivePrecedence(t *testing.T) {
 		Model:    "stored-model",
 		APIKey:   "stored-key",
 		Endpoint: "https://stored.invalid/v1",
-		MCP:      MCP{Enabled: true, Servers: []MCPServer{{Name: "context7", Command: "context7-mcp"}}},
-		LSP:      LSP{Enabled: true, YAML: LSPEntry{Command: "yaml-language-server", Args: []string{"--stdio"}}},
+		MCP:      MCP{Enabled: true, Servers: []MCPServer{{Name: "context7", RunCommand: "context7-mcp"}}},
+		LSP:      LSP{Enabled: true, YAML: LSPEntry{RunCommand: "yaml-language-server", Args: []string{"--stdio"}}},
 	}); err != nil {
 		t.Fatalf("save stored: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestResolveEffectivePrecedence(t *testing.T) {
 	if !effective.MCP.Enabled || len(effective.MCP.Servers) != 1 {
 		t.Fatalf("expected stored mcp config in effective settings: %#v", effective)
 	}
-	if !effective.LSP.Enabled || effective.LSP.YAML.Command != "yaml-language-server" {
+	if !effective.LSP.Enabled || effective.LSP.YAML.RunCommand != "yaml-language-server" {
 		t.Fatalf("expected stored lsp config in effective settings: %#v", effective)
 	}
 	if effective.LogLevel != "basic" {

@@ -16,10 +16,10 @@ func TestListScenarios(t *testing.T) {
 		if err := os.MkdirAll(filepath.Join(root, "workflows", "scenarios", "nested"), 0o755); err != nil {
 			t.Fatalf("mkdir scenarios: %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "apply.yaml"), []byte("role: apply\nversion: v1alpha1\nsteps: []\n"), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "apply.yaml"), []byte("version: v1alpha1\nsteps: []\n"), 0o644); err != nil {
 			t.Fatalf("write apply: %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "nested", "extra.yaml"), []byte("role: apply\nversion: v1alpha1\nsteps: []\n"), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "nested", "extra.yaml"), []byte("version: v1alpha1\nsteps: []\n"), 0o644); err != nil {
 			t.Fatalf("write extra: %v", err)
 		}
 
@@ -71,7 +71,7 @@ func TestListScenarios(t *testing.T) {
 		if err := os.MkdirAll(filepath.Join(root, "workflows", "scenarios"), 0o755); err != nil {
 			t.Fatalf("mkdir scenarios: %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "apply.yaml"), []byte("role: apply\nversion: v1alpha1\nsteps: []\n"), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "apply.yaml"), []byte("version: v1alpha1\nsteps: []\n"), 0o644); err != nil {
 			t.Fatalf("write apply: %v", err)
 		}
 		t.Setenv("DECK_SERVER_CONFIG_PATH", filepath.Join(t.TempDir(), "server.json"))

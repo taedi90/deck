@@ -40,7 +40,7 @@ Use steps and phases to show what the procedure is doing. Typical boundaries in 
 - kubeadm bootstrap or join
 - verification
 
-Prefer typed steps where possible. `Command` is available for the edges that are not modeled yet.
+Prefer typed steps where possible. `RunCommand` is available for the edges that are not modeled yet.
 
 ## 4. Prepare the bundle in the connected environment
 

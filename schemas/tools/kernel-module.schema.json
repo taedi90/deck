@@ -11,7 +11,7 @@
       "type": "string"
     },
     "kind": {
-      "const": "KernelModule"
+      "const": "ConfigureKernelModule"
     },
     "metadata": {
       "additionalProperties": true,
@@ -94,7 +94,7 @@
     "kind",
     "spec"
   ],
-  "title": "KernelModuleStep",
+  "title": "ConfigureKernelModuleStep",
   "type": "object",
   "x-deck-visibility": "public"
 }

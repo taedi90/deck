@@ -30,7 +30,7 @@ func (m *mockAskClient) Generate(_ context.Context, _ askprovider.Request) (askp
 	return askprovider.Response{Content: resp}, nil
 }
 
-func TestAskConfigCommands(t *testing.T) {
+func TestAskConfigRunCommands(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "config"))
 	out, err := runWithCapturedStdout([]string{"ask", "config", "set", "--provider", "openrouter", "--model", "anthropic/claude-3.5-sonnet", "--endpoint", "https://openrouter.ai/api/v1", "--api-key", "secret-token", "--log-level", "debug"})
 	if err != nil {
@@ -79,8 +79,8 @@ func TestAskConfigShowIncludesStoredAugmentSettings(t *testing.T) {
 		Model:    "gpt-5.4",
 		APIKey:   "secret-token",
 		LogLevel: "trace",
-		MCP:      askconfig.MCP{Enabled: true, Servers: []askconfig.MCPServer{{Name: "context7", Command: "context7-mcp"}}},
-		LSP:      askconfig.LSP{Enabled: true, YAML: askconfig.LSPEntry{Command: "yaml-language-server", Args: []string{"--stdio"}}},
+		MCP:      askconfig.MCP{Enabled: true, Servers: []askconfig.MCPServer{{Name: "context7", command: "context7-mcp"}}},
+		LSP:      askconfig.LSP{Enabled: true, YAML: askconfig.LSPEntry{RunCommand: "yaml-language-server", Args: []string{"--stdio"}}},
 	}); err != nil {
 		t.Fatalf("save stored config: %v", err)
 	}
@@ -186,7 +186,7 @@ func TestAskRepairLoop(t *testing.T) {
 
 	originalFactory := newAskBackend
 	newAskBackend = func() askprovider.Client {
-		return &mockAskClient{responses: []string{validClassificationDraft(), `{"summary":"bad","files":[{"path":"workflows/scenarios/apply.yaml","content":"role: apply\nversion: v1alpha1\nsteps: ["}]}`, validAskJSON()}}
+		return &mockAskClient{responses: []string{validClassificationDraft(), `{"summary":"bad","files":[{"path":"workflows/scenarios/apply.yaml","content":"version: v1alpha1\nsteps: ["}]}`, validAskJSON()}}
 	}
 	defer func() { newAskBackend = originalFactory }()
 
@@ -205,10 +205,10 @@ func TestAskReviewMode(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, "workflows", "scenarios"), 0o755); err != nil {
 		t.Fatalf("mkdir scenarios: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "apply.yaml"), []byte("role: apply\nversion: v1alpha1\nsteps:\n  - id: run\n    kind: Command\n    spec:\n      command: [\"true\"]\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "apply.yaml"), []byte("version: v1alpha1\nsteps:\n  - id: run\n    kind: RunCommand\n    spec:\n      command: [\"true\"]\n"), 0o644); err != nil {
 		t.Fatalf("write apply: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "prepare.yaml"), []byte("role: prepare\nversion: v1alpha1\nartifacts: {}\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "prepare.yaml"), []byte("version: v1alpha1\nartifacts: {}\n"), 0o644); err != nil {
 		t.Fatalf("write prepare: %v", err)
 	}
 	oldWD, err := os.Getwd()
@@ -220,7 +220,7 @@ func TestAskReviewMode(t *testing.T) {
 	}
 	defer func() { _ = os.Chdir(oldWD) }()
 
-	client := &mockAskClient{responses: []string{validClassificationReview(), `{"summary":"reviewed workspace","answer":"The apply scenario currently uses a Command step and would benefit from typed steps.","suggestions":["Replace generic Command usage with typed steps where possible."]}`}}
+	client := &mockAskClient{responses: []string{validClassificationReview(), `{"summary":"reviewed workspace","answer":"The apply scenario currently uses a RunCommand step and would benefit from typed steps.","suggestions":["Replace generic RunCommand usage with typed steps where possible."]}`}}
 	originalFactory := newAskBackend
 	newAskBackend = func() askprovider.Client { return client }
 	defer func() { newAskBackend = originalFactory }()
@@ -366,7 +366,7 @@ func TestAskOneShotFallsBackToPlanOnlyWhenPlannerBlocks(t *testing.T) {
 }
 
 func validAskJSON() string {
-	return `{"summary":"generated starter workflows","review":["Prefer typed steps where possible."],"files":[{"path":"workflows/vars.yaml","content":"{}\n"},{"path":"workflows/scenarios/prepare.yaml","content":"role: prepare\nversion: v1alpha1\nartifacts: {}\n"},{"path":"workflows/scenarios/apply.yaml","content":"role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    imports:\n      - path: example-apply.yaml\n"},{"path":"workflows/components/example-apply.yaml","content":"steps:\n  - id: wait-runtime\n    kind: WaitFileExists\n    spec:\n      path: /etc/containerd/config.toml\n      interval: 1s\n      timeout: 5s\n"}]}`
+	return `{"summary":"generated starter workflows","review":["Prefer typed steps where possible."],"files":[{"path":"workflows/vars.yaml","content":"{}\n"},{"path":"workflows/scenarios/prepare.yaml","content":"version: v1alpha1\nartifacts: {}\n"},{"path":"workflows/scenarios/apply.yaml","content":"version: v1alpha1\nphases:\n  - name: install\n    imports:\n      - path: example-apply.yaml\n"},{"path":"workflows/components/example-apply.yaml","content":"steps:\n  - id: wait-runtime\n    kind: WaitForFile\n    spec:\n      path: /etc/containerd/config.toml\n      interval: 1s\n      timeout: 5s\n"}]}`
 }
 
 func validClassificationDraft() string {

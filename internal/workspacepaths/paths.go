@@ -10,7 +10,7 @@ const (
 	WorkflowRootDir             = "workflows"
 	WorkflowScenariosDir        = "scenarios"
 	WorkflowComponentsDir       = "components"
-	CanonicalPrepareWorkflowRel = "scenarios/prepare.yaml"
+	CanonicalPrepareWorkflowRel = "prepare.yaml"
 	CanonicalApplyWorkflowRel   = "scenarios/apply.yaml"
 	WorkflowVarsRel             = "vars.yaml"
 	PreparedDirRel              = "outputs"
@@ -22,7 +22,7 @@ func WorkflowPath(root string, rel string) string {
 }
 
 func CanonicalPrepareWorkflowPath(root string) string {
-	return WorkflowPath(root, CanonicalPrepareWorkflowRel)
+	return filepath.Join(root, CanonicalPrepareWorkflowRel)
 }
 
 func CanonicalApplyWorkflowPath(root string) string {

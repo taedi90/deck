@@ -6,7 +6,7 @@ Reference for the `Kubeadm` family of typed workflow steps.
 ## Summary
 
 - family: `kubeadm`
-- kinds: `KubeadmInit`, `KubeadmJoin`, `KubeadmReset`
+- kinds: `InitKubeadm`, `JoinKubeadm`, `ResetKubeadm`
 
 ## Shared Step Fields
 
@@ -14,13 +14,13 @@ Shared step envelope fields such as `id`, `apiVersion`, `kind`, `when`, `retry`,
 
 ## Supported Kinds
 
-- `KubeadmInit`: Run `kubeadm init` and write the join command to a file.
-- `KubeadmJoin`: Run `kubeadm join` for a worker or additional control-plane node.
-- `KubeadmReset`: Run `kubeadm reset` and optional cleanup steps.
+- `InitKubeadm`: Run kubeadm init and write the join command to a file.
+- `JoinKubeadm`: Run kubeadm join for a worker or additional control-plane node.
+- `ResetKubeadm`: Run kubeadm reset and optional cleanup steps.
 
-## `KubeadmInit`
+## `InitKubeadm`
 
-Run `kubeadm init` and write the join command to a file.
+Run kubeadm init and write the join command to a file.
 
 - schema: `../../../schemas/tools/kubeadm.init.schema.json`
 - outputs: `joinFile`
@@ -32,7 +32,7 @@ Use this to bootstrap a control-plane node after host prerequisites are ready.
 ### Example
 
 ```yaml
-kind: KubeadmInit
+kind: InitKubeadm
 spec:
   outputJoinFile: /tmp/deck/join.txt
   podNetworkCIDR: 10.244.0.0/16
@@ -51,7 +51,6 @@ spec:
 | `spec.kubernetesVersion` | `string` | no | `` | `` | Kubernetes version string passed to kubeadm. Accepts the `{{ .vars.* }}` template syntax. | `v1.30.1` |
 | `spec.outputJoinFile` | `string` | yes | `` | `` | Path where the generated join command is written after `init`. Worker nodes read this file to join the cluster. | `/tmp/deck/join.txt` |
 | `spec.podNetworkCIDR` | `string` | no | `` | `` | CIDR range for the pod network passed to `init`. Must not overlap with node or service CIDRs. | `10.244.0.0/16` |
-| `spec.pullImages` | `boolean` | no | `` | `` | Pull required control-plane images before running `kubeadm init`. Requires network or a pre-configured mirror. | `true` |
 | `spec.skipIfAdminConfExists` | `boolean` | no | `true` | `` | Skip the `init` step if `/etc/kubernetes/admin.conf` already exists, treating the node as already bootstrapped. Defaults to `true`. | `true` |
 
 ### Notes
@@ -59,11 +58,11 @@ spec:
 - The action controls the contract: `init` requires `outputJoinFile`, `join` requires exactly one of `joinFile` or `configFile`, and `reset` focuses on cleanup fields.
 - Kubeadm fields are action-scoped: validation rejects `join`-only fields on `init`, `init`-only fields on `reset`, and other cross-action mixes.
 - When `skipIfAdminConfExists` skips `init`, deck does not create a new join artifact and registered `joinFile` outputs are unavailable unless the file already exists.
-- Place host preparation steps (`Containerd`, `Swap`, `KernelModule`, `Sysctl`) before `Kubeadm` so bootstrap failures point to the correct step.
+- Place host preparation steps (`WriteContainerdConfig`, `ConfigureSwap`, `ConfigureKernelModule`, `ConfigureSysctl`) before `Kubeadm` so bootstrap failures point to the correct step.
 
-## `KubeadmJoin`
+## `JoinKubeadm`
 
-Run `kubeadm join` for a worker or additional control-plane node.
+Run kubeadm join for a worker or additional control-plane node.
 
 - schema: `../../../schemas/tools/kubeadm.join.schema.json`
 
@@ -74,7 +73,7 @@ Use this after a bootstrap node has produced a valid join file or config.
 ### Example
 
 ```yaml
-kind: KubeadmJoin
+kind: JoinKubeadm
 spec:
   configFile: /tmp/deck/kubeadm-join.yaml
   extraArgs: [--skip-phases=preflight]
@@ -94,11 +93,11 @@ spec:
 - The action controls the contract: `init` requires `outputJoinFile`, `join` requires exactly one of `joinFile` or `configFile`, and `reset` focuses on cleanup fields.
 - Kubeadm fields are action-scoped: validation rejects `join`-only fields on `init`, `init`-only fields on `reset`, and other cross-action mixes.
 - When `skipIfAdminConfExists` skips `init`, deck does not create a new join artifact and registered `joinFile` outputs are unavailable unless the file already exists.
-- Place host preparation steps (`Containerd`, `Swap`, `KernelModule`, `Sysctl`) before `Kubeadm` so bootstrap failures point to the correct step.
+- Place host preparation steps (`WriteContainerdConfig`, `ConfigureSwap`, `ConfigureKernelModule`, `ConfigureSysctl`) before `Kubeadm` so bootstrap failures point to the correct step.
 
-## `KubeadmReset`
+## `ResetKubeadm`
 
-Run `kubeadm reset` and optional cleanup steps.
+Run kubeadm reset and optional cleanup steps.
 
 - schema: `../../../schemas/tools/kubeadm.reset.schema.json`
 
@@ -109,7 +108,7 @@ Use this to tear down an existing kubeadm-managed node safely.
 ### Example
 
 ```yaml
-kind: KubeadmReset
+kind: ResetKubeadm
 spec:
   force: true
   removePaths: [/etc/cni/net.d, /var/lib/etcd]
@@ -134,7 +133,7 @@ spec:
 - The action controls the contract: `init` requires `outputJoinFile`, `join` requires exactly one of `joinFile` or `configFile`, and `reset` focuses on cleanup fields.
 - Kubeadm fields are action-scoped: validation rejects `join`-only fields on `init`, `init`-only fields on `reset`, and other cross-action mixes.
 - When `skipIfAdminConfExists` skips `init`, deck does not create a new join artifact and registered `joinFile` outputs are unavailable unless the file already exists.
-- Place host preparation steps (`Containerd`, `Swap`, `KernelModule`, `Sysctl`) before `Kubeadm` so bootstrap failures point to the correct step.
+- Place host preparation steps (`WriteContainerdConfig`, `ConfigureSwap`, `ConfigureKernelModule`, `ConfigureSysctl`) before `Kubeadm` so bootstrap failures point to the correct step.
 
 ## Related
 

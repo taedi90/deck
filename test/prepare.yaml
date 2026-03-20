@@ -1,0 +1,11 @@
+version: v1alpha1
+phases:
+  - name: collect
+    steps:
+      - id: download-runc
+        kind: DownloadFile
+        spec:
+          source:
+            url: https://example.invalid/runc
+          outputPath: files/bin/runc
+          mode: "0755"

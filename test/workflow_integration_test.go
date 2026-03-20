@@ -48,10 +48,10 @@ func TestWorkflowIntegrationBootstrap(t *testing.T) {
 		"PHASE=runtime",
 		"PHASE=bootstrap",
 		"PHASE=verify",
-		"prep-disable-swap Swap PLAN",
-		"bootstrap-reset-preflight KubeadmReset PLAN",
-		"bootstrap-init KubeadmInit PLAN",
-		"bootstrap-report Command PLAN",
+		"prep-disable-swap ConfigureSwap PLAN",
+		"bootstrap-reset-preflight ResetKubeadm PLAN",
+		"bootstrap-init InitKubeadm PLAN",
+		"bootstrap-report RunCommand PLAN",
 	)
 }
 
@@ -76,9 +76,9 @@ func TestWorkflowIntegrationWorkerJoin(t *testing.T) {
 		"PHASE=host-prereqs",
 		"PHASE=runtime",
 		"PHASE=join",
-		"prep-disable-swap Swap PLAN",
-		"fetch-join-file FileDownload PLAN",
-		"join-worker KubeadmJoin PLAN",
+		"prep-disable-swap ConfigureSwap PLAN",
+		"fetch-join-file CopyFile PLAN",
+		"join-worker JoinKubeadm PLAN",
 	)
 }
 
@@ -100,11 +100,11 @@ func TestWorkflowIntegrationNodeReset(t *testing.T) {
 		"PHASE=host-prereqs",
 		"PHASE=reset",
 		"PHASE=verify",
-		"prep-disable-swap Swap PLAN",
-		"reset-node KubeadmReset SKIP",
-		"reset-runtime-ready Command PLAN",
-		"reset-state-report Command PLAN",
-		"reset-summary Command PLAN",
+		"prep-disable-swap ConfigureSwap PLAN",
+		"reset-node ResetKubeadm SKIP",
+		"reset-runtime-ready RunCommand PLAN",
+		"reset-state-report RunCommand PLAN",
+		"reset-summary RunCommand PLAN",
 	)
 }
 
@@ -116,7 +116,7 @@ func TestWorkflowIntegrationRejectsBrokenImports(t *testing.T) {
 		t.Fatalf("mkdir workflows: %v", err)
 	}
 	workflowPath := filepath.Join(workflowsDir, "broken.yaml")
-	content := "role: apply\nversion: v1alpha1\nphases:\n  - name: install\n    imports:\n      - path: missing/import.yaml\n"
+	content := "version: v1alpha1\nphases:\n  - name: install\n    imports:\n      - path: missing/import.yaml\n"
 	if err := os.WriteFile(workflowPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("write broken workflow: %v", err)
 	}
@@ -131,25 +131,25 @@ func TestWorkflowIntegrationRejectsBrokenImports(t *testing.T) {
 
 func TestWorkflowIntegrationRejectsMissingJoinPublish(t *testing.T) {
 	root := projectRoot(t)
-	workflowPath := writeExecutableNegativeWorkflow(t, root, "join-publish-fail.yaml", `role: apply
-version: v1alpha1
+	workflowPath := writeExecutableNegativeWorkflow(t, root, "join-publish-fail.yaml", `version: v1alpha1
 phases:
   - name: install
     steps:
       - id: bootstrap-init
         apiVersion: deck/v1alpha1
-        kind: Command
+        kind: RunCommand
         spec:
           command: ["bash", "-lc", "true"]
       - id: bootstrap-publish-join
         apiVersion: deck/v1alpha1
-        kind: FileCopy
+        kind: CopyFile
         spec:
-          src: /tmp/nonexistent-join.txt
-          dest: /tmp/published-join.txt
+          source:
+            path: /tmp/nonexistent-join.txt
+          path: /tmp/published-join.txt
       - id: bootstrap-report
         apiVersion: deck/v1alpha1
-        kind: Command
+        kind: RunCommand
         spec:
           command: ["bash", "-lc", "test -f /tmp/published-join.txt"]
 `)
@@ -161,22 +161,20 @@ phases:
 
 func TestWorkflowIntegrationRejectsMissingJoinFetch(t *testing.T) {
 	root := projectRoot(t)
-	workflowPath := writeExecutableNegativeWorkflow(t, root, "join-fetch-fail.yaml", `role: apply
-version: v1alpha1
+	workflowPath := writeExecutableNegativeWorkflow(t, root, "join-fetch-fail.yaml", `version: v1alpha1
 phases:
   - name: install
     steps:
       - id: fetch-join-file
         apiVersion: deck/v1alpha1
-        kind: FileDownload
+        kind: DownloadFile
         spec:
           source:
             url: http://127.0.0.1:9/join.txt
-          output:
-            path: /tmp/deck/join.txt
+          outputPath: /tmp/deck/join.txt
       - id: join-worker
         apiVersion: deck/v1alpha1
-        kind: Command
+        kind: RunCommand
         spec:
           command: ["bash", "-lc", "test -s /tmp/deck/join.txt"]
 `)
@@ -188,19 +186,18 @@ phases:
 
 func TestWorkflowIntegrationRejectsUnhealthyResetRuntime(t *testing.T) {
 	root := projectRoot(t)
-	workflowPath := writeExecutableNegativeWorkflow(t, root, "reset-runtime-fail.yaml", `role: apply
-version: v1alpha1
+	workflowPath := writeExecutableNegativeWorkflow(t, root, "reset-runtime-fail.yaml", `version: v1alpha1
 phases:
   - name: install
     steps:
       - id: reset-runtime-ready
         apiVersion: deck/v1alpha1
-        kind: Command
+        kind: RunCommand
         spec:
           command: ["bash", "-lc", "echo runtime unhealthy >&2; exit 1"]
       - id: reset-state-report
         apiVersion: deck/v1alpha1
-        kind: Command
+        kind: RunCommand
         spec:
           command: ["bash", "-lc", "echo should-not-run"]
 `)

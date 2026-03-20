@@ -81,7 +81,7 @@ func (p HostPath) Chmod(mode os.FileMode) error {
 	return os.Chmod(p.abs, mode)
 }
 
-func (p HostPath) Symlink(target string) error {
+func (p HostPath) CreateSymlink(target string) error {
 	return os.Symlink(target, p.abs)
 }
 

@@ -146,7 +146,7 @@ func describeVarsFile(file askretrieve.WorkspaceFile) (string, string) {
 }
 
 func describeScenarioFile(workspace askretrieve.WorkspaceSummary, file askretrieve.WorkspaceFile, doc map[string]any) (string, string) {
-	role, _ := doc["role"].(string)
+	role := localWorkflowMode(file.Path, file.Content)
 	version, _ := doc["version"].(string)
 	phaseNames := make([]string, 0)
 	imports := make([]string, 0)
@@ -167,9 +167,6 @@ func describeScenarioFile(workspace askretrieve.WorkspaceSummary, file askretrie
 	}
 	b := &strings.Builder{}
 	_, _ = fmt.Fprintf(b, "%s is a scenario workflow", file.Path)
-	if role != "" {
-		_, _ = fmt.Fprintf(b, " with role %q", role)
-	}
 	if version != "" {
 		_, _ = fmt.Fprintf(b, " and version %q", version)
 	}
@@ -191,7 +188,7 @@ func describeScenarioFile(workspace askretrieve.WorkspaceSummary, file askretrie
 		b.WriteString(". ")
 	}
 	if commandCount > 0 {
-		_, _ = fmt.Fprintf(b, "There are %d inline Command step(s), which may deserve extra review for shell complexity. ", commandCount)
+		_, _ = fmt.Fprintf(b, "There are %d inline RunCommand step(s), which may deserve extra review for shell complexity. ", commandCount)
 	}
 	switch role {
 	case "apply":
@@ -242,7 +239,7 @@ func describeComponentFile(file askretrieve.WorkspaceFile, doc map[string]any) (
 		b.WriteString(". ")
 	}
 	if commandCount > 0 {
-		_, _ = fmt.Fprintf(b, "It contains %d Command step(s). ", commandCount)
+		_, _ = fmt.Fprintf(b, "It contains %d RunCommand step(s). ", commandCount)
 	}
 	return filepath.Base(file.Path) + " explanation", strings.TrimSpace(b.String())
 }
@@ -282,7 +279,7 @@ func collectStepKinds(scope map[string]any, stepKinds map[string]int, commandCou
 			kind = "unknown"
 		}
 		stepKinds[kind]++
-		if kind == "Command" {
+		if kind == "RunCommand" {
 			commandCount++
 		}
 	}

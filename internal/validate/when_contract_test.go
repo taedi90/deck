@@ -8,12 +8,11 @@ import (
 )
 
 func TestWorkflowRejectsLegacyWhenOperators(t *testing.T) {
-	wf := []byte(`role: apply
-version: v1alpha1
+	wf := []byte(`version: v1alpha1
 steps:
   - id: bad-when
     apiVersion: deck/v1alpha1
-    kind: Directory
+    kind: EnsureDirectory
     when: vars.enabled and runtime.ready
     spec:
       path: /var/lib/deck

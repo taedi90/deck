@@ -33,24 +33,24 @@ func TestRunUsageShowsTopLevelAxes(t *testing.T) {
 					t.Fatalf("usage must include %q, got %q", cmd, msg)
 				}
 			}
-			for _, section := range []string{"Core Commands:\n", "Additional Commands:\n"} {
+			for _, section := range []string{"Core RunCommands:\n", "Additional RunCommands:\n"} {
 				if !strings.Contains(msg, section) {
 					t.Fatalf("usage must include %q, got %q", section, msg)
 				}
 			}
-			if strings.Index(msg, "Core Commands:\n") > strings.Index(msg, "Additional Commands:\n") {
+			if strings.Index(msg, "Core RunCommands:\n") > strings.Index(msg, "Additional RunCommands:\n") {
 				t.Fatalf("core commands section must appear before additional commands: %q", msg)
 			}
-			coreCommands := []string{"init", "lint", "prepare", "bundle", "plan", "apply"}
-			for i := 0; i < len(coreCommands)-1; i++ {
-				if strings.Index(msg, coreCommands[i]) > strings.Index(msg, coreCommands[i+1]) {
-					t.Fatalf("core commands must keep registration order: %q appeared after %q in %q", coreCommands[i], coreCommands[i+1], msg)
+			coreRunCommands := []string{"init", "lint", "prepare", "bundle", "plan", "apply"}
+			for i := 0; i < len(coreRunCommands)-1; i++ {
+				if strings.Index(msg, coreRunCommands[i]) > strings.Index(msg, coreRunCommands[i+1]) {
+					t.Fatalf("core commands must keep registration order: %q appeared after %q in %q", coreRunCommands[i], coreRunCommands[i+1], msg)
 				}
 			}
-			additionalCommands := []string{"list", "server", "version", "completion", "cache"}
-			for i := 0; i < len(additionalCommands)-1; i++ {
-				if strings.Index(msg, additionalCommands[i]) > strings.Index(msg, additionalCommands[i+1]) {
-					t.Fatalf("additional commands must keep registration order: %q appeared after %q in %q", additionalCommands[i], additionalCommands[i+1], msg)
+			additionalRunCommands := []string{"list", "server", "version", "completion", "cache"}
+			for i := 0; i < len(additionalRunCommands)-1; i++ {
+				if strings.Index(msg, additionalRunCommands[i]) > strings.Index(msg, additionalRunCommands[i+1]) {
+					t.Fatalf("additional commands must keep registration order: %q appeared after %q in %q", additionalRunCommands[i], additionalRunCommands[i+1], msg)
 				}
 			}
 			for _, legacy := range []string{"strategy", "control"} {
@@ -72,7 +72,7 @@ func TestCompletionHelp(t *testing.T) {
 	}
 }
 
-func TestCompletionCommands(t *testing.T) {
+func TestCompletionRunCommands(t *testing.T) {
 	tests := []struct {
 		name string
 		args []string
@@ -118,7 +118,7 @@ func TestScenarioFlagCompletion(t *testing.T) {
 		if err := os.MkdirAll(filepath.Join(root, "workflows", "scenarios"), 0o755); err != nil {
 			t.Fatalf("mkdir scenarios: %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "apply.yaml"), []byte("role: apply\nversion: v1alpha1\nsteps: []\n"), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "apply.yaml"), []byte("version: v1alpha1\nsteps: []\n"), 0o644); err != nil {
 			t.Fatalf("write scenario: %v", err)
 		}
 

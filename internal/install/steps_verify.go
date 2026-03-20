@@ -14,7 +14,7 @@ func runVerifyImages(ctx context.Context, spec map[string]any) error {
 		return fmt.Errorf("%s: VerifyImages requires images", errCodeInstallImagesMissing)
 	}
 
-	cmdArgs := stringSlice(spec["Command"])
+	cmdArgs := stringSlice(spec["command"])
 	if len(cmdArgs) == 0 {
 		cmdArgs = []string{"ctr", "-n", "k8s.io", "images", "list", "-q"}
 	}

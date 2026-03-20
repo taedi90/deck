@@ -6,7 +6,7 @@ Reference for the `Image` family of typed workflow steps.
 ## Summary
 
 - family: `image`
-- kinds: `ImageDownload`, `ImageVerify`
+- kinds: `DownloadImage`, `LoadImage`, `VerifyImage`
 
 ## Shared Step Fields
 
@@ -14,12 +14,13 @@ Shared step envelope fields such as `id`, `apiVersion`, `kind`, `when`, `retry`,
 
 ## Supported Kinds
 
-- `ImageDownload`: Download container images into the bundle.
-- `ImageVerify`: Verify that required container images already exist on the node.
+- `DownloadImage`: Download container images into prepared bundle storage.
+- `LoadImage`: Load prepared image archives into the local container runtime.
+- `VerifyImage`: Verify that required container images already exist on the node.
 
-## `ImageDownload`
+## `DownloadImage`
 
-Download container images into the bundle.
+Download container images into prepared bundle storage.
 
 - schema: `../../../schemas/tools/image.download.schema.json`
 - outputs: `artifacts`
@@ -31,7 +32,7 @@ Use this during prepare to collect required images for offline use.
 ### Example
 
 ```yaml
-kind: ImageDownload
+kind: DownloadImage
 spec:
   images:
     - registry.k8s.io/kube-apiserver:v1.30.1
@@ -52,7 +53,7 @@ spec:
 | `spec.auth` | `array<object>` | no | `` | `` | Optional registry authentication entries for `download`. Match each private registry with credentials while leaving public registries to the default keychain. | `[{registry:registry.example.com,basic:{username:robot,password:${REGISTRY_PASSWORD}}}]` |
 | `spec.backend` | `object` | no | `` | `` | Backend-specific download settings such as image transfer engine configuration. Applies to `download` only. | `{engine:go-containerregistry}` |
 | `spec.images` | `array<string>` | yes | `` | `` | Fully qualified image references to download or verify. | `[registry.k8s.io/pause:3.9]` |
-| `spec.output` | `object` | no | `` | `` | Bundle output settings for `download`. Deck writes one tar archive per image under `output.dir`. | `{dir:images/control-plane}` |
+| `spec.outputDir` | `string` | no | `` | `` |  | `example` |
 
 ### Nested Objects
 
@@ -69,12 +70,6 @@ spec:
 |---|---|---:|---|---|---|---|
 | `spec.backend.engine` | `string` | no | `` | `go-containerregistry` | Image download engine. Currently only `go-containerregistry` is supported. | `go-containerregistry` |
 
-### `spec.output`
-
-| Key | Type | Required | Default | Enum | Description | Example |
-|---|---|---:|---|---|---|---|
-| `spec.output.dir` | `string` | no | `` | `` | Bundle-relative directory where per-image tar archives are written. Defaults to `images` when omitted. | `images/control-plane` |
-
 
 ### Notes
 
@@ -82,7 +77,43 @@ spec:
 - Use explicit image tags or digests to keep prepared bundles reproducible.
 - `spec.auth` is optional and only applies to `download`; when omitted, deck falls back to the environment's default registry keychain.
 
-## `ImageVerify`
+## `LoadImage`
+
+Load prepared image archives into the local container runtime.
+
+- schema: `../../../schemas/tools/image.load.schema.json`
+
+### When To Use
+
+Use this during apply before verifying or using images from an offline bundle.
+
+### Example
+
+```yaml
+apiVersion: deck/v1alpha1
+id: example-loadimage
+kind: LoadImage
+spec:
+    images:
+        - example
+```
+
+### Spec Fields
+
+| Key | Type | Required | Default | Enum | Description | Example |
+|---|---|---:|---|---|---|---|
+| `spec.command` | `array<string>` | no | `` | `` | Optional image-listing command used by `verify` when the default runtime command is not appropriate. | `[ctr,-n,k8s.io,images,list,-q]` |
+| `spec.images` | `array<string>` | yes | `` | `` | Fully qualified image references to download or verify. | `[registry.k8s.io/pause:3.9]` |
+| `spec.runtime` | `string` | no | `` | `auto, ctr, docker, podman` |  | `auto` |
+| `spec.sourceDir` | `string` | no | `` | `` |  | `example` |
+
+### Notes
+
+- Prefer `Image` over ad-hoc shell commands so workflows keep an explicit list of required images.
+- Use explicit image tags or digests to keep prepared bundles reproducible.
+- `spec.auth` is optional and only applies to `download`; when omitted, deck falls back to the environment's default registry keychain.
+
+## `VerifyImage`
 
 Verify that required container images already exist on the node.
 
@@ -95,7 +126,7 @@ Use this during apply when images should already be present and only need verifi
 ### Example
 
 ```yaml
-kind: ImageVerify
+kind: VerifyImage
 spec:
   command: [ctr, -n, k8s.io, images, list, -q]
   images:

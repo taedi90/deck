@@ -10,7 +10,7 @@ import (
 	"github.com/taedi90/deck/internal/userdirs"
 )
 
-func resolveLegacyRepositoryRefreshRoot(cacheKey string) (string, bool, error) {
+func resolveLegacyRefreshRepositoryRoot(cacheKey string) (string, bool, error) {
 	legacyRoot, err := userdirs.LegacyCacheRoot()
 	if err != nil {
 		return "", false, err

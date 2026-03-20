@@ -59,9 +59,9 @@ func TestRemovedFieldsStayOutOfPublicMetadata(t *testing.T) {
 		kind  string
 		field string
 	}{
-		{kind: "FileDownload", field: "spec.owner"},
-		{kind: "FileDownload", field: "spec.group"},
-		{kind: "WaitServiceActive", field: "spec.state"},
+		{kind: "DownloadFile", field: "spec.owner"},
+		{kind: "DownloadFile", field: "spec.group"},
+		{kind: "WaitForService", field: "spec.state"},
 	}
 	for _, tc := range checks {
 		meta := ToolMeta(tc.kind)

@@ -35,7 +35,7 @@ These assumptions make sense in a cloud environment, but they create massive fri
 
 Instead of treating artifact gathering and host mutation as a single blurred process, `deck` strictly separates them (`prepare`, `bundle`, `apply`). 
 
-It also replaces large procedural scripts with typed workflow steps. A typed `PackageInstall` step immediately communicates its intent, whereas a shell block full of `yum` or `apt` commands hides the goal behind syntax.
+It also replaces large procedural scripts with typed workflow steps. A typed `InstallPackage` step immediately communicates its intent, whereas a shell block full of `yum` or `apt` commands hides the goal behind syntax.
 
 ## Core principles
 

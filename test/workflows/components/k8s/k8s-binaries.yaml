@@ -1,51 +1,30 @@
 steps:
-  - id: install-k8s-binaries
-    kind: Artifact
+  - id: install-kubelet
+    kind: CopyFile
     spec:
-      artifacts:
-        - source:
-            amd64:
-              url: http://{{ .vars.serverURL }}/files/bin/linux/amd64/kubelet
-            arm64:
-              url: http://{{ .vars.serverURL }}/files/bin/linux/arm64/kubelet
-          skipIfPresent:
-            path: /usr/bin/kubelet
-            executable: true
-          install:
-            path: /usr/bin/kubelet
-            mode: "0755"
-        - source:
-            amd64:
-              url: http://{{ .vars.serverURL }}/files/bin/linux/amd64/kubeadm
-            arm64:
-              url: http://{{ .vars.serverURL }}/files/bin/linux/arm64/kubeadm
-          skipIfPresent:
-            path: /usr/bin/kubeadm
-            executable: true
-          install:
-            path: /usr/bin/kubeadm
-            mode: "0755"
-        - source:
-            amd64:
-              url: http://{{ .vars.serverURL }}/files/bin/linux/amd64/kubectl
-            arm64:
-              url: http://{{ .vars.serverURL }}/files/bin/linux/arm64/kubectl
-          skipIfPresent:
-            path: /usr/bin/kubectl
-            executable: true
-          install:
-            path: /usr/bin/kubectl
-            mode: "0755"
-        - source:
-            amd64:
-              url: http://{{ .vars.serverURL }}/files/bin/linux/amd64/crictl.tar.gz
-            arm64:
-              url: http://{{ .vars.serverURL }}/files/bin/linux/arm64/crictl.tar.gz
-          skipIfPresent:
-            path: /usr/bin/crictl
-            executable: true
-          extract:
-            destination: /usr/bin
-            include:
-              - crictl
-            mode: "0755"
+      source:
+        url: http://{{ .vars.serverURL }}/files/bin/linux/{{ .runtime.host.arch }}/kubelet
+      path: /usr/bin/kubelet
+      mode: "0755"
+  - id: install-kubeadm
+    kind: CopyFile
+    spec:
+      source:
+        url: http://{{ .vars.serverURL }}/files/bin/linux/{{ .runtime.host.arch }}/kubeadm
+      path: /usr/bin/kubeadm
+      mode: "0755"
+  - id: install-kubectl
+    kind: CopyFile
+    spec:
+      source:
+        url: http://{{ .vars.serverURL }}/files/bin/linux/{{ .runtime.host.arch }}/kubectl
+      path: /usr/bin/kubectl
+      mode: "0755"
+  - id: install-crictl
+    kind: ExtractArchive
+    spec:
+      source:
+        url: http://{{ .vars.serverURL }}/files/bin/linux/{{ .runtime.host.arch }}/crictl.tar.gz
+      path: /usr/bin
+      include: [crictl]
+      mode: "0755"

@@ -26,7 +26,7 @@ func AskCommandMeta() AskCommandMetadata {
 			Flags: []CLIFlag{
 				{Name: "--from", Description: "Load additional request details from a text or markdown file."},
 				{Name: "--plan-name", Description: "Optional plan artifact name."},
-				{Name: "--plan-dir", Description: "Directory for ask plan artifacts."},
+				{Name: "--plan-dir", Description: "EnsureDirectory for ask plan artifacts."},
 			},
 		},
 		Config: AskConfigCommandMetadata{Short: "Manage global ask config defaults and api key"},
@@ -34,7 +34,7 @@ func AskCommandMeta() AskCommandMetadata {
 			{Name: "--write", Description: "Write generated workflow files into the current workspace."},
 			{Name: "--from", Description: "Load additional request details from a text or markdown file."},
 			{Name: "--plan-name", Description: "Optional plan artifact name used by ask plan."},
-			{Name: "--plan-dir", Description: "Directory for ask plan artifacts."},
+			{Name: "--plan-dir", Description: "EnsureDirectory for ask plan artifacts."},
 		},
 	}
 }

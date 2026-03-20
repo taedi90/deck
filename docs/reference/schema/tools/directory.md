@@ -6,13 +6,13 @@ Reference for the `Directory` family of typed workflow steps.
 ## Summary
 
 - family: `directory`
-- kinds: `Directory`
+- kinds: `EnsureDirectory`
 
 ## Shared Step Fields
 
 Shared step envelope fields such as `id`, `apiVersion`, `kind`, `when`, `retry`, `timeout`, `register`, and `metadata` are documented in [Workflow Schema](../workflow.md).
 
-## `Directory`
+## `EnsureDirectory`
 
 Ensure a directory exists with an optional mode.
 
@@ -26,7 +26,7 @@ Use this before writing files or placing extracted content.
 ### Example
 
 ```yaml
-kind: Directory
+kind: EnsureDirectory
 spec:
   path: /home/vagrant/.kube
   mode: "0755"
@@ -36,8 +36,8 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.mode` | `string` | no | `` | `` | Directory permissions in octal notation. Applied after ensuring the directory exists, including on existing directories. | `0755` |
-| `spec.path` | `string` | yes | `` | `` | Directory path to create if it does not already exist. Parent directories are created as needed. | `/var/lib/deck` |
+| `spec.mode` | `string` | no | `` | `` | EnsureDirectory permissions in octal notation. Applied after ensuring the directory exists, including on existing directories. | `0755` |
+| `spec.path` | `string` | yes | `` | `` | EnsureDirectory path to create if it does not already exist. Parent directories are created as needed. | `/var/lib/deck` |
 
 ## Related
 

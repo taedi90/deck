@@ -6,15 +6,15 @@ Reference for the `Service` family of typed workflow steps.
 ## Summary
 
 - family: `service`
-- kinds: `Service`
+- kinds: `ManageService`
 
 ## Shared Step Fields
 
 Shared step envelope fields such as `id`, `apiVersion`, `kind`, `when`, `retry`, `timeout`, `register`, and `metadata` are documented in [Workflow Schema](../workflow.md).
 
-## `Service`
+## `ManageService`
 
-Start, stop, enable, or reload local services.
+Start, stop, enable, disable, restart, or reload local services.
 
 - schema: `../../../schemas/tools/service.schema.json`
 - outputs: `name`, `names`
@@ -26,7 +26,7 @@ Use this after config changes that need a service lifecycle action.
 ### Example
 
 ```yaml
-kind: Service
+kind: ManageService
 spec:
   name: containerd
   enabled: true

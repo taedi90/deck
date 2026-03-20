@@ -3,88 +3,83 @@
 
 Reference documentation for each typed workflow step supported by deck.
 
-## [Artifact](artifact.md)
-
-- **Summary**: Reference for the `Artifact` family of typed workflow steps.
-- **Kinds**: `Artifact`
-
 ## [Command](command.md)
 
 - **Summary**: Reference for the `Command` family of typed workflow steps.
-- **Kinds**: `Command`
+- **Kinds**: `RunCommand`
 
 ## [Containerd](containerd.md)
 
 - **Summary**: Reference for the `Containerd` family of typed workflow steps.
-- **Kinds**: `Containerd`
+- **Kinds**: `WriteContainerdConfig`, `WriteContainerdRegistryHosts`
 
 ## [Directory](directory.md)
 
 - **Summary**: Reference for the `Directory` family of typed workflow steps.
-- **Kinds**: `Directory`
+- **Kinds**: `EnsureDirectory`
 
 ## [File](file.md)
 
 - **Summary**: Reference for the `File` family of typed workflow steps.
-- **Kinds**: `FileDownload`, `FileWrite`, `FileCopy`, `FileEdit`
+- **Kinds**: `DownloadFile`, `WriteFile`, `CopyFile`, `EditFile`, `ExtractArchive`
 
 ## [HostCheck](host-check.md)
 
 - **Summary**: Reference for the `HostCheck` family of typed workflow steps.
-- **Kinds**: `HostCheck`
+- **Kinds**: `CheckHost`
 
 ## [Image](image.md)
 
 - **Summary**: Reference for the `Image` family of typed workflow steps.
-- **Kinds**: `ImageDownload`, `ImageVerify`
+- **Kinds**: `DownloadImage`, `LoadImage`, `VerifyImage`
 
 ## [KernelModule](kernel-module.md)
 
 - **Summary**: Reference for the `KernelModule` family of typed workflow steps.
-- **Kinds**: `KernelModule`
+- **Kinds**: `ConfigureKernelModule`
 
 ## [Kubeadm](kubeadm.md)
 
 - **Summary**: Reference for the `Kubeadm` family of typed workflow steps.
-- **Kinds**: `KubeadmInit`, `KubeadmJoin`, `KubeadmReset`
+- **Kinds**: `InitKubeadm`, `JoinKubeadm`, `ResetKubeadm`
 
 ## [Package](package.md)
 
 - **Summary**: Reference for the `Package` family of typed workflow steps.
-- **Kinds**: `PackageDownload`, `PackageInstall`
+- **Kinds**: `DownloadPackage`, `InstallPackage`
 
 ## [Repository](repository.md)
 
 - **Summary**: Reference for the `Repository` family of typed workflow steps.
-- **Kinds**: `RepositoryConfigure`, `RepositoryRefresh`
+- **Kinds**: `ConfigureRepository`, `RefreshRepository`
 
 ## [Service](service.md)
 
 - **Summary**: Reference for the `Service` family of typed workflow steps.
-- **Kinds**: `Service`
+- **Kinds**: `ManageService`
 
 ## [Swap](swap.md)
 
 - **Summary**: Reference for the `Swap` family of typed workflow steps.
-- **Kinds**: `Swap`
+- **Kinds**: `ConfigureSwap`
 
 ## [Symlink](symlink.md)
 
 - **Summary**: Reference for the `Symlink` family of typed workflow steps.
-- **Kinds**: `Symlink`
+- **Kinds**: `CreateSymlink`
 
 ## [Sysctl](sysctl.md)
 
 - **Summary**: Reference for the `Sysctl` family of typed workflow steps.
-- **Kinds**: `Sysctl`
+- **Kinds**: `ConfigureSysctl`
 
 ## [SystemdUnit](systemd-unit.md)
 
 - **Summary**: Reference for the `SystemdUnit` family of typed workflow steps.
-- **Kinds**: `SystemdUnit`
+- **Kinds**: `WriteSystemdUnit`
 
 ## [Wait](wait.md)
 
 - **Summary**: Reference for the `Wait` family of typed workflow steps.
-- **Kinds**: `WaitServiceActive`, `WaitCommand`, `WaitFileExists`, `WaitFileAbsent`, `WaitTCPPortOpen`, `WaitTCPPortClosed`
+- **Kinds**: `WaitForService`, `WaitForCommand`, `WaitForFile`, `WaitForMissingFile`, `WaitForTCPPort`, `WaitForMissingTCPPort`
 

@@ -8,26 +8,26 @@ import (
 	"github.com/taedi90/deck/internal/filemode"
 )
 
-func runKubeadmInitStub(spec kubeadmInitSpec) error {
+func runInitKubeadmStub(spec kubeadmInitSpec) error {
 	joinFile := strings.TrimSpace(spec.OutputJoinFile)
 	if joinFile == "" {
-		return fmt.Errorf("%s: KubeadmInit requires outputJoinFile", errCodeInstallInitJoinMissing)
+		return fmt.Errorf("%s: InitKubeadm requires outputJoinFile", errCodeInstallInitJoinMissing)
 	}
-	if shouldSkipKubeadmInit(spec) {
+	if shouldSkipInitKubeadm(spec) {
 		return nil
 	}
 	content := "kubeadm join 10.0.0.10:6443 --token dummy.token --discovery-token-ca-cert-hash sha256:dummy\n"
 	return filemode.WritePrivateFile(joinFile, []byte(content))
 }
 
-func runKubeadmJoinStub(spec kubeadmJoinSpec) error {
+func runJoinKubeadmStub(spec kubeadmJoinSpec) error {
 	joinFile := strings.TrimSpace(spec.JoinFile)
 	configFile := strings.TrimSpace(spec.ConfigFile)
 	if joinFile != "" && configFile != "" {
-		return fmt.Errorf("%s: KubeadmJoin accepts joinFile or configFile, not both", errCodeInstallJoinInputConflict)
+		return fmt.Errorf("%s: JoinKubeadm accepts joinFile or configFile, not both", errCodeInstallJoinInputConflict)
 	}
 	if joinFile == "" && configFile == "" {
-		return fmt.Errorf("%s: KubeadmJoin requires joinFile or configFile", errCodeInstallJoinPathMissing)
+		return fmt.Errorf("%s: JoinKubeadm requires joinFile or configFile", errCodeInstallJoinPathMissing)
 	}
 	path := joinFile
 	label := "join file"
@@ -41,12 +41,12 @@ func runKubeadmJoinStub(spec kubeadmJoinSpec) error {
 	return nil
 }
 
-func runKubeadmResetStub(spec kubeadmResetSpec) error {
+func runResetKubeadmStub(spec kubeadmResetSpec) error {
 	_ = trimmedStringSlice(spec.RemovePaths)
 	_ = trimmedStringSlice(spec.RemoveFiles)
 	_ = trimmedStringSlice(spec.CleanupContainers)
 	_ = trimmedStringSlice(spec.ExtraArgs)
 	_ = strings.TrimSpace(spec.CriSocket)
-	_ = strings.TrimSpace(spec.RestartRuntimeService)
+	_ = strings.TrimSpace(spec.RestartRuntimeManageService)
 	return nil
 }

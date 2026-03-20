@@ -1,10 +1,14 @@
 steps:
   - id: configure-containerd-runtime
-    kind: Containerd
+    kind: WriteContainerdConfig
     spec:
       path: /etc/containerd/config.toml
       configPath: /etc/containerd/certs.d
       systemdCgroup: true
+  - id: configure-containerd-registry-hosts
+    kind: WriteContainerdRegistryHosts
+    spec:
+      path: /etc/containerd/certs.d
       registryHosts:
         - registry: registry.k8s.io
           server: https://registry.k8s.io
@@ -12,30 +16,30 @@ steps:
           capabilities: [pull, resolve]
           skipVerify: true
   - id: update-containerd-pause-image
-    kind: FileEdit
+    kind: EditFile
     spec:
       path: /etc/containerd/config.toml
       backup: false
       edits:
         - op: replace
           match: registry.k8s.io/pause:3.8
-          with: registry.k8s.io/pause:3.9
+          replaceWith: registry.k8s.io/pause:3.9
   - id: restart-containerd
-    kind: Service
+    kind: ManageService
     spec:
       name: containerd
       enabled: true
       state: restarted
   - id: ensure-kubelet-state-dir
-    kind: Directory
+    kind: EnsureDirectory
     spec:
       path: /var/lib/kubelet
   - id: ensure-kubelet-defaults-dir
-    kind: Directory
+    kind: EnsureDirectory
     spec:
       path: /etc/default
   - id: setup-kubelet-systemd
-    kind: SystemdUnit
+    kind: WriteSystemdUnit
     spec:
       path: /etc/systemd/system/kubelet.service
       mode: "0644"
@@ -46,7 +50,7 @@ steps:
         Wants=network-online.target
         After=network-online.target
 
-        [Service]
+        [ManageService]
         EnvironmentFile=-/var/lib/kubelet/kubeadm-flags.env
         EnvironmentFile=-/etc/default/kubelet
         ExecStart=/usr/bin/kubelet \
@@ -61,7 +65,9 @@ steps:
         [Install]
         WantedBy=multi-user.target
       daemonReload: true
-      service:
-        name: kubelet
-        enabled: true
-        state: started
+  - id: start-kubelet
+    kind: ManageService
+    spec:
+      name: kubelet
+      enabled: true
+      state: started

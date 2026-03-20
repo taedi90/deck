@@ -1,0 +1,70 @@
+{
+  "$id": "https://deck.local/schemas/tools/containerd.config.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Writes the containerd config.toml file on the node.",
+  "properties": {
+    "apiVersion": {
+      "const": "deck/v1alpha1"
+    },
+    "id": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "WriteContainerdConfig"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "register": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      },
+      "type": "object"
+    },
+    "retry": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "spec": {
+      "additionalProperties": false,
+      "properties": {
+        "configPath": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "createDefault": {
+          "default": true,
+          "type": "boolean"
+        },
+        "path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "systemdCgroup": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "timeout": {
+      "pattern": "^[0-9]+(ms|s|m|h)$",
+      "type": "string"
+    },
+    "when": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "kind",
+    "spec"
+  ],
+  "title": "WriteContainerdConfigStep",
+  "type": "object",
+  "x-deck-visibility": "public"
+}

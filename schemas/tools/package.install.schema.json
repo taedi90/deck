@@ -11,7 +11,7 @@
       "type": "string"
     },
     "kind": {
-      "const": "PackageInstall"
+      "const": "InstallPackage"
     },
     "metadata": {
       "additionalProperties": true,
@@ -89,7 +89,7 @@
     "kind",
     "spec"
   ],
-  "title": "PackageInstallStep",
+  "title": "InstallPackageStep",
   "type": "object",
   "x-deck-visibility": "public"
 }

@@ -17,7 +17,7 @@ import (
 var ErrStepCommandTimeout = errors.New("step command timeout")
 
 type runCommandSpec struct {
-	Command []string          `json:"Command"`
+	Command []string          `json:"command"`
 	Env     map[string]string `json:"env"`
 	Sudo    bool              `json:"sudo"`
 	Timeout string            `json:"timeout"`
@@ -26,7 +26,7 @@ type runCommandSpec struct {
 func runCommand(ctx context.Context, spec map[string]any) error {
 	decoded, err := workflowexec.DecodeSpec[runCommandSpec](spec)
 	if err != nil {
-		return fmt.Errorf("decode Command spec: %w", err)
+		return fmt.Errorf("decode RunCommand spec: %w", err)
 	}
 	return runCommandDecoded(ctx, decoded)
 }
@@ -34,7 +34,7 @@ func runCommand(ctx context.Context, spec map[string]any) error {
 func runCommandDecoded(ctx context.Context, decoded runCommandSpec) error {
 	cmdArgs := decoded.Command
 	if len(cmdArgs) == 0 {
-		return fmt.Errorf("%s: Command requires command", errCodeInstallCommandMissing)
+		return fmt.Errorf("%s: RunCommand requires command", errCodeInstallCommandMissing)
 	}
 	timeout := parseStepTimeout(decoded.Timeout, 30*time.Second)
 
@@ -91,7 +91,7 @@ func runTimedCommandSpecWithContext(parent context.Context, cmdArgs []string, en
 	if sudo {
 		commandArgs = append([]string{"sudo"}, commandArgs...)
 	}
-	// #nosec G204 -- Command intentionally executes the workflow-provided command vector.
+	// #nosec G204 -- RunCommand intentionally executes the workflow-provided command vector.
 	command := exec.CommandContext(ctx, commandArgs[0], commandArgs[1:]...)
 	command.Stdout = stdout
 	command.Stderr = stderr

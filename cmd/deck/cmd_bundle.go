@@ -80,13 +80,13 @@ func initTemplateFiles(root string) map[string]string {
 		"",
 	}, "\n")
 	prepareScenarioContent := strings.Join([]string{
-		"role: prepare",
 		"version: v1alpha1",
-		"artifacts: {}",
+		"phases:",
+		"  - name: prepare",
+		"    steps: []",
 		"",
 	}, "\n")
 	applyScenarioContent := strings.Join([]string{
-		"role: apply",
 		"version: v1alpha1",
 		"phases:",
 		"  - name: install",

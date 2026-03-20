@@ -6,27 +6,32 @@ Reference for the `Containerd` family of typed workflow steps.
 ## Summary
 
 - family: `containerd`
-- kinds: `Containerd`
+- kinds: `WriteContainerdConfig`, `WriteContainerdRegistryHosts`
 
 ## Shared Step Fields
 
 Shared step envelope fields such as `id`, `apiVersion`, `kind`, `when`, `retry`, `timeout`, `register`, and `metadata` are documented in [Workflow Schema](../workflow.md).
 
-## `Containerd`
+## Supported Kinds
 
-Write containerd config and registry host settings.
+- `WriteContainerdConfig`: Write the containerd config file on the node.
+- `WriteContainerdRegistryHosts`: Write containerd registry host configuration for mirrors and trust policy.
 
-- schema: `../../../schemas/tools/containerd.schema.json`
+## `WriteContainerdConfig`
+
+Write the containerd config file on the node.
+
+- schema: `../../../schemas/tools/containerd.config.schema.json`
 - outputs: `path`
 
 ### When To Use
 
-Use this when the node runtime needs a default config or registry mirror layout.
+Use this when the node runtime needs a managed containerd config.toml.
 
 ### Example
 
 ```yaml
-kind: Containerd
+kind: WriteContainerdConfig
 spec:
   path: /etc/containerd/config.toml
   systemdCgroup: true
@@ -42,16 +47,50 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.configPath` | `string` | no | `` | `` | Directory for per-registry `hosts.toml` files, used by containerd's registry host configuration model. | `/etc/containerd/certs.d` |
+| `spec.configPath` | `string` | no | `` | `` | EnsureDirectory for per-registry `hosts.toml` files, used by containerd's registry host configuration model. | `/etc/containerd/certs.d` |
 | `spec.createDefault` | `boolean` | no | `true` | `` | Write a minimal default config when no explicit config exists. Defaults to `true`. | `true` |
 | `spec.path` | `string` | no | `` | `` | Destination path for the generated `config.toml`. Defaults to `/etc/containerd/config.toml`. | `/etc/containerd/config.toml` |
-| `spec.registryHosts` | `array<object>` | no | `` | `` | Per-registry host entries written as `hosts.toml` files under `configPath`. Each entry redirects a registry to a local mirror. | `[{registry:registry.k8s.io,host:http://mirror.local:5000}]` |
 | `spec.systemdCgroup` | `boolean` | no | `` | `` | Enable systemd cgroup driver in the generated config. Required for Kubernetes nodes managed by systemd. | `true` |
 
 ### Notes
 
 - Set `systemdCgroup: true` on all Kubernetes nodes to match the kubelet cgroup driver.
 - Use `registryHosts` to point the runtime at an internal mirror instead of the public registry.
+
+## `WriteContainerdRegistryHosts`
+
+Write containerd registry host configuration for mirrors and trust policy.
+
+- schema: `../../../schemas/tools/containerd.registry-hosts.schema.json`
+- outputs: `path`
+
+### When To Use
+
+Use this when containerd should resolve pulls through explicit registry host configuration.
+
+### Example
+
+```yaml
+apiVersion: deck/v1alpha1
+id: example-writecontainerdregistryhosts
+kind: WriteContainerdRegistryHosts
+spec:
+    path: example
+    registryHosts:
+        - capabilities:
+            - example
+          host: example
+          registry: example
+          server: example
+          skipVerify: true
+```
+
+### Spec Fields
+
+| Key | Type | Required | Default | Enum | Description | Example |
+|---|---|---:|---|---|---|---|
+| `spec.path` | `string` | yes | `` | `` |  | `example` |
+| `spec.registryHosts` | `array<object>` | yes | `` | `` |  | `[{...}]` |
 
 ## Related
 

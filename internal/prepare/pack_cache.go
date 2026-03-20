@@ -196,11 +196,11 @@ func collectPackCacheArtifact(steps []config.Step, effectiveVars map[string]any)
 
 func stepArtifactType(kind string) (string, bool) {
 	switch kind {
-	case "PackageDownload":
+	case "DownloadPackage":
 		return "package", true
-	case "ImageDownload":
+	case "DownloadImage":
 		return "image", true
-	case "FileDownload":
+	case "DownloadFile":
 		return "file", true
 	default:
 		return "", false

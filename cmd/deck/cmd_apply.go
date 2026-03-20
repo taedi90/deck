@@ -22,7 +22,7 @@ type diffOptions struct {
 	varOverrides  map[string]string
 }
 
-func newPlanCommand() *cobra.Command {
+func newPlanRunCommand() *cobra.Command {
 	vars := &varFlag{}
 	cmd := &cobra.Command{
 		Use:     "plan",
@@ -118,7 +118,7 @@ type applyOptions struct {
 	positional    []string
 }
 
-func newApplyCommand() *cobra.Command {
+func newApplyRunCommand() *cobra.Command {
 	vars := &varFlag{}
 	cmd := &cobra.Command{
 		Use:   "apply [workflow] [bundle]",

@@ -32,12 +32,11 @@ This creates a starter layout with two entry workflows and a set of empty artifa
 Prefer typed steps. They make the procedure easier to read and lint as it grows.
 
 ```yaml
-role: apply
 version: v1alpha1
 steps:
   - id: write-motd
     apiVersion: deck/v1alpha1
-    kind: FileWrite
+    kind: WriteFile
     spec:
       path: /etc/motd
       content: |

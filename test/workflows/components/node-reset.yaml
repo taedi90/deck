@@ -1,6 +1,6 @@
 steps:
   - id: reset-node
-    kind: KubeadmReset
+    kind: ResetKubeadm
     when: vars.allowDestructive == "true"
     spec:
       force: true
@@ -24,7 +24,7 @@ steps:
         - etcd
       restartRuntimeService: containerd
   - id: reset-runtime-ready
-    kind: Command
+    kind: RunCommand
     spec:
       timeout: 5m
       command:
@@ -60,7 +60,7 @@ steps:
           fi
           systemctl stop kubelet || true
   - id: reset-state-report
-    kind: Command
+    kind: RunCommand
     spec:
       command:
         - bash
@@ -91,8 +91,8 @@ steps:
               echo "kubeletConfig=absent"
             fi
             if systemctl is-active --quiet kubelet; then
-              echo "kubeletService=active"
+              echo "kubeletManageService=active"
             else
-              echo "kubeletService=inactive"
+              echo "kubeletManageService=inactive"
             fi
           } > "{{ .vars.resetStatePath }}"

@@ -23,7 +23,7 @@ type imageDownloadOps struct {
 	writeArchive   func(string, name.Reference, v1.Image, ...tarball.WriteOption) error
 }
 
-func defaultImageDownloadOps() imageDownloadOps {
+func defaultDownloadImageOps() imageDownloadOps {
 	return imageDownloadOps{
 		parseReference: parseWeakImageReference,
 		fetchImage:     remote.Image,
@@ -35,17 +35,16 @@ func parseWeakImageReference(v string) (name.Reference, error) {
 	return name.ParseReference(v, name.WeakValidation)
 }
 
-func resolveImageDownloadOps(opts RunOptions) imageDownloadOps {
+func resolveDownloadImageOps(opts RunOptions) imageDownloadOps {
 	if opts.imageDownloadOps.parseReference == nil || opts.imageDownloadOps.fetchImage == nil || opts.imageDownloadOps.writeArchive == nil {
-		return defaultImageDownloadOps()
+		return defaultDownloadImageOps()
 	}
 	return opts.imageDownloadOps
 }
 
-func runImageDownload(ctx context.Context, runner CommandRunner, bundleRoot string, spec map[string]any, opts RunOptions) ([]string, error) {
+func runDownloadImage(ctx context.Context, runner CommandRunner, bundleRoot string, spec map[string]any, opts RunOptions) ([]string, error) {
 	_ = runner
-	output := mapValue(spec, "output")
-	dir := stringValue(output, "dir")
+	dir := stringValue(spec, "outputDir")
 	if dir == "" {
 		dir = "images"
 	}
@@ -74,7 +73,7 @@ func runImageDownload(ctx context.Context, runner CommandRunner, bundleRoot stri
 }
 
 func runGoContainerRegistryDownloads(ctx context.Context, bundleRoot, dir string, images []string, auth imageRegistryAuthMap, opts RunOptions) ([]string, error) {
-	deps := resolveImageDownloadOps(opts)
+	deps := resolveDownloadImageOps(opts)
 	files := make([]string, 0, len(images))
 	for _, img := range images {
 		rel := filepath.ToSlash(filepath.Join(dir, sanitizeImageName(img)+".tar"))

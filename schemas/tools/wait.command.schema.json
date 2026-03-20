@@ -11,7 +11,7 @@
       "type": "string"
     },
     "kind": {
-      "const": "WaitCommand"
+      "const": "WaitForCommand"
     },
     "metadata": {
       "additionalProperties": true,
@@ -75,7 +75,7 @@
     "kind",
     "spec"
   ],
-  "title": "WaitCommandStep",
+  "title": "WaitForCommandStep",
   "type": "object",
   "x-deck-visibility": "public"
 }

@@ -1,4 +1,3 @@
-role: apply
 version: v1alpha1
 vars:
   serverRegistryHost: 127.0.0.1:5000
@@ -7,15 +6,20 @@ phases:
     steps:
       - id: prep-containerd-certs-dir
         apiVersion: deck/v1alpha1
-        kind: Directory
+        kind: EnsureDirectory
         spec:
           path: /etc/containerd/certs.d
       - id: prep-containerd-certsd-config
         apiVersion: deck/v1alpha1
-        kind: Containerd
+        kind: WriteContainerdConfig
         spec:
           path: /etc/containerd/config.toml
           configPath: /etc/containerd/certs.d
+      - id: prep-containerd-registry-hosts
+        apiVersion: deck/v1alpha1
+        kind: WriteContainerdRegistryHosts
+        spec:
+          path: /etc/containerd/certs.d
           registryHosts:
             - registry: registry.k8s.io
               server: http://{{ .vars.serverRegistryHost }}
@@ -49,7 +53,7 @@ phases:
               skipVerify: true
       - id: restart-containerd
         apiVersion: deck/v1alpha1
-        kind: Service
+        kind: ManageService
         spec:
           name: containerd
           state: restarted

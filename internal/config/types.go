@@ -1,10 +1,8 @@
 package config
 
 type Workflow struct {
-	Role           string         `yaml:"role" json:"-"`
 	Version        string         `yaml:"version" json:"version"`
 	Vars           map[string]any `yaml:"vars" json:"vars,omitempty"`
-	Artifact       *ArtifactSpec  `yaml:"artifacts,omitempty" json:"artifacts,omitempty"`
 	Phases         []Phase        `yaml:"phases,omitempty" json:"phases,omitempty"`
 	Steps          []Step         `yaml:"steps,omitempty" json:"-"`
 	StateKey       string         `yaml:"-" json:"-"`

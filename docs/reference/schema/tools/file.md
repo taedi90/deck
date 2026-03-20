@@ -6,7 +6,7 @@ Reference for the `File` family of typed workflow steps.
 ## Summary
 
 - family: `file`
-- kinds: `FileDownload`, `FileWrite`, `FileCopy`, `FileEdit`
+- kinds: `DownloadFile`, `WriteFile`, `CopyFile`, `EditFile`, `ExtractArchive`
 
 ## Shared Step Fields
 
@@ -14,26 +14,27 @@ Shared step envelope fields such as `id`, `apiVersion`, `kind`, `when`, `retry`,
 
 ## Supported Kinds
 
-- `FileDownload`: Download or stage a file into bundle output storage.
-- `FileWrite`: Write inline or templated file content to a destination path.
-- `FileCopy`: Copy a file already present on the node to another path.
-- `FileEdit`: Edit an existing file in place using ordered match rules.
+- `DownloadFile`: Download a file into prepared bundle storage.
+- `WriteFile`: Write inline or templated file content to a destination path.
+- `CopyFile`: Copy a file from a declared source to a destination path.
+- `EditFile`: Edit an existing file in place using ordered match rules.
+- `ExtractArchive`: Extract an archive from a declared source into a destination directory.
 
-## `FileDownload`
+## `DownloadFile`
 
-Download or stage a file into bundle output storage.
+Download a file into prepared bundle storage.
 
 - schema: `../../../schemas/tools/file.download.schema.json`
-- outputs: `artifacts`, `path`
+- outputs: `artifacts`, `outputPath`
 
 ### When To Use
 
-Use this during prepare, or when apply needs to stage a bundle file for later steps.
+Use this during prepare to stage files into the bundle.
 
 ### Example
 
 ```yaml
-kind: FileDownload
+kind: DownloadFile
 spec:
   source:
     bundle:
@@ -48,7 +49,8 @@ spec:
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
 | `spec.fetch` | `object` | no | `` | `` | Optional download transport settings applied to `download` fetches. | `{offlineOnly:true}` |
-| `spec.output` | `object` | no | `` | `` | Optional output target inside the bundle for the downloaded file. When omitted, deck writes to `files/<basename>`. | `{path:files/bin/runc}` |
+| `spec.mode` | `string` | no | `` | `` | File permissions in octal notation applied after `write`, `copy`, or `edit` actions complete. | `0644` |
+| `spec.outputPath` | `string` | no | `` | `` |  | `example` |
 | `spec.source` | `object` | yes | `` | `` | Download source descriptor. `path` or `bundle` may be combined with `url` to allow an online fallback when local resolution fails. | `{url:https://example.invalid/file.tar.gz}` |
 
 ### Nested Objects
@@ -59,13 +61,6 @@ spec:
 |---|---|---:|---|---|---|---|
 | `spec.fetch.offlineOnly` | `boolean` | no | `` | `` |  | `true` |
 | `spec.fetch.sources` | `array<object>` | no | `` | `` |  | `[{...}]` |
-
-### `spec.output`
-
-| Key | Type | Required | Default | Enum | Description | Example |
-|---|---|---:|---|---|---|---|
-| `spec.output.chmod` | `string` | no | `` | `` | File permissions applied to the downloaded output file in octal notation. | `0755` |
-| `spec.output.path` | `string` | no | `` | `` | Bundle-relative path where the downloaded file is written. Defaults to `files/<basename>` when omitted. | `files/bin/runc` |
 
 ### `spec.source`
 
@@ -88,9 +83,9 @@ spec:
 
 - `File` is usually the best first choice for host file changes because it stays declarative and validates action-specific inputs.
 - `download` writes into a bundle output target during prepare, while `copy`, `write`, and `edit` operate on live node paths during apply.
-- Use `contentFromTemplate` instead of `content` when the body includes variable substitution.
+- Use `template` instead of `content` when the body includes variable substitution.
 
-## `FileWrite`
+## `WriteFile`
 
 Write inline or templated file content to a destination path.
 
@@ -104,10 +99,10 @@ Use this to create or fully replace a managed file on the node.
 ### Example
 
 ```yaml
-kind: FileWrite
+kind: WriteFile
 spec:
   path: /etc/containerd/config.toml
-  contentFromTemplate: |
+  template: |
     [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
       SystemdCgroup = {{ .vars.systemdCgroup }}
   mode: "0644"
@@ -118,35 +113,35 @@ spec:
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
 | `spec.content` | `string` | no | `` | `` | Inline file content written verbatim to `path`. Used with `write`. | `[offline-base]\nbaseurl=http://repo.local` |
-| `spec.contentFromTemplate` | `string` | no | `` | `` | Inline multi-line content rendered with the current vars before writing. Use this instead of `content` when the body includes template expressions such as `{{ .vars.* }}`. | `[Service]\nEnvironment=ROLE={{ .vars.role }}` |
 | `spec.mode` | `string` | no | `` | `` | File permissions in octal notation applied after `write`, `copy`, or `edit` actions complete. | `0644` |
 | `spec.path` | `string` | yes | `` | `` | Destination path on the node. Required for `write` and `edit`. | `/etc/containerd/config.toml` |
+| `spec.template` | `string` | no | `` | `` | Inline multi-line content rendered with the current vars before writing. Use this instead of `content` when the body includes template expressions such as `{{ .vars.* }}`. | `[ManageService]\nEnvironment=ROLE={{ .vars.role }}` |
 
 ### Validation Rules
 
-- Exactly one of `spec.content` or `spec.contentFromTemplate` must be set.
+- Exactly one of `spec.content` or `spec.template` must be set.
 
 ### Notes
 
 - `File` is usually the best first choice for host file changes because it stays declarative and validates action-specific inputs.
 - `download` writes into a bundle output target during prepare, while `copy`, `write`, and `edit` operate on live node paths during apply.
-- Use `contentFromTemplate` instead of `content` when the body includes variable substitution.
+- Use `template` instead of `content` when the body includes variable substitution.
 
-## `FileCopy`
+## `CopyFile`
 
-Copy a file already present on the node to another path.
+Copy a file from a declared source to a destination path.
 
 - schema: `../../../schemas/tools/file.copy.schema.json`
-- outputs: `dest`
+- outputs: `path`
 
 ### When To Use
 
-Use this when a workflow needs to duplicate a local file into its final location.
+Use this to place a prepared or local file at its final location on the node.
 
 ### Example
 
 ```yaml
-kind: FileCopy
+kind: CopyFile
 spec:
   src: /etc/kubernetes/admin.conf
   dest: /home/vagrant/.kube/config
@@ -157,17 +152,36 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.dest` | `string` | yes | `` | `` | Destination path on the node. Required for `copy`. | `/home/vagrant/.kube/config` |
 | `spec.mode` | `string` | no | `` | `` | File permissions in octal notation applied after `write`, `copy`, or `edit` actions complete. | `0644` |
-| `spec.src` | `string` | yes | `` | `` | Source path already present on the node. Required for `copy`. | `/etc/kubernetes/admin.conf` |
+| `spec.path` | `string` | yes | `` | `` | Destination path on the node. Required for `write` and `edit`. | `/etc/containerd/config.toml` |
+| `spec.source` | `object` | yes | `` | `` | Download source descriptor. `path` or `bundle` may be combined with `url` to allow an online fallback when local resolution fails. | `{url:https://example.invalid/file.tar.gz}` |
+
+### Nested Objects
+
+### `spec.source`
+
+| Key | Type | Required | Default | Enum | Description | Example |
+|---|---|---:|---|---|---|---|
+| `spec.source.bundle` | `object` | no | `` | `` | Reference to a file already inside the bundle. Used to stage a bundle-resident file into a new output location. | `{root:files,path:bin/linux/amd64/runc}` |
+| `spec.source.path` | `string` | no | `` | `` | Local filesystem path to use as the source during prepare. | `/opt/cache/runc` |
+| `spec.source.sha256` | `string` | no | `` | `` | Expected SHA-256 checksum. Fails the step if the fetched file does not match. | `abc123...` |
+| `spec.source.url` | `string` | no | `` | `` | URL to fetch the file from during prepare. | `https://mirror.example.com/runc` |
+
+### `spec.source.bundle`
+
+| Key | Type | Required | Default | Enum | Description | Example |
+|---|---|---:|---|---|---|---|
+| `spec.source.bundle.path` | `string` | yes | `` | `` | Relative path within the bundle root to the source file. | `bin/linux/amd64/runc` |
+| `spec.source.bundle.root` | `string` | yes | `` | `files, images, packages` | Bundle root category to read from (`files`, `images`, or `package`). | `files` |
+
 
 ### Notes
 
 - `File` is usually the best first choice for host file changes because it stays declarative and validates action-specific inputs.
 - `download` writes into a bundle output target during prepare, while `copy`, `write`, and `edit` operate on live node paths during apply.
-- Use `contentFromTemplate` instead of `content` when the body includes variable substitution.
+- Use `template` instead of `content` when the body includes variable substitution.
 
-## `FileEdit`
+## `EditFile`
 
 Edit an existing file in place using ordered match rules.
 
@@ -181,7 +195,7 @@ Use this for small in-place configuration edits when full file ownership is unne
 ### Example
 
 ```yaml
-kind: FileEdit
+kind: EditFile
 spec:
   path: /etc/containerd/config.toml
   edits:
@@ -202,7 +216,64 @@ spec:
 
 - `File` is usually the best first choice for host file changes because it stays declarative and validates action-specific inputs.
 - `download` writes into a bundle output target during prepare, while `copy`, `write`, and `edit` operate on live node paths during apply.
-- Use `contentFromTemplate` instead of `content` when the body includes variable substitution.
+- Use `template` instead of `content` when the body includes variable substitution.
+
+## `ExtractArchive`
+
+Extract an archive from a declared source into a destination directory.
+
+- schema: `../../../schemas/tools/file.extract-archive.schema.json`
+- outputs: `path`
+
+### When To Use
+
+Use this when prepared tarballs or local archives should be expanded onto the node.
+
+### Example
+
+```yaml
+apiVersion: deck/v1alpha1
+id: example-extractarchive
+kind: ExtractArchive
+spec:
+    path: example
+    source:
+        url: example
+```
+
+### Spec Fields
+
+| Key | Type | Required | Default | Enum | Description | Example |
+|---|---|---:|---|---|---|---|
+| `spec.include` | `array<string>` | no | `` | `` |  | `[example]` |
+| `spec.mode` | `string` | no | `` | `` | File permissions in octal notation applied after `write`, `copy`, or `edit` actions complete. | `0644` |
+| `spec.path` | `string` | yes | `` | `` | Destination path on the node. Required for `write` and `edit`. | `/etc/containerd/config.toml` |
+| `spec.source` | `object` | yes | `` | `` | Download source descriptor. `path` or `bundle` may be combined with `url` to allow an online fallback when local resolution fails. | `{url:https://example.invalid/file.tar.gz}` |
+
+### Nested Objects
+
+### `spec.source`
+
+| Key | Type | Required | Default | Enum | Description | Example |
+|---|---|---:|---|---|---|---|
+| `spec.source.bundle` | `object` | no | `` | `` | Reference to a file already inside the bundle. Used to stage a bundle-resident file into a new output location. | `{root:files,path:bin/linux/amd64/runc}` |
+| `spec.source.path` | `string` | no | `` | `` | Local filesystem path to use as the source during prepare. | `/opt/cache/runc` |
+| `spec.source.sha256` | `string` | no | `` | `` | Expected SHA-256 checksum. Fails the step if the fetched file does not match. | `abc123...` |
+| `spec.source.url` | `string` | no | `` | `` | URL to fetch the file from during prepare. | `https://mirror.example.com/runc` |
+
+### `spec.source.bundle`
+
+| Key | Type | Required | Default | Enum | Description | Example |
+|---|---|---:|---|---|---|---|
+| `spec.source.bundle.path` | `string` | yes | `` | `` | Relative path within the bundle root to the source file. | `bin/linux/amd64/runc` |
+| `spec.source.bundle.root` | `string` | yes | `` | `files, images, packages` | Bundle root category to read from (`files`, `images`, or `package`). | `files` |
+
+
+### Notes
+
+- `File` is usually the best first choice for host file changes because it stays declarative and validates action-specific inputs.
+- `download` writes into a bundle output target during prepare, while `copy`, `write`, and `edit` operate on live node paths during apply.
+- Use `template` instead of `content` when the body includes variable substitution.
 
 ## Related
 

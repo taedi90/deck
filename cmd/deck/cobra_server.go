@@ -13,7 +13,7 @@ import (
 	"github.com/taedi90/deck/internal/executil"
 )
 
-func newServerCommand() *cobra.Command {
+func newServerRunCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "server",
 		Short: "Run the local content server and manage remote lookup defaults",
@@ -24,17 +24,17 @@ func newServerCommand() *cobra.Command {
 	}
 
 	cmd.AddCommand(
-		newServerUpCommand(),
-		newServerDownCommand(),
-		newServerHealthCommand(),
-		newServerLogsCommand(),
-		newServerRemoteCommand(),
+		newServerUpRunCommand(),
+		newServerDownRunCommand(),
+		newServerHealthRunCommand(),
+		newServerLogsRunCommand(),
+		newServerRemoteRunCommand(),
 	)
 
 	return cmd
 }
 
-func newServerUpCommand() *cobra.Command {
+func newServerUpRunCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "up",
 		Short: "Start the local bundle server",
@@ -101,7 +101,7 @@ func newServerUpCommand() *cobra.Command {
 	return cmd
 }
 
-func newServerDownCommand() *cobra.Command {
+func newServerDownRunCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "down",
 		Short: "Stop the local server daemon",
@@ -118,7 +118,7 @@ func newServerDownCommand() *cobra.Command {
 	return cmd
 }
 
-func newServerHealthCommand() *cobra.Command {
+func newServerHealthRunCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "health",
 		Short: "Probe an explicit server or the saved remote server URL",
@@ -140,7 +140,7 @@ func newServerHealthCommand() *cobra.Command {
 	return cmd
 }
 
-func newServerLogsCommand() *cobra.Command {
+func newServerLogsRunCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "logs",
 		Short: "Read local server audit logs from file or journal",
@@ -177,7 +177,7 @@ func newServerLogsCommand() *cobra.Command {
 	return cmd
 }
 
-func newServerRemoteCommand() *cobra.Command {
+func newServerRemoteRunCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "remote",
 		Short: "Manage the saved remote server URL for scenario lookup",
@@ -188,15 +188,15 @@ func newServerRemoteCommand() *cobra.Command {
 	}
 
 	cmd.AddCommand(
-		newServerRemoteSetCommand(),
-		newServerRemoteShowCommand(),
-		newServerRemoteUnsetCommand(),
+		newServerRemoteSetRunCommand(),
+		newServerRemoteShowRunCommand(),
+		newServerRemoteUnsetRunCommand(),
 	)
 
 	return cmd
 }
 
-func newServerRemoteSetCommand() *cobra.Command {
+func newServerRemoteSetRunCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <url>",
 		Short: "Save the default remote server URL for scenario lookup",
@@ -208,7 +208,7 @@ func newServerRemoteSetCommand() *cobra.Command {
 	return cmd
 }
 
-func newServerRemoteShowCommand() *cobra.Command {
+func newServerRemoteShowRunCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "show",
 		Short: "Show the effective saved remote server URL",
@@ -220,7 +220,7 @@ func newServerRemoteShowCommand() *cobra.Command {
 	return cmd
 }
 
-func newServerRemoteUnsetCommand() *cobra.Command {
+func newServerRemoteUnsetRunCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "unset",
 		Short: "Clear the saved remote server URL",
@@ -344,7 +344,7 @@ func runServerDaemon(ctx context.Context, opts serverUpOptions) error {
 	}
 	args := []string{
 		"--unit", resolvedUnit,
-		"--property", "WorkingDirectory=" + cwd,
+		"--property", "WorkingEnsureDirectory=" + cwd,
 		"--service-type=simple",
 		execPath,
 		"server", "up",

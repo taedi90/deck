@@ -6,7 +6,7 @@ Reference for the `Repository` family of typed workflow steps.
 ## Summary
 
 - family: `repository`
-- kinds: `RepositoryConfigure`, `RepositoryRefresh`
+- kinds: `ConfigureRepository`, `RefreshRepository`
 
 ## Shared Step Fields
 
@@ -14,12 +14,12 @@ Shared step envelope fields such as `id`, `apiVersion`, `kind`, `when`, `retry`,
 
 ## Supported Kinds
 
-- `RepositoryConfigure`: Configure apt or yum repository definitions.
-- `RepositoryRefresh`: Refresh package metadata with repo filtering.
+- `ConfigureRepository`: Write apt or yum repository definitions.
+- `RefreshRepository`: Refresh package metadata with repo filtering.
 
-## `RepositoryConfigure`
+## `ConfigureRepository`
 
-Configure apt or yum repository definitions.
+Write apt or yum repository definitions.
 
 - schema: `../../../schemas/tools/repository.configure.schema.json`
 - outputs: `path`
@@ -31,7 +31,7 @@ Use this before refreshing caches or installing packages from a local mirror.
 ### Example
 
 ```yaml
-kind: RepositoryConfigureConfigure
+kind: ConfigureRepository
 spec:
   format: apt
   path: /etc/apt/sources.list.d/offline.list
@@ -56,10 +56,10 @@ spec:
 
 ### Notes
 
-- `RepositoryConfigure` only writes repository definition files. Use `RepositoryRefresh` when the package manager needs an explicit metadata refresh.
+- `ConfigureRepository` only writes repository definition files. Use `RefreshRepository` when the package manager needs an explicit metadata refresh.
 - Keep repository definitions mirror-specific rather than mutating the host's default online sources.
 
-## `RepositoryRefresh`
+## `RefreshRepository`
 
 Refresh package metadata with repo filtering.
 
@@ -72,7 +72,7 @@ Use this after writing repo definitions and before package install steps that de
 ### Example
 
 ```yaml
-kind: RepositoryRefreshRefresh
+kind: RefreshRepository
 spec:
   manager: apt
   clean: true

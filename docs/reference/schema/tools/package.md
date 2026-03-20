@@ -6,7 +6,7 @@ Reference for the `Package` family of typed workflow steps.
 ## Summary
 
 - family: `package`
-- kinds: `PackageDownload`, `PackageInstall`
+- kinds: `DownloadPackage`, `InstallPackage`
 
 ## Shared Step Fields
 
@@ -14,12 +14,12 @@ Shared step envelope fields such as `id`, `apiVersion`, `kind`, `when`, `retry`,
 
 ## Supported Kinds
 
-- `PackageDownload`: Download packages into the bundle.
-- `PackageInstall`: Install packages on the local node.
+- `DownloadPackage`: Download packages into prepared bundle storage.
+- `InstallPackage`: Install packages on the local node.
 
-## `PackageDownload`
+## `DownloadPackage`
 
-Download packages into the bundle.
+Download packages into prepared bundle storage.
 
 - schema: `../../../schemas/tools/package.download.schema.json`
 - outputs: `artifacts`
@@ -31,7 +31,7 @@ Use this during prepare to collect package-manager content for offline installat
 ### Example
 
 ```yaml
-kind: PackageDownload
+kind: DownloadPackage
 spec:
   packages: [podman]
   distro:
@@ -54,7 +54,7 @@ spec:
 |---|---|---:|---|---|---|---|
 | `spec.backend` | `object` | no | `` | `` | Container-based download backend for `download`. When provided, `backend.mode=container` and `backend.image` are required. | `{mode:container,runtime:docker,image:rockylinux:9}` |
 | `spec.distro` | `object` | no | `` | `` | Target distribution hint used by `download` to select the correct package manager and resolver backend. | `{family:rhel,release:rocky9}` |
-| `spec.output` | `object` | no | `` | `` | Optional bundle output settings for `download`. When set, `output.dir` changes the directory where downloaded package artifacts are written. | `{dir:packages/kubernetes}` |
+| `spec.outputDir` | `string` | no | `` | `` |  | `example` |
 | `spec.packages` | `array<string>` | yes | `` | `` | Package names to download or install. Use the same list in both `download` and `install` steps to keep offline parity. | `[kubelet,kubeadm,kubectl]` |
 | `spec.repo` | `object` | no | `` | `` | Package-manager repository settings applied before `download`, including repo layout generation and RPM module streams. | `{type:yum,modules:[...]}` |
 
@@ -68,12 +68,6 @@ spec:
 | `spec.backend.mode` | `string` | yes | `` | `container` | Download backend mode. Currently only `container` is supported. | `container` |
 | `spec.backend.runtime` | `string` | no | `` | `auto, docker, podman` | Preferred container runtime for the download helper container. Supported values are `docker`, `podman`, or `auto`. | `docker` |
 
-### `spec.output`
-
-| Key | Type | Required | Default | Enum | Description | Example |
-|---|---|---:|---|---|---|---|
-| `spec.output.dir` | `string` | no | `` | `` | Bundle-relative directory used by `download` for downloaded package artifacts. Defaults to `packages` or a repo-derived path when omitted. | `packages/kubernetes` |
-
 ### `spec.repo`
 
 | Key | Type | Required | Default | Enum | Description | Example |
@@ -86,13 +80,13 @@ spec:
 
 ### Notes
 
-- Use `PackageDownload` and `PackageInstall` with `RepositoryConfigure` and `RepositoryRefresh` for a complete typed package-management flow.
+- Use `DownloadPackage` and `InstallPackage` with `ConfigureRepository` and `RefreshRepository` for a complete typed package-management flow.
 - Keeping the same package list across `download` and `install` helps maintain offline parity.
 - Use `restrictToRepos` on the `install` step to prevent the node's default online repos from being consulted during an offline apply.
 - When `repo` is set for `download`, deck expects `repo.type` and `distro.release` so it can build an apt-flat or yum-style repository layout.
 - Without a container download backend, `download` currently writes placeholder package markers instead of resolving real packages.
 
-## `PackageInstall`
+## `InstallPackage`
 
 Install packages on the local node.
 
@@ -105,7 +99,7 @@ Use this during apply to install packages from configured local or mirrored repo
 ### Example
 
 ```yaml
-kind: PackageInstall
+kind: InstallPackage
 spec:
   packages: [kubelet, kubeadm, kubectl]
   source:
@@ -134,7 +128,7 @@ spec:
 
 ### Notes
 
-- Use `PackageDownload` and `PackageInstall` with `RepositoryConfigure` and `RepositoryRefresh` for a complete typed package-management flow.
+- Use `DownloadPackage` and `InstallPackage` with `ConfigureRepository` and `RefreshRepository` for a complete typed package-management flow.
 - Keeping the same package list across `download` and `install` helps maintain offline parity.
 - Use `restrictToRepos` on the `install` step to prevent the node's default online repos from being consulted during an offline apply.
 - When `repo` is set for `download`, deck expects `repo.type` and `distro.release` so it can build an apt-flat or yum-style repository layout.

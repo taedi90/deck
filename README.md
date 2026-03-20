@@ -41,7 +41,7 @@ For a detailed walkthrough, start with the [Quick Start Guide](docs/getting-star
 
 ## Core Features
 
-- **Typed steps**: File, Package, Service — step kinds that make intent visible without reading through shell syntax.
+- **Typed steps**: File, Package, ManageService — step kinds that make intent visible without reading through shell syntax.
 - **Pre-flight validation**: Lint catches schema errors before you carry the bundle into the site.
 - **Self-contained bundle**: Workflows, artifacts, and the `deck` binary in a single archive. No dependency surprises on site.
 - **Air-gap native**: No SSH, no control plane, no internet access assumed at execution time.

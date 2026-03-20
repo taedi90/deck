@@ -40,7 +40,7 @@ func Workspace(root string) []Finding {
 	if commandCount >= 3 {
 		findings = append(findings, Finding{
 			Severity: "warn",
-			Message:  fmt.Sprintf("workspace uses %d Command steps; prefer typed steps where possible", commandCount),
+			Message:  fmt.Sprintf("workspace uses %d RunCommand steps; prefer typed steps where possible", commandCount),
 		})
 	}
 	return findings
@@ -62,7 +62,7 @@ func Candidate(files map[string]string) []Finding {
 	if commandCount >= 3 {
 		findings = append(findings, Finding{
 			Severity: "warn",
-			Message:  fmt.Sprintf("candidate output uses %d Command steps; prefer typed steps where possible", commandCount),
+			Message:  fmt.Sprintf("candidate output uses %d RunCommand steps; prefer typed steps where possible", commandCount),
 		})
 	}
 	return findings
@@ -88,13 +88,13 @@ func inspectWorkflow(raw []byte) (commandCount int, hasTopLevelSteps bool) {
 	}
 	hasTopLevelSteps = len(doc.Steps) > 0
 	for _, step := range doc.Steps {
-		if step.Kind == "Command" {
+		if step.Kind == "RunCommand" {
 			commandCount++
 		}
 	}
 	for _, phase := range doc.Phases {
 		for _, step := range phase.Steps {
-			if step.Kind == "Command" {
+			if step.Kind == "RunCommand" {
 				commandCount++
 			}
 		}

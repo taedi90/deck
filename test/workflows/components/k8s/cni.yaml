@@ -1,10 +1,10 @@
 steps:
   - id: setup-basic-cni
-    kind: Directory
+    kind: EnsureDirectory
     spec:
       path: /etc/cni/net.d
   - id: write-basic-cni-config
-    kind: FileWrite
+    kind: WriteFile
     spec:
       path: /etc/cni/net.d/10-deck-bridge.conflist
       content: |
@@ -31,7 +31,7 @@ steps:
            ]
          }
   - id: ensure-cni-bin-path
-    kind: Command
+    kind: RunCommand
     spec:
       command:
         - bash
@@ -43,7 +43,7 @@ steps:
             ln -s /usr/lib/cni /opt/cni/bin
           fi
   - id: restart-kubelet-after-cni
-    kind: Service
+    kind: ManageService
     spec:
       name: kubelet
       state: restarted

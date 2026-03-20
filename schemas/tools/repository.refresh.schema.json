@@ -11,7 +11,7 @@
       "type": "string"
     },
     "kind": {
-      "const": "RepositoryRefresh"
+      "const": "RefreshRepository"
     },
     "metadata": {
       "additionalProperties": true,
@@ -99,7 +99,7 @@
     "kind",
     "spec"
   ],
-  "title": "RepositoryRefreshStep",
+  "title": "RefreshRepositoryStep",
   "type": "object",
   "x-deck-visibility": "public"
 }

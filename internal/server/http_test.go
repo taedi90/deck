@@ -40,7 +40,7 @@ func TestServe_StaticReadOnly(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "outputs", "files", "a.txt"), originalBody, 0o644); err != nil {
 		t.Fatalf("write seed file: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "apply.yaml"), []byte("role: apply\nversion: v1alpha1\nsteps: []\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "apply.yaml"), []byte("version: v1alpha1\nsteps: []\n"), 0o644); err != nil {
 		t.Fatalf("write workflow scenario: %v", err)
 	}
 	registryTag, err := name.NewTag("registry.k8s.io/kube-apiserver:v1.30.1", name.WeakValidation)

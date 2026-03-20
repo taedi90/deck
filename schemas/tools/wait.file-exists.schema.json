@@ -11,7 +11,7 @@
       "type": "string"
     },
     "kind": {
-      "const": "WaitFileExists"
+      "const": "WaitForFile"
     },
     "metadata": {
       "additionalProperties": true,
@@ -83,7 +83,7 @@
     "kind",
     "spec"
   ],
-  "title": "WaitFileExistsStep",
+  "title": "WaitForFileStep",
   "type": "object",
   "x-deck-visibility": "public"
 }

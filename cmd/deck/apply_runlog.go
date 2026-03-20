@@ -15,7 +15,7 @@ import (
 
 type applyRunRecord struct {
 	ID             string               `json:"id"`
-	Command        string               `json:"Command"`
+	RunCommand     string               `json:"RunCommand"`
 	WorkflowRef    string               `json:"workflow_ref"`
 	WorkflowSource string               `json:"workflow_source,omitempty"`
 	Scenario       string               `json:"scenario,omitempty"`
@@ -91,7 +91,7 @@ func newApplyRunLogger(workflowPath, workflowSource, scenario, bundleRoot, selec
 		steps:  map[string]*applyRunStepRecord{},
 		record: applyRunRecord{
 			ID:             runID,
-			Command:        "apply",
+			RunCommand:     "apply",
 			WorkflowRef:    strings.TrimSpace(workflowPath),
 			WorkflowSource: strings.TrimSpace(workflowSource),
 			Scenario:       strings.TrimSpace(scenario),

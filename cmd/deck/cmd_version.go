@@ -6,7 +6,7 @@ import (
 	"github.com/taedi90/deck/internal/buildinfo"
 )
 
-func newVersionCommand() *cobra.Command {
+func newVersionRunCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "version",
 		Short: "Show deck build version",

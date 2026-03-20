@@ -1,11 +1,10 @@
-role: apply
 version: v1alpha1
 phases:
   - name: install
     steps:
       - id: verify-required-images
         apiVersion: deck/v1alpha1
-        kind: ImageVerify
+        kind: VerifyImage
         spec:
           images:
             - registry.k8s.io/pause:3.10.1

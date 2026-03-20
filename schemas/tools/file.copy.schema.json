@@ -11,7 +11,7 @@
       "type": "string"
     },
     "kind": {
-      "const": "FileCopy"
+      "const": "CopyFile"
     },
     "metadata": {
       "additionalProperties": true,
@@ -33,22 +33,75 @@
     "spec": {
       "additionalProperties": false,
       "properties": {
-        "dest": {
-          "minLength": 1,
-          "type": "string"
-        },
         "mode": {
           "pattern": "^[0-7]{4}$",
           "type": "string"
         },
-        "src": {
+        "path": {
           "minLength": 1,
           "type": "string"
+        },
+        "source": {
+          "additionalProperties": false,
+          "anyOf": [
+            {
+              "required": [
+                "url"
+              ]
+            },
+            {
+              "required": [
+                "path"
+              ]
+            },
+            {
+              "required": [
+                "bundle"
+              ]
+            }
+          ],
+          "properties": {
+            "bundle": {
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "root": {
+                  "enum": [
+                    "files",
+                    "images",
+                    "packages"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "root",
+                "path"
+              ],
+              "type": "object"
+            },
+            "path": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "sha256": {
+              "pattern": "^[a-fA-F0-9]{64}$",
+              "type": "string"
+            },
+            "url": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "type": "object"
         }
       },
       "required": [
-        "src",
-        "dest"
+        "source",
+        "path"
       ],
       "type": "object"
     },
@@ -65,7 +118,7 @@
     "kind",
     "spec"
   ],
-  "title": "FileCopyStep",
+  "title": "CopyFileStep",
   "type": "object",
   "x-deck-visibility": "public"
 }
