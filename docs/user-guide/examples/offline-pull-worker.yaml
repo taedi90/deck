@@ -10,7 +10,7 @@ phases:
     steps:
       - id: prep-disable-swap
         apiVersion: deck/v1alpha1
-        kind: ConfigureSwap
+        kind: Swap
         spec:
           disable: true
           persist: false
@@ -104,4 +104,4 @@ phases:
         kind: JoinKubeadm
         spec:
           joinFile: "{{ .vars.joinFile }}"
-          extraArgs: ["--cri-socket", "unix:///run/containerd/containerd.sock", "--ignore-preflight-errors=ConfigureSwap"]
+          extraArgs: ["--cri-socket", "unix:///run/containerd/containerd.sock", "--ignore-preflight-errors=Swap"]

@@ -210,7 +210,7 @@ func RenderComponentFragmentPage(schemaPath string, schema map[string]any, meta 
 	buf.WriteString("# " + firstNonEmpty(meta.Title, "Component Fragment Schema") + "\n\n")
 	buf.WriteString(firstNonEmpty(meta.Summary, "Reference for reusable workflow component fragments.") + "\n\n")
 	buf.WriteString("- schema: `../../../" + schemaPath + "`\n\n")
-	buf.WriteString("## Example\n\n```yaml\n" + firstNonEmpty(meta.Example, "steps:\n  - id: example-step\n    kind: RunCommand\n    spec:\n      command: [echo, hello]\n") + "```\n")
+	buf.WriteString("## Example\n\n```yaml\n" + firstNonEmpty(meta.Example, "steps:\n  - id: example-step\n    kind: Command\n    spec:\n      command: [echo, hello]\n") + "```\n")
 	fields := CollectFields(schema)
 	applyFieldDocs(fields, meta.FieldDocs)
 	buf.WriteString("\n## Fields\n\n")

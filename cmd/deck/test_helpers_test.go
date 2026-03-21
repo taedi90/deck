@@ -133,7 +133,7 @@ func writeInstallTrueWorkflowFixture(t *testing.T) string {
 func writeApplyTrueWorkflowFixture(t *testing.T, phaseName string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "install-true.yaml")
-	content := fmt.Sprintf("version: v1alpha1\nphases:\n  - name: %s\n    steps:\n      - id: run-true\n        kind: RunCommand\n        spec:\n          command: [\"true\"]\n", phaseName)
+	content := fmt.Sprintf("version: v1alpha1\nphases:\n  - name: %s\n    steps:\n      - id: run-true\n        kind: Command\n        spec:\n          command: [\"true\"]\n", phaseName)
 	writeWorkflowYAML(t, path, content)
 	return path
 }
@@ -141,7 +141,7 @@ func writeApplyTrueWorkflowFixture(t *testing.T, phaseName string) string {
 func writeValidateWorkflowFixture(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "validate-workflow.yaml")
-	content := "version: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: validate-run\n        apiVersion: deck/v1alpha1\n        kind: RunCommand\n        spec:\n          command: [\"true\"]\n"
+	content := "version: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: validate-run\n        apiVersion: deck/v1alpha1\n        kind: Command\n        spec:\n          command: [\"true\"]\n"
 	writeWorkflowYAML(t, path, content)
 	return path
 }

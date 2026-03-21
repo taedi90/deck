@@ -13,7 +13,7 @@ phases:
   - name: verify
     steps:
       - id: reset-summary
-        kind: RunCommand
+        kind: Command
         spec:
           command:
             - bash

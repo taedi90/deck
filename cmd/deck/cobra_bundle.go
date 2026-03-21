@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newBundleRunCommand() *cobra.Command {
+func newBundleCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "bundle",
 		Short: "Build or verify bundles",
@@ -17,14 +17,14 @@ func newBundleRunCommand() *cobra.Command {
 	}
 
 	cmd.AddCommand(
-		newBundleBuildRunCommand(),
-		newBundleVerifyRunCommand(),
+		newBundleBuildCommand(),
+		newBundleVerifyCommand(),
 	)
 
 	return cmd
 }
 
-func newBundleVerifyRunCommand() *cobra.Command {
+func newBundleVerifyCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "verify [path]",
 		Short: "Verify bundle manifest integrity",
@@ -46,7 +46,7 @@ func newBundleVerifyRunCommand() *cobra.Command {
 	return cmd
 }
 
-func newBundleBuildRunCommand() *cobra.Command {
+func newBundleBuildCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "build",
 		Short: "Archive deck, workflows, outputs, and manifest",

@@ -82,13 +82,13 @@ func analyzeSteps(path string, phase string, steps []config.Step) []Finding {
 }
 
 func analyzeStep(path string, phase string, step config.Step) []Finding {
-	if !strings.EqualFold(strings.TrimSpace(step.Kind), "RunCommand") {
+	if !strings.EqualFold(strings.TrimSpace(step.Kind), "Command") {
 		return nil
 	}
 	return []Finding{{
 		Severity: "warning",
 		Code:     "W_COMMAND_OPAQUE",
-		Message:  "RunCommand step relies on opaque shell behavior; deck cannot infer idempotency or side effects.",
+		Message:  "Command step relies on opaque shell behavior; deck cannot infer idempotency or side effects.",
 		Hint:     "Prefer typed steps when available, or keep command steps small and explicit.",
 		Path:     path,
 		Phase:    strings.TrimSpace(phase),

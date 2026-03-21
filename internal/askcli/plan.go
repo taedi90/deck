@@ -292,7 +292,7 @@ func projectContextChunk(root string) askretrieve.Chunk {
 		b.WriteString(text)
 		b.WriteString("\n")
 	}
-	b.WriteString("Authoring defaults: Prefer typed steps over RunCommand; keep changes surgical and goal-driven.\n")
+	b.WriteString("Authoring defaults: Prefer typed steps over Command; keep changes surgical and goal-driven.\n")
 	b.WriteString("Planner defaults: use retrieved context for workspace topology, component imports, vars placement, and relevant typed steps.\n")
 	return askretrieve.Chunk{ID: "project-context", Source: "project", Label: "project-context", Topic: askcontext.TopicProjectPhilosophy, Content: b.String(), Score: 70}
 }

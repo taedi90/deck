@@ -119,7 +119,7 @@ func TestPromptBlocksIncludeCoreAuthoringGuidance(t *testing.T) {
 		CLIHintsBlock(),
 	}
 	joined := strings.Join(blocks, "\n")
-	for _, want := range []string{"workflows/components/", "workflows/vars.yaml", "prepare", "apply", "Prefer typed steps over RunCommand"} {
+	for _, want := range []string{"workflows/components/", "workflows/vars.yaml", "prepare", "apply", "Prefer typed steps over Command"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("expected %q in prompt blocks, got %q", want, joined)
 		}

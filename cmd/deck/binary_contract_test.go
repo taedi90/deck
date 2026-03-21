@@ -29,7 +29,7 @@ func TestApplyDryRunExitCodeViaBinary(t *testing.T) {
 		t.Fatalf("mkdir workflows: %v", err)
 	}
 	workflowPath := filepath.Join(root, "apply.yaml")
-	workflowBody := "version: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: dry-run-step\n        kind: RunCommand\n        spec:\n          command: [\"true\"]\n"
+	workflowBody := "version: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: dry-run-step\n        kind: Command\n        spec:\n          command: [\"true\"]\n"
 	if err := os.WriteFile(workflowPath, []byte(workflowBody), 0o644); err != nil {
 		t.Fatalf("write workflow: %v", err)
 	}
@@ -206,7 +206,7 @@ func TestCLIContractHelpRoutesViaBinary(t *testing.T) {
 	}
 }
 
-func TestCLIContractVersionRunCommandViaBinary(t *testing.T) {
+func TestCLIContractVersionCommandViaBinary(t *testing.T) {
 	binaryPath := buildDeckBinary(t, "deck-version-bin")
 	res := runDeckBinary(t, binaryPath, "version")
 	if res.exitCode != 0 {
@@ -310,7 +310,7 @@ phases:
   - name: install
     steps:
       - id: apply-step
-        kind: RunCommand
+        kind: Command
         spec:
           command: ["sh", "-c", "echo hit >> %s"]
 `, strings.ReplaceAll(applyLogPath, "\\", "\\\\"))
@@ -366,7 +366,7 @@ phases:
 	}
 }
 
-func TestRunUnknownRunCommand(t *testing.T) {
+func TestRunUnknownCommand(t *testing.T) {
 	err := run([]string{"unknown"})
 	if err == nil {
 		t.Fatalf("expected unknown command error")

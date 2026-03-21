@@ -22,7 +22,7 @@ steps:
         - etcd
       restartRuntimeService: containerd
   - id: bootstrap-runtime-ready
-    kind: RunCommand
+    kind: Command
     spec:
       timeout: 5m
       command:
@@ -74,7 +74,7 @@ steps:
       advertiseAddress: auto
       podNetworkCIDR: 10.244.0.0/16
       criSocket: unix:///run/containerd/containerd.sock
-      ignorePreflightErrors: [ConfigureSwap, FileExisting-crictl, FileExisting-conntrack, FileExisting-socat, Port-10250]
+      ignorePreflightErrors: [Swap, FileExisting-crictl, FileExisting-conntrack, FileExisting-socat, Port-10250]
   - id: bootstrap-publish-join-dir
     kind: EnsureDirectory
     spec:
@@ -93,7 +93,7 @@ steps:
       type: file
       nonEmpty: true
   - id: bootstrap-offline-guard
-    kind: RunCommand
+    kind: Command
     spec:
       command:
         - bash

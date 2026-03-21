@@ -31,7 +31,7 @@ type PromptBlock struct {
 }
 
 type CLIContext struct {
-	RunCommand          string
+	Command             string
 	PlanSubcommand      string
 	ConfigSubcommand    string
 	TopLevelDescription string

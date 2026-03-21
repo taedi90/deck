@@ -54,7 +54,7 @@ You can override `provider`, `model`, and `endpoint` per run, or save defaults w
 
 These commands are additive. They do not replace the default local execution path.
 
-`deck lint -o json` returns a structured report with the validated workflow list, summary counts, supported workflow contracts, and warning-level `findings` such as opaque `RunCommand` steps or remote artifacts without integrity checks.
+`deck lint -o json` returns a structured report with the validated workflow list, summary counts, supported workflow contracts, and warning-level `findings` such as opaque `Command` steps or remote artifacts without integrity checks.
 
 `deck plan -o json` returns the resolved workflow path, state path, runtime var keys, per-step actions, and a summary section.
 
@@ -193,10 +193,10 @@ Optional ask augmentation config example:
 - `apply` runs all phases by default when phases are used; `--phase` narrows execution to one phase.
 - `bundle build` archives the canonical workspace bundle inputs: `deck`, `workflows/`, `outputs/`, and `.deck/manifest.json`, and respects `.deckignore` within those paths.
 - Help text is shown on stdout only when you request it with `--help` or `help`.
-- RunCommand and flag errors are written to stderr without automatic usage output.
+- Command and flag errors are written to stderr without automatic usage output.
 - `version` prints `deck <version>` by default and supports `--json` for machine-readable metadata.
 - Prefer typed step kinds for common host changes.
-- Keep `RunCommand` for cases where the clearer typed form does not exist yet.
+- Keep `Command` for cases where the clearer typed form does not exist yet.
 - `deck ask` previews changes by default and only writes workflow files when `--write` is present.
 - `--max-iterations` applies to generation routes (`draft`/`refine`) only; non-generation routes do not run repair loops.
 
@@ -213,5 +213,5 @@ Optional ask augmentation config example:
 - Top-level workflow authoring reference for deck workflows.
 - Imports are only valid under phases[].imports and resolve from workflows/components/ using component-relative paths.
 - Prefer workflows/vars.yaml for configurable values that would otherwise be repeated inline across steps or files.
-- Prefer typed steps over `RunCommand` when a typed step exists.
+- Prefer typed steps over `Command` when a typed step exists.
 <!-- END GENERATED:ASK_AUTHORING_CONTEXT -->

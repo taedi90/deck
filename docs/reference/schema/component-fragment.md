@@ -25,7 +25,7 @@ steps:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `steps` | `array<object>` | yes | `` | `` | Ordered list of workflow steps contained in this fragment. | `[{id:example,kind:RunCommand,spec:{...}}]` |
+| `steps` | `array<object>` | yes | `` | `` | Ordered list of workflow steps contained in this fragment. | `[{id:example,kind:Command,spec:{...}}]` |
 
 ## Notes
 

@@ -18,7 +18,7 @@ type loadImageSpec struct {
 	Timeout   string   `json:"timeout"`
 }
 
-func runLoadImage(ctx context.Context, spec map[string]any) error {
+func runLoadImage(ctx context.Context, bundleRoot string, spec map[string]any) error {
 	decoded, err := workflowexec.DecodeSpec[loadImageSpec](spec)
 	if err != nil {
 		return fmt.Errorf("decode LoadImage spec: %w", err)
@@ -29,6 +29,9 @@ func runLoadImage(ctx context.Context, spec map[string]any) error {
 	sourceDir := strings.TrimSpace(decoded.SourceDir)
 	if sourceDir == "" {
 		sourceDir = "images"
+	}
+	if strings.TrimSpace(bundleRoot) != "" {
+		sourceDir = filepath.Join(bundleRoot, sourceDir)
 	}
 	for _, image := range decoded.Images {
 		archivePath := filepath.ToSlash(filepath.Join(sourceDir, sanitizeImageArchiveName(image)+".tar"))

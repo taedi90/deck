@@ -6,13 +6,13 @@ Reference for the `Swap` family of typed workflow steps.
 ## Summary
 
 - family: `swap`
-- kinds: `ConfigureSwap`
+- kinds: `Swap`
 
 ## Shared Step Fields
 
 Shared step envelope fields such as `id`, `apiVersion`, `kind`, `when`, `retry`, `timeout`, `register`, and `metadata` are documented in [Workflow Schema](../workflow.md).
 
-## `ConfigureSwap`
+## `Swap`
 
 Enable or disable swap and its persistence.
 
@@ -25,7 +25,7 @@ Use this for Kubernetes-oriented host prep where swap policy matters.
 ### Example
 
 ```yaml
-kind: ConfigureSwap
+kind: Swap
 spec:
   disable: true
   persist: true

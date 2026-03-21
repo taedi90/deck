@@ -10,7 +10,7 @@ func TestParseInfoFallback(t *testing.T) {
 }
 
 func TestParseGeneration(t *testing.T) {
-	raw := `{"summary":"ok","files":[{"path":"workflows/scenarios/apply.yaml","content":"version: v1alpha1\nsteps:\n  - id: run\n    kind: RunCommand\n    spec:\n      command: [\"true\"]\n"}]}`
+	raw := `{"summary":"ok","files":[{"path":"workflows/scenarios/apply.yaml","content":"version: v1alpha1\nsteps:\n  - id: run\n    kind: Command\n    spec:\n      command: [\"true\"]\n"}]}`
 	resp, err := ParseGeneration(raw)
 	if err != nil {
 		t.Fatalf("parse generation: %v", err)

@@ -30,7 +30,7 @@ func (m *mockAskClient) Generate(_ context.Context, _ askprovider.Request) (askp
 	return askprovider.Response{Content: resp}, nil
 }
 
-func TestAskConfigRunCommands(t *testing.T) {
+func TestAskConfigCommands(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "config"))
 	out, err := runWithCapturedStdout([]string{"ask", "config", "set", "--provider", "openrouter", "--model", "anthropic/claude-3.5-sonnet", "--endpoint", "https://openrouter.ai/api/v1", "--api-key", "secret-token", "--log-level", "debug"})
 	if err != nil {
@@ -205,7 +205,7 @@ func TestAskReviewMode(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, "workflows", "scenarios"), 0o755); err != nil {
 		t.Fatalf("mkdir scenarios: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "apply.yaml"), []byte("version: v1alpha1\nsteps:\n  - id: run\n    kind: RunCommand\n    spec:\n      command: [\"true\"]\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "apply.yaml"), []byte("version: v1alpha1\nsteps:\n  - id: run\n    kind: Command\n    spec:\n      command: [\"true\"]\n"), 0o644); err != nil {
 		t.Fatalf("write apply: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(root, "workflows", "prepare.yaml"), []byte("version: v1alpha1\nphases:\n  - name: collect\n    steps: []\n"), 0o644); err != nil {
@@ -220,7 +220,7 @@ func TestAskReviewMode(t *testing.T) {
 	}
 	defer func() { _ = os.Chdir(oldWD) }()
 
-	client := &mockAskClient{responses: []string{validClassificationReview(), `{"summary":"reviewed workspace","answer":"The apply scenario currently uses a RunCommand step and would benefit from typed steps.","suggestions":["Replace generic RunCommand usage with typed steps where possible."]}`}}
+	client := &mockAskClient{responses: []string{validClassificationReview(), `{"summary":"reviewed workspace","answer":"The apply scenario currently uses a Command step and would benefit from typed steps.","suggestions":["Replace generic Command usage with typed steps where possible."]}`}}
 	originalFactory := newAskBackend
 	newAskBackend = func() askprovider.Client { return client }
 	defer func() { newAskBackend = originalFactory }()

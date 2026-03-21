@@ -19,7 +19,7 @@ phases:
   - name: verify
     steps:
       - id: bootstrap-report
-        kind: RunCommand
+        kind: Command
         spec:
           timeout: 10m
           command:

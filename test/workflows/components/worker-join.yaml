@@ -9,4 +9,4 @@ steps:
     kind: JoinKubeadm
     spec:
       joinFile: "{{ .vars.joinFile }}"
-      extraArgs: ["--cri-socket", "unix:///run/containerd/containerd.sock", "--ignore-preflight-errors=ConfigureSwap,FileExisting-crictl,FileExisting-conntrack,FileExisting-socat"]
+      extraArgs: ["--cri-socket", "unix:///run/containerd/containerd.sock", "--ignore-preflight-errors=Swap,FileExisting-crictl,FileExisting-conntrack,FileExisting-socat"]

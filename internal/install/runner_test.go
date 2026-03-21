@@ -1,12 +1,15 @@
 package install
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -92,9 +95,9 @@ func TestRun_InstallTools(t *testing.T) {
 				{ID: "write-file", Kind: "WriteFile", Spec: map[string]any{"path": fileA, "content": "hello world"}},
 				{ID: "edit-file", Kind: "EditFile", Spec: map[string]any{"path": fileA, "edits": []any{map[string]any{"op": "replace", "match": "world", "replaceWith": "deck"}}}},
 				{ID: "copy-file", Kind: "CopyFile", Spec: map[string]any{"source": map[string]any{"path": fileA}, "path": fileB}},
-				{ID: "ConfigureSysctl", Kind: "ConfigureSysctl", Spec: map[string]any{"writeFile": sysctlPath, "values": map[string]any{"net.ipv4.ip_forward": "1"}}},
-				{ID: "modprobe", Kind: "ConfigureKernelModule", Spec: map[string]any{"name": "overlay", "persistFile": modprobePath}},
-				{ID: "run-cmd", Kind: "RunCommand", Spec: map[string]any{"command": []any{"true"}}},
+				{ID: "Sysctl", Kind: "Sysctl", Spec: map[string]any{"writeFile": sysctlPath, "values": map[string]any{"net.ipv4.ip_forward": "1"}}},
+				{ID: "modprobe", Kind: "KernelModule", Spec: map[string]any{"name": "overlay", "persistFile": modprobePath}},
+				{ID: "run-cmd", Kind: "Command", Spec: map[string]any{"command": []any{"true"}}},
 				{ID: "kubeadm-init", Kind: "InitKubeadm", Spec: map[string]any{"outputJoinFile": joinPath}},
 				{ID: "kubeadm-join", Kind: "JoinKubeadm", Spec: map[string]any{"joinFile": joinPath}},
 			},
@@ -168,7 +171,7 @@ func TestRun_DefaultStatePathUsesHomeStateKey(t *testing.T) {
 		StateKey: "state-key-default-path-test",
 		Phases: []config.Phase{{
 			Name:  "install",
-			Steps: []config.Step{{ID: "s1", Kind: "RunCommand", Spec: map[string]any{"command": []any{"true"}}}},
+			Steps: []config.Step{{ID: "s1", Kind: "Command", Spec: map[string]any{"command": []any{"true"}}}},
 		}},
 	}
 
@@ -237,7 +240,7 @@ func TestRun_ManifestIntegrityVerified(t *testing.T) {
 		Version: "v1",
 		Phases: []config.Phase{{
 			Name:  "install",
-			Steps: []config.Step{{ID: "s1", Kind: "RunCommand", Spec: map[string]any{"command": []any{"true"}}}},
+			Steps: []config.Step{{ID: "s1", Kind: "Command", Spec: map[string]any{"command": []any{"true"}}}},
 		}},
 	}
 
@@ -268,7 +271,7 @@ func TestRun_ManifestIntegrityMismatch(t *testing.T) {
 		Version: "v1",
 		Phases: []config.Phase{{
 			Name:  "install",
-			Steps: []config.Step{{ID: "s1", Kind: "RunCommand", Spec: map[string]any{"command": []any{"true"}}}},
+			Steps: []config.Step{{ID: "s1", Kind: "Command", Spec: map[string]any{"command": []any{"true"}}}},
 		}},
 	}
 
@@ -318,7 +321,7 @@ func TestRun_ResumeFromFailedStep(t *testing.T) {
 			Name: "install",
 			Steps: []config.Step{
 				{ID: "s1", Kind: "WriteFile", Spec: map[string]any{"path": first, "content": "ok"}},
-				{ID: "s2", Kind: "RunCommand", Spec: map[string]any{"command": []any{"false"}}},
+				{ID: "s2", Kind: "Command", Spec: map[string]any{"command": []any{"false"}}},
 				{ID: "s3", Kind: "WriteFile", Spec: map[string]any{"path": second, "content": "done"}},
 			},
 		}},
@@ -403,7 +406,7 @@ func TestRun_UnsupportedInstallKindFails(t *testing.T) {
 	}
 }
 
-func TestRun_RunCommandErrorCodes(t *testing.T) {
+func TestRun_CommandErrorCodes(t *testing.T) {
 	t.Run("non-zero exit", func(t *testing.T) {
 		dir := t.TempDir()
 		bundle := filepath.Join(dir, "bundle")
@@ -426,7 +429,7 @@ func TestRun_RunCommandErrorCodes(t *testing.T) {
 			Version: "v1",
 			Phases: []config.Phase{{
 				Name:  "install",
-				Steps: []config.Step{{ID: "cmd", Kind: "RunCommand", Spec: map[string]any{"command": []any{"false"}}}},
+				Steps: []config.Step{{ID: "cmd", Kind: "Command", Spec: map[string]any{"command": []any{"false"}}}},
 			}},
 		}
 
@@ -463,7 +466,7 @@ func TestRun_RunCommandErrorCodes(t *testing.T) {
 				Name: "install",
 				Steps: []config.Step{{
 					ID:   "cmd",
-					Kind: "RunCommand",
+					Kind: "Command",
 					Spec: map[string]any{"command": []any{"sleep", "1"}, "timeout": "10ms"},
 				}},
 			}},
@@ -1108,7 +1111,7 @@ func TestRun_KubeadmRealMode(t *testing.T) {
 	}
 }
 
-func TestRun_KubeadmRealModeRejectsInvalidRunCommand(t *testing.T) {
+func TestRun_KubeadmRealModeRejectsInvalidCommand(t *testing.T) {
 	dir := t.TempDir()
 	bundle := filepath.Join(dir, "bundle")
 	statePath := filepath.Join(dir, "state", "state.json")
@@ -1790,7 +1793,7 @@ func TestRun_RetrySemantics(t *testing.T) {
 			Version: "v1",
 			Phases: []config.Phase{{
 				Name:  "install",
-				Steps: []config.Step{{ID: "retry-cmd", Kind: "RunCommand", Retry: 1, Spec: map[string]any{"command": []any{scriptPath}}}},
+				Steps: []config.Step{{ID: "retry-cmd", Kind: "Command", Retry: 1, Spec: map[string]any{"command": []any{scriptPath}}}},
 			}},
 		}
 
@@ -1828,7 +1831,7 @@ func TestRun_RetrySemantics(t *testing.T) {
 			Version: "v1",
 			Phases: []config.Phase{{
 				Name:  "install",
-				Steps: []config.Step{{ID: "retry-cmd", Kind: "RunCommand", Retry: 1, Spec: map[string]any{"command": []any{scriptPath}}}},
+				Steps: []config.Step{{ID: "retry-cmd", Kind: "Command", Retry: 1, Spec: map[string]any{"command": []any{scriptPath}}}},
 			}},
 		}
 
@@ -1876,7 +1879,7 @@ func TestRun_RetryStopsWhenParentContextDone(t *testing.T) {
 		Version: "v1",
 		Phases: []config.Phase{{
 			Name:  "install",
-			Steps: []config.Step{{ID: "retry-cmd", Kind: "RunCommand", Retry: 4, Spec: map[string]any{"command": []any{scriptPath}, "timeout": "5s"}}},
+			Steps: []config.Step{{ID: "retry-cmd", Kind: "Command", Retry: 4, Spec: map[string]any{"command": []any{scriptPath}, "timeout": "5s"}}},
 		}},
 	}
 
@@ -1896,7 +1899,7 @@ func TestRun_RetryStopsWhenParentContextDone(t *testing.T) {
 	}
 }
 
-func TestRun_RunCommandParentCancelNotRelabeledAsTimeout(t *testing.T) {
+func TestRun_CommandParentCancelNotRelabeledAsTimeout(t *testing.T) {
 	dir := t.TempDir()
 	bundle := filepath.Join(dir, "bundle")
 	statePath := filepath.Join(dir, "state", "state.json")
@@ -1918,7 +1921,7 @@ func TestRun_RunCommandParentCancelNotRelabeledAsTimeout(t *testing.T) {
 		Version: "v1",
 		Phases: []config.Phase{{
 			Name:  "install",
-			Steps: []config.Step{{ID: "cmd", Kind: "RunCommand", Spec: map[string]any{"command": []any{"true"}, "timeout": "3s"}}},
+			Steps: []config.Step{{ID: "cmd", Kind: "Command", Spec: map[string]any{"command": []any{"true"}, "timeout": "3s"}}},
 		}},
 	}
 
@@ -2061,7 +2064,7 @@ func TestResolveSourceBytes_PreservesContextCancellation(t *testing.T) {
 	}
 }
 
-func TestRunCommandOutputWithContext_TimeoutReturnsSentinel(t *testing.T) {
+func TestCommandOutputWithContext_TimeoutReturnsSentinel(t *testing.T) {
 	_, err := runCommandOutputWithContext(context.Background(), []string{"sleep", "1"}, 10*time.Millisecond)
 	if err == nil {
 		t.Fatalf("expected timeout error")
@@ -2071,7 +2074,7 @@ func TestRunCommandOutputWithContext_TimeoutReturnsSentinel(t *testing.T) {
 	}
 }
 
-func TestRunCommandOutputWithContext_RejectsNilContext(t *testing.T) {
+func TestCommandOutputWithContext_RejectsNilContext(t *testing.T) {
 	_, err := runCommandOutputWithContext(nilContextForInstallTest(), []string{"true"}, time.Second)
 	if err == nil {
 		t.Fatalf("expected nil context error")
@@ -2212,7 +2215,7 @@ func TestRun_WhenInvalidExpression(t *testing.T) {
 			Name: "install",
 			Steps: []config.Step{{
 				ID:   "bad-when",
-				Kind: "RunCommand",
+				Kind: "Command",
 				When: "vars.role = \"worker\"",
 				Spec: map[string]any{"command": []any{"true"}},
 			}},
@@ -2787,6 +2790,105 @@ func TestFileModeAppliesToCopyAndEdit(t *testing.T) {
 	}
 }
 
+func TestCopyFileReadsBundleSourceFromBundleRoot(t *testing.T) {
+	dir := t.TempDir()
+	bundleRoot := filepath.Join(dir, "bundle")
+	dest := filepath.Join(dir, "dest.txt")
+	sourcePath := filepath.Join(bundleRoot, "files", "bin", "tool")
+	if err := os.MkdirAll(filepath.Dir(sourcePath), 0o755); err != nil {
+		t.Fatalf("mkdir bundle source: %v", err)
+	}
+	if err := os.WriteFile(sourcePath, []byte("bundle-copy"), 0o644); err != nil {
+		t.Fatalf("write bundle source: %v", err)
+	}
+
+	if err := runCopyFile(context.Background(), bundleRoot, map[string]any{
+		"source": map[string]any{"bundle": map[string]any{"root": "files", "path": "bin/tool"}},
+		"path":   dest,
+	}); err != nil {
+		t.Fatalf("runCopyFile failed: %v", err)
+	}
+
+	raw, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatalf("read dest: %v", err)
+	}
+	if string(raw) != "bundle-copy" {
+		t.Fatalf("unexpected copied content: %q", string(raw))
+	}
+}
+
+func TestExtractArchiveReadsBundleSourceFromBundleRoot(t *testing.T) {
+	dir := t.TempDir()
+	bundleRoot := filepath.Join(dir, "bundle")
+	destDir := filepath.Join(dir, "out")
+	archivePath := filepath.Join(bundleRoot, "files", "archives", "tool.tar.gz")
+	if err := os.MkdirAll(filepath.Dir(archivePath), 0o755); err != nil {
+		t.Fatalf("mkdir archive dir: %v", err)
+	}
+	if err := writeTestTarGz(archivePath, map[string]string{"bin/tool": "extracted"}); err != nil {
+		t.Fatalf("write archive: %v", err)
+	}
+
+	if err := runExtractArchive(context.Background(), bundleRoot, map[string]any{
+		"source": map[string]any{"bundle": map[string]any{"root": "files", "path": "archives/tool.tar.gz"}},
+		"path":   destDir,
+	}); err != nil {
+		t.Fatalf("runExtractArchive failed: %v", err)
+	}
+
+	raw, err := os.ReadFile(filepath.Join(destDir, "bin", "tool"))
+	if err != nil {
+		t.Fatalf("read extracted file: %v", err)
+	}
+	if string(raw) != "extracted" {
+		t.Fatalf("unexpected extracted content: %q", string(raw))
+	}
+}
+
+func TestLoadImageReadsArchivesFromBundleRoot(t *testing.T) {
+	dir := t.TempDir()
+	bundleRoot := filepath.Join(dir, "bundle")
+	archivePath := filepath.Join(bundleRoot, "images", "control-plane", sanitizeImageArchiveName("registry.k8s.io/kube-apiserver:v1.30.1")+".tar")
+	if err := os.MkdirAll(filepath.Dir(archivePath), 0o755); err != nil {
+		t.Fatalf("mkdir image dir: %v", err)
+	}
+	if err := os.WriteFile(archivePath, []byte("image"), 0o644); err != nil {
+		t.Fatalf("write image archive: %v", err)
+	}
+
+	if err := runLoadImage(context.Background(), bundleRoot, map[string]any{
+		"images":    []string{"registry.k8s.io/kube-apiserver:v1.30.1"},
+		"sourceDir": "images/control-plane",
+		"command":   []string{"/bin/sh", "-c", "test -f {archive}"},
+	}); err != nil {
+		t.Fatalf("runLoadImage failed: %v", err)
+	}
+}
+
+func writeTestTarGz(path string, files map[string]string) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+	gz := gzip.NewWriter(f)
+	defer func() { _ = gz.Close() }()
+	tw := tar.NewWriter(gz)
+	defer func() { _ = tw.Close() }()
+	for name, content := range files {
+		raw := []byte(content)
+		hdr := &tar.Header{Name: name, Mode: 0o644, Size: int64(len(raw))}
+		if err := tw.WriteHeader(hdr); err != nil {
+			return err
+		}
+		if _, err := io.Copy(tw, strings.NewReader(content)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func TestManageServiceStep(t *testing.T) {
 	dir := t.TempDir()
 	binDir := filepath.Join(dir, "bin")
@@ -3016,7 +3118,7 @@ func TestInstallFileStep(t *testing.T) {
 	}
 }
 
-func TestRunRunCommandSupportsEnvAndSudo(t *testing.T) {
+func TestCommandSupportsEnvAndSudo(t *testing.T) {
 	dir := t.TempDir()
 	binDir := filepath.Join(dir, "bin")
 	if err := os.MkdirAll(binDir, 0o755); err != nil {
@@ -3313,10 +3415,10 @@ func TestRepoConfigStep(t *testing.T) {
 	t.Run("repository configure does not refresh cache inline", func(t *testing.T) {
 		dir := t.TempDir()
 		target := filepath.Join(dir, "repo", "offline.list")
-		origRun := repoConfigRunTimedRunCommand
-		t.Cleanup(func() { repoConfigRunTimedRunCommand = origRun })
+		origRun := repoConfigRunTimedCommand
+		t.Cleanup(func() { repoConfigRunTimedCommand = origRun })
 		calls := make([]string, 0)
-		repoConfigRunTimedRunCommand = func(_ context.Context, name string, args []string, timeout time.Duration) error {
+		repoConfigRunTimedCommand = func(_ context.Context, name string, args []string, timeout time.Duration) error {
 			calls = append(calls, name+" "+strings.Join(args, " "))
 			if timeout < time.Second {
 				t.Fatalf("unexpected timeout: %s", timeout)
@@ -3342,10 +3444,10 @@ func TestRepoConfigStep(t *testing.T) {
 	t.Run("repository configure only writes repo files", func(t *testing.T) {
 		dir := t.TempDir()
 		target := filepath.Join(dir, "repo", "offline.list")
-		origRun := repoConfigRunTimedRunCommand
-		t.Cleanup(func() { repoConfigRunTimedRunCommand = origRun })
+		origRun := repoConfigRunTimedCommand
+		t.Cleanup(func() { repoConfigRunTimedCommand = origRun })
 		calls := make([]string, 0)
-		repoConfigRunTimedRunCommand = func(_ context.Context, name string, args []string, timeout time.Duration) error {
+		repoConfigRunTimedCommand = func(_ context.Context, name string, args []string, timeout time.Duration) error {
 			calls = append(calls, name+" "+strings.Join(args, " "))
 			return nil
 		}
@@ -3599,15 +3701,15 @@ func TestWriteContainerdConfigStep(t *testing.T) {
 	})
 }
 
-func TestConfigureSwapStep(t *testing.T) {
+func TestSwapStep(t *testing.T) {
 	dir := t.TempDir()
 	fstab := filepath.Join(dir, "fstab")
 	content := "UUID=abc / ext4 defaults 0 1\n/swapfile none swap sw 0 0\n"
 	if err := os.WriteFile(fstab, []byte(content), 0o644); err != nil {
 		t.Fatalf("write fstab: %v", err)
 	}
-	if err := runConfigureSwap(context.Background(), map[string]any{"disable": false, "persist": true, "fstabPath": fstab}); err != nil {
-		t.Fatalf("runConfigureSwap failed: %v", err)
+	if err := runSwap(context.Background(), map[string]any{"disable": false, "persist": true, "fstabPath": fstab}); err != nil {
+		t.Fatalf("runSwap failed: %v", err)
 	}
 	raw, err := os.ReadFile(fstab)
 	if err != nil {
@@ -3618,15 +3720,15 @@ func TestConfigureSwapStep(t *testing.T) {
 	}
 }
 
-func TestConfigureKernelModuleStep(t *testing.T) {
+func TestKernelModuleStep(t *testing.T) {
 	dir := t.TempDir()
 	persistPath := filepath.Join(dir, "modules-load.d", "k8s.conf")
 	spec := map[string]any{"name": "overlay", "load": false, "persist": true, "persistFile": persistPath}
-	if err := runConfigureKernelModule(context.Background(), spec); err != nil {
-		t.Fatalf("runConfigureKernelModule failed: %v", err)
+	if err := runKernelModule(context.Background(), spec); err != nil {
+		t.Fatalf("runKernelModule failed: %v", err)
 	}
-	if err := runConfigureKernelModule(context.Background(), spec); err != nil {
-		t.Fatalf("runConfigureKernelModule second pass failed: %v", err)
+	if err := runKernelModule(context.Background(), spec); err != nil {
+		t.Fatalf("runKernelModule second pass failed: %v", err)
 	}
 	raw, err := os.ReadFile(persistPath)
 	if err != nil {
@@ -3638,8 +3740,8 @@ func TestConfigureKernelModuleStep(t *testing.T) {
 
 	multiPersistPath := filepath.Join(dir, "modules-load.d", "multi.conf")
 	multiSpec := map[string]any{"names": []any{"overlay", "br_netfilter", "overlay"}, "load": false, "persist": true, "persistFile": multiPersistPath}
-	if err := runConfigureKernelModule(context.Background(), multiSpec); err != nil {
-		t.Fatalf("runConfigureKernelModule multi failed: %v", err)
+	if err := runKernelModule(context.Background(), multiSpec); err != nil {
+		t.Fatalf("runKernelModule multi failed: %v", err)
 	}
 	multiRaw, err := os.ReadFile(multiPersistPath)
 	if err != nil {
@@ -3698,7 +3800,7 @@ func TestRun_RepositoryRequiresExplicitAction(t *testing.T) {
 	}
 }
 
-func TestConfigureSysctlApplyStep(t *testing.T) {
+func TestSysctlApplyStep(t *testing.T) {
 	dir := t.TempDir()
 	binDir := filepath.Join(dir, "bin")
 	if err := os.MkdirAll(binDir, 0o755); err != nil {
@@ -3712,8 +3814,8 @@ func TestConfigureSysctlApplyStep(t *testing.T) {
 	}
 	t.Setenv("PATH", fmt.Sprintf("%s:%s", binDir, os.Getenv("PATH")))
 
-	if err := runConfigureSysctlApply(context.Background(), map[string]any{"file": "/etc/sysctl.d/99-kubernetes-cri.conf"}); err != nil {
-		t.Fatalf("runConfigureSysctlApply failed: %v", err)
+	if err := runSysctlApply(context.Background(), map[string]any{"file": "/etc/sysctl.d/99-kubernetes-cri.conf"}); err != nil {
+		t.Fatalf("runSysctlApply failed: %v", err)
 	}
 	raw, err := os.ReadFile(logPath)
 	if err != nil {

@@ -6,13 +6,13 @@ phases:
     steps:
       - id: prep-disable-swap
         apiVersion: deck/v1alpha1
-        kind: ConfigureSwap
+        kind: Swap
         spec:
           disable: true
           persist: true
       - id: prep-kernel-module-overlay
         apiVersion: deck/v1alpha1
-        kind: ConfigureKernelModule
+        kind: KernelModule
         spec:
           name: overlay
           load: true
@@ -20,7 +20,7 @@ phases:
           persistFile: /etc/modules-load.d/k8s.conf
       - id: prep-kernel-module-br-netfilter
         apiVersion: deck/v1alpha1
-        kind: ConfigureKernelModule
+        kind: KernelModule
         spec:
           name: br_netfilter
           load: true
@@ -28,7 +28,7 @@ phases:
           persistFile: /etc/modules-load.d/k8s.conf
       - id: prep-sysctl
         apiVersion: deck/v1alpha1
-        kind: ConfigureSysctl
+        kind: Sysctl
         spec:
           writeFile: /etc/sysctl.d/99-kubernetes-cri.conf
           apply: true
@@ -61,4 +61,4 @@ phases:
         kind: JoinKubeadm
         spec:
           joinFile: /tmp/deck/join-real.txt
-          extraArgs: ["--cri-socket", "unix:///run/containerd/containerd.sock", "--ignore-preflight-errors=ConfigureSwap"]
+          extraArgs: ["--cri-socket", "unix:///run/containerd/containerd.sock", "--ignore-preflight-errors=Swap"]

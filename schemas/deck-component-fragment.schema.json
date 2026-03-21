@@ -40,7 +40,7 @@
             "if": {
               "properties": {
                 "kind": {
-                  "const": "ConfigureKernelModule"
+                  "const": "Command"
                 }
               },
               "required": [
@@ -50,12 +50,8 @@
             "then": {
               "properties": {
                 "register": {
-                  "additionalProperties": {
-                    "enum": [
-                      "name",
-                      "names"
-                    ]
-                  },
+                  "additionalProperties": false,
+                  "maxProperties": 0,
                   "propertyNames": {
                     "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
                   },
@@ -83,54 +79,6 @@
                       "path"
                     ]
                   },
-                  "propertyNames": {
-                    "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
-                  },
-                  "type": "object"
-                }
-              }
-            }
-          },
-          {
-            "if": {
-              "properties": {
-                "kind": {
-                  "const": "ConfigureSwap"
-                }
-              },
-              "required": [
-                "kind"
-              ]
-            },
-            "then": {
-              "properties": {
-                "register": {
-                  "additionalProperties": false,
-                  "maxProperties": 0,
-                  "propertyNames": {
-                    "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
-                  },
-                  "type": "object"
-                }
-              }
-            }
-          },
-          {
-            "if": {
-              "properties": {
-                "kind": {
-                  "const": "ConfigureSysctl"
-                }
-              },
-              "required": [
-                "kind"
-              ]
-            },
-            "then": {
-              "properties": {
-                "register": {
-                  "additionalProperties": false,
-                  "maxProperties": 0,
                   "propertyNames": {
                     "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
                   },
@@ -435,6 +383,34 @@
             "if": {
               "properties": {
                 "kind": {
+                  "const": "KernelModule"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "register": {
+                  "additionalProperties": {
+                    "enum": [
+                      "name",
+                      "names"
+                    ]
+                  },
+                  "propertyNames": {
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                  },
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
                   "const": "LoadImage"
                 }
               },
@@ -535,7 +511,31 @@
             "if": {
               "properties": {
                 "kind": {
-                  "const": "RunCommand"
+                  "const": "Swap"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "register": {
+                  "additionalProperties": false,
+                  "maxProperties": 0,
+                  "propertyNames": {
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                  },
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "Sysctl"
                 }
               },
               "required": [
@@ -844,10 +844,8 @@
           "kind": {
             "enum": [
               "CheckHost",
-              "ConfigureKernelModule",
+              "Command",
               "ConfigureRepository",
-              "ConfigureSwap",
-              "ConfigureSysctl",
               "CopyFile",
               "CreateSymlink",
               "DownloadFile",
@@ -859,11 +857,13 @@
               "InitKubeadm",
               "InstallPackage",
               "JoinKubeadm",
+              "KernelModule",
               "LoadImage",
               "ManageService",
               "RefreshRepository",
               "ResetKubeadm",
-              "RunCommand",
+              "Swap",
+              "Sysctl",
               "VerifyImage",
               "WaitForCommand",
               "WaitForFile",

@@ -112,7 +112,7 @@ func TestHealth(t *testing.T) {
 	})
 }
 
-func TestServerRemoteRunCommands(t *testing.T) {
+func TestServerRemoteCommands(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "server.json")
 	t.Setenv("DECK_SERVER_CONFIG_PATH", configPath)
 
@@ -445,7 +445,7 @@ func TestRunServerAuditRotationFlagValidation(t *testing.T) {
 	}
 }
 
-func TestRunLegacyTopLevelRunCommandsAreRemoved(t *testing.T) {
+func TestRunLegacyTopLevelCommandsAreRemoved(t *testing.T) {
 	for _, cmd := range []string{"run", "resume", "diagnose", "agent", "workflow", "control", "strategy", "ManageService", "serve", "health", "logs"} {
 		t.Run(cmd, func(t *testing.T) {
 			err := run([]string{cmd})
@@ -481,7 +481,7 @@ func TestServerRemoteUsage(t *testing.T) {
 	}
 }
 
-func TestSourceRunCommandRemoved(t *testing.T) {
+func TestSourceCommandRemoved(t *testing.T) {
 	err := run([]string{"source"})
 	if err == nil {
 		t.Fatalf("expected unknown command error")
@@ -560,7 +560,7 @@ func TestRunWorkflowLintAndLegacyValidateMigration(t *testing.T) {
 		if !ok {
 			t.Fatalf("unexpected finding payload type: %#v", payload.Findings[0])
 		}
-		if finding["code"] != "W_COMMAND_OPAQUE" || finding["severity"] != "warning" || finding["stepId"] != "validate-run" || finding["kind"] != "RunCommand" {
+		if finding["code"] != "W_COMMAND_OPAQUE" || finding["severity"] != "warning" || finding["stepId"] != "validate-run" || finding["kind"] != "Command" {
 			t.Fatalf("unexpected finding payload: %+v", finding)
 		}
 		if res.stderr != "" {
@@ -602,7 +602,7 @@ func TestRunWorkflowLintAndLegacyValidateMigration(t *testing.T) {
 			t.Fatalf("write prepare: %v", err)
 		}
 		componentPath := filepath.Join(root, "workflows", "components", "shared", "checks.yaml")
-		if err := os.WriteFile(componentPath, []byte("steps:\n  - id: imported-check\n    kind: RunCommand\n    spec:\n      command: [\"true\"]\n"), 0o644); err != nil {
+		if err := os.WriteFile(componentPath, []byte("steps:\n  - id: imported-check\n    kind: Command\n    spec:\n      command: [\"true\"]\n"), 0o644); err != nil {
 			t.Fatalf("write component: %v", err)
 		}
 

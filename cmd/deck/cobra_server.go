@@ -13,7 +13,7 @@ import (
 	"github.com/taedi90/deck/internal/executil"
 )
 
-func newServerRunCommand() *cobra.Command {
+func newServerCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "server",
 		Short: "Run the local content server and manage remote lookup defaults",
@@ -24,17 +24,17 @@ func newServerRunCommand() *cobra.Command {
 	}
 
 	cmd.AddCommand(
-		newServerUpRunCommand(),
-		newServerDownRunCommand(),
-		newServerHealthRunCommand(),
-		newServerLogsRunCommand(),
-		newServerRemoteRunCommand(),
+		newServerUpCommand(),
+		newServerDownCommand(),
+		newServerHealthCommand(),
+		newServerLogsCommand(),
+		newServerRemoteCommand(),
 	)
 
 	return cmd
 }
 
-func newServerUpRunCommand() *cobra.Command {
+func newServerUpCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "up",
 		Short: "Start the local bundle server",
@@ -101,7 +101,7 @@ func newServerUpRunCommand() *cobra.Command {
 	return cmd
 }
 
-func newServerDownRunCommand() *cobra.Command {
+func newServerDownCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "down",
 		Short: "Stop the local server daemon",
@@ -118,7 +118,7 @@ func newServerDownRunCommand() *cobra.Command {
 	return cmd
 }
 
-func newServerHealthRunCommand() *cobra.Command {
+func newServerHealthCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "health",
 		Short: "Probe an explicit server or the saved remote server URL",
@@ -140,7 +140,7 @@ func newServerHealthRunCommand() *cobra.Command {
 	return cmd
 }
 
-func newServerLogsRunCommand() *cobra.Command {
+func newServerLogsCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "logs",
 		Short: "Read local server audit logs from file or journal",
@@ -177,7 +177,7 @@ func newServerLogsRunCommand() *cobra.Command {
 	return cmd
 }
 
-func newServerRemoteRunCommand() *cobra.Command {
+func newServerRemoteCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "remote",
 		Short: "Manage the saved remote server URL for scenario lookup",
@@ -188,15 +188,15 @@ func newServerRemoteRunCommand() *cobra.Command {
 	}
 
 	cmd.AddCommand(
-		newServerRemoteSetRunCommand(),
-		newServerRemoteShowRunCommand(),
-		newServerRemoteUnsetRunCommand(),
+		newServerRemoteSetCommand(),
+		newServerRemoteShowCommand(),
+		newServerRemoteUnsetCommand(),
 	)
 
 	return cmd
 }
 
-func newServerRemoteSetRunCommand() *cobra.Command {
+func newServerRemoteSetCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <url>",
 		Short: "Save the default remote server URL for scenario lookup",
@@ -208,7 +208,7 @@ func newServerRemoteSetRunCommand() *cobra.Command {
 	return cmd
 }
 
-func newServerRemoteShowRunCommand() *cobra.Command {
+func newServerRemoteShowCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "show",
 		Short: "Show the effective saved remote server URL",
@@ -220,7 +220,7 @@ func newServerRemoteShowRunCommand() *cobra.Command {
 	return cmd
 }
 
-func newServerRemoteUnsetRunCommand() *cobra.Command {
+func newServerRemoteUnsetCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "unset",
 		Short: "Clear the saved remote server URL",

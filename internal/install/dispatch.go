@@ -22,9 +22,9 @@ func executeStep(ctx context.Context, kind string, spec map[string]any, execCtx 
 	case "EditFile":
 		return runEditFile(spec)
 	case "ExtractArchive":
-		return runExtractArchive(ctx, spec)
-	case "ConfigureSysctl":
-		return runConfigureSysctl(ctx, spec)
+		return runExtractArchive(ctx, execCtx.BundleRoot, spec)
+	case "Sysctl":
+		return runSysctl(ctx, spec)
 	case "ManageService":
 		return runManageService(ctx, spec)
 	case "EnsureDirectory":
@@ -41,18 +41,18 @@ func executeStep(ctx context.Context, kind string, spec map[string]any, execCtx 
 		return runWriteContainerdConfig(ctx, spec)
 	case "WriteContainerdRegistryHosts":
 		return runWriteContainerdRegistryHosts(spec)
-	case "ConfigureSwap":
-		return runConfigureSwap(ctx, spec)
-	case "ConfigureKernelModule":
-		return runConfigureKernelModule(ctx, spec)
-	case "RunCommand":
+	case "Swap":
+		return runSwap(ctx, spec)
+	case "KernelModule":
+		return runKernelModule(ctx, spec)
+	case "Command":
 		decoded, err := workflowexec.DecodeSpec[runCommandSpec](spec)
 		if err != nil {
 			return fmt.Errorf("decode command spec: %w", err)
 		}
 		return runCommandDecoded(ctx, decoded)
 	case "LoadImage":
-		return runLoadImage(ctx, spec)
+		return runLoadImage(ctx, execCtx.BundleRoot, spec)
 	case "VerifyImage":
 		return runVerifyImages(ctx, spec)
 	case "InitKubeadm":

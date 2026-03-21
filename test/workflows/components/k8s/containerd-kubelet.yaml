@@ -50,7 +50,7 @@ steps:
         Wants=network-online.target
         After=network-online.target
 
-        [ManageService]
+        [Service]
         EnvironmentFile=-/var/lib/kubelet/kubeadm-flags.env
         EnvironmentFile=-/etc/default/kubelet
         ExecStart=/usr/bin/kubelet \

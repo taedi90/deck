@@ -31,7 +31,7 @@ func runRefreshRepositoryWithRunner(spec map[string]any, runner func(name string
 		return fmt.Errorf("%s: RefreshRepository requires clean and/or update", errCodeInstallRefreshRepositoryMgr)
 	}
 
-	return runRefreshRepositoryRunCommands(
+	return runRefreshRepositoryCommands(
 		manager,
 		clean,
 		update,
@@ -69,7 +69,7 @@ func repoConfigFormatToPackageManager(format string) string {
 	return "dnf"
 }
 
-func runRefreshRepositoryRunCommands(
+func runRefreshRepositoryCommands(
 	manager string,
 	clean bool,
 	update bool,

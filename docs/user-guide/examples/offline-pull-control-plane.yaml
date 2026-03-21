@@ -10,7 +10,7 @@ phases:
     steps:
       - id: prep-disable-swap
         apiVersion: deck/v1alpha1
-        kind: ConfigureSwap
+        kind: Swap
         spec:
           disable: true
           persist: false

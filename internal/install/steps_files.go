@@ -17,9 +17,9 @@ import (
 )
 
 var (
-	repoConfigDetectHostFacts    = detectHostFacts
-	repoConfigRunTimedRunCommand = runTimedCommandWithContext
-	repoConfigDefaultPathFunc    = defaultRepoConfigPath
+	repoConfigDetectHostFacts = detectHostFacts
+	repoConfigRunTimedCommand = runTimedCommandWithContext
+	repoConfigDefaultPathFunc = defaultRepoConfigPath
 )
 
 var yumEnabledTruePattern = regexp.MustCompile(`(?i)^\s*enabled\s*=\s*(1|yes|true)\s*$`)
@@ -152,11 +152,19 @@ func runCopyFile(ctx context.Context, bundleRoot string, spec map[string]any) er
 	if decoded.Source.Bundle != nil {
 		downloadSpec["source"].(map[string]any)["bundle"] = map[string]any{"root": decoded.Source.Bundle.Root, "path": decoded.Source.Bundle.Path}
 	}
-	relPath, err := runDownloadFile(ctx, tmpDir, downloadSpec)
+	downloadRoot := tmpDir
+	if decoded.Source.Bundle != nil {
+		downloadRoot = bundleRoot
+	}
+	relPath, err := runDownloadFile(ctx, downloadRoot, downloadSpec)
 	if err != nil {
 		return err
 	}
-	content, err := fsutil.ReadFile(filepath.Join(tmpDir, relPath))
+	contentPath := filepath.Join(tmpDir, "copy.bin")
+	if decoded.Source.Bundle != nil {
+		contentPath = filepath.Join(bundleRoot, relPath)
+	}
+	content, err := fsutil.ReadFile(contentPath)
 	if err != nil {
 		return err
 	}

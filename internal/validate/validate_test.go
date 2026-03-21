@@ -433,7 +433,7 @@ phases:
     steps:
       - id: dup-id
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: Command
         spec:
           command: ["true"]
 `)
@@ -520,7 +520,7 @@ phases:
     steps:
       - id: bad-run-command
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: Command
         spec:
           command: []
 `)
@@ -546,7 +546,7 @@ phases:
     steps:
       - id: bad-run-command
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: Command
         spec:
           command: []
 `)
@@ -747,7 +747,7 @@ phases:
 		}
 	})
 
-	t.Run("tool schema valid ConfigureKernelModule names", func(t *testing.T) {
+	t.Run("tool schema valid KernelModule names", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
 		content := []byte(`version: v1alpha1
@@ -756,7 +756,7 @@ phases:
     steps:
       - id: load-modules
         apiVersion: deck/v1alpha1
-        kind: ConfigureKernelModule
+        kind: KernelModule
         spec:
           names: [overlay, br_netfilter]
           load: true
@@ -1470,7 +1470,7 @@ func TestSchema_ApiVersionOptional(t *testing.T) {
 	content := []byte(`version: v1alpha1
 steps:
   - id: run-without-api-version
-    kind: RunCommand
+    kind: Command
     spec:
       command: ["true"]
 `)
@@ -1489,7 +1489,7 @@ func TestValidate_SingleBraceTemplateShowsLine(t *testing.T) {
 	content := []byte(`version: v1alpha1
 steps:
   - id: bad-template
-    kind: RunCommand
+    kind: Command
     spec:
       command:
         - "echo"
@@ -1520,7 +1520,7 @@ imports:
   - ./legacy.yaml
 steps:
   - id: ok-step
-    kind: RunCommand
+    kind: Command
     spec:
       command: ["true"]
 `)
@@ -1565,8 +1565,8 @@ func TestSchema_AcceptsComponentFragment(t *testing.T) {
 	path := filepath.Join(componentsDir, "prereq.yaml")
 	content := []byte(`steps:
   - id: prep-disable-swap
-    kind: ConfigureSwap
-    when: vars.enableConfigureSwap == "false"
+    kind: Swap
+    when: vars.enableSwap == "false"
     spec:
       disable: true
       persist: false
@@ -1591,7 +1591,7 @@ func TestSchema_RejectsComponentFragmentVars(t *testing.T) {
   osFamily: debian
 steps:
   - id: prep-disable-swap
-    kind: ConfigureSwap
+    kind: Swap
     spec:
       disable: true
       persist: false
@@ -1620,7 +1620,7 @@ func TestSchema_RejectsComponentFragmentPhases(t *testing.T) {
   - name: install
     steps:
       - id: prep-disable-swap
-        kind: ConfigureSwap
+        kind: Swap
         spec:
           disable: true
           persist: false
@@ -1646,7 +1646,7 @@ context:
   bundleRoot: /tmp/bundle
 steps:
   - id: ok-step
-    kind: RunCommand
+    kind: Command
     spec:
       command: ["true"]
 `)
@@ -1725,25 +1725,25 @@ steps:
           capabilities: [pull, resolve]
           skipVerify: true
   - id: swap
-    kind: ConfigureSwap
+    kind: Swap
     spec:
       disable: true
       persist: true
   - id: kernel-module
-    kind: ConfigureKernelModule
+    kind: KernelModule
     spec:
       name: br_netfilter
       load: true
       persist: true
   - id: sysctl-apply
-    kind: ConfigureSysctl
+    kind: Sysctl
     spec:
       values:
         net.ipv4.ip_forward: 1
       writeFile: /etc/sysctl.d/99-kubernetes-cri.conf
       apply: true
   - id: run-cmd
-    kind: RunCommand
+    kind: Command
     spec:
       command: ["true"]
 `)

@@ -6,7 +6,7 @@ Reference documentation for each typed workflow step supported by deck.
 ## [Command](command.md)
 
 - **Summary**: Reference for the `Command` family of typed workflow steps.
-- **Kinds**: `RunCommand`
+- **Kinds**: `Command`
 
 ## [Containerd](containerd.md)
 
@@ -36,7 +36,7 @@ Reference documentation for each typed workflow step supported by deck.
 ## [KernelModule](kernel-module.md)
 
 - **Summary**: Reference for the `KernelModule` family of typed workflow steps.
-- **Kinds**: `ConfigureKernelModule`
+- **Kinds**: `KernelModule`
 
 ## [Kubeadm](kubeadm.md)
 
@@ -61,7 +61,7 @@ Reference documentation for each typed workflow step supported by deck.
 ## [Swap](swap.md)
 
 - **Summary**: Reference for the `Swap` family of typed workflow steps.
-- **Kinds**: `ConfigureSwap`
+- **Kinds**: `Swap`
 
 ## [Symlink](symlink.md)
 
@@ -71,7 +71,7 @@ Reference documentation for each typed workflow step supported by deck.
 ## [Sysctl](sysctl.md)
 
 - **Summary**: Reference for the `Sysctl` family of typed workflow steps.
-- **Kinds**: `ConfigureSysctl`
+- **Kinds**: `Sysctl`
 
 ## [SystemdUnit](systemd-unit.md)
 

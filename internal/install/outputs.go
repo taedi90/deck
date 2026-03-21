@@ -40,7 +40,7 @@ func stepOutputs(kind string, rendered map[string]any) map[string]any {
 		} else if names := stringSlice(rendered["names"]); len(names) > 0 {
 			outputs["names"] = names
 		}
-	case "ConfigureKernelModule":
+	case "KernelModule":
 		if name := stringValue(rendered, "name"); name != "" {
 			outputs["name"] = name
 		} else if names := stringSlice(rendered["names"]); len(names) > 0 {

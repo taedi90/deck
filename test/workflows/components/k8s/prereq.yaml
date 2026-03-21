@@ -1,6 +1,6 @@
 steps:
   - id: prep-disable-swap
-    kind: ConfigureSwap
+    kind: Swap
     spec:
       disable: true
       persist: false
@@ -11,7 +11,7 @@ steps:
       content: |
         net.ipv4.ip_forward = 1
   - id: prep-apply-ip-forward
-    kind: ConfigureSysctl
+    kind: Sysctl
     spec:
       writeFile: /etc/sysctl.d/99-kubernetes-ipforward.conf
       values:

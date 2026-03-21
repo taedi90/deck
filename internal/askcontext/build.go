@@ -29,7 +29,7 @@ func buildManifest() Manifest {
 	cli := AskCommandMeta()
 	manifest := Manifest{
 		CLI: CLIContext{
-			RunCommand:          "deck ask",
+			Command:             "deck ask",
 			PlanSubcommand:      "deck ask plan",
 			ConfigSubcommand:    "deck ask config",
 			TopLevelDescription: cli.Short,

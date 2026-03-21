@@ -15,7 +15,7 @@ type prepareOptions struct {
 	varOverrides map[string]string
 }
 
-func newPrepareRunCommand() *cobra.Command {
+func newPrepareCommand() *cobra.Command {
 	vars := &varFlag{}
 	cmd := &cobra.Command{
 		Use:   "prepare",

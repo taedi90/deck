@@ -7,7 +7,7 @@ const (
 	commandGroupAdditional = "additional"
 )
 
-func newRootRunCommand() *cobra.Command {
+func newRootCommand() *cobra.Command {
 	cobra.EnableCommandSorting = false
 	setCLIVerbosity(0)
 
@@ -24,23 +24,23 @@ func newRootRunCommand() *cobra.Command {
 	cmd.CompletionOptions.DisableDefaultCmd = true
 	cmd.SetHelpCommandGroupID(commandGroupAdditional)
 	cmd.AddGroup(
-		&cobra.Group{ID: commandGroupCore, Title: "Core RunCommands:"},
-		&cobra.Group{ID: commandGroupAdditional, Title: "Additional RunCommands:"},
+		&cobra.Group{ID: commandGroupCore, Title: "Core Commands:"},
+		&cobra.Group{ID: commandGroupAdditional, Title: "Additional Commands:"},
 	)
 
 	for _, child := range []*cobra.Command{
-		withGroup(newInitRunCommand(), commandGroupCore),
-		withGroup(newLintRunCommand(), commandGroupCore),
-		withGroup(newPrepareRunCommand(), commandGroupCore),
-		withGroup(newBundleRunCommand(), commandGroupCore),
-		withGroup(newPlanRunCommand(), commandGroupCore),
-		withGroup(newApplyRunCommand(), commandGroupCore),
-		withGroup(newListRunCommand(), commandGroupAdditional),
-		withGroup(newServerRunCommand(), commandGroupAdditional),
+		withGroup(newInitCommand(), commandGroupCore),
+		withGroup(newLintCommand(), commandGroupCore),
+		withGroup(newPrepareCommand(), commandGroupCore),
+		withGroup(newBundleCommand(), commandGroupCore),
+		withGroup(newPlanCommand(), commandGroupCore),
+		withGroup(newApplyCommand(), commandGroupCore),
+		withGroup(newListCommand(), commandGroupAdditional),
+		withGroup(newServerCommand(), commandGroupAdditional),
 		withGroup(newAskCommand(), commandGroupAdditional),
-		withGroup(newVersionRunCommand(), commandGroupAdditional),
-		withGroup(newCompletionRunCommand(), commandGroupAdditional),
-		withGroup(newCacheRunCommand(), commandGroupAdditional),
+		withGroup(newVersionCommand(), commandGroupAdditional),
+		withGroup(newCompletionCommand(), commandGroupAdditional),
+		withGroup(newCacheCommand(), commandGroupAdditional),
 	} {
 		if child != nil {
 			cmd.AddCommand(child)

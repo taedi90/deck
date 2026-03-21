@@ -48,10 +48,10 @@ func TestWorkflowIntegrationBootstrap(t *testing.T) {
 		"PHASE=runtime",
 		"PHASE=bootstrap",
 		"PHASE=verify",
-		"prep-disable-swap ConfigureSwap PLAN",
+		"prep-disable-swap Swap PLAN",
 		"bootstrap-reset-preflight ResetKubeadm PLAN",
 		"bootstrap-init InitKubeadm PLAN",
-		"bootstrap-report RunCommand PLAN",
+		"bootstrap-report Command PLAN",
 	)
 }
 
@@ -76,7 +76,7 @@ func TestWorkflowIntegrationWorkerJoin(t *testing.T) {
 		"PHASE=host-prereqs",
 		"PHASE=runtime",
 		"PHASE=join",
-		"prep-disable-swap ConfigureSwap PLAN",
+		"prep-disable-swap Swap PLAN",
 		"fetch-join-file CopyFile PLAN",
 		"join-worker JoinKubeadm PLAN",
 	)
@@ -100,11 +100,11 @@ func TestWorkflowIntegrationNodeReset(t *testing.T) {
 		"PHASE=host-prereqs",
 		"PHASE=reset",
 		"PHASE=verify",
-		"prep-disable-swap ConfigureSwap PLAN",
+		"prep-disable-swap Swap PLAN",
 		"reset-node ResetKubeadm SKIP",
-		"reset-runtime-ready RunCommand PLAN",
-		"reset-state-report RunCommand PLAN",
-		"reset-summary RunCommand PLAN",
+		"reset-runtime-ready Command PLAN",
+		"reset-state-report Command PLAN",
+		"reset-summary Command PLAN",
 	)
 }
 
@@ -137,7 +137,7 @@ phases:
     steps:
       - id: bootstrap-init
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: Command
         spec:
           command: ["bash", "-lc", "true"]
       - id: bootstrap-publish-join
@@ -149,7 +149,7 @@ phases:
           path: /tmp/published-join.txt
       - id: bootstrap-report
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: Command
         spec:
           command: ["bash", "-lc", "test -f /tmp/published-join.txt"]
 `)
@@ -174,7 +174,7 @@ phases:
           outputPath: /tmp/deck/join.txt
       - id: join-worker
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: Command
         spec:
           command: ["bash", "-lc", "test -s /tmp/deck/join.txt"]
 `)
@@ -192,12 +192,12 @@ phases:
     steps:
       - id: reset-runtime-ready
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: Command
         spec:
           command: ["bash", "-lc", "echo runtime unhealthy >&2; exit 1"]
       - id: reset-state-report
         apiVersion: deck/v1alpha1
-        kind: RunCommand
+        kind: Command
         spec:
           command: ["bash", "-lc", "echo should-not-run"]
 `)

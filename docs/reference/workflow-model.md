@@ -60,7 +60,7 @@ vars:
 - id: install-rhel-packages
   kind: InstallPackage
   spec:
-    names: [kubeadm, kubelet, kubectl]
+    packages: [kubeadm, kubelet, kubectl]
   when: vars.osFamily == "rhel"
 ```
 
@@ -146,7 +146,7 @@ steps:
     kind: JoinKubeadm
     spec:
       joinFile: "{{ .runtime.joinFile }}"
-      extraArgs: ["--cri-socket", "unix:///run/containerd/containerd.sock", "--ignore-preflight-errors=ConfigureSwap,FileExisting-crictl,FileExisting-conntrack,FileExisting-socat"]
+      extraArgs: ["--cri-socket", "unix:///run/containerd/containerd.sock", "--ignore-preflight-errors=Swap,FileExisting-crictl,FileExisting-conntrack,FileExisting-socat"]
 ```
 
 ## Phases
@@ -168,7 +168,7 @@ phases:
   - name: verify
     steps:
       - id: check-node-ready
-        kind: RunCommand
+        kind: Command
         spec:
           command: [kubectl, get, nodes]
 ```
@@ -177,24 +177,24 @@ Import paths are relative to `workflows/components/`. Write `k8s/prereq.yaml`, n
 
 ## Step kinds
 
-Typed steps make the workflow easier to scan, validate, and evolve. Use `RunCommand` only when no supported kind fits.
+Typed steps make the workflow easier to scan, validate, and evolve. Use `Command` only when no supported kind fits.
 
 Supported kinds:
 
 - `CheckHost`
-- `RunCommand`
+- `Command`
 - `WriteContainerdConfig`, `WriteContainerdRegistryHosts`
 - `EnsureDirectory`
 - `DownloadFile`, `WriteFile`, `CopyFile`, `EditFile`, `ExtractArchive`
 - `DownloadImage`, `LoadImage`, `VerifyImage`
-- `ConfigureKernelModule`
+- `KernelModule`
 - `InitKubeadm`, `JoinKubeadm`, `ResetKubeadm`
 - `DownloadPackage`, `InstallPackage`
 - `ConfigureRepository`, `RefreshRepository`
 - `ManageService`
-- `ConfigureSwap`
+- `Swap`
 - `CreateSymlink`
-- `ConfigureSysctl`
+- `Sysctl`
 - `WriteSystemdUnit`
 - `WaitForCommand`, `WaitForFile`, `WaitForMissingFile`, `WaitForService`, `WaitForTCPPort`, `WaitForMissingTCPPort`
 
@@ -207,9 +207,9 @@ Supported kinds:
 - `DownloadPackage` writes prepared package content under `outputDir` or the default `packages/` root
 - `workflows/prepare.yaml` is the fixed entrypoint for prepare workflows
 
-## When to use RunCommand
+## When to use Command
 
-Use `RunCommand` when no supported step kind fits yet. It is the escape hatch, not the ideal authoring path. If a workflow leans heavily on `RunCommand`, the procedure may still be too close to raw shell.
+Use `Command` when no supported step kind fits yet. It is the escape hatch, not the ideal authoring path. If a workflow leans heavily on `Command`, the procedure may still be too close to raw shell.
 
 ## Validation model
 

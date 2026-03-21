@@ -23,8 +23,8 @@ func generateManageServiceToolSchema() map[string]any {
 	return root
 }
 
-func generateConfigureSwapToolSchema() map[string]any {
-	root := stepEnvelopeSchema("ConfigureSwap", "ConfigureSwapStep", "Enables or disables swap and its persistence settings.", "public")
+func generateSwapToolSchema() map[string]any {
+	root := stepEnvelopeSchema("Swap", "SwapStep", "Enables or disables swap and its persistence settings.", "public")
 	props := propertyMap(root)
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",
@@ -56,8 +56,8 @@ func generateCreateSymlinkToolSchema() map[string]any {
 	return root
 }
 
-func generateConfigureSysctlToolSchema() map[string]any {
-	root := stepEnvelopeSchema("ConfigureSysctl", "ConfigureSysctlStep", "Writes and optionally applies sysctl values on the local node.", "public")
+func generateSysctlToolSchema() map[string]any {
+	root := stepEnvelopeSchema("Sysctl", "SysctlStep", "Writes and optionally applies sysctl values on the local node.", "public")
 	props := propertyMap(root)
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",

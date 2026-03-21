@@ -188,7 +188,7 @@ func describeScenarioFile(workspace askretrieve.WorkspaceSummary, file askretrie
 		b.WriteString(". ")
 	}
 	if commandCount > 0 {
-		_, _ = fmt.Fprintf(b, "There are %d inline RunCommand step(s), which may deserve extra review for shell complexity. ", commandCount)
+		_, _ = fmt.Fprintf(b, "There are %d inline Command step(s), which may deserve extra review for shell complexity. ", commandCount)
 	}
 	switch role {
 	case "apply":
@@ -239,7 +239,7 @@ func describeComponentFile(file askretrieve.WorkspaceFile, doc map[string]any) (
 		b.WriteString(". ")
 	}
 	if commandCount > 0 {
-		_, _ = fmt.Fprintf(b, "It contains %d RunCommand step(s). ", commandCount)
+		_, _ = fmt.Fprintf(b, "It contains %d Command step(s). ", commandCount)
 	}
 	return filepath.Base(file.Path) + " explanation", strings.TrimSpace(b.String())
 }
@@ -279,7 +279,7 @@ func collectStepKinds(scope map[string]any, stepKinds map[string]int, commandCou
 			kind = "unknown"
 		}
 		stepKinds[kind]++
-		if kind == "RunCommand" {
+		if kind == "Command" {
 			commandCount++
 		}
 	}

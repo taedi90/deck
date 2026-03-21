@@ -33,8 +33,8 @@ func TestStepOutputsCoverApplyContracts(t *testing.T) {
 		{name: "repository path", kind: "ConfigureRepository", spec: map[string]any{"path": "/etc/apt/sources.list.d/offline.list", "repositories": []any{map[string]any{"id": "offline"}}}, output: []string{"path"}},
 		{name: "service name", kind: "ManageService", spec: map[string]any{"name": "containerd"}, output: []string{"name"}},
 		{name: "service names", kind: "ManageService", spec: map[string]any{"names": []any{"containerd", "kubelet"}}, output: []string{"names"}},
-		{name: "kernel module name", kind: "ConfigureKernelModule", spec: map[string]any{"name": "overlay"}, output: []string{"name"}},
-		{name: "kernel module names", kind: "ConfigureKernelModule", spec: map[string]any{"names": []any{"overlay", "br_netfilter"}}, output: []string{"names"}},
+		{name: "kernel module name", kind: "KernelModule", spec: map[string]any{"name": "overlay"}, output: []string{"name"}},
+		{name: "kernel module names", kind: "KernelModule", spec: map[string]any{"names": []any{"overlay", "br_netfilter"}}, output: []string{"names"}},
 		{name: "kubeadm join file", kind: "InitKubeadm", spec: map[string]any{"outputJoinFile": joinPath}, output: []string{"joinFile"}},
 	}
 	covered := map[string]bool{}

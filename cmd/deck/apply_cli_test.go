@@ -42,7 +42,7 @@ func TestApplyWritesRunRecordUnderXDGStateHome(t *testing.T) {
 	t.Setenv("HOME", filepath.Join(t.TempDir(), "home"))
 
 	wfPath := filepath.Join(t.TempDir(), "apply-runlog.yaml")
-	content := "version: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: run-true\n        kind: RunCommand\n        spec:\n          command: [\"true\"]\n"
+	content := "version: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: run-true\n        kind: Command\n        spec:\n          command: [\"true\"]\n"
 	if err := os.WriteFile(wfPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("write workflow: %v", err)
 	}
@@ -70,9 +70,9 @@ func TestApplyWritesRunRecordUnderXDGStateHome(t *testing.T) {
 		t.Fatalf("read run record: %v", err)
 	}
 	var record struct {
-		RunCommand string `json:"RunCommand"`
-		Status     string `json:"status"`
-		Steps      []struct {
+		Command string `json:"command"`
+		Status  string `json:"status"`
+		Steps   []struct {
 			StepID string `json:"step_id"`
 			Status string `json:"status"`
 		} `json:"steps"`
@@ -80,7 +80,7 @@ func TestApplyWritesRunRecordUnderXDGStateHome(t *testing.T) {
 	if err := json.Unmarshal(raw, &record); err != nil {
 		t.Fatalf("parse run record: %v", err)
 	}
-	if record.RunCommand != "apply" || record.Status != "ok" {
+	if record.Command != "apply" || record.Status != "ok" {
 		t.Fatalf("unexpected run record: %+v", record)
 	}
 	if len(record.Steps) == 0 || record.Steps[len(record.Steps)-1].Status != "succeeded" {
@@ -95,7 +95,7 @@ phases:
   - name: install
     steps:
       - id: run-with-vars
-        kind: RunCommand
+        kind: Command
         when: vars.run == "yes"
         spec:
           command: ["true"]
@@ -112,7 +112,7 @@ phases:
 	if err != nil {
 		t.Fatalf("expected success, got %v", err)
 	}
-	if !strings.Contains(out, "run-with-vars RunCommand PLAN") {
+	if !strings.Contains(out, "run-with-vars Command PLAN") {
 		t.Fatalf("expected PLAN status, got %q", out)
 	}
 }
@@ -139,13 +139,13 @@ phases:
   - name: install
     steps:
       - id: install-step
-        kind: RunCommand
+        kind: Command
         spec:
           command: ["sh", "-c", "echo install >> %s"]
   - name: post
     steps:
       - id: post-step
-        kind: RunCommand
+        kind: Command
         spec:
           command: ["sh", "-c", "echo post >> %s"]
 `, strings.ReplaceAll(installLogPath, "\\", "\\\\"), strings.ReplaceAll(postLogPath, "\\", "\\\\"))
@@ -166,7 +166,7 @@ phases:
 	if !strings.Contains(dryRunOut, "PHASE=post") {
 		t.Fatalf("expected post phase line in dry-run output, got %q", dryRunOut)
 	}
-	if !strings.Contains(dryRunOut, "post-step RunCommand SKIP (completed)") {
+	if !strings.Contains(dryRunOut, "post-step Command SKIP (completed)") {
 		t.Fatalf("expected completed skip in dry-run output, got %q", dryRunOut)
 	}
 	if strings.Contains(dryRunOut, "install-step") {
@@ -224,7 +224,7 @@ phases:
   - name: install
     steps:
       - id: requires-prefetch
-        kind: RunCommand
+        kind: Command
         spec:
           command:
             - sh
@@ -282,7 +282,7 @@ phases:
   - name: install
     steps:
       - id: remote-step
-        kind: RunCommand
+        kind: Command
         spec:
           command: ["sh", "-c", "echo hit >> %s"]
 `, strings.ReplaceAll(logPath, "\\", "\\\\"))
@@ -367,7 +367,7 @@ phases:
   - name: install
     steps:
       - id: remote-step
-        kind: RunCommand
+        kind: Command
         spec:
           command: ["sh", "-c", "echo hit >> %s"]
 `, strings.ReplaceAll(logPath, "\\", "\\\\"))
@@ -405,7 +405,7 @@ phases:
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
 			case "/workflows/scenarios/apply.yaml":
-				_, _ = w.Write([]byte("version: v1alpha1\nsteps:\n  - id: pack-step\n    kind: RunCommand\n    spec:\n      command: [\"true\"]\n"))
+				_, _ = w.Write([]byte("version: v1alpha1\nsteps:\n  - id: pack-step\n    kind: Command\n    spec:\n      command: [\"true\"]\n"))
 			default:
 				http.NotFound(w, r)
 			}
@@ -425,7 +425,7 @@ phases:
 func TestPlan(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	wfPath := filepath.Join(t.TempDir(), "apply.yaml")
-	writeWorkflowYAML(t, wfPath, "version: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: step-1\n        apiVersion: deck/v1alpha1\n        kind: RunCommand\n        spec:\n          command: [\"true\"]\n")
+	writeWorkflowYAML(t, wfPath, "version: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: step-1\n        apiVersion: deck/v1alpha1\n        kind: Command\n        spec:\n          command: [\"true\"]\n")
 
 	before, err := runWithCapturedStdout([]string{"plan", "--workflow", wfPath})
 	if err != nil {
@@ -468,7 +468,7 @@ func TestPlan(t *testing.T) {
 func TestPlanJSONAndVerboseDiagnostics(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	wfPath := filepath.Join(t.TempDir(), "apply-plan.json.yaml")
-	writeWorkflowYAML(t, wfPath, "version: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: guarded\n        apiVersion: deck/v1alpha1\n        kind: RunCommand\n        when: vars.run == \"yes\"\n        retry: 2\n        timeout: 30s\n        spec:\n          command: [\"true\"]\n")
+	writeWorkflowYAML(t, wfPath, "version: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: guarded\n        apiVersion: deck/v1alpha1\n        kind: Command\n        when: vars.run == \"yes\"\n        retry: 2\n        timeout: 30s\n        spec:\n          command: [\"true\"]\n")
 
 	res := execute([]string{"plan", "--workflow", wfPath, "-o", "json", "--v=2", "--var", "run=yes"})
 	if res.err != nil {
@@ -532,7 +532,7 @@ func TestPlanJSONAndVerboseDiagnostics(t *testing.T) {
 func TestApplyVerboseDiagnostics(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	wfPath := filepath.Join(t.TempDir(), "apply-verbose.yaml")
-	writeWorkflowYAML(t, wfPath, "version: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: verbose-step\n        kind: RunCommand\n        retry: 1\n        spec:\n          command: [\"true\"]\n")
+	writeWorkflowYAML(t, wfPath, "version: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: verbose-step\n        kind: Command\n        retry: 1\n        spec:\n          command: [\"true\"]\n")
 
 	res := execute([]string{"apply", "--workflow", wfPath, "--v=2"})
 	if res.err != nil {
@@ -541,7 +541,7 @@ func TestApplyVerboseDiagnostics(t *testing.T) {
 	if res.stdout != "apply: ok\n" {
 		t.Fatalf("unexpected stdout: %q", res.stdout)
 	}
-	for _, want := range []string{"deck: apply workflow=", "deck: apply runlog=", "deck: apply step=verbose-step kind=RunCommand phase=install status=started attempt=1", "deck: apply step=verbose-step kind=RunCommand phase=install status=succeeded attempt=1"} {
+	for _, want := range []string{"deck: apply workflow=", "deck: apply runlog=", "deck: apply step=verbose-step kind=Command phase=install status=started attempt=1", "deck: apply step=verbose-step kind=Command phase=install status=succeeded attempt=1"} {
 		if !strings.Contains(res.stderr, want) {
 			t.Fatalf("expected %q in stderr, got %q", want, res.stderr)
 		}
@@ -562,7 +562,7 @@ func TestRunApplyPhaseNotFound(t *testing.T) {
 	}
 
 	workflowPath := filepath.Join(t.TempDir(), "apply.yaml")
-	workflowBody := "version: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: step-one\n        kind: RunCommand\n        spec:\n          command: [\"true\"]\n"
+	workflowBody := "version: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: step-one\n        kind: Command\n        spec:\n          command: [\"true\"]\n"
 	if err := os.WriteFile(workflowPath, []byte(workflowBody), 0o644); err != nil {
 		t.Fatalf("write workflow: %v", err)
 	}

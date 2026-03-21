@@ -23,7 +23,7 @@ type extractArchiveSpec struct {
 	Mode    string                 `json:"mode"`
 }
 
-func runExtractArchive(ctx context.Context, spec map[string]any) error {
+func runExtractArchive(ctx context.Context, bundleRoot string, spec map[string]any) error {
 	decoded, err := workflowexec.DecodeSpec[extractArchiveSpec](spec)
 	if err != nil {
 		return fmt.Errorf("decode ExtractArchive spec: %w", err)
@@ -54,11 +54,19 @@ func runExtractArchive(ctx context.Context, spec map[string]any) error {
 	if decoded.Source.Bundle != nil {
 		downloadSpec["source"].(map[string]any)["bundle"] = map[string]any{"root": decoded.Source.Bundle.Root, "path": decoded.Source.Bundle.Path}
 	}
-	relPath, err := runDownloadFile(ctx, tmpDir, downloadSpec)
+	downloadRoot := tmpDir
+	if decoded.Source.Bundle != nil {
+		downloadRoot = bundleRoot
+	}
+	relPath, err := runDownloadFile(ctx, downloadRoot, downloadSpec)
 	if err != nil {
 		return err
 	}
-	return extractArchiveTarGz(filepath.Join(tmpDir, relPath), decoded.Path, decoded.Include, decoded.Mode)
+	sourcePath := filepath.Join(tmpDir, "archive.bin")
+	if decoded.Source.Bundle != nil {
+		sourcePath = filepath.Join(bundleRoot, relPath)
+	}
+	return extractArchiveTarGz(sourcePath, decoded.Path, decoded.Include, decoded.Mode)
 }
 
 func extractArchiveTarGz(sourcePath, destination string, include []string, mode string) error {

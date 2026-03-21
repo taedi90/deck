@@ -11,7 +11,7 @@
       "type": "string"
     },
     "kind": {
-      "const": "ConfigureSysctl"
+      "const": "Sysctl"
     },
     "metadata": {
       "additionalProperties": true,
@@ -80,7 +80,7 @@
     "kind",
     "spec"
   ],
-  "title": "ConfigureSysctlStep",
+  "title": "SysctlStep",
   "type": "object",
   "x-deck-visibility": "public"
 }

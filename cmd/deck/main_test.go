@@ -10,7 +10,7 @@ import (
 	"github.com/taedi90/deck/internal/buildinfo"
 )
 
-func TestVersionRunCommand(t *testing.T) {
+func TestVersionCommand(t *testing.T) {
 	originalVersion := buildinfo.Version
 	originalCommit := buildinfo.Commit
 	originalDate := buildinfo.Date
@@ -39,7 +39,7 @@ func TestVersionRunCommand(t *testing.T) {
 	}
 }
 
-func TestVersionRunCommandJSON(t *testing.T) {
+func TestVersionCommandJSON(t *testing.T) {
 	originalVersion := buildinfo.Version
 	originalCommit := buildinfo.Commit
 	originalDate := buildinfo.Date
@@ -296,7 +296,7 @@ func TestRunWorkflowRunDryRunPrintsPlan(t *testing.T) {
 	if !strings.Contains(out, "PHASE=install") {
 		t.Fatalf("expected phase line in output, got %q", out)
 	}
-	if !strings.Contains(out, "run-true RunCommand PLAN") {
+	if !strings.Contains(out, "run-true Command PLAN") {
 		t.Fatalf("expected step plan line in output, got %q", out)
 	}
 }
@@ -321,7 +321,7 @@ func TestRunWorkflowRunDryRunWithNonInstallPhaseName(t *testing.T) {
 	if !strings.Contains(out, "PHASE=bootstrap") {
 		t.Fatalf("expected bootstrap phase line in output, got %q", out)
 	}
-	if !strings.Contains(out, "run-true RunCommand PLAN") {
+	if !strings.Contains(out, "run-true Command PLAN") {
 		t.Fatalf("expected step plan line in output, got %q", out)
 	}
 
@@ -335,7 +335,7 @@ func TestRunWorkflowRunDryRunWithNonInstallPhaseName(t *testing.T) {
 	if !strings.Contains(planOut, "PLAN workflow=") {
 		t.Fatalf("expected plan header, got %q", planOut)
 	}
-	if !strings.Contains(planOut, "run-true RunCommand RUN") {
+	if !strings.Contains(planOut, "run-true Command RUN") {
 		t.Fatalf("expected plan output, got %q", planOut)
 	}
 	if !strings.Contains(planOut, "SUMMARY steps=1 run=1 skip=0") {

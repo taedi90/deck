@@ -1,7 +1,7 @@
 package main
 
-func generateRunCommandToolSchema() map[string]any {
-	root := stepEnvelopeSchema("RunCommand", "RunCommandStep", "Escape hatch for commands that are not yet covered by typed steps.", "public")
+func generateCommandToolSchema() map[string]any {
+	root := stepEnvelopeSchema("Command", "CommandStep", "Escape hatch for commands that are not yet covered by typed steps.", "public")
 	props := propertyMap(root)
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",
@@ -170,8 +170,8 @@ func generateCheckHostToolSchema() map[string]any {
 	return root
 }
 
-func generateConfigureKernelModuleToolSchema() map[string]any {
-	root := stepEnvelopeSchema("ConfigureKernelModule", "ConfigureKernelModuleStep", "Loads and persists required kernel modules on the local node.", "public")
+func generateKernelModuleToolSchema() map[string]any {
+	root := stepEnvelopeSchema("KernelModule", "KernelModuleStep", "Loads and persists required kernel modules on the local node.", "public")
 	props := propertyMap(root)
 	setMap(props, "spec", map[string]any{
 		"type":                 "object",

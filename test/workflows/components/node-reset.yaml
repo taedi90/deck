@@ -24,7 +24,7 @@ steps:
         - etcd
       restartRuntimeService: containerd
   - id: reset-runtime-ready
-    kind: RunCommand
+    kind: Command
     spec:
       timeout: 5m
       command:
@@ -60,7 +60,7 @@ steps:
           fi
           systemctl stop kubelet || true
   - id: reset-state-report
-    kind: RunCommand
+    kind: Command
     spec:
       command:
         - bash

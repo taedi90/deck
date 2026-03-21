@@ -57,7 +57,7 @@ spec:
 
 - `InitKubeadm` requires `outputJoinFile`, `JoinKubeadm` requires exactly one of `joinFile` or `configFile`, and `ResetKubeadm` focuses on cleanup fields.
 - When `skipIfAdminConfExists` skips `InitKubeadm`, deck does not create a new join artifact and registered `joinFile` outputs are unavailable unless the file already exists.
-- Place host preparation steps (`WriteContainerdConfig`, `ConfigureSwap`, `ConfigureKernelModule`, `ConfigureSysctl`) before kubeadm bootstrap so failures point to the correct step.
+- Place host preparation steps (`WriteContainerdConfig`, `Swap`, `KernelModule`, `Sysctl`) before kubeadm bootstrap so failures point to the correct step.
 
 ## `JoinKubeadm`
 
@@ -91,7 +91,7 @@ spec:
 
 - `InitKubeadm` requires `outputJoinFile`, `JoinKubeadm` requires exactly one of `joinFile` or `configFile`, and `ResetKubeadm` focuses on cleanup fields.
 - When `skipIfAdminConfExists` skips `InitKubeadm`, deck does not create a new join artifact and registered `joinFile` outputs are unavailable unless the file already exists.
-- Place host preparation steps (`WriteContainerdConfig`, `ConfigureSwap`, `ConfigureKernelModule`, `ConfigureSysctl`) before kubeadm bootstrap so failures point to the correct step.
+- Place host preparation steps (`WriteContainerdConfig`, `Swap`, `KernelModule`, `Sysctl`) before kubeadm bootstrap so failures point to the correct step.
 
 ## `ResetKubeadm`
 
@@ -130,7 +130,7 @@ spec:
 
 - `InitKubeadm` requires `outputJoinFile`, `JoinKubeadm` requires exactly one of `joinFile` or `configFile`, and `ResetKubeadm` focuses on cleanup fields.
 - When `skipIfAdminConfExists` skips `InitKubeadm`, deck does not create a new join artifact and registered `joinFile` outputs are unavailable unless the file already exists.
-- Place host preparation steps (`WriteContainerdConfig`, `ConfigureSwap`, `ConfigureKernelModule`, `ConfigureSysctl`) before kubeadm bootstrap so failures point to the correct step.
+- Place host preparation steps (`WriteContainerdConfig`, `Swap`, `KernelModule`, `Sysctl`) before kubeadm bootstrap so failures point to the correct step.
 
 ## Related
 

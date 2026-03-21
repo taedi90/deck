@@ -50,15 +50,15 @@ var commonFieldDocs = map[string]FieldDoc{
 
 var toolMetadata = map[string]ToolMetadata{
 	"Command": {
-		Example: "kind: RunCommand\nspec:\n  command: [\"systemctl\", \"status\", \"containerd\"]\n  timeout: 30s\n",
+		Example: "kind: Command\nspec:\n  command: [\"systemctl\", \"status\", \"containerd\"]\n  timeout: 30s\n",
 		FieldDocs: map[string]FieldDoc{
-			"spec.command": {Description: "RunCommand vector to execute. The first element is the binary; remaining elements are arguments.", Example: "[systemctl,restart,containerd]"},
+			"spec.command": {Description: "Command vector to execute. The first element is the binary; remaining elements are arguments.", Example: "[systemctl,restart,containerd]"},
 			"spec.env":     {Description: "Additional environment variables passed to the command process as key-value pairs.", Example: "{KUBECONFIG:/etc/kubernetes/admin.conf}"},
 			"spec.sudo":    {Description: "Prepend `sudo` before the command vector. Defaults to `false`.", Example: "false"},
 			"spec.timeout": {Description: "Maximum duration for the command before it is killed. Overrides the step-level `timeout`.", Example: "30s"},
 		},
 		Notes: []string{
-			"Prefer a typed step kind over `RunCommand` whenever one is available — typed steps are easier to lint, review, and evolve.",
+			"Prefer a typed step kind over `Command` whenever one is available — typed steps are easier to lint, review, and evolve.",
 			"Use `spec.timeout` to bound commands that may hang rather than relying on the outer step timeout.",
 		},
 	},
@@ -172,8 +172,8 @@ var toolMetadata = map[string]ToolMetadata{
 		},
 	},
 
-	"ConfigureKernelModule": {
-		Example: "kind: ConfigureKernelModule\nspec:\n  name: br_netfilter\n  load: true\n  persist: true\n  persistFile: /etc/modules-load.d/k8s.conf\n",
+	"KernelModule": {
+		Example: "kind: KernelModule\nspec:\n  name: br_netfilter\n  load: true\n  persist: true\n  persistFile: /etc/modules-load.d/k8s.conf\n",
 		FieldDocs: map[string]FieldDoc{
 			"spec.name":        {Description: "Single module name to load. Use `name` or `names`, not both.", Example: "br_netfilter"},
 			"spec.names":       {Description: "Multiple module names to load in a single step. Use `name` or `names`, not both.", Example: "[overlay,br_netfilter]"},
@@ -213,7 +213,7 @@ var toolMetadata = map[string]ToolMetadata{
 		Notes: []string{
 			"`InitKubeadm` requires `outputJoinFile`, `JoinKubeadm` requires exactly one of `joinFile` or `configFile`, and `ResetKubeadm` focuses on cleanup fields.",
 			"When `skipIfAdminConfExists` skips `InitKubeadm`, deck does not create a new join artifact and registered `joinFile` outputs are unavailable unless the file already exists.",
-			"Place host preparation steps (`WriteContainerdConfig`, `ConfigureSwap`, `ConfigureKernelModule`, `ConfigureSysctl`) before kubeadm bootstrap so failures point to the correct step.",
+			"Place host preparation steps (`WriteContainerdConfig`, `Swap`, `KernelModule`, `Sysctl`) before kubeadm bootstrap so failures point to the correct step.",
 		},
 	},
 
@@ -302,8 +302,8 @@ var toolMetadata = map[string]ToolMetadata{
 		},
 	},
 
-	"ConfigureSwap": {
-		Example: "kind: ConfigureSwap\nspec:\n  disable: true\n  persist: true\n",
+	"Swap": {
+		Example: "kind: Swap\nspec:\n  disable: true\n  persist: true\n",
 		FieldDocs: map[string]FieldDoc{
 			"spec.disable":   {Description: "Disable all active swap devices with `swapoff -a`. Defaults to `true`.", Example: "true"},
 			"spec.persist":   {Description: "Comment out swap entries in `/etc/fstab` so swap stays off after reboot. Defaults to `true`.", Example: "true"},
@@ -322,8 +322,8 @@ var toolMetadata = map[string]ToolMetadata{
 		},
 	},
 
-	"ConfigureSysctl": {
-		Example: "kind: ConfigureSysctl\nspec:\n  writeFile: /etc/sysctl.d/99-kubernetes-cri.conf\n  apply: true\n  values:\n    net.ipv4.ip_forward: 1\n",
+	"Sysctl": {
+		Example: "kind: Sysctl\nspec:\n  writeFile: /etc/sysctl.d/99-kubernetes-cri.conf\n  apply: true\n  values:\n    net.ipv4.ip_forward: 1\n",
 		FieldDocs: map[string]FieldDoc{
 			"spec.writeFile": {Description: "Path to the sysctl file written with the given values. A drop-in under `/etc/sysctl.d/` is the common choice.", Example: "/etc/sysctl.d/99-k8s.conf"},
 			"spec.values":    {Description: "Map of sysctl key-value pairs to write and optionally apply.", Example: "{net.ipv4.ip_forward:1,net.bridge.bridge-nf-call-iptables:1}"},
@@ -516,7 +516,7 @@ func ComponentFragmentMeta() PageMetadata {
 		Summary: "Reference for reusable workflow component fragments located under `workflows/components/`.",
 		Example: "steps:\n  - id: write-config\n    kind: WriteFile\n    spec:\n      path: /etc/example.conf\n      content: hello\n  - id: restart-service\n    kind: ManageService\n    spec:\n      name: example\n      state: restarted\n",
 		FieldDocs: map[string]FieldDoc{
-			"steps": {Description: "Ordered list of workflow steps contained in this fragment.", Example: "[{id:example,kind:RunCommand,spec:{...}}]"},
+			"steps": {Description: "Ordered list of workflow steps contained in this fragment.", Example: "[{id:example,kind:Command,spec:{...}}]"},
 		},
 		Notes: []string{
 			"Component fragments are stored in the `workflows/components/` directory of your workspace.",

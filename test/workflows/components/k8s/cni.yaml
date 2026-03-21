@@ -31,7 +31,7 @@ steps:
            ]
          }
   - id: ensure-cni-bin-path
-    kind: RunCommand
+    kind: Command
     spec:
       command:
         - bash

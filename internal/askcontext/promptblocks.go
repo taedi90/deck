@@ -32,7 +32,7 @@ func InvariantPromptBlock() PromptBlock {
 func PolicyPromptBlock() PromptBlock {
 	b := &strings.Builder{}
 	b.WriteString("Workflow authoring policy:\n")
-	b.WriteString("- Prefer typed steps over RunCommand whenever a typed step expresses the change clearly.\n")
+	b.WriteString("- Prefer typed steps over Command whenever a typed step expresses the change clearly.\n")
 	b.WriteString("- Prefer workflows/vars.yaml for repeated configurable values instead of scattering literals across steps.\n")
 	b.WriteString("- Do not replace schema-typed arrays or objects with string templates. Keep arrays as YAML arrays and objects as YAML objects so schema validation still passes.\n")
 	b.WriteString("- Split repeated logic into reusable components and import them under phases[].imports.\n")
@@ -144,7 +144,7 @@ func CLIHintsBlock() string {
 	b := &strings.Builder{}
 	b.WriteString("Relevant CLI usage:\n")
 	b.WriteString("- ")
-	b.WriteString(manifest.CLI.RunCommand)
+	b.WriteString(manifest.CLI.Command)
 	b.WriteString(" previews by default; add --write to write files.\n")
 	b.WriteString("- ")
 	b.WriteString(manifest.CLI.PlanSubcommand)
@@ -312,7 +312,7 @@ func RelevantStepKinds(prompt string) []StepKindContext {
 	}
 	if len(out) == 0 {
 		for _, kind := range manifest.StepKinds {
-			if kind.Kind == "WriteFile" || kind.Kind == "ConfigureRepository" || kind.Kind == "ManageService" || kind.Kind == "RunCommand" {
+			if kind.Kind == "WriteFile" || kind.Kind == "ConfigureRepository" || kind.Kind == "ManageService" || kind.Kind == "Command" {
 				out = append(out, kind)
 			}
 		}

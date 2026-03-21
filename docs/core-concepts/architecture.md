@@ -139,7 +139,7 @@ This keeps the main path easier to discover and helps examples, validation, bund
 
 Typed steps make workflows easier to review, validate, and evolve. They also let the implementation hold clearer boundaries around filesystem access, command execution, runtime outputs, and schema contracts.
 
-`RunCommand` remains available as an escape hatch, but it is not meant to dominate the authoring model.
+`Command` remains available as an escape hatch, but it is not meant to dominate the authoring model.
 
 Another reason for this design is to reduce user confusion. `deck` tries to give common operational work one clear typed shape instead of several overlapping ways to express the same action. The goal is not to model every edge immediately. The goal is to keep the main path simple enough that operators can usually predict which step kind to reach for and what behavior it implies.
 
@@ -151,7 +151,7 @@ Families such as `File`, `Package`, `Image`, `Repository`, and `Wait` group conc
 
 When a capability fits an existing family cleanly, extending that family is usually preferred over creating a new unrelated step kind.
 
-## RunCommand surface design
+## Command surface design
 
 The CLI follows the same simplification goal.
 
@@ -272,7 +272,7 @@ The exact package layout may continue to evolve, but the architectural direction
 
 New capabilities should follow the same shape.
 
-- prefer adding a typed step over expanding `RunCommand` usage
+- prefer adding a typed step over expanding `Command` usage
 - prefer extending an existing noun family before introducing a new top-level step kind
 - keep runtime side effects in focused helper boundaries
 - keep prepare-side network work out of apply-side host mutation paths

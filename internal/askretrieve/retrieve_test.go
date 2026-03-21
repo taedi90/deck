@@ -81,7 +81,7 @@ func TestRetrieveIncludesRelatedImportsForTargetScenario(t *testing.T) {
 		Files: []WorkspaceFile{
 			{Path: "workflows/scenarios/apply.yaml", Content: "version: v1alpha1\nphases:\n  - name: bootstrap\n    imports:\n      - path: bootstrap.yaml\n"},
 			{Path: "workflows/components/bootstrap.yaml", Content: "steps:\n  - id: init\n    kind: InitKubeadm\n    spec:\n"},
-			{Path: "workflows/components/unrelated.yaml", Content: "steps:\n  - id: noop\n    kind: RunCommand\n"},
+			{Path: "workflows/components/unrelated.yaml", Content: "steps:\n  - id: noop\n    kind: Command\n"},
 		},
 	}
 	result := Retrieve(askintent.RouteExplain, "explain apply workflow", askintent.Target{Kind: "scenario", Path: "workflows/scenarios/apply.yaml", Name: "apply"}, workspace, askstate.Context{}, nil)
@@ -95,7 +95,7 @@ func TestRetrieveIncludesExternalPlanAwareChunks(t *testing.T) {
 	workspace := WorkspaceSummary{
 		Root: filepath.ToSlash(t.TempDir()),
 		Files: []WorkspaceFile{
-			{Path: "workflows/scenarios/apply.yaml", Content: "version: v1alpha1\nsteps:\n  - id: run\n    kind: RunCommand\n    spec:\n      command: [\"true\"]\n"},
+			{Path: "workflows/scenarios/apply.yaml", Content: "version: v1alpha1\nsteps:\n  - id: run\n    kind: Command\n    spec:\n      command: [\"true\"]\n"},
 		},
 	}
 	external := []Chunk{{ID: "plan-artifact", Source: "plan", Label: "plan", Content: "Planned files:\n- workflows/scenarios/apply.yaml", Score: 90}}
