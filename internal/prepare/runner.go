@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -30,6 +31,7 @@ type RunOptions struct {
 
 type CommandRunner interface {
 	Run(ctx context.Context, name string, args ...string) error
+	RunWithIO(ctx context.Context, stdout io.Writer, stderr io.Writer, name string, args ...string) error
 	LookPath(file string) (string, error)
 }
 
@@ -37,6 +39,10 @@ type osCommandRunner struct{}
 
 func (o osCommandRunner) Run(ctx context.Context, name string, args ...string) error {
 	return executil.RunWorkflowCommandWithIO(ctx, os.Stdout, os.Stderr, name, args...)
+}
+
+func (o osCommandRunner) RunWithIO(ctx context.Context, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
+	return executil.RunWorkflowCommandWithIO(ctx, stdout, stderr, name, args...)
 }
 
 func (o osCommandRunner) LookPath(file string) (string, error) {
@@ -237,7 +243,8 @@ func executePrepareStep(ctx context.Context, runner CommandRunner, bundleRoot st
 			execErr = fmt.Errorf("render spec template: %w", renderErr)
 			break
 		}
-		stepFiles, outputs, stepErr := runPrepareStep(ctx, runner, bundleRoot, step.Kind, rendered, opts)
+		inputVars := collectStepInputVarValues(step.Spec, wf.Vars)
+		stepFiles, outputs, stepErr := runPrepareRenderedStep(ctx, runner, bundleRoot, step, rendered, inputVars, opts)
 		if stepErr == nil {
 			return prepareBatchResult{files: stepFiles, outputs: outputs}, nil
 		}
@@ -400,27 +407,4 @@ func renderSpec(spec map[string]any, wf *config.Workflow, runtimeVars map[string
 
 func renderSpecWithContext(spec map[string]any, wf *config.Workflow, runtimeVars map[string]any, ctxData map[string]any) (map[string]any, error) {
 	return workflowexec.RenderSpec(spec, wf, runtimeVars, ctxData)
-}
-
-func listRelativeFiles(root string) ([]string, error) {
-	results := []string{}
-	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-		rel, err := filepath.Rel(root, path)
-		if err != nil {
-			return err
-		}
-		results = append(results, filepath.ToSlash(rel))
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	sort.Strings(results)
-	return results, nil
 }

@@ -1,15 +1,18 @@
 package prepare
 
 import (
+	"archive/tar"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -139,6 +142,7 @@ func TestRun_NoPrepareSteps(t *testing.T) {
 }
 
 func TestRun_PrepareParallelGroupRunsContainerDownloadsConcurrently(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	bundle := t.TempDir()
 	r := &concurrencyRunner{delegate: &fakeRunner{}}
 	wf := &config.Workflow{
@@ -318,6 +322,7 @@ func TestRun_PackagesContainerRuntimeMissing(t *testing.T) {
 }
 
 func TestRun_PackagesContainerNoArtifact(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	bundle := t.TempDir()
 
 	wf := &config.Workflow{
@@ -351,6 +356,7 @@ func TestRun_PackagesContainerNoArtifact(t *testing.T) {
 }
 
 func TestRun_DownloadPackageUsesOutputDir(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	bundle := t.TempDir()
 	wf := &config.Workflow{
 		Version: "v1",
@@ -372,6 +378,77 @@ func TestRun_DownloadPackageUsesOutputDir(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(bundle, "packages", "custom", "containerd.txt")); err != nil {
 		t.Fatalf("expected package artifact in custom dir: %v", err)
+	}
+}
+
+func TestRun_DownloadPackageReusesExportedArtifactCache(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	bundle := t.TempDir()
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "prepare",
+			Steps: []config.Step{{
+				ID:   "pkg-cache",
+				Kind: "DownloadPackage",
+				Spec: map[string]any{
+					"packages": []any{"containerd"},
+					"backend":  map[string]any{"mode": "container", "runtime": "docker", "image": "ubuntu:22.04"},
+				},
+			}},
+		}},
+	}
+	if err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, CommandRunner: &fakeRunner{}}); err != nil {
+		t.Fatalf("initial run failed: %v", err)
+	}
+	if err := os.RemoveAll(filepath.Join(bundle, "packages")); err != nil {
+		t.Fatalf("remove bundle packages: %v", err)
+	}
+	if err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, CommandRunner: &noArtifactRunner{}}); err != nil {
+		t.Fatalf("expected exported cache reuse, got %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(bundle, "packages", "mock-package.deb")); err != nil {
+		t.Fatalf("expected package restored from exported cache: %v", err)
+	}
+	cacheRoot := filepath.Join(home, ".cache", "deck", "artifacts", "package")
+	if _, err := os.Stat(cacheRoot); err != nil {
+		t.Fatalf("expected exported package cache root: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".cache", "deck", "packages")); !os.IsNotExist(err) {
+		t.Fatalf("expected old package-manager cache path to stay unused, got %v", err)
+	}
+}
+
+func TestRun_DownloadPackageExportFailureLeavesNoBundleOutput(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	bundle := t.TempDir()
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "prepare",
+			Steps: []config.Step{{
+				ID:   "pkg-export-fail",
+				Kind: "DownloadPackage",
+				Spec: map[string]any{
+					"packages": []any{"containerd"},
+					"backend":  map[string]any{"mode": "container", "runtime": "docker", "image": "ubuntu:22.04"},
+				},
+			}},
+		}},
+	}
+	err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, CommandRunner: &fakeRunner{failExport: true}})
+	if err == nil {
+		t.Fatalf("expected export failure")
+	}
+	if _, statErr := os.Stat(filepath.Join(bundle, "packages")); !os.IsNotExist(statErr) {
+		t.Fatalf("expected no published bundle output after export failure, got %v", statErr)
+	}
+	cacheRoot := filepath.Join(home, ".cache", "deck", "artifacts", "package")
+	entries, readErr := os.ReadDir(cacheRoot)
+	if readErr == nil && len(entries) > 0 {
+		t.Fatalf("expected no published cache entries after export failure")
 	}
 }
 
@@ -684,6 +761,7 @@ func TestRun_WhenAndRegisterSemantics(t *testing.T) {
 
 func TestRun_RetrySemantics(t *testing.T) {
 	t.Run("retry succeeds on second attempt", func(t *testing.T) {
+		t.Setenv("HOME", t.TempDir())
 		bundle := t.TempDir()
 		runner := &failOnceRunner{}
 		wf := &config.Workflow{
@@ -709,8 +787,8 @@ func TestRun_RetrySemantics(t *testing.T) {
 		if err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, CommandRunner: runner}); err != nil {
 			t.Fatalf("expected retry success, got %v", err)
 		}
-		if runner.calls != 2 {
-			t.Fatalf("expected 2 attempts, got %d", runner.calls)
+		if runner.attempts != 2 {
+			t.Fatalf("expected 2 attempts, got %d", runner.attempts)
 		}
 	})
 
@@ -930,6 +1008,7 @@ func TestRun_CheckHostStep(t *testing.T) {
 }
 
 func TestRun_PackagesKubernetesSetRepoModeAptFlatGeneratesMetadata(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	bundle := t.TempDir()
 	r := &fakeRunner{}
 
@@ -975,6 +1054,7 @@ func TestRun_PackagesKubernetesSetRepoModeAptFlatGeneratesMetadata(t *testing.T)
 }
 
 func TestRun_PackagesKubernetesSetRepoModeYumGeneratesRepodata(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	bundle := t.TempDir()
 	r := &fakeRunner{}
 
@@ -1013,7 +1093,11 @@ func TestRun_PackagesKubernetesSetRepoModeYumGeneratesRepodata(t *testing.T) {
 	}
 }
 
-type fakeRunner struct{}
+type fakeRunner struct {
+	mu                sync.Mutex
+	containerPayloads map[string]map[string][]byte
+	failExport        bool
+}
 
 type concurrencyRunner struct {
 	delegate  CommandRunner
@@ -1023,7 +1107,8 @@ type concurrencyRunner struct {
 }
 
 type failOnceRunner struct {
-	calls int
+	attempts int
+	delegate *fakeRunner
 }
 
 type noRuntimeRunner struct{}
@@ -1036,12 +1121,27 @@ func (f *failOnceRunner) LookPath(file string) (string, error) {
 }
 
 func (f *failOnceRunner) Run(ctx context.Context, name string, args ...string) error {
-	f.calls++
-	if f.calls == 1 {
-		return fmt.Errorf("intentional first failure")
+	fr := f.delegate
+	if fr == nil {
+		fr = &fakeRunner{}
+		f.delegate = fr
 	}
-	fr := &fakeRunner{}
 	return fr.Run(ctx, name, args...)
+}
+
+func (f *failOnceRunner) RunWithIO(ctx context.Context, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
+	if (name == "docker" || name == "podman") && len(args) > 0 && args[0] == "start" {
+		f.attempts++
+		if f.attempts == 1 {
+			return fmt.Errorf("intentional first failure")
+		}
+	}
+	fr := f.delegate
+	if fr == nil {
+		fr = &fakeRunner{}
+		f.delegate = fr
+	}
+	return fr.RunWithIO(ctx, stdout, stderr, name, args...)
 }
 
 func (n *noRuntimeRunner) LookPath(_ string) (string, error) {
@@ -1049,6 +1149,10 @@ func (n *noRuntimeRunner) LookPath(_ string) (string, error) {
 }
 
 func (n *noRuntimeRunner) Run(_ context.Context, _ string, _ ...string) error {
+	return nil
+}
+
+func (n *noRuntimeRunner) RunWithIO(_ context.Context, _ io.Writer, _ io.Writer, _ string, _ ...string) error {
 	return nil
 }
 
@@ -1065,6 +1169,13 @@ func (n *noArtifactRunner) Run(_ context.Context, _ string, _ ...string) error {
 	return nil
 }
 
+func (n *noArtifactRunner) RunWithIO(_ context.Context, stdout io.Writer, _ io.Writer, name string, args ...string) error {
+	if (name == "docker" || name == "podman") && len(args) > 0 && args[0] == "create" {
+		_, _ = io.WriteString(stdout, "empty-container\n")
+	}
+	return nil
+}
+
 func (f *fakeRunner) LookPath(file string) (string, error) {
 	if file == "docker" || file == "podman" {
 		return "/usr/bin/" + file, nil
@@ -1077,6 +1188,10 @@ func (c *concurrencyRunner) LookPath(file string) (string, error) {
 }
 
 func (c *concurrencyRunner) Run(ctx context.Context, name string, args ...string) error {
+	return c.delegate.Run(ctx, name, args...)
+}
+
+func (c *concurrencyRunner) RunWithIO(ctx context.Context, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
 	if name == "docker" || name == "podman" {
 		c.mu.Lock()
 		c.active++
@@ -1091,11 +1206,60 @@ func (c *concurrencyRunner) Run(ctx context.Context, name string, args ...string
 		}()
 		time.Sleep(100 * time.Millisecond)
 	}
-	return c.delegate.Run(ctx, name, args...)
+	return c.delegate.RunWithIO(ctx, stdout, stderr, name, args...)
 }
 
 func (f *fakeRunner) Run(_ context.Context, name string, args ...string) error {
+	return f.RunWithIO(context.Background(), nil, nil, name, args...)
+}
+
+func (f *fakeRunner) RunWithIO(_ context.Context, stdout io.Writer, _ io.Writer, name string, args ...string) error {
 	if name != "docker" && name != "podman" {
+		return nil
+	}
+	if f.containerPayloads == nil {
+		f.mu.Lock()
+		if f.containerPayloads == nil {
+			f.containerPayloads = map[string]map[string][]byte{}
+		}
+		f.mu.Unlock()
+	}
+	if len(args) == 0 {
+		return nil
+	}
+	switch args[0] {
+	case "create":
+		f.mu.Lock()
+		containerID := fmt.Sprintf("container-%d", len(f.containerPayloads)+1)
+		f.containerPayloads[containerID] = fakePackageContainerPayload(args)
+		f.mu.Unlock()
+		if stdout != nil {
+			_, _ = io.WriteString(stdout, containerID+"\n")
+		}
+		return nil
+	case "start":
+		return nil
+	case "cp":
+		if f.failExport {
+			return fmt.Errorf("intentional export failure")
+		}
+		if len(args) < 3 {
+			return fmt.Errorf("cp requires src and dst")
+		}
+		containerID := strings.SplitN(args[1], ":", 2)[0]
+		f.mu.Lock()
+		payload := f.containerPayloads[containerID]
+		f.mu.Unlock()
+		if stdout == nil {
+			return nil
+		}
+		return writeFakeTar(stdout, payload)
+	case "rm":
+		if len(args) > 1 {
+			f.mu.Lock()
+			delete(f.containerPayloads, args[len(args)-1])
+			f.mu.Unlock()
+		}
 		return nil
 	}
 
@@ -1182,6 +1346,63 @@ func (f *fakeRunner) Run(_ context.Context, name string, args ...string) error {
 		}
 	}
 
+	return nil
+}
+
+func fakePackageContainerPayload(args []string) map[string][]byte {
+	payload := map[string][]byte{}
+	joined := strings.Join(args, " ")
+	if strings.Contains(joined, "apt-ftparchive") {
+		payload["pkgs/mock-package.deb"] = []byte("pkg")
+		payload["Packages"] = []byte("Packages")
+		payload["Packages.gz"] = []byte("Packages.gz")
+		payload["Release"] = []byte("Release")
+		if strings.Contains(joined, "apt-k8s") {
+			payload["pkgs/kubelet.deb"] = []byte("pkg")
+			payload["pkgs/kubeadm.deb"] = []byte("pkg")
+			payload["pkgs/kubectl.deb"] = []byte("pkg")
+			delete(payload, "pkgs/mock-package.deb")
+		}
+		return payload
+	}
+	if strings.Contains(joined, "createrepo_c") {
+		payload["mock-package.rpm"] = []byte("pkg")
+		payload["repodata/repomd.xml"] = []byte("repomd")
+		return payload
+	}
+	payload["mock-package.deb"] = []byte("pkg")
+	return payload
+}
+
+func writeFakeTar(w io.Writer, payload map[string][]byte) error {
+	tw := tar.NewWriter(w)
+	defer func() { _ = tw.Close() }()
+	keys := make([]string, 0, len(payload))
+	for key := range payload {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	seenDirs := map[string]bool{}
+	for _, key := range keys {
+		dir := filepath.Dir(key)
+		for dir != "." && dir != "" {
+			if seenDirs[dir] {
+				break
+			}
+			seenDirs[dir] = true
+			if err := tw.WriteHeader(&tar.Header{Name: filepath.ToSlash(dir), Typeflag: tar.TypeDir, Mode: 0o755}); err != nil {
+				return err
+			}
+			dir = filepath.Dir(dir)
+		}
+		content := payload[key]
+		if err := tw.WriteHeader(&tar.Header{Name: filepath.ToSlash(key), Typeflag: tar.TypeReg, Mode: 0o644, Size: int64(len(content))}); err != nil {
+			return err
+		}
+		if _, err := tw.Write(content); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

@@ -259,6 +259,8 @@ var toolMetadata = map[string]ToolMetadata{
 			"Keeping the same package list across `download` and `install` helps maintain offline parity.",
 			"Use `restrictToRepos` on the `InstallPackage` step to prevent the node's default online repos from being consulted during an offline apply.",
 			"When `repo` is set for `DownloadPackage`, deck expects `repo.type` and `distro.release` so it can build an apt-flat or yum-style repository layout.",
+			"Container-backed `DownloadPackage` exports completed artifacts into a host-owned cache and does not bind-mount apt/dnf package-manager cache directories.",
+			"Older releases may have left root-owned content under legacy package cache paths; clean those directories manually after upgrading if needed.",
 			"Without a container download backend, `download` currently writes placeholder package markers instead of resolving real packages.",
 		},
 	},
