@@ -43,12 +43,12 @@ spec:
 | `spec.fileAssertions` | `array<object>` | no | `` | `` | Optional file-content assertions evaluated on every poll attempt. | `[{path:/etc/containerd/config.toml,contains:[registry.k8s.io/pause:3.10]}]` |
 | `spec.initialDelay` | `string` | no | `` | `` | Optional delay before the first poll attempt. | `10s` |
 | `spec.interval` | `string` | no | `` | `` | Duration between poll attempts while waiting for cluster state to converge. | `5s` |
-| `spec.kubeSystem` | `object` | no | `` | `` |  | `{...}` |
+| `spec.kubeSystem` | `object` | no | `` | `` | Optional checks for `kube-system` pod readiness and optional pod state reports. | `{readyNames:[etcd-control-plane]}` |
 | `spec.kubeconfig` | `string` | no | `` | `` | Kubeconfig path used for kubectl-based checks. Defaults to `/etc/kubernetes/admin.conf`. | `/etc/kubernetes/admin.conf` |
-| `spec.nodes` | `object` | no | `` | `` |  | `{...}` |
-| `spec.reports` | `object` | no | `` | `` |  | `{...}` |
+| `spec.nodes` | `object` | no | `` | `` | Optional checks for cluster node count and readiness. | `{total:1,ready:1,controlPlaneReady:1}` |
+| `spec.reports` | `object` | no | `` | `` | Optional paths for writing node and cluster state reports during verification. | `{nodesPath:/tmp/deck/reports/bootstrap-nodes.txt}` |
 | `spec.timeout` | `string` | no | `` | `` | Maximum total duration to keep polling before the step fails. | `10m` |
-| `spec.versions` | `object` | no | `` | `` |  | `{...}` |
+| `spec.versions` | `object` | no | `` | `` | Optional checks for Kubernetes component versions and an optional version report. | `{server:v1.31.0,kubelet:v1.31.0}` |
 
 ### Nested Objects
 
