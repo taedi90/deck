@@ -257,6 +257,7 @@ Supported kinds:
 - `DownloadFile` writes bundle-relative outputs through `outputPath`
 - `DownloadImage` writes prepared image archives under `outputDir` or the default `images/` root
 - `DownloadPackage` writes prepared package content under `outputDir` or the default `packages/` root
+- container-backed `DownloadPackage` reuses a host-owned exported artifact cache after successful exports instead of bind-mounting apt/dnf package-manager cache directories
 - `workflows/prepare.yaml` is the fixed entrypoint for prepare workflows
 
 ## When to use Command

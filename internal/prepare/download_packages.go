@@ -2,8 +2,6 @@ package prepare
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -13,7 +11,6 @@ import (
 
 	"github.com/taedi90/deck/internal/filemode"
 	"github.com/taedi90/deck/internal/fsutil"
-	"github.com/taedi90/deck/internal/userdirs"
 )
 
 type packageCacheMeta struct {
@@ -21,10 +18,7 @@ type packageCacheMeta struct {
 	Files    []string `json:"files"`
 }
 
-type packageCacheMount struct {
-	host      string
-	container string
-}
+const containerOutputRoot = "/out"
 
 type rpmModuleSpec struct {
 	Name   string
@@ -78,7 +72,6 @@ func runDownloadPackage(ctx context.Context, runner CommandRunner, bundleRoot st
 			} else if reused {
 				return files, nil
 			}
-
 			files, err := runContainerPackageRepoBuild(ctx, runner, bundleRoot, repoRoot, family, repoType, generate, pkgsDir, spec, repo, packages, opts)
 			if err != nil {
 				return nil, err
@@ -132,16 +125,6 @@ func runContainerPackageRepoBuild(
 		return nil, fmt.Errorf("backend.image is required for container package download")
 	}
 
-	outAbs := filepath.Join(bundleRoot, filepath.FromSlash(repoRoot))
-	if opts.ForceRedownload {
-		if err := os.RemoveAll(outAbs); err != nil {
-			return nil, err
-		}
-	}
-	if err := filemode.EnsureDir(outAbs, filemode.PublishedArtifact); err != nil {
-		return nil, err
-	}
-
 	modules, err := parseRPMModules(repo)
 	if err != nil {
 		return nil, err
@@ -150,24 +133,7 @@ func runContainerPackageRepoBuild(
 	if err != nil {
 		return nil, err
 	}
-	cacheKey, err := packageDownloadCacheKey(spec, family, repoRoot)
-	if err != nil {
-		return nil, err
-	}
-	mounts, err := prepareRefreshRepositoryMounts(family, cacheKey)
-	if err != nil {
-		return nil, err
-	}
-	if err := runDownloadPackageContainer(ctx, runner, runtimeSel, image, outAbs, cmdScript, mounts); err != nil {
-		return nil, fmt.Errorf("container package repo build failed: %w", err)
-	}
-
-	after, _ := listRelativeFiles(outAbs)
-	files := packageFilesFromDirListing(repoRoot, after)
-	if len(files) == 0 {
-		return nil, fmt.Errorf("%s: no package artifacts generated in %s", errCodePrepareArtifactEmpty, repoRoot)
-	}
-	return files, nil
+	return runContainerDownloadPackageToCache(ctx, runner, runtimeSel, image, bundleRoot, repoRoot, spec, packages, cmdScript, opts)
 }
 
 func runContainerDownloadPackageAll(ctx context.Context, runner CommandRunner, bundleRoot, dir string, spec map[string]any, repo map[string]any, packages []string, opts RunOptions) ([]string, error) {
@@ -188,16 +154,6 @@ func runContainerDownloadPackageAll(ctx context.Context, runner CommandRunner, b
 		family = "debian"
 	}
 
-	outAbs := filepath.Join(bundleRoot, filepath.FromSlash(dir))
-	if opts.ForceRedownload {
-		if err := os.RemoveAll(outAbs); err != nil {
-			return nil, err
-		}
-	}
-	if err := filemode.EnsureDir(outAbs, filemode.PublishedArtifact); err != nil {
-		return nil, err
-	}
-
 	modules, err := parseRPMModules(repo)
 	if err != nil {
 		return nil, err
@@ -206,24 +162,7 @@ func runContainerDownloadPackageAll(ctx context.Context, runner CommandRunner, b
 	if err != nil {
 		return nil, err
 	}
-	cacheKey, err := packageDownloadCacheKey(spec, family, dir)
-	if err != nil {
-		return nil, err
-	}
-	mounts, err := prepareRefreshRepositoryMounts(family, cacheKey)
-	if err != nil {
-		return nil, err
-	}
-	if err := runDownloadPackageContainer(ctx, runner, runtimeSel, image, outAbs, cmdScript, mounts); err != nil {
-		return nil, fmt.Errorf("container package download failed: %w", err)
-	}
-
-	after, _ := listRelativeFiles(outAbs)
-	files := packageFilesFromDirListing(dir, after)
-	if len(files) == 0 {
-		return nil, fmt.Errorf("%s: no package artifacts generated in %s", errCodePrepareArtifactEmpty, dir)
-	}
-	return files, nil
+	return runContainerDownloadPackageToCache(ctx, runner, runtimeSel, image, bundleRoot, dir, spec, packages, cmdScript, opts)
 }
 
 func buildDownloadPackageAllScript(family string, packages []string, modules []rpmModuleSpec) (string, error) {
@@ -257,8 +196,10 @@ func buildDownloadPackageAllScript(family string, packages []string, modules []r
 	}
 
 	return fmt.Sprintf(
-		"set -euo pipefail; export DEBIAN_FRONTEND=noninteractive; mkdir -p /out; apt-get update -y >/dev/null; apt-get install -y --download-only --no-install-recommends %s >/dev/null; cp -a /var/cache/apt/archives/*.deb /out/ 2>/dev/null || true",
+		"set -euo pipefail; export DEBIAN_FRONTEND=noninteractive; mkdir -p %s; apt-get update -y >/dev/null; apt-get install -y --download-only --no-install-recommends %s >/dev/null; cp -a /var/cache/apt/archives/*.deb %s/ 2>/dev/null || true",
+		shellEscape(containerOutputRoot),
 		pkgList,
+		shellEscape(containerOutputRoot),
 	), nil
 }
 
@@ -308,11 +249,14 @@ func buildPackageRepoBuildScript(family string, packages []string, modules []rpm
 		safePkgsDir = "pkgs"
 	}
 	return fmt.Sprintf(
-		"set -euo pipefail; export DEBIAN_FRONTEND=noninteractive; mkdir -p /out/%s; apt-get update -y >/dev/null; apt-get install -y apt-utils gzip >/dev/null; apt-get install -y --download-only --no-install-recommends %s >/dev/null; cp -a /var/cache/apt/archives/*.deb /out/%s/ 2>/dev/null || true; if %s; then cd /out; apt-ftparchive packages %s > Packages; gzip -c Packages > Packages.gz; apt-ftparchive release . > Release; fi",
+		"set -euo pipefail; export DEBIAN_FRONTEND=noninteractive; mkdir -p %s/%s; apt-get update -y >/dev/null; apt-get install -y apt-utils gzip >/dev/null; apt-get install -y --download-only --no-install-recommends %s >/dev/null; cp -a /var/cache/apt/archives/*.deb %s/%s/ 2>/dev/null || true; if %s; then cd %s; apt-ftparchive packages %s > Packages; gzip -c Packages > Packages.gz; apt-ftparchive release . > Release; fi",
+		shellEscape(containerOutputRoot),
 		shellEscape(safePkgsDir),
 		pkgList,
+		shellEscape(containerOutputRoot),
 		shellEscape(safePkgsDir),
 		gen,
+		shellEscape(containerOutputRoot),
 		shellEscape(safePkgsDir),
 	), nil
 }
@@ -363,87 +307,54 @@ func buildRPMModuleEnableCommand(modules []rpmModuleSpec) (string, error) {
 	return "dnf -y module enable " + strings.Join(parts, " ") + " >/dev/null 2>&1", nil
 }
 
-func packageDownloadCacheKey(spec map[string]any, family string, artifactRoot string) (string, error) {
-	repo := mapValue(spec, "repo")
-	modules, err := parseRPMModules(repo)
-	if err != nil {
-		return "", err
-	}
-	normalizedRepo := map[string]any{}
-	for key, value := range repo {
-		if key == "modules" {
-			continue
-		}
-		normalizedRepo[key] = value
-	}
-	if len(modules) > 0 {
-		normalizedModules := make([]map[string]any, 0, len(modules))
-		for _, module := range modules {
-			normalizedModules = append(normalizedModules, map[string]any{"name": module.Name, "stream": module.Stream})
-		}
-		normalizedRepo["modules"] = normalizedModules
-	}
-	payload := map[string]any{
-		"artifactRoot": filepath.ToSlash(strings.TrimSpace(artifactRoot)),
-		"backend":      mapValue(spec, "backend"),
-		"distro":       mapValue(spec, "distro"),
-		"family":       strings.TrimSpace(family),
-		"repo":         normalizedRepo,
-	}
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return "", fmt.Errorf("encode package cache key: %w", err)
-	}
-	sum := sha256.Sum256(raw)
-	return hex.EncodeToString(sum[:]), nil
-}
-
-func prepareRefreshRepositoryMounts(family string, cacheKey string) ([]packageCacheMount, error) {
-	cacheRoot, err := userdirs.CacheRoot()
+func runContainerDownloadPackageToCache(ctx context.Context, runner CommandRunner, runtimeSel, image, bundleRoot, rootRel string, spec map[string]any, packages []string, script string, opts RunOptions) ([]string, error) {
+	cacheKey, err := exportedPackageCacheKey(spec, rootRel)
 	if err != nil {
 		return nil, err
 	}
-	root := filepath.Join(cacheRoot, "packages", cacheKey)
-	if _, err := os.Stat(root); err != nil {
-		if !os.IsNotExist(err) {
-			return nil, fmt.Errorf("stat package cache root: %w", err)
-		}
-		legacyPath, ok, legacyErr := resolveLegacyRefreshRepositoryRoot(cacheKey)
-		if legacyErr != nil {
-			return nil, legacyErr
-		}
-		if ok {
-			root = legacyPath
-		}
+	cachePath, err := exportedPackageCachePath(cacheKey)
+	if err != nil {
+		return nil, err
 	}
-	if strings.TrimSpace(family) == "rhel" {
-		dnfRoot := filepath.Join(root, "dnf")
-		if err := filemode.EnsureDir(dnfRoot, filemode.PublishedArtifact); err != nil {
+	if files, reused, err := tryReuseExportedPackageArtifact(bundleRoot, rootRel, cachePath, packages, opts); err != nil {
+		return nil, err
+	} else if reused {
+		if err := writePackageArtifactMeta(bundleRoot, rootRel, packages, files); err != nil {
 			return nil, err
 		}
-		return []packageCacheMount{{host: dnfRoot, container: "/var/cache/dnf"}}, nil
+		return files, nil
 	}
-
-	archives := filepath.Join(root, "apt", "archives")
-	lists := filepath.Join(root, "apt", "lists")
-	for _, dir := range []string{archives, filepath.Join(archives, "partial"), lists, filepath.Join(lists, "partial")} {
-		if err := filemode.EnsureDir(dir, filemode.PublishedArtifact); err != nil {
-			return nil, err
-		}
+	exported, err := runPackageContainerWithExport(ctx, runner, runtimeSel, image, script)
+	if err != nil {
+		return nil, err
 	}
-	return []packageCacheMount{
-		{host: archives, container: "/var/cache/apt/archives"},
-		{host: lists, container: "/var/lib/apt/lists"},
-	}, nil
-}
-
-func runDownloadPackageContainer(ctx context.Context, runner CommandRunner, runtimeSel, image, outAbs, script string, mounts []packageCacheMount) error {
-	runArgs := []string{"run", "--rm", "-v", outAbs + ":/out"}
-	for _, mount := range mounts {
-		runArgs = append(runArgs, "-v", mount.host+":"+mount.container)
+	cacheStage := buildExportedPackageCacheStage(cachePath)
+	relFiles, err := exportContainerTarToStage(exported, cacheStage)
+	if err != nil {
+		_ = os.RemoveAll(cacheStage)
+		return nil, err
 	}
-	runArgs = append(runArgs, image, "bash", "-lc", script)
-	return runner.Run(ctx, runtimeSel, runArgs...)
+	if len(relFiles) == 0 {
+		_ = os.RemoveAll(cacheStage)
+		return nil, fmt.Errorf("%s: no package artifacts generated in %s", errCodePrepareArtifactEmpty, rootRel)
+	}
+	meta := exportedPackageCacheMeta{RootRel: rootRel, Packages: packages, Files: relFiles}
+	if err := saveExportedPackageCacheMeta(cacheStage, meta); err != nil {
+		_ = os.RemoveAll(cacheStage)
+		return nil, err
+	}
+	if err := replacePublishedArtifactDir(cacheStage, cachePath); err != nil {
+		_ = os.RemoveAll(cacheStage)
+		return nil, err
+	}
+	if err := publishCachedPackageArtifact(bundleRoot, rootRel, cachePath, relFiles); err != nil {
+		return nil, err
+	}
+	files := packageFilesFromDirListing(rootRel, relFiles)
+	if err := writePackageArtifactMeta(bundleRoot, rootRel, packages, files); err != nil {
+		return nil, err
+	}
+	return files, nil
 }
 
 func writePackagePlaceholders(bundleRoot, dir string, packages []string) []string {

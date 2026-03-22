@@ -7,22 +7,7 @@ import (
 	"strings"
 
 	"github.com/taedi90/deck/internal/fsutil"
-	"github.com/taedi90/deck/internal/userdirs"
 )
-
-func resolveLegacyRefreshRepositoryRoot(cacheKey string) (string, bool, error) {
-	legacyRoot, err := userdirs.LegacyCacheRoot()
-	if err != nil {
-		return "", false, err
-	}
-	legacyPath := filepath.Join(legacyRoot, "packages", strings.TrimSpace(cacheKey))
-	if _, err := os.Stat(legacyPath); err == nil {
-		return legacyPath, true, nil
-	} else if err != nil && !os.IsNotExist(err) {
-		return "", false, fmt.Errorf("stat legacy package cache root: %w", err)
-	}
-	return "", false, nil
-}
 
 func loadLegacyPackCacheState(path string) ([]byte, bool, error) {
 	base := filepath.Base(path)
