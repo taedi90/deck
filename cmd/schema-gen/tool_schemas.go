@@ -97,14 +97,6 @@ func toolSchemaDefinitions() (map[string]map[string]any, error) {
 		}
 		generated[def.Step.SchemaFile] = schema
 	}
-	usedGenerators := map[string]bool{}
-	for _, def := range defs {
-		name := def.Schema.GeneratorName
-		if name == "" {
-			name = def.Step.Kind
-		}
-		usedGenerators[name] = true
-	}
 	return generated, nil
 }
 

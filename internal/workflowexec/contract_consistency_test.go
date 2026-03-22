@@ -46,9 +46,6 @@ func TestStepRegistryDelegatesToWorkflowContract(t *testing.T) {
 		if builtIn.Schema.GeneratorName == "" {
 			t.Fatalf("missing schema generator name for %s", want.Kind)
 		}
-		if builtIn.Schema.SpecType != nil && builtIn.Schema.Patch == nil {
-			t.Fatalf("schema patch hook should be present when spec type is registered for %s", want.Kind)
-		}
 	}
 }
 

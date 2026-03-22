@@ -21,9 +21,6 @@ func TestToolSchemaGeneratorsCoverStepDefinitions(t *testing.T) {
 		if def.Schema.Patch == nil {
 			t.Fatalf("missing schema patch hook for %s", def.Step.Kind)
 		}
-		if def.Schema.SpecType != nil && def.Schema.Patch == nil {
-			t.Fatalf("schema patch hook should be present when spec type is registered for %s", def.Step.Kind)
-		}
 	}
 }
 
