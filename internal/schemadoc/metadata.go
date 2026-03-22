@@ -64,14 +64,21 @@ var toolMetadata = map[string]ToolMetadata{
 	},
 
 	"WriteContainerdConfig": {
-		Example: "kind: WriteContainerdConfig\nspec:\n  path: /etc/containerd/config.toml\n  systemdCgroup: true\n  createDefault: true\n",
+		Example: "kind: WriteContainerdConfig\nspec:\n  path: /etc/containerd/config.toml\n  createDefault: true\n  versionPolicy: preserve\n  rawSettings:\n    - op: set\n      rawPath: plugins.\"io.containerd.grpc.v1.cri\".registry.config_path\n      value: /etc/containerd/certs.d\n    - op: set\n      key: runtime.runtimes.runc.options.SystemdCgroup\n      value: true\n",
 		FieldDocs: map[string]FieldDoc{
-			"spec.path":          {Description: "Destination path for the generated `config.toml`. Defaults to `/etc/containerd/config.toml`.", Example: "/etc/containerd/config.toml"},
-			"spec.systemdCgroup": {Description: "Enable systemd cgroup driver in the generated config. Required for Kubernetes nodes managed by systemd.", Example: "true"},
-			"spec.createDefault": {Description: "Write a minimal default config when no explicit config exists. Defaults to `true`.", Example: "true"},
+			"spec.path":                  {Description: "Destination path for the generated `config.toml`. Defaults to `/etc/containerd/config.toml`.", Example: "/etc/containerd/config.toml"},
+			"spec.createDefault":         {Description: "Generate a base config with `containerd config default` when the file does not exist. Defaults to `true`.", Example: "true"},
+			"spec.versionPolicy":         {Description: "How the step chooses or enforces the containerd config version. Use `preserve` to keep the existing version, or `require-v1`, `require-v2`, `require-v3` to pin it.", Example: "require-v3"},
+			"spec.rawSettings":           {Description: "Ordered containerd config edits. Prefer `rawPath` when you need direct TOML path control, or `key` when you want deck to map a version-independent logical key across containerd v1, v2, and v3.", Example: "[{op:set,rawPath:plugins.\"io.containerd.grpc.v1.cri\".registry.config_path,value:/etc/containerd/certs.d}]"},
+			"spec.rawSettings[].op":      {Description: "Edit operation. Use `set` for scalar updates, `delete` to remove a key, `appendUnique` to extend a string list without duplicates, or `replaceList` to replace a string list entirely.", Example: "set"},
+			"spec.rawSettings[].key":     {Description: "Optional logical containerd config key. Examples include `registry.configPath`, `image.snapshotter`, and `runtime.runtimes.runc.options.SystemdCgroup`.", Example: "runtime.runtimes.runc.options.SystemdCgroup"},
+			"spec.rawSettings[].rawPath": {Description: "Optional direct TOML path for advanced use cases. Use quoted segments when a key contains dots, for example `plugins.\"io.containerd.grpc.v1.cri\".registry.config_path`.", Example: "plugins.\"io.containerd.grpc.v1.cri\".registry.config_path"},
+			"spec.rawSettings[].value":   {Description: "Typed value for the edit. Supported value types are string, boolean, integer, object, and string list depending on the target path and operation.", Example: "true"},
 		},
 		Notes: []string{
 			"Use `WriteContainerdConfig` for the main `config.toml` only.",
+			"Prefer `rawSettings[].rawPath` when you need full control over the exact TOML location.",
+			"Use `rawSettings[].key` when you want deck to map a version-independent logical key for containerd config versions 1, 2, and 3.",
 			"Use `WriteContainerdRegistryHosts` separately when mirrors or trust policy need per-registry `hosts.toml` files.",
 		},
 	},

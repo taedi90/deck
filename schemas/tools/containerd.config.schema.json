@@ -40,10 +40,6 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
-        "configPath": {
-          "minLength": 1,
-          "type": "string"
-        },
         "createDefault": {
           "default": true,
           "type": "boolean"
@@ -52,8 +48,81 @@
           "minLength": 1,
           "type": "string"
         },
-        "systemdCgroup": {
-          "type": "boolean"
+        "rawSettings": {
+          "items": {
+            "additionalProperties": false,
+            "oneOf": [
+              {
+                "required": [
+                  "key"
+                ]
+              },
+              {
+                "required": [
+                  "rawPath"
+                ]
+              }
+            ],
+            "properties": {
+              "key": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "op": {
+                "enum": [
+                  "set",
+                  "delete",
+                  "appendUnique",
+                  "replaceList"
+                ],
+                "type": "string"
+              },
+              "rawPath": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "value": {
+                "oneOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "items": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  {
+                    "type": "object"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "op"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "versionPolicy": {
+          "enum": [
+            "preserve",
+            "require-v1",
+            "require-v2",
+            "require-v3"
+          ],
+          "type": "string"
         }
       },
       "type": "object"

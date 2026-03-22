@@ -2049,8 +2049,13 @@ steps:
     kind: WriteContainerdConfig
     spec:
       path: /etc/containerd/config.toml
-      configPath: /etc/containerd/certs.d
-      systemdCgroup: true
+      rawSettings:
+        - op: set
+          key: registry.configPath
+          value: /etc/containerd/certs.d
+        - op: set
+          key: runtime.runtimes.runc.options.SystemdCgroup
+          value: true
   - id: containerd-registry-hosts
     kind: WriteContainerdRegistryHosts
     spec:

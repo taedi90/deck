@@ -3701,12 +3701,15 @@ func TestWriteContainerdConfigStep(t *testing.T) {
 	t.Run("updates existing config.toml fields", func(t *testing.T) {
 		dir := t.TempDir()
 		target := filepath.Join(dir, "config.toml")
-		initial := "config_path = \"\"\n            SystemdCgroup = false\n"
+		initial := "version = 2\n[plugins.\"io.containerd.grpc.v1.cri\".registry]\n  config_path = \"\"\n[plugins.\"io.containerd.grpc.v1.cri\".containerd.runtimes.runc.options]\n  SystemdCgroup = false\n"
 		if err := os.WriteFile(target, []byte(initial), 0o644); err != nil {
 			t.Fatalf("write initial config: %v", err)
 		}
 
-		spec := map[string]any{"path": target, "configPath": "/etc/containerd/certs.d", "systemdCgroup": true}
+		spec := map[string]any{"path": target, "rawSettings": []any{
+			map[string]any{"op": "set", "key": "registry.configPath", "value": "/etc/containerd/certs.d"},
+			map[string]any{"op": "set", "key": "runtime.runtimes.runc.options.SystemdCgroup", "value": true},
+		}}
 		if err := runWriteContainerdConfig(context.Background(), spec); err != nil {
 			t.Fatalf("runWriteContainerdConfig failed: %v", err)
 		}
@@ -3716,7 +3719,7 @@ func TestWriteContainerdConfigStep(t *testing.T) {
 			t.Fatalf("read config: %v", err)
 		}
 		got := string(raw)
-		if !strings.Contains(got, "config_path = \"/etc/containerd/certs.d\"") || !strings.Contains(got, "SystemdCgroup = true") {
+		if !strings.Contains(got, "/etc/containerd/certs.d") || !strings.Contains(got, "SystemdCgroup = true") {
 			t.Fatalf("unexpected config content: %q", got)
 		}
 	})

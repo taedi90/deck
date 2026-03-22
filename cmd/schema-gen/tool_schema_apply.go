@@ -26,9 +26,35 @@ func patchWriteContainerdConfigToolSchema(root map[string]any) {
 	delete(propertyMap(spec), "timeout")
 	properties := propertyMap(spec)
 	setMap(properties, "path", minLenStringSchema())
-	setMap(properties, "configPath", minLenStringSchema())
-	setMap(properties, "systemdCgroup", map[string]any{"type": "boolean"})
 	setMap(properties, "createDefault", map[string]any{"type": "boolean", "default": true})
+	setMap(properties, "versionPolicy", enumStringSchema("preserve", "require-v1", "require-v2", "require-v3"))
+	setMap(properties, "rawSettings", map[string]any{
+		"type":     "array",
+		"minItems": 1,
+		"items": map[string]any{
+			"type":                 "object",
+			"additionalProperties": false,
+			"required":             []any{"op"},
+			"oneOf": []any{
+				map[string]any{"required": []any{"key"}},
+				map[string]any{"required": []any{"rawPath"}},
+			},
+			"properties": map[string]any{
+				"op":      enumStringSchema("set", "delete", "appendUnique", "replaceList"),
+				"key":     minLenStringSchema(),
+				"rawPath": minLenStringSchema(),
+				"value": map[string]any{
+					"oneOf": []any{
+						minLenStringSchema(),
+						map[string]any{"type": "boolean"},
+						map[string]any{"type": "integer"},
+						stringArraySchema(1, true),
+						map[string]any{"type": "object"},
+					},
+				},
+			},
+		},
+	})
 	setMap(props, "spec", spec)
 }
 

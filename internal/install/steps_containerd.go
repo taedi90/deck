@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
+	"github.com/taedi90/deck/internal/containerdconfig"
 	"github.com/taedi90/deck/internal/filemode"
 	"github.com/taedi90/deck/internal/fsutil"
 	"github.com/taedi90/deck/internal/stepspec"
@@ -48,34 +48,12 @@ func runWriteContainerdConfig(ctx context.Context, spec map[string]any) error {
 		}
 	}
 
-	updated := string(content)
-	if configPath := strings.TrimSpace(decoded.ConfigPath); configPath != "" {
-		target := fmt.Sprintf("config_path = %q", configPath)
-		re := regexp.MustCompile(`(?m)^\s*config_path\s*=\s*"[^"]*"\s*$`)
-		if re.MatchString(updated) {
-			updated = re.ReplaceAllString(updated, target)
-		} else {
-			if !strings.HasSuffix(updated, "\n") && updated != "" {
-				updated += "\n"
-			}
-			updated += target + "\n"
-		}
+	updated, err := containerdconfig.Apply(content, decoded.RawSettings, decoded.VersionPolicy)
+	if err != nil {
+		return err
 	}
 
-	if decoded.SystemdCgroup != nil {
-		target := fmt.Sprintf("            SystemdCgroup = %t", *decoded.SystemdCgroup)
-		re := regexp.MustCompile(`(?m)^\s*SystemdCgroup\s*=\s*(true|false)\s*$`)
-		if re.MatchString(updated) {
-			updated = re.ReplaceAllString(updated, target)
-		} else {
-			if !strings.HasSuffix(updated, "\n") && updated != "" {
-				updated += "\n"
-			}
-			updated += target + "\n"
-		}
-	}
-
-	if err := writeFileIfChanged(path, []byte(updated), 0o644); err != nil {
+	if err := writeFileIfChanged(path, updated, 0o644); err != nil {
 		return err
 	}
 

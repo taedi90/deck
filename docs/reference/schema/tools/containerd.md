@@ -34,22 +34,31 @@ Use this when the node runtime needs a managed containerd config.toml.
 kind: WriteContainerdConfig
 spec:
   path: /etc/containerd/config.toml
-  systemdCgroup: true
   createDefault: true
+  versionPolicy: preserve
+  rawSettings:
+    - op: set
+      rawPath: plugins."io.containerd.grpc.v1.cri".registry.config_path
+      value: /etc/containerd/certs.d
+    - op: set
+      key: runtime.runtimes.runc.options.SystemdCgroup
+      value: true
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.configPath` | `string` | no | `` | `` |  | `example` |
-| `spec.createDefault` | `boolean` | no | `true` | `` | Write a minimal default config when no explicit config exists. Defaults to `true`. | `true` |
+| `spec.createDefault` | `boolean` | no | `true` | `` | Generate a base config with `containerd config default` when the file does not exist. Defaults to `true`. | `true` |
 | `spec.path` | `string` | no | `` | `` | Destination path for the generated `config.toml`. Defaults to `/etc/containerd/config.toml`. | `/etc/containerd/config.toml` |
-| `spec.systemdCgroup` | `boolean` | no | `` | `` | Enable systemd cgroup driver in the generated config. Required for Kubernetes nodes managed by systemd. | `true` |
+| `spec.rawSettings` | `array<object>` | no | `` | `` | Ordered containerd config edits. Prefer `rawPath` when you need direct TOML path control, or `key` when you want deck to map a version-independent logical key across containerd v1, v2, and v3. | `[{op:set,rawPath:plugins."io.containerd.grpc.v1.cri".registry.config_path,value:/etc/containerd/certs.d}]` |
+| `spec.versionPolicy` | `string` | no | `` | `preserve, require-v1, require-v2, require-v3` | How the step chooses or enforces the containerd config version. Use `preserve` to keep the existing version, or `require-v1`, `require-v2`, `require-v3` to pin it. | `require-v3` |
 
 ### Notes
 
 - Use `WriteContainerdConfig` for the main `config.toml` only.
+- Prefer `rawSettings[].rawPath` when you need full control over the exact TOML location.
+- Use `rawSettings[].key` when you want deck to map a version-independent logical key for containerd config versions 1, 2, and 3.
 - Use `WriteContainerdRegistryHosts` separately when mirrors or trust policy need per-registry `hosts.toml` files.
 
 ## `WriteContainerdRegistryHosts`
