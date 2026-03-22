@@ -102,6 +102,7 @@ Every step is centered on:
 Optional execution controls:
 
 - `when`: CEL expression; the step is skipped when it evaluates to false
+- `parallelGroup`: consecutive steps with the same group can run as one parallel batch inside a phase
 - `retry`: retry count on failure
 - `timeout`: duration string such as `30s` or `5m`
 - `register`: export step outputs into later runtime values
@@ -131,7 +132,7 @@ steps:
 
 ### `register` — capture step output
 
-`register` maps a runtime variable name to a step output key. The exported value is available to later steps via `runtime.` in CEL and `.runtime` in templates.
+`register` maps a runtime variable name to a step output key. The exported value is available to later steps via `runtime.` in CEL and `.runtime` in templates. If the step runs inside a parallel batch, the value becomes visible after the full batch succeeds.
 
 ```yaml
 steps:
@@ -153,7 +154,7 @@ steps:
 
 Use phases when the procedure has natural boundaries — a host-prereqs block that must complete before a runtime block, for example. For simple apply workflows with a handful of steps, flat `steps:` is fine.
 
-Each phase can import component fragments, include inline steps, or both.
+Each phase can import component fragments, include inline steps, or both. Phases are also the persisted resume boundary for `apply`.
 
 ```yaml
 version: v1alpha1
@@ -163,6 +164,7 @@ phases:
       - path: k8s/prereq.yaml
       - path: repo/offline-repo.yaml
   - name: runtime
+    maxParallelism: 2
     imports:
       - path: k8s/containerd-kubelet.yaml
   - name: verify
@@ -174,6 +176,56 @@ phases:
 ```
 
 Import paths are relative to `workflows/components/`. Write `k8s/prereq.yaml`, not `../components/k8s/prereq.yaml`.
+
+Top-level `steps:` are still valid. Execution normalizes them into an implicit phase named `default`.
+
+## Parallel batches
+
+Use `parallelGroup` when a few consecutive steps are safe to run together.
+
+```yaml
+version: v1alpha1
+phases:
+  - name: packages
+    maxParallelism: 2
+    steps:
+      - id: download-ubuntu
+        kind: DownloadPackage
+        parallelGroup: distro-downloads
+        spec:
+          packages: [containerd]
+          distro:
+            family: debian
+            release: ubuntu2204
+          repo:
+            type: apt-flat
+          backend:
+            mode: container
+            runtime: docker
+            image: ubuntu:22.04
+
+      - id: download-rhel
+        kind: DownloadPackage
+        parallelGroup: distro-downloads
+        spec:
+          packages: [containerd]
+          distro:
+            family: rhel
+            release: rhel9
+          repo:
+            type: yum
+          backend:
+            mode: container
+            runtime: docker
+            image: rockylinux:9
+```
+
+Rules for the first version:
+
+- only consecutive steps with the same `parallelGroup` value are in the same batch
+- phases still execute in order
+- same-batch steps cannot consume each other's `register` outputs through `runtime.*`
+- `register` outputs from a parallel batch become visible only to later batches or later phases
 
 ## Step kinds
 

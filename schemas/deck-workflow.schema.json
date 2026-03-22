@@ -69,6 +69,10 @@
             "minItems": 1,
             "type": "array"
           },
+          "maxParallelism": {
+            "minimum": 1,
+            "type": "integer"
+          },
           "name": {
             "minLength": 1,
             "type": "string"
@@ -950,6 +954,10 @@
                 "metadata": {
                   "additionalProperties": true,
                   "type": "object"
+                },
+                "parallelGroup": {
+                  "minLength": 1,
+                  "type": "string"
                 },
                 "register": {
                   "additionalProperties": {
@@ -1871,6 +1879,10 @@
           "metadata": {
             "additionalProperties": true,
             "type": "object"
+          },
+          "parallelGroup": {
+            "minLength": 1,
+            "type": "string"
           },
           "register": {
             "additionalProperties": {

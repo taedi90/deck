@@ -8,9 +8,10 @@ type WorkflowDocument struct {
 }
 
 type WorkflowPhase struct {
-	Name    string            `json:"name"`
-	Imports []WorkflowImport  `json:"imports,omitempty"`
-	Steps   []WorkflowStepRef `json:"steps,omitempty"`
+	Name           string            `json:"name"`
+	MaxParallelism int               `json:"maxParallelism,omitempty"`
+	Imports        []WorkflowImport  `json:"imports,omitempty"`
+	Steps          []WorkflowStepRef `json:"steps,omitempty"`
 }
 
 type WorkflowImport struct {
@@ -19,15 +20,16 @@ type WorkflowImport struct {
 }
 
 type WorkflowStepRef struct {
-	ID         string            `json:"id"`
-	APIVersion string            `json:"apiVersion,omitempty"`
-	Kind       string            `json:"kind"`
-	Metadata   map[string]any    `json:"metadata,omitempty"`
-	When       string            `json:"when,omitempty"`
-	Register   map[string]string `json:"register,omitempty"`
-	Retry      int               `json:"retry,omitempty"`
-	Timeout    string            `json:"timeout,omitempty"`
-	Spec       map[string]any    `json:"spec"`
+	ID            string            `json:"id"`
+	APIVersion    string            `json:"apiVersion,omitempty"`
+	Kind          string            `json:"kind"`
+	Metadata      map[string]any    `json:"metadata,omitempty"`
+	When          string            `json:"when,omitempty"`
+	ParallelGroup string            `json:"parallelGroup,omitempty"`
+	Register      map[string]string `json:"register,omitempty"`
+	Retry         int               `json:"retry,omitempty"`
+	Timeout       string            `json:"timeout,omitempty"`
+	Spec          map[string]any    `json:"spec"`
 }
 
 type ToolDefinitionDocument struct {

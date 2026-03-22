@@ -10,9 +10,10 @@ type Workflow struct {
 }
 
 type Phase struct {
-	Name    string        `yaml:"name" json:"name"`
-	Imports []PhaseImport `yaml:"imports,omitempty" json:"imports,omitempty"`
-	Steps   []Step        `yaml:"steps,omitempty" json:"steps,omitempty"`
+	Name           string        `yaml:"name" json:"name"`
+	MaxParallelism int           `yaml:"maxParallelism,omitempty" json:"maxParallelism,omitempty"`
+	Imports        []PhaseImport `yaml:"imports,omitempty" json:"imports,omitempty"`
+	Steps          []Step        `yaml:"steps,omitempty" json:"steps,omitempty"`
 }
 
 type PhaseImport struct {
@@ -21,13 +22,14 @@ type PhaseImport struct {
 }
 
 type Step struct {
-	ID         string            `yaml:"id" json:"id"`
-	APIVersion string            `yaml:"apiVersion" json:"apiVersion"`
-	Kind       string            `yaml:"kind" json:"kind"`
-	Metadata   map[string]any    `yaml:"metadata" json:"metadata,omitempty"`
-	When       string            `yaml:"when" json:"when,omitempty"`
-	Register   map[string]string `yaml:"register" json:"register,omitempty"`
-	Retry      int               `yaml:"retry" json:"retry,omitempty"`
-	Timeout    string            `yaml:"timeout" json:"timeout,omitempty"`
-	Spec       map[string]any    `yaml:"spec" json:"spec"`
+	ID            string            `yaml:"id" json:"id"`
+	APIVersion    string            `yaml:"apiVersion" json:"apiVersion"`
+	Kind          string            `yaml:"kind" json:"kind"`
+	Metadata      map[string]any    `yaml:"metadata" json:"metadata,omitempty"`
+	When          string            `yaml:"when" json:"when,omitempty"`
+	ParallelGroup string            `yaml:"parallelGroup,omitempty" json:"parallelGroup,omitempty"`
+	Register      map[string]string `yaml:"register" json:"register,omitempty"`
+	Retry         int               `yaml:"retry" json:"retry,omitempty"`
+	Timeout       string            `yaml:"timeout" json:"timeout,omitempty"`
+	Spec          map[string]any    `yaml:"spec" json:"spec"`
 }

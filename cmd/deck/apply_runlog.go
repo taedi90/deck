@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/taedi90/deck/internal/filemode"
@@ -55,6 +56,7 @@ type applyRunEventRecord struct {
 }
 
 type applyRunLogger struct {
+	mu        sync.Mutex
 	dir       string
 	record    applyRunRecord
 	stepOrder []string
@@ -113,6 +115,8 @@ func (l *applyRunLogger) CloseWithResult(status string, err error) error {
 	if l == nil {
 		return nil
 	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	l.record.EndedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	l.record.Status = strings.TrimSpace(status)
 	if err != nil {
@@ -141,6 +145,8 @@ func (l *applyRunLogger) EventSink() install.StepEventSink {
 }
 
 func (l *applyRunLogger) writeEvent(event install.StepEvent) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	eventRecord := applyRunEventRecord{
 		TS:        time.Now().UTC().Format(time.RFC3339Nano),
 		StepID:    strings.TrimSpace(event.StepID),

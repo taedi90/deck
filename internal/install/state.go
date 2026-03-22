@@ -13,35 +13,53 @@ import (
 )
 
 type State struct {
-	Phase          string         `json:"phase"`
-	CompletedSteps []string       `json:"completedSteps"`
-	SkippedSteps   []string       `json:"skippedSteps,omitempty"`
-	RuntimeVars    map[string]any `json:"runtimeVars,omitempty"`
-	FailedStep     string         `json:"failedStep,omitempty"`
-	Error          string         `json:"error,omitempty"`
+	Phase           string         `json:"phase,omitempty"`
+	CompletedPhases []string       `json:"completedPhases,omitempty"`
+	FailedPhase     string         `json:"failedPhase,omitempty"`
+	RuntimeVars     map[string]any `json:"runtimeVars,omitempty"`
+	Error           string         `json:"error,omitempty"`
+}
+
+type legacyState struct {
+	Phase           string         `json:"phase,omitempty"`
+	CompletedPhases []string       `json:"completedPhases,omitempty"`
+	FailedPhase     string         `json:"failedPhase,omitempty"`
+	RuntimeVars     map[string]any `json:"runtimeVars,omitempty"`
+	Error           string         `json:"error,omitempty"`
+	CompletedSteps  []string       `json:"completedSteps,omitempty"`
+	SkippedSteps    []string       `json:"skippedSteps,omitempty"`
+	FailedStep      string         `json:"failedStep,omitempty"`
 }
 
 func LoadState(path string) (*State, error) {
 	content, err := fsutil.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return &State{CompletedSteps: []string{}}, nil
+			return &State{CompletedPhases: []string{}, RuntimeVars: map[string]any{}}, nil
 		}
 		return nil, fmt.Errorf("read state file: %w", err)
 	}
 
+	var legacy legacyState
 	var st State
-	if err := json.Unmarshal(content, &st); err != nil {
+	if err := json.Unmarshal(content, &legacy); err != nil {
 		return nil, fmt.Errorf("parse state file: %w", err)
 	}
-	if st.CompletedSteps == nil {
-		st.CompletedSteps = []string{}
+	st = State{
+		Phase:           legacy.Phase,
+		CompletedPhases: legacy.CompletedPhases,
+		FailedPhase:     legacy.FailedPhase,
+		RuntimeVars:     legacy.RuntimeVars,
+		Error:           legacy.Error,
+	}
+	if len(st.CompletedPhases) == 0 && len(legacy.CompletedSteps) > 0 {
+		st.CompletedPhases = []string{}
+	}
+	if st.CompletedPhases == nil {
+		st.CompletedPhases = []string{}
 	}
 	if st.RuntimeVars == nil {
 		st.RuntimeVars = map[string]any{}
-	}
-	if st.SkippedSteps == nil {
-		st.SkippedSteps = []string{}
 	}
 	return &st, nil
 }

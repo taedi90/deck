@@ -166,7 +166,7 @@ phases:
 	if !strings.Contains(dryRunOut, "PHASE=post") {
 		t.Fatalf("expected post phase line in dry-run output, got %q", dryRunOut)
 	}
-	if !strings.Contains(dryRunOut, "post-step Command SKIP (completed)") {
+	if !strings.Contains(dryRunOut, "SKIP (completed phase)") {
 		t.Fatalf("expected completed skip in dry-run output, got %q", dryRunOut)
 	}
 	if strings.Contains(dryRunOut, "install-step") {
@@ -401,7 +401,7 @@ phases:
 		}
 	})
 
-	t.Run("remote apply workflow still requires phases", func(t *testing.T) {
+	t.Run("remote apply workflow with top-level steps uses implicit default phase", func(t *testing.T) {
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
 			case "/workflows/scenarios/apply.yaml":
@@ -413,11 +413,8 @@ phases:
 		defer ts.Close()
 
 		_, err := runWithCapturedStdout([]string{"apply", "--workflow", ts.URL + "/workflows/scenarios/apply.yaml"})
-		if err == nil {
-			t.Fatalf("expected missing phases error")
-		}
-		if !strings.Contains(err.Error(), "no phases found") {
-			t.Fatalf("unexpected error: %v", err)
+		if err != nil {
+			t.Fatalf("expected success for implicit default phase, got %v", err)
 		}
 	})
 }
@@ -486,10 +483,10 @@ func TestPlanJSONAndVerboseDiagnostics(t *testing.T) {
 		StatePath      string   `json:"statePath"`
 		RuntimeVarKeys []string `json:"runtimeVarKeys"`
 		Summary        struct {
-			TotalSteps     int `json:"totalSteps"`
-			RunSteps       int `json:"runSteps"`
-			SkipSteps      int `json:"skipSteps"`
-			CompletedSteps int `json:"completedSteps"`
+			TotalSteps      int `json:"totalSteps"`
+			RunSteps        int `json:"runSteps"`
+			SkipSteps       int `json:"skipSteps"`
+			CompletedPhases int `json:"completedPhases"`
 		} `json:"summary"`
 		Steps []struct {
 			Phase   string `json:"phase"`
@@ -522,10 +519,55 @@ func TestPlanJSONAndVerboseDiagnostics(t *testing.T) {
 	if res.err != nil {
 		t.Fatalf("expected success, got %v", res.err)
 	}
-	for _, want := range []string{"deck: plan workflowVars=run runtimeVars=- completedSteps=0", "deck: plan stepEval step=guarded whenEvaluated=true registerKeys=-"} {
+	for _, want := range []string{"deck: plan workflowVars=run runtimeVars=- completedPhases=0", "deck: plan stepEval step=guarded whenEvaluated=true registerKeys=-"} {
 		if !strings.Contains(res.stderr, want) {
 			t.Fatalf("expected %q in stderr, got %q", want, res.stderr)
 		}
+	}
+}
+
+func TestApplyAndPlanFresh(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	wfPath := filepath.Join(t.TempDir(), "apply-fresh.yaml")
+	logPath := filepath.Join(t.TempDir(), "fresh.log")
+	writeWorkflowYAML(t, wfPath, fmt.Sprintf("version: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: once\n        kind: Command\n        spec:\n          command: [\"sh\", \"-c\", \"echo run >> %s\"]\n", strings.ReplaceAll(logPath, "\\", "\\\\")))
+
+	if _, err := runWithCapturedStdout([]string{"apply", "--workflow", wfPath}); err != nil {
+		t.Fatalf("initial apply failed: %v", err)
+	}
+	planOut, err := runWithCapturedStdout([]string{"plan", "--workflow", wfPath})
+	if err != nil {
+		t.Fatalf("plan failed: %v", err)
+	}
+	if !strings.Contains(planOut, "SKIP (completed)") {
+		t.Fatalf("expected completed phase skip in plan output, got %q", planOut)
+	}
+	freshPlan, err := runWithCapturedStdout([]string{"plan", "--workflow", wfPath, "--fresh"})
+	if err != nil {
+		t.Fatalf("fresh plan failed: %v", err)
+	}
+	if !strings.Contains(freshPlan, "once Command RUN") {
+		t.Fatalf("expected fresh plan to rerun step, got %q", freshPlan)
+	}
+	if _, err := runWithCapturedStdout([]string{"apply", "--workflow", wfPath, "--fresh"}); err != nil {
+		t.Fatalf("fresh apply failed: %v", err)
+	}
+	raw, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read fresh log: %v", err)
+	}
+	if got := strings.Count(strings.TrimSpace(string(raw)), "run"); got != 2 {
+		t.Fatalf("expected 2 executions after fresh apply, got %d (%q)", got, string(raw))
+	}
+}
+
+func TestApplyPrefetchRejectsParallelGroupWorkflow(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	wfPath := filepath.Join(t.TempDir(), "apply-prefetch-parallel.yaml")
+	writeWorkflowYAML(t, wfPath, "version: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: step-a\n        kind: Command\n        parallelGroup: pair\n        spec:\n          command: [\"true\"]\n      - id: step-b\n        kind: Command\n        parallelGroup: pair\n        spec:\n          command: [\"true\"]\n")
+	_, err := runWithCapturedStdout([]string{"apply", "--workflow", wfPath, "--prefetch"})
+	if err == nil || !strings.Contains(err.Error(), "prefetch is not supported") {
+		t.Fatalf("expected prefetch/parallelGroup incompatibility error, got %v", err)
 	}
 }
 

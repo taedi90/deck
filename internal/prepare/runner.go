@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/taedi90/deck/internal/config"
 	"github.com/taedi90/deck/internal/executil"
 	"github.com/taedi90/deck/internal/filemode"
@@ -78,12 +80,12 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 		runner = osCommandRunner{}
 	}
 
-	runtimeVars := map[string]any{}
-	entries := make([]manifestEntry, 0)
-	prepareSteps, err := prepareExecutionSteps(wf)
+	phases, prepareSteps, err := prepareExecutionPlan(wf)
 	if err != nil {
 		return err
 	}
+	runtimeVars := map[string]any{}
+	entries := make([]manifestEntry, 0)
 	packCacheEnabled := true
 	packCacheStatePath := ""
 	packCachePlan := PackCachePlan{}
@@ -114,52 +116,19 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 	}
 	ctxData := map[string]any{"bundleRoot": bundleRoot, "stateFile": ""}
 
-	for _, step := range prepareSteps {
-		ok, err := evaluateWhen(step.When, wf.Vars, runtimeVars)
-		if err != nil {
-			return fmt.Errorf("step %s (%s): %w", step.ID, step.Kind, err)
-		}
-		if !ok {
-			continue
-		}
-
-		attempts := step.Retry + 1
-		if attempts < 1 {
-			attempts = 1
-		}
-
-		var (
-			stepFiles []string
-			outputs   map[string]any
-			execErr   error
-		)
-		for i := 0; i < attempts; i++ {
-			rendered, renderErr := renderSpecWithContext(step.Spec, wf, runtimeVars, ctxData)
-			if renderErr != nil {
-				execErr = fmt.Errorf("render spec template: %w", renderErr)
-				break
-			}
-			stepFiles, outputs, execErr = runPrepareStep(ctx, runner, bundleRoot, step.Kind, rendered, opts)
-			if host, ok := outputs["host"]; ok {
-				runtimeVars["host"] = host
-			}
-			if execErr == nil {
-				execErr = applyRegister(step, outputs, runtimeVars)
-			}
-			if execErr == nil {
-				break
-			}
-		}
-		if execErr != nil {
-			return fmt.Errorf("step %s (%s): %w", step.ID, step.Kind, execErr)
-		}
-
-		for _, f := range stepFiles {
-			entry, err := fileManifestEntry(bundleRoot, f)
+	for _, phase := range phases {
+		for _, batch := range workflowexec.BuildPhaseBatches(phase) {
+			batchFiles, err := executePrepareBatch(ctx, runner, bundleRoot, wf, runtimeVars, ctxData, batch, opts)
 			if err != nil {
 				return err
 			}
-			entries = append(entries, entry)
+			for _, f := range batchFiles {
+				entry, err := fileManifestEntry(bundleRoot, f)
+				if err != nil {
+					return err
+				}
+				entries = append(entries, entry)
+			}
 		}
 	}
 
@@ -177,24 +146,115 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 	return nil
 }
 
-func prepareExecutionSteps(wf *config.Workflow) ([]config.Step, error) {
+func prepareExecutionPlan(wf *config.Workflow) ([]config.Phase, []config.Step, error) {
 	if wf == nil {
-		return nil, fmt.Errorf("workflow is nil")
+		return nil, nil, fmt.Errorf("workflow is nil")
 	}
-	if len(wf.Phases) > 0 {
-		steps := make([]config.Step, 0)
-		for _, phase := range wf.Phases {
-			steps = append(steps, phase.Steps...)
+	phases := config.NormalizedPhases(wf)
+	if len(phases) == 0 {
+		return nil, nil, fmt.Errorf("prepare workflow has no steps")
+	}
+	steps := make([]config.Step, 0)
+	for _, phase := range phases {
+		steps = append(steps, phase.Steps...)
+	}
+	if len(steps) == 0 {
+		return nil, nil, fmt.Errorf("prepare workflow has no steps")
+	}
+	return phases, steps, nil
+}
+
+type prepareBatchResult struct {
+	files   []string
+	outputs map[string]any
+}
+
+func executePrepareBatch(ctx context.Context, runner CommandRunner, bundleRoot string, wf *config.Workflow, runtimeVars map[string]any, ctxData map[string]any, batch workflowexec.StepBatch, opts RunOptions) ([]string, error) {
+	if len(batch.Steps) == 0 {
+		return nil, nil
+	}
+	snapshot := cloneRuntimeVars(runtimeVars)
+	results := make([]prepareBatchResult, len(batch.Steps))
+	if !batch.Parallel() {
+		result, err := executePrepareStep(ctx, runner, bundleRoot, wf, snapshot, ctxData, batch.Steps[0], opts)
+		if err != nil {
+			return nil, err
 		}
-		if len(steps) == 0 {
-			return nil, fmt.Errorf("prepare workflow has no steps")
+		results[0] = result
+	} else {
+		group, groupCtx := errgroup.WithContext(ctx)
+		limit := batch.MaxParallelism
+		if limit <= 0 || limit > len(batch.Steps) {
+			limit = len(batch.Steps)
 		}
-		return steps, nil
+		group.SetLimit(limit)
+		for i, step := range batch.Steps {
+			i := i
+			step := step
+			group.Go(func() error {
+				result, err := executePrepareStep(groupCtx, runner, bundleRoot, wf, snapshot, ctxData, step, opts)
+				if err != nil {
+					return err
+				}
+				results[i] = result
+				return nil
+			})
+		}
+		if err := group.Wait(); err != nil {
+			return nil, err
+		}
 	}
-	if len(wf.Steps) == 0 {
-		return nil, fmt.Errorf("prepare workflow has no steps")
+	files := make([]string, 0)
+	for i, step := range batch.Steps {
+		result := results[i]
+		if host, ok := result.outputs["host"]; ok {
+			runtimeVars["host"] = host
+		}
+		if err := applyRegister(step, result.outputs, runtimeVars); err != nil {
+			return nil, fmt.Errorf("step %s (%s): %w", step.ID, step.Kind, err)
+		}
+		files = append(files, result.files...)
 	}
-	return wf.Steps, nil
+	return files, nil
+}
+
+func executePrepareStep(ctx context.Context, runner CommandRunner, bundleRoot string, wf *config.Workflow, runtimeSnapshot map[string]any, ctxData map[string]any, step config.Step, opts RunOptions) (prepareBatchResult, error) {
+	ok, err := evaluateWhen(step.When, wf.Vars, runtimeSnapshot)
+	if err != nil {
+		return prepareBatchResult{}, fmt.Errorf("step %s (%s): %w", step.ID, step.Kind, err)
+	}
+	if !ok {
+		return prepareBatchResult{outputs: map[string]any{}}, nil
+	}
+	attempts := step.Retry + 1
+	if attempts < 1 {
+		attempts = 1
+	}
+	var execErr error
+	for i := 0; i < attempts; i++ {
+		rendered, renderErr := renderSpecWithContext(step.Spec, wf, runtimeSnapshot, ctxData)
+		if renderErr != nil {
+			execErr = fmt.Errorf("render spec template: %w", renderErr)
+			break
+		}
+		stepFiles, outputs, stepErr := runPrepareStep(ctx, runner, bundleRoot, step.Kind, rendered, opts)
+		if stepErr == nil {
+			return prepareBatchResult{files: stepFiles, outputs: outputs}, nil
+		}
+		execErr = stepErr
+	}
+	return prepareBatchResult{}, fmt.Errorf("step %s (%s): %w", step.ID, step.Kind, execErr)
+}
+
+func cloneRuntimeVars(input map[string]any) map[string]any {
+	if input == nil {
+		return map[string]any{}
+	}
+	out := make(map[string]any, len(input))
+	for key, value := range input {
+		out[key] = value
+	}
+	return out
 }
 
 func applyRegister(step config.Step, outputs map[string]any, runtimeVars map[string]any) error {
