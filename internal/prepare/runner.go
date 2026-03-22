@@ -243,7 +243,8 @@ func executePrepareStep(ctx context.Context, runner CommandRunner, bundleRoot st
 			execErr = fmt.Errorf("render spec template: %w", renderErr)
 			break
 		}
-		stepFiles, outputs, stepErr := runPrepareStep(ctx, runner, bundleRoot, step.Kind, rendered, opts)
+		inputVars := collectStepInputVarValues(step.Spec, wf.Vars)
+		stepFiles, outputs, stepErr := runPrepareRenderedStep(ctx, runner, bundleRoot, step, rendered, inputVars, opts)
 		if stepErr == nil {
 			return prepareBatchResult{files: stepFiles, outputs: outputs}, nil
 		}

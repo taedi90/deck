@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/taedi90/deck/internal/config"
 	"github.com/taedi90/deck/internal/filemode"
 	"github.com/taedi90/deck/internal/fsutil"
 )
@@ -25,7 +26,7 @@ type rpmModuleSpec struct {
 	Stream string
 }
 
-func runDownloadPackage(ctx context.Context, runner CommandRunner, bundleRoot string, spec map[string]any, defaultDir string, opts RunOptions) ([]string, error) {
+func runDownloadPackage(ctx context.Context, runner CommandRunner, bundleRoot string, step config.Step, spec map[string]any, inputVars map[string]string, defaultDir string, opts RunOptions) ([]string, error) {
 	dir := stringValue(spec, "outputDir")
 	if dir == "" {
 		dir = defaultDir
@@ -72,7 +73,7 @@ func runDownloadPackage(ctx context.Context, runner CommandRunner, bundleRoot st
 			} else if reused {
 				return files, nil
 			}
-			files, err := runContainerPackageRepoBuild(ctx, runner, bundleRoot, repoRoot, family, repoType, generate, pkgsDir, spec, repo, packages, opts)
+			files, err := runContainerPackageRepoBuild(ctx, runner, bundleRoot, repoRoot, family, repoType, generate, pkgsDir, step, spec, inputVars, repo, packages, opts)
 			if err != nil {
 				return nil, err
 			}
@@ -88,7 +89,7 @@ func runDownloadPackage(ctx context.Context, runner CommandRunner, bundleRoot st
 			return files, nil
 		}
 
-		files, err := runContainerDownloadPackageAll(ctx, runner, bundleRoot, dir, spec, repo, packages, opts)
+		files, err := runContainerDownloadPackageAll(ctx, runner, bundleRoot, dir, step, spec, inputVars, repo, packages, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -110,7 +111,9 @@ func runContainerPackageRepoBuild(
 	repoType string,
 	generate bool,
 	pkgsDir string,
+	step config.Step,
 	spec map[string]any,
+	inputVars map[string]string,
 	repo map[string]any,
 	packages []string,
 	opts RunOptions,
@@ -133,10 +136,10 @@ func runContainerPackageRepoBuild(
 	if err != nil {
 		return nil, err
 	}
-	return runContainerDownloadPackageToCache(ctx, runner, runtimeSel, image, bundleRoot, repoRoot, spec, packages, cmdScript, opts)
+	return runContainerDownloadPackageToCache(ctx, runner, runtimeSel, image, bundleRoot, repoRoot, step, spec, inputVars, packages, cmdScript, opts)
 }
 
-func runContainerDownloadPackageAll(ctx context.Context, runner CommandRunner, bundleRoot, dir string, spec map[string]any, repo map[string]any, packages []string, opts RunOptions) ([]string, error) {
+func runContainerDownloadPackageAll(ctx context.Context, runner CommandRunner, bundleRoot, dir string, step config.Step, spec map[string]any, inputVars map[string]string, repo map[string]any, packages []string, opts RunOptions) ([]string, error) {
 	backend := mapValue(spec, "backend")
 	runtimeSel, err := detectRuntime(runner, stringValue(backend, "runtime"))
 	if err != nil {
@@ -162,7 +165,7 @@ func runContainerDownloadPackageAll(ctx context.Context, runner CommandRunner, b
 	if err != nil {
 		return nil, err
 	}
-	return runContainerDownloadPackageToCache(ctx, runner, runtimeSel, image, bundleRoot, dir, spec, packages, cmdScript, opts)
+	return runContainerDownloadPackageToCache(ctx, runner, runtimeSel, image, bundleRoot, dir, step, spec, inputVars, packages, cmdScript, opts)
 }
 
 func buildDownloadPackageAllScript(family string, packages []string, modules []rpmModuleSpec) (string, error) {
@@ -307,12 +310,9 @@ func buildRPMModuleEnableCommand(modules []rpmModuleSpec) (string, error) {
 	return "dnf -y module enable " + strings.Join(parts, " ") + " >/dev/null 2>&1", nil
 }
 
-func runContainerDownloadPackageToCache(ctx context.Context, runner CommandRunner, runtimeSel, image, bundleRoot, rootRel string, spec map[string]any, packages []string, script string, opts RunOptions) ([]string, error) {
-	cacheKey, err := exportedPackageCacheKey(spec, rootRel)
-	if err != nil {
-		return nil, err
-	}
-	cachePath, err := exportedPackageCachePath(cacheKey)
+func runContainerDownloadPackageToCache(ctx context.Context, runner CommandRunner, runtimeSel, image, bundleRoot, rootRel string, step config.Step, spec map[string]any, inputVars map[string]string, packages []string, script string, opts RunOptions) ([]string, error) {
+	cacheKey := computeStepCacheKey(step)
+	cachePath, err := exportedPackageCachePath(cacheKey, inputVars)
 	if err != nil {
 		return nil, err
 	}

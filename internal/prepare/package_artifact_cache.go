@@ -29,6 +29,20 @@ type exportedPackageCacheMeta struct {
 	Files    []string `json:"files"`
 }
 
+func exportedPackageInputDigest(inputVars map[string]string) string {
+	keys := make([]string, 0, len(inputVars))
+	for key := range inputVars {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	payload := make([]string, 0, len(keys))
+	for _, key := range keys {
+		payload = append(payload, key+"="+inputVars[key])
+	}
+	sum := sha256.Sum256([]byte(strings.Join(payload, "\n")))
+	return hex.EncodeToString(sum[:])
+}
+
 func exportedPackageCacheRoot() (string, error) {
 	cacheRoot, err := userdirs.CacheRoot()
 	if err != nil {
@@ -37,26 +51,16 @@ func exportedPackageCacheRoot() (string, error) {
 	return filepath.Join(cacheRoot, "artifacts", "package"), nil
 }
 
-func exportedPackageCachePath(cacheKey string) (string, error) {
+func exportedPackageCachePath(cacheKey string, inputVars map[string]string) (string, error) {
 	root, err := exportedPackageCacheRoot()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(root, strings.TrimSpace(cacheKey), runtime.GOARCH), nil
+	return filepath.Join(root, strings.TrimSpace(cacheKey), exportedPackageInputDigest(inputVars), runtime.GOARCH), nil
 }
 
-func exportedPackageCacheKey(spec map[string]any, rootRel string) (string, error) {
-	payload := map[string]any{
-		"rootRel":  filepath.ToSlash(strings.TrimSpace(rootRel)),
-		"packages": stringSlice(spec["packages"]),
-		"spec":     spec,
-	}
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return "", fmt.Errorf("encode exported package cache key: %w", err)
-	}
-	sum := sha256.Sum256(raw)
-	return hex.EncodeToString(sum[:]), nil
+func exportedPackageCachePayloadPath(cachePath string) string {
+	return filepath.Join(cachePath, "payload")
 }
 
 func loadExportedPackageCache(path string) (exportedPackageCacheMeta, bool, error) {
@@ -123,8 +127,9 @@ func tryReuseExportedPackageArtifact(bundleRoot, rootRel, cachePath string, pack
 	if len(meta.Files) == 0 {
 		return nil, false, nil
 	}
+	cachePayload := exportedPackageCachePayloadPath(cachePath)
 	for _, rel := range meta.Files {
-		cacheFile := filepath.Join(cachePath, filepath.FromSlash(rel))
+		cacheFile := filepath.Join(cachePayload, filepath.FromSlash(rel))
 		info, err := os.Stat(cacheFile)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -143,13 +148,14 @@ func tryReuseExportedPackageArtifact(bundleRoot, rootRel, cachePath string, pack
 }
 
 func publishCachedPackageArtifact(bundleRoot, rootRel, cachePath string, relFiles []string) error {
+	cachePayload := exportedPackageCachePayloadPath(cachePath)
 	stageRoot := buildPublishedArtifactStage(filepath.Join(bundleRoot, filepath.FromSlash(rootRel)))
 	_ = os.RemoveAll(stageRoot)
 	if err := filemode.EnsureDir(stageRoot, filemode.PublishedArtifact); err != nil {
 		return err
 	}
 	for _, rel := range normalizeStrings(relFiles) {
-		src := filepath.Join(cachePath, filepath.FromSlash(rel))
+		src := filepath.Join(cachePayload, filepath.FromSlash(rel))
 		dst := filepath.Join(stageRoot, filepath.FromSlash(rel))
 		if err := copyArtifactFile(src, dst); err != nil {
 			return err
@@ -202,8 +208,9 @@ func replacePublishedArtifactDir(stagePath, finalPath string) error {
 }
 
 func exportContainerTarToStage(data []byte, stageRoot string) ([]string, error) {
+	payloadRoot := exportedPackageCachePayloadPath(stageRoot)
 	_ = os.RemoveAll(stageRoot)
-	if err := filemode.EnsureDir(stageRoot, filemode.PublishedArtifact); err != nil {
+	if err := filemode.EnsureDir(payloadRoot, filemode.PublishedArtifact); err != nil {
 		return nil, err
 	}
 	reader := tar.NewReader(bytes.NewReader(data))
@@ -220,7 +227,7 @@ func exportContainerTarToStage(data []byte, stageRoot string) ([]string, error) 
 		if !ok {
 			continue
 		}
-		target := filepath.Join(stageRoot, filepath.FromSlash(rel))
+		target := filepath.Join(payloadRoot, filepath.FromSlash(rel))
 		switch hdr.Typeflag {
 		case tar.TypeDir:
 			if err := filemode.EnsureDir(target, filemode.PublishedArtifact); err != nil {
@@ -248,6 +255,25 @@ func exportContainerTarToStage(data []byte, stageRoot string) ([]string, error) 
 		}
 	}
 	return sortedUniqueStrings(files), nil
+}
+
+func exportedPackageCacheAvailable(cacheKey string, inputVars map[string]string) bool {
+	cachePath, err := exportedPackageCachePath(cacheKey, inputVars)
+	if err != nil {
+		return false
+	}
+	meta, ok, err := loadExportedPackageCache(cachePath)
+	if err != nil || !ok || len(meta.Files) == 0 {
+		return false
+	}
+	cachePayload := exportedPackageCachePayloadPath(cachePath)
+	for _, rel := range meta.Files {
+		info, statErr := os.Stat(filepath.Join(cachePayload, filepath.FromSlash(rel)))
+		if statErr != nil || info.IsDir() || info.Size() == 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func normalizeTarPath(name string) (string, bool) {

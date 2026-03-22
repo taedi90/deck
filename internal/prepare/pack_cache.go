@@ -65,6 +65,9 @@ func ComputePackCachePlan(prevState packCacheState, workflowBytes []byte, effect
 		if prev, ok := prevByIdentity[packCacheIdentity(item.StepID, item.Type)]; ok {
 			if prev.CacheKey == item.CacheKey && equalStringMap(prev.InputVars, item.InputVars) {
 				action = packCacheActionReuse
+				if item.Type == "package" && !exportedPackageCacheAvailable(item.CacheKey, item.InputVars) {
+					action = packCacheActionFetch
+				}
 			}
 		}
 		artifacts = append(artifacts, packCacheArtifactPlan{
@@ -174,16 +177,7 @@ func collectPackCacheArtifact(steps []config.Step, effectiveVars map[string]any)
 		if !ok {
 			continue
 		}
-		inputVarNames := collectStepInputVarNames(step.Spec)
-		inputVars := map[string]string{}
-		for _, name := range inputVarNames {
-			value, ok := effectiveVars[name]
-			if !ok {
-				inputVars[name] = "__MISSING__"
-				continue
-			}
-			inputVars[name] = stablePackCacheVarValue(value)
-		}
+		inputVars := collectStepInputVarValues(step.Spec, effectiveVars)
 		out = append(out, packCacheArtifactState{
 			StepID:    step.ID,
 			Type:      artifactType,
@@ -192,6 +186,20 @@ func collectPackCacheArtifact(steps []config.Step, effectiveVars map[string]any)
 		})
 	}
 	return out
+}
+
+func collectStepInputVarValues(spec map[string]any, effectiveVars map[string]any) map[string]string {
+	inputVarNames := collectStepInputVarNames(spec)
+	inputVars := map[string]string{}
+	for _, name := range inputVarNames {
+		value, ok := effectiveVars[name]
+		if !ok {
+			inputVars[name] = "__MISSING__"
+			continue
+		}
+		inputVars[name] = stablePackCacheVarValue(value)
+	}
+	return inputVars
 }
 
 func stepArtifactType(kind string) (string, bool) {
