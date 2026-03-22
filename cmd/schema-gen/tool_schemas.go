@@ -7,10 +7,6 @@ import (
 	"github.com/taedi90/deck/internal/workflowexec"
 )
 
-type toolSchemaGenerator func() (map[string]any, error)
-
-var _ = toolSchemaGenerators()
-
 var _ = workflowexec.RegisterSchemaMetadataBuilder(func(def workflowexec.StepDefinition) workflowexec.SchemaMetadata {
 	generatorName := def.ToolSchemaGenerator
 	if generatorName == "" {
@@ -147,51 +143,6 @@ func toolSchemaDefinitions() (map[string]map[string]any, error) {
 		usedGenerators[name] = true
 	}
 	return generated, nil
-}
-
-func toolSchemaGenerators() map[string]toolSchemaGenerator {
-	return map[string]toolSchemaGenerator{
-		"host-check":                wrapToolSchema(generateCheckHostToolSchema),
-		"command":                   wrapToolSchema(generateCommandToolSchema),
-		"containerd.config":         wrapToolSchema(generateWriteContainerdConfigToolSchema),
-		"containerd.registry-hosts": wrapToolSchema(generateWriteContainerdRegistryHostsToolSchema),
-		"directory":                 wrapToolSchema(generateEnsureDirectoryToolSchema),
-		"file.copy":                 wrapToolSchema(generateCopyFileToolSchema),
-		"file.download":             wrapToolSchema(generateDownloadFileToolSchema),
-		"file.edit":                 wrapToolSchema(generateEditFileToolSchema),
-		"file.extract-archive":      wrapToolSchema(generateExtractArchiveToolSchema),
-		"file.write":                wrapToolSchema(generateWriteFileToolSchema),
-		"image.download":            wrapToolSchema(generateDownloadImageToolSchema),
-		"image.load":                wrapToolSchema(generateImageLoadToolSchema),
-		"image.verify":              wrapToolSchema(generateVerifyImageToolSchema),
-		"kernel-module":             wrapToolSchema(generateKernelModuleToolSchema),
-		"cluster-check":             wrapToolSchema(generateCheckClusterToolSchema),
-		"kubeadm.init":              wrapToolSchema(generateInitKubeadmToolSchema),
-		"kubeadm.join":              wrapToolSchema(generateJoinKubeadmToolSchema),
-		"kubeadm.reset":             wrapToolSchema(generateResetKubeadmToolSchema),
-		"kubeadm.upgrade":           wrapToolSchema(generateUpgradeKubeadmToolSchema),
-		"package.download":          wrapToolSchema(generateDownloadPackageToolSchema),
-		"package.install":           wrapToolSchema(generateInstallPackageToolSchema),
-		"repository.configure":      wrapToolSchema(generateConfigureRepositoryToolSchema),
-		"repository.refresh":        wrapToolSchema(generateRefreshRepositoryToolSchema),
-		"service":                   wrapToolSchema(generateManageServiceToolSchema),
-		"swap":                      wrapToolSchema(generateSwapToolSchema),
-		"symlink":                   wrapToolSchema(generateCreateSymlinkToolSchema),
-		"sysctl":                    wrapToolSchema(generateSysctlToolSchema),
-		"systemd-unit":              wrapToolSchema(generateWriteSystemdUnitToolSchema),
-		"wait.command":              wrapToolSchema(generateWaitForCommandToolSchema),
-		"wait.file-absent":          wrapToolSchema(generateWaitForMissingFileToolSchema),
-		"wait.file-exists":          wrapToolSchema(generateWaitForFileToolSchema),
-		"wait.service-active":       wrapToolSchema(generateWaitForServiceToolSchema),
-		"wait.tcp-port-closed":      wrapToolSchema(generateWaitForMissingTCPPortToolSchema),
-		"wait.tcp-port-open":        wrapToolSchema(generateWaitForTCPPortToolSchema),
-	}
-}
-
-func wrapToolSchema(generator func() map[string]any) toolSchemaGenerator {
-	return func() (map[string]any, error) {
-		return generator(), nil
-	}
 }
 
 func generateToolSchemaFromRegistry(def workflowexec.BuiltInTypeDefinition) (map[string]any, error) {
