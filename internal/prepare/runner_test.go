@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -134,6 +135,29 @@ func TestRun_NoPrepareSteps(t *testing.T) {
 	wf := &config.Workflow{Version: "v1", Phases: []config.Phase{{Name: "install"}}}
 	if err := Run(context.Background(), wf, RunOptions{BundleRoot: t.TempDir()}); err == nil {
 		t.Fatalf("expected error when prepare workflow has no steps")
+	}
+}
+
+func TestRun_PrepareParallelGroupRunsContainerDownloadsConcurrently(t *testing.T) {
+	bundle := t.TempDir()
+	r := &concurrencyRunner{delegate: &fakeRunner{}}
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name:           "prepare",
+			MaxParallelism: 2,
+			Steps: []config.Step{
+				{ID: "ubuntu", Kind: "DownloadPackage", ParallelGroup: "distros", Spec: map[string]any{"packages": []any{"containerd"}, "distro": map[string]any{"family": "debian", "release": "ubuntu2204"}, "repo": map[string]any{"type": "apt-flat"}, "backend": map[string]any{"mode": "container", "runtime": "docker", "image": "ubuntu:22.04"}}},
+				{ID: "rhel", Kind: "DownloadPackage", ParallelGroup: "distros", Spec: map[string]any{"packages": []any{"containerd"}, "distro": map[string]any{"family": "rhel", "release": "rhel9"}, "repo": map[string]any{"type": "yum"}, "backend": map[string]any{"mode": "container", "runtime": "docker", "image": "rockylinux:9"}}},
+			},
+		}},
+	}
+
+	if err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, CommandRunner: r}); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+	if r.maxActive < 2 {
+		t.Fatalf("expected concurrent container downloads, maxActive=%d", r.maxActive)
 	}
 }
 
@@ -991,6 +1015,13 @@ func TestRun_PackagesKubernetesSetRepoModeYumGeneratesRepodata(t *testing.T) {
 
 type fakeRunner struct{}
 
+type concurrencyRunner struct {
+	delegate  CommandRunner
+	mu        sync.Mutex
+	active    int
+	maxActive int
+}
+
 type failOnceRunner struct {
 	calls int
 }
@@ -1039,6 +1070,28 @@ func (f *fakeRunner) LookPath(file string) (string, error) {
 		return "/usr/bin/" + file, nil
 	}
 	return "", fmt.Errorf("not found")
+}
+
+func (c *concurrencyRunner) LookPath(file string) (string, error) {
+	return c.delegate.LookPath(file)
+}
+
+func (c *concurrencyRunner) Run(ctx context.Context, name string, args ...string) error {
+	if name == "docker" || name == "podman" {
+		c.mu.Lock()
+		c.active++
+		if c.active > c.maxActive {
+			c.maxActive = c.active
+		}
+		c.mu.Unlock()
+		defer func() {
+			c.mu.Lock()
+			c.active--
+			c.mu.Unlock()
+		}()
+		time.Sleep(100 * time.Millisecond)
+	}
+	return c.delegate.Run(ctx, name, args...)
 }
 
 func (f *fakeRunner) Run(_ context.Context, name string, args ...string) error {

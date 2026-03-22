@@ -13,7 +13,7 @@ func BuildPrefetchWorkflow(wf *config.Workflow) *config.Workflow {
 		return &config.Workflow{}
 	}
 	prefetchSteps := make([]config.Step, 0)
-	for _, phase := range wf.Phases {
+	for _, phase := range config.NormalizedPhases(wf) {
 		for _, step := range phase.Steps {
 			if step.Kind == "DownloadFile" {
 				prefetchSteps = append(prefetchSteps, step)
@@ -36,32 +36,33 @@ func BuildExecutionWorkflow(wf *config.Workflow, phaseName string) (*config.Work
 	if wf == nil {
 		return nil, errors.New("workflow is nil")
 	}
+	phases := config.NormalizedPhases(wf)
 	if strings.TrimSpace(phaseName) == "" {
-		phases := make([]config.Phase, len(wf.Phases))
-		copy(phases, wf.Phases)
+		selectedPhases := make([]config.Phase, len(phases))
+		copy(selectedPhases, phases)
 		return &config.Workflow{
 			Version:        wf.Version,
 			Vars:           wf.Vars,
-			Phases:         phases,
+			Phases:         selectedPhases,
 			StateKey:       wf.StateKey,
 			WorkflowSHA256: wf.WorkflowSHA256,
 		}, nil
 	}
-	selectedPhase, found := findWorkflowPhaseByName(wf, phaseName)
+	selectedPhase, found := findWorkflowPhaseByName(phases, phaseName)
 	if !found {
 		return nil, fmt.Errorf("%s phase not found", phaseName)
 	}
 	return &config.Workflow{
 		Version:        wf.Version,
 		Vars:           wf.Vars,
-		Phases:         []config.Phase{{Name: selectedPhase.Name, Steps: selectedPhase.Steps}},
+		Phases:         []config.Phase{{Name: selectedPhase.Name, MaxParallelism: selectedPhase.MaxParallelism, Steps: selectedPhase.Steps}},
 		StateKey:       wf.StateKey,
 		WorkflowSHA256: wf.WorkflowSHA256,
 	}, nil
 }
 
-func findWorkflowPhaseByName(wf *config.Workflow, name string) (config.Phase, bool) {
-	for _, phase := range wf.Phases {
+func findWorkflowPhaseByName(phases []config.Phase, name string) (config.Phase, bool) {
+	for _, phase := range phases {
 		if phase.Name == name {
 			return phase, true
 		}

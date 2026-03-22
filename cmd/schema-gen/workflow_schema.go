@@ -99,6 +99,7 @@ func phaseSchema() (map[string]any, error) {
 	}
 	props := propertyMap(phase)
 	setMap(props, "name", map[string]any{"type": "string", "minLength": 1})
+	setMap(props, "maxParallelism", map[string]any{"type": "integer", "minimum": 1})
 	setMap(props, "imports", map[string]any{"type": "array", "minItems": 1, "items": workflowImportSchema()})
 	setMap(props, "steps", map[string]any{"type": "array", "items": stepBaseSchema()})
 	return phase, nil
@@ -122,11 +123,12 @@ func stepBaseSchema() map[string]any {
 		"additionalProperties": false,
 		"required":             []any{"id", "kind", "spec"},
 		"properties": map[string]any{
-			"id":         map[string]any{"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,127}$"},
-			"apiVersion": map[string]any{"type": "string", "const": "deck/v1alpha1"},
-			"kind":       map[string]any{"type": "string", "enum": toAnySlice(workflowexec.StepKinds())},
-			"metadata":   map[string]any{"type": "object", "additionalProperties": true},
-			"when":       map[string]any{"type": "string", "minLength": 1},
+			"id":            map[string]any{"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,127}$"},
+			"apiVersion":    map[string]any{"type": "string", "const": "deck/v1alpha1"},
+			"kind":          map[string]any{"type": "string", "enum": toAnySlice(workflowexec.StepKinds())},
+			"metadata":      map[string]any{"type": "object", "additionalProperties": true},
+			"when":          map[string]any{"type": "string", "minLength": 1},
+			"parallelGroup": map[string]any{"type": "string", "minLength": 1},
 			"register": map[string]any{
 				"type":                 "object",
 				"propertyNames":        map[string]any{"pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
@@ -183,13 +185,14 @@ func stepEnvelopeSchema(kind, title, description, visibility string) map[string]
 		"additionalProperties": false,
 		"required":             []any{"id", "kind", "spec"},
 		"properties": map[string]any{
-			"id":         map[string]any{"type": "string"},
-			"apiVersion": map[string]any{"const": "deck/v1alpha1"},
-			"kind":       map[string]any{"const": kind},
-			"metadata":   map[string]any{"type": "object", "additionalProperties": true},
-			"when":       map[string]any{"type": "string"},
-			"retry":      map[string]any{"type": "integer", "minimum": 0},
-			"timeout":    durationStringSchema(),
+			"id":            map[string]any{"type": "string"},
+			"apiVersion":    map[string]any{"const": "deck/v1alpha1"},
+			"kind":          map[string]any{"const": kind},
+			"metadata":      map[string]any{"type": "object", "additionalProperties": true},
+			"when":          map[string]any{"type": "string"},
+			"parallelGroup": map[string]any{"type": "string", "minLength": 1},
+			"retry":         map[string]any{"type": "integer", "minimum": 0},
+			"timeout":       durationStringSchema(),
 			"register": map[string]any{
 				"type":                 "object",
 				"propertyNames":        map[string]any{"pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},

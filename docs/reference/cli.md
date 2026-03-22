@@ -180,6 +180,7 @@ Optional ask augmentation config example:
 - `prepare` expects a workflow tree rooted at `workflows/` with entrypoints under `workflows/scenarios/`.
 - scenario entrypoints live under `workflows/scenarios/`
 - `plan` and `apply` accept `--scenario` for named scenarios and `--workflow` for an explicit path or URL.
+- `plan` and `apply` support `--fresh` to ignore saved apply state for that invocation.
 - `--source` controls whether `--scenario` resolves from the local workspace or the saved remote server.
 - workspace-local metadata stays under `./.deck/`, while user-global config, state, cache, and run history use standard XDG locations.
 - `ask` workspace context lives under `./.deck/ask/`, while saved ask config defaults live under `~/.config/deck/config.json` as the top-level `ask` object.
@@ -191,6 +192,9 @@ Optional ask augmentation config example:
 - optional MCP and LSP augmentation is disabled by default and degrades gracefully when configured tools are unavailable.
 - phase imports resolve from `workflows/components/` using component-relative paths
 - `apply` runs all phases by default when phases are used; `--phase` narrows execution to one phase.
+- top-level `steps` execute as an implicit `default` phase.
+- `parallelGroup` only parallelizes consecutive steps inside one phase.
+- `apply --prefetch` is not supported for workflows that use explicit `parallelGroup` batches.
 - `bundle build` archives the canonical workspace bundle inputs: `deck`, `workflows/`, `outputs/`, and `.deck/manifest.json`, and respects `.deckignore` within those paths.
 - Help text is shown on stdout only when you request it with `--help` or `help`.
 - Command and flag errors are written to stderr without automatic usage output.

@@ -17,7 +17,7 @@ func InspectPlan(wf *config.Workflow, bundleRoot string, opts RunOptions) (PlanD
 		return PlanDiagnostics{}, fmt.Errorf("workflow is nil")
 	}
 	diagnostics := PlanDiagnostics{}
-	prepareSteps, err := prepareExecutionSteps(wf)
+	_, prepareSteps, err := prepareExecutionPlan(wf)
 	if err != nil {
 		return diagnostics, err
 	}

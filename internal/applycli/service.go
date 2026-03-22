@@ -41,11 +41,11 @@ func Execute(ctx context.Context, opts ExecuteOptions) (err error) {
 	if request.ExecutionWorkflow == nil {
 		return fmt.Errorf("execution workflow is nil")
 	}
-	if err := verbosef(opts.Verbosef, 1, "deck: apply workflow=%s phase=%s state=%s bundle=%s dryRun=%t prefetch=%t\n", request.WorkflowPath, request.SelectedPhase, request.StatePath, strings.TrimSpace(opts.BundleRoot), opts.DryRun, opts.Prefetch); err != nil {
+	if err := verbosef(opts.Verbosef, 1, "deck: apply workflow=%s phase=%s state=%s bundle=%s dryRun=%t prefetch=%t fresh=%t\n", request.WorkflowPath, request.SelectedPhase, request.StatePath, strings.TrimSpace(opts.BundleRoot), opts.DryRun, opts.Prefetch, request.Fresh); err != nil {
 		return err
 	}
 	if opts.DryRun {
-		return writeApplyDryRun(opts.StdoutPrintf, request.ExecutionWorkflow, request.SelectedPhase, opts.BundleRoot)
+		return writeApplyDryRun(opts.StdoutPrintf, request)
 	}
 	if opts.NewRunLogger == nil {
 		return fmt.Errorf("run logger factory is nil")
@@ -70,18 +70,21 @@ func Execute(ctx context.Context, opts ExecuteOptions) (err error) {
 	}()
 
 	if opts.Prefetch {
+		if workflowUsesParallelGroups(request.ExecutionWorkflow) {
+			return fmt.Errorf("prefetch is not supported for workflows that use parallelGroup")
+		}
 		prefetchWorkflow := BuildPrefetchWorkflow(request.Workflow)
 		if len(prefetchWorkflow.Phases) > 0 && len(prefetchWorkflow.Phases[0].Steps) > 0 {
 			if err := verbosef(opts.Verbosef, 1, "deck: apply prefetchSteps=%d\n", len(prefetchWorkflow.Phases[0].Steps)); err != nil {
 				return err
 			}
-			if err := install.Run(ctx, prefetchWorkflow, install.RunOptions{BundleRoot: opts.BundleRoot, StatePath: request.StatePath, EventSink: eventSink}); err != nil {
+			if err := install.Run(ctx, prefetchWorkflow, install.RunOptions{BundleRoot: opts.BundleRoot, StatePath: request.StatePath, EventSink: eventSink, Fresh: request.Fresh}); err != nil {
 				return err
 			}
 		}
 	}
 
-	if err := install.Run(ctx, request.ExecutionWorkflow, install.RunOptions{BundleRoot: opts.BundleRoot, StatePath: request.StatePath, EventSink: eventSink}); err != nil {
+	if err := install.Run(ctx, request.ExecutionWorkflow, install.RunOptions{BundleRoot: opts.BundleRoot, StatePath: request.StatePath, EventSink: eventSink, Fresh: request.Fresh}); err != nil {
 		return err
 	}
 	if opts.StdoutPrintln == nil {
@@ -90,10 +93,12 @@ func Execute(ctx context.Context, opts ExecuteOptions) (err error) {
 	return opts.StdoutPrintln("apply: ok")
 }
 
-func writeApplyDryRun(stdoutPrintf func(format string, args ...any) error, wf *config.Workflow, selectedPhaseName string, bundleRoot string) error {
+func writeApplyDryRun(stdoutPrintf func(format string, args ...any) error, request ExecutionRequest) error {
 	if stdoutPrintf == nil {
 		return fmt.Errorf("stdout printf is nil")
 	}
+	wf := request.ExecutionWorkflow
+	selectedPhaseName := request.SelectedPhase
 	if wf == nil || len(wf.Phases) == 0 {
 		if selectedPhaseName == "" {
 			return errors.New("no phases found")
@@ -101,7 +106,7 @@ func writeApplyDryRun(stdoutPrintf func(format string, args ...any) error, wf *c
 		return fmt.Errorf("%s phase not found", selectedPhaseName)
 	}
 
-	state, err := LoadInstallDryRunState(wf)
+	state, err := LoadInstallDryRunState(request)
 	if err != nil {
 		return err
 	}
@@ -111,23 +116,22 @@ func writeApplyDryRun(stdoutPrintf func(format string, args ...any) error, wf *c
 		runtimeVars[key] = value
 	}
 
-	completed := make(map[string]bool, len(state.CompletedSteps))
-	for _, stepID := range state.CompletedSteps {
-		completed[stepID] = true
+	completed := make(map[string]bool, len(state.CompletedPhases))
+	for _, phaseName := range state.CompletedPhases {
+		completed[phaseName] = true
 	}
 
 	for _, phase := range wf.Phases {
 		if err := stdoutPrintf("PHASE=%s\n", phase.Name); err != nil {
 			return err
 		}
-		for _, step := range phase.Steps {
-			if completed[step.ID] {
-				if err := stdoutPrintf("%s %s SKIP (completed)\n", step.ID, step.Kind); err != nil {
-					return err
-				}
-				continue
+		if completed[phase.Name] {
+			if err := stdoutPrintf("SKIP (completed phase)\n"); err != nil {
+				return err
 			}
-
+			continue
+		}
+		for _, step := range phase.Steps {
 			ok, evalErr := install.EvaluateWhen(step.When, wf.Vars, runtimeVars)
 			if evalErr != nil {
 				return fmt.Errorf("WHEN_EVAL_ERROR: step %s (%s): %w", step.ID, step.Kind, evalErr)
@@ -144,6 +148,20 @@ func writeApplyDryRun(stdoutPrintf func(format string, args ...any) error, wf *c
 	}
 
 	return nil
+}
+
+func workflowUsesParallelGroups(wf *config.Workflow) bool {
+	if wf == nil {
+		return false
+	}
+	for _, phase := range config.NormalizedPhases(wf) {
+		for _, step := range phase.Steps {
+			if strings.TrimSpace(step.ParallelGroup) != "" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func combineStepEventSinks(sinks ...install.StepEventSink) install.StepEventSink {

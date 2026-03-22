@@ -481,6 +481,99 @@ phases:
 		}
 	})
 
+	t.Run("duplicate phase name", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "workflow.yaml")
+		content := []byte(`version: v1alpha1
+phases:
+  - name: install
+    steps:
+      - id: first
+        apiVersion: deck/v1alpha1
+        kind: Command
+        spec:
+          command: ["true"]
+  - name: install
+    steps:
+      - id: second
+        apiVersion: deck/v1alpha1
+        kind: Command
+        spec:
+          command: ["true"]
+`)
+		if err := os.WriteFile(path, content, 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+		err := File(path)
+		if err == nil || !strings.Contains(err.Error(), "E_DUPLICATE_PHASE_NAME") {
+			t.Fatalf("expected duplicate phase name error, got %v", err)
+		}
+	})
+
+	t.Run("parallel group rejects same batch runtime dependency", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "workflow.yaml")
+		content := []byte(`version: v1alpha1
+phases:
+  - name: prepare
+    steps:
+      - id: download-a
+        apiVersion: deck/v1alpha1
+        kind: DownloadFile
+        parallelGroup: pair
+        register:
+          downloaded: outputPath
+        spec:
+          source:
+            url: https://example.local/a
+          outputPath: files/a.bin
+      - id: download-b
+        apiVersion: deck/v1alpha1
+        kind: DownloadFile
+        parallelGroup: pair
+        spec:
+          source:
+            path: "{{ .runtime.downloaded }}"
+          outputPath: files/b.bin
+`)
+		if err := os.WriteFile(path, content, 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+		err := File(path)
+		if err == nil || !strings.Contains(err.Error(), "E_PARALLEL_RUNTIME_DEPENDENCY") {
+			t.Fatalf("expected parallel runtime dependency error, got %v", err)
+		}
+	})
+
+	t.Run("parallel group rejects unsafe apply kind", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "workflow.yaml")
+		content := []byte(`version: v1alpha1
+phases:
+  - name: install
+    steps:
+      - id: install-a
+        apiVersion: deck/v1alpha1
+        kind: InstallPackage
+        parallelGroup: packages
+        spec:
+          packages: [containerd]
+      - id: install-b
+        apiVersion: deck/v1alpha1
+        kind: InstallPackage
+        parallelGroup: packages
+        spec:
+          packages: [iptables]
+`)
+		if err := os.WriteFile(path, content, 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+		err := File(path)
+		if err == nil || !strings.Contains(err.Error(), "E_PARALLEL_KIND_UNSAFE") {
+			t.Fatalf("expected unsafe parallel kind error, got %v", err)
+		}
+	})
+
 	t.Run("tool schema rejects invalid register output key for action", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")

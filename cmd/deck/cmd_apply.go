@@ -17,6 +17,7 @@ type diffOptions struct {
 	workflowPath  string
 	scenario      string
 	source        string
+	fresh         bool
 	selectedPhase string
 	output        string
 	varOverrides  map[string]string
@@ -45,6 +46,10 @@ func newPlanCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			fresh, err := cmdFlagBoolValue(cmd, "fresh")
+			if err != nil {
+				return err
+			}
 			output, err := cmdFlagValue(cmd, "output")
 			if err != nil {
 				return err
@@ -53,6 +58,7 @@ func newPlanCommand() *cobra.Command {
 				workflowPath:  workflowPath,
 				scenario:      scenario,
 				source:        source,
+				fresh:         fresh,
 				selectedPhase: selectedPhase,
 				output:        output,
 				varOverrides:  vars.AsMap(),
@@ -64,6 +70,7 @@ func newPlanCommand() *cobra.Command {
 	cmd.Flags().String("scenario", "", "scenario name to plan")
 	cmd.Flags().String("source", scenarioSourceLocal, "scenario source (local|server)")
 	cmd.Flags().String("phase", "", "phase name to plan (defaults to all phases)")
+	cmd.Flags().Bool("fresh", false, "ignore saved apply state for this invocation")
 	cmd.Flags().StringP("output", "o", "text", "output format (text|json)")
 	cmd.Flags().Var(vars, "var", "set variable override (key=value), repeatable")
 	registerScenarioSourceCompletion(cmd, "source", false)
@@ -77,10 +84,10 @@ func runDiffWithOptions(ctx context.Context, opts diffOptions) error {
 		return err
 	}
 	selectedPhase := strings.TrimSpace(opts.selectedPhase)
-	return executeDiff(ctx, workflowPath, selectedPhase, opts.output, varsAsAnyMap(opts.varOverrides))
+	return executeDiff(ctx, workflowPath, selectedPhase, opts.output, opts.fresh, varsAsAnyMap(opts.varOverrides))
 }
 
-func executeDiff(ctx context.Context, workflowPath, selectedPhase, output string, varOverrides map[string]any) error {
+func executeDiff(ctx context.Context, workflowPath, selectedPhase, output string, fresh bool, varOverrides map[string]any) error {
 	resolvedOutput, err := resolveOutputFormat(output)
 	if err != nil {
 		return err
@@ -89,6 +96,7 @@ func executeDiff(ctx context.Context, workflowPath, selectedPhase, output string
 		CommandName:                  "diff",
 		WorkflowPath:                 workflowPath,
 		VarOverrides:                 varOverrides,
+		Fresh:                        fresh,
 		SelectedPhase:                selectedPhase,
 		DefaultPhase:                 "",
 		BuildExecutionWorkflow:       true,
@@ -113,6 +121,7 @@ type applyOptions struct {
 	source        string
 	selectedPhase string
 	prefetch      bool
+	fresh         bool
 	dryRun        bool
 	varOverrides  map[string]string
 	positional    []string
@@ -150,6 +159,10 @@ func newApplyCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			fresh, err := cmdFlagBoolValue(cmd, "fresh")
+			if err != nil {
+				return err
+			}
 			dryRun, err := cmdFlagBoolValue(cmd, "dry-run")
 			if err != nil {
 				return err
@@ -160,6 +173,7 @@ func newApplyCommand() *cobra.Command {
 				source:        source,
 				selectedPhase: selectedPhase,
 				prefetch:      prefetch,
+				fresh:         fresh,
 				dryRun:        dryRun,
 				varOverrides:  vars.AsMap(),
 				positional:    args,
@@ -172,6 +186,7 @@ func newApplyCommand() *cobra.Command {
 	cmd.Flags().String("source", scenarioSourceLocal, "scenario source (local|server)")
 	cmd.Flags().String("phase", "", "phase name to execute (defaults to all phases)")
 	cmd.Flags().Bool("prefetch", false, "execute File download steps before other steps")
+	cmd.Flags().Bool("fresh", false, "ignore saved apply state for this invocation")
 	cmd.Flags().Bool("dry-run", false, "print apply plan without executing steps")
 	cmd.Flags().Var(vars, "var", "set variable override (key=value), repeatable")
 	registerScenarioSourceCompletion(cmd, "source", false)
@@ -200,6 +215,7 @@ func runApplyWithOptions(ctx context.Context, opts applyOptions) error {
 		WorkflowPath:                 workflowPath,
 		AllowRemoteWorkflow:          true,
 		VarOverrides:                 varsAsAnyMap(opts.varOverrides),
+		Fresh:                        opts.fresh,
 		SelectedPhase:                strings.TrimSpace(opts.selectedPhase),
 		DefaultPhase:                 "",
 		BuildExecutionWorkflow:       true,

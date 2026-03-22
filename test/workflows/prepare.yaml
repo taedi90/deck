@@ -1,11 +1,13 @@
 version: v1alpha1
 phases:
   - name: binaries
+    maxParallelism: 4
     imports:
       - path: prepare/binaries.yaml
   - name: images
     imports:
       - path: prepare/images.yaml
   - name: packages
+    maxParallelism: 3
     imports:
       - path: prepare/packages.yaml

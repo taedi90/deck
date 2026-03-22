@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/taedi90/deck/internal/bundle"
 	"github.com/taedi90/deck/internal/config"
 	"github.com/taedi90/deck/internal/workflowexec"
@@ -15,6 +17,7 @@ type RunOptions struct {
 	BundleRoot string
 	StatePath  string
 	EventSink  StepEventSink
+	Fresh      bool
 }
 
 const (
@@ -86,7 +89,8 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 		return fmt.Errorf("context is nil")
 	}
 
-	if len(wf.Phases) == 0 {
+	phases := config.NormalizedPhases(wf)
+	if len(phases) == 0 {
 		return fmt.Errorf("no phases found")
 	}
 
@@ -105,17 +109,20 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 		}
 		statePath = resolvedStatePath
 	}
-	stateReadPath, err := resolveStateReadPath(wf, statePath)
-	if err != nil {
-		return err
+	st := &State{CompletedPhases: []string{}, RuntimeVars: map[string]any{}}
+	if !opts.Fresh {
+		stateReadPath, err := resolveStateReadPath(wf, statePath)
+		if err != nil {
+			return err
+		}
+		loadedState, err := LoadState(stateReadPath)
+		if err != nil {
+			return err
+		}
+		st = loadedState
 	}
-
-	st, err := LoadState(stateReadPath)
-	if err != nil {
-		return err
-	}
-	completed := make(map[string]bool, len(st.CompletedSteps))
-	for _, id := range st.CompletedSteps {
+	completed := make(map[string]bool, len(st.CompletedPhases))
+	for _, id := range st.CompletedPhases {
 		completed[id] = true
 	}
 
@@ -124,111 +131,36 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 		runtimeVars[k] = v
 	}
 	runtimeVars["host"] = detectHostFacts()
-	skipped := make(map[string]bool, len(st.SkippedSteps))
-	for _, id := range st.SkippedSteps {
-		skipped[id] = true
-	}
-
 	execCtx := ExecutionContext{BundleRoot: bundleRoot, StatePath: statePath}
 	ctxData := execCtx.RenderContext()
-	for _, phase := range wf.Phases {
+	for _, phase := range phases {
 		st.Phase = phase.Name
-		for _, step := range phase.Steps {
-			if completed[step.ID] {
-				emitStepEvent(opts.EventSink, StepEvent{StepID: step.ID, Kind: step.Kind, Phase: phase.Name, Status: "skipped", Reason: "completed"})
-				continue
-			}
-
-			ok, err := evaluateWhen(step.When, wf.Vars, runtimeVars)
-			if err != nil {
-				st.FailedStep = step.ID
+		if completed[phase.Name] {
+			continue
+		}
+		for _, batch := range workflowexec.BuildPhaseBatches(phase) {
+			if err := executeInstallBatch(ctx, wf, runtimeVars, ctxData, execCtx, batch, opts.EventSink); err != nil {
+				st.FailedPhase = phase.Name
 				st.Error = err.Error()
 				st.RuntimeVars = runtimeVars
-				st.SkippedSteps = sortedStepIDs(skipped)
 				_ = SaveState(statePath, st)
-				return fmt.Errorf("step %s (%s): %w", step.ID, step.Kind, err)
-			}
-			if !ok {
-				skipped[step.ID] = true
-				emitStepEvent(opts.EventSink, StepEvent{StepID: step.ID, Kind: step.Kind, Phase: phase.Name, Status: "skipped", Reason: "when"})
-				st.RuntimeVars = runtimeVars
-				st.SkippedSteps = sortedStepIDs(skipped)
-				if err := SaveState(statePath, st); err != nil {
-					return err
-				}
-				continue
-			}
-
-			var execErr error
-			attempts := step.Retry + 1
-			if attempts < 1 {
-				attempts = 1
-			}
-			for i := 0; i < attempts; i++ {
-				if err := ctx.Err(); err != nil {
-					execErr = err
-					break
-				}
-				startedAt := time.Now().UTC().Format(time.RFC3339Nano)
-				emitStepEvent(opts.EventSink, StepEvent{StepID: step.ID, Kind: step.Kind, Phase: phase.Name, Status: "started", Attempt: i + 1, StartedAt: startedAt})
-				rendered, renderErr := workflowexec.RenderSpec(step.Spec, wf, runtimeVars, ctxData)
-				if renderErr != nil {
-					execErr = fmt.Errorf("render spec template: %w", renderErr)
-					emitStepEvent(opts.EventSink, StepEvent{StepID: step.ID, Kind: step.Kind, Phase: phase.Name, Status: "failed", Attempt: i + 1, StartedAt: startedAt, EndedAt: time.Now().UTC().Format(time.RFC3339Nano), Error: execErr.Error()})
-					break
-				}
-				if strings.TrimSpace(step.Timeout) != "" {
-					if _, exists := rendered["timeout"]; !exists {
-						rendered["timeout"] = strings.TrimSpace(step.Timeout)
-					}
-				}
-				execErr = executeStep(ctx, step.Kind, rendered, execCtx)
-				if execErr == nil {
-					if err := applyRegister(step, rendered, runtimeVars); err != nil {
-						execErr = err
-					}
-				}
-				endedAt := time.Now().UTC().Format(time.RFC3339Nano)
-				if execErr != nil {
-					emitStepEvent(opts.EventSink, StepEvent{StepID: step.ID, Kind: step.Kind, Phase: phase.Name, Status: "failed", Attempt: i + 1, StartedAt: startedAt, EndedAt: endedAt, Error: execErr.Error()})
-				} else {
-					emitStepEvent(opts.EventSink, StepEvent{StepID: step.ID, Kind: step.Kind, Phase: phase.Name, Status: "succeeded", Attempt: i + 1, StartedAt: startedAt, EndedAt: endedAt})
-				}
-				if execErr == nil {
-					break
-				}
-				if ctx.Err() != nil {
-					break
-				}
-			}
-
-			if execErr != nil {
-				st.FailedStep = step.ID
-				st.Error = execErr.Error()
-				st.RuntimeVars = runtimeVars
-				st.SkippedSteps = sortedStepIDs(skipped)
-				_ = SaveState(statePath, st)
-				return fmt.Errorf("step %s (%s): %w", step.ID, step.Kind, execErr)
-			}
-
-			st.CompletedSteps = append(st.CompletedSteps, step.ID)
-			completed[step.ID] = true
-			delete(skipped, step.ID)
-			st.FailedStep = ""
-			st.Error = ""
-			st.RuntimeVars = runtimeVars
-			st.SkippedSteps = sortedStepIDs(skipped)
-			if err := SaveState(statePath, st); err != nil {
 				return err
 			}
+		}
+		st.CompletedPhases = append(st.CompletedPhases, phase.Name)
+		completed[phase.Name] = true
+		st.FailedPhase = ""
+		st.Error = ""
+		st.RuntimeVars = runtimeVars
+		if err := SaveState(statePath, st); err != nil {
+			return err
 		}
 	}
 
 	st.Phase = "completed"
-	st.FailedStep = ""
+	st.FailedPhase = ""
 	st.Error = ""
 	st.RuntimeVars = runtimeVars
-	st.SkippedSteps = sortedStepIDs(skipped)
 	if err := SaveState(statePath, st); err != nil {
 		return err
 	}
@@ -240,22 +172,113 @@ func verifyBundleManifest(bundleRoot string) error {
 	return bundle.VerifyManifest(bundleRoot)
 }
 
-func sortedStepIDs(m map[string]bool) []string {
-	if len(m) == 0 {
+type installBatchResult struct {
+	rendered map[string]any
+	skipped  bool
+}
+
+func executeInstallBatch(ctx context.Context, wf *config.Workflow, runtimeVars map[string]any, ctxData map[string]any, execCtx ExecutionContext, batch workflowexec.StepBatch, sink StepEventSink) error {
+	if len(batch.Steps) == 0 {
 		return nil
 	}
-	items := make([]string, 0, len(m))
-	for k := range m {
-		items = append(items, k)
-	}
-	for i := 0; i < len(items); i++ {
-		for j := i + 1; j < len(items); j++ {
-			if items[j] < items[i] {
-				items[i], items[j] = items[j], items[i]
-			}
+	snapshot := cloneRuntimeVars(runtimeVars)
+	results := make([]installBatchResult, len(batch.Steps))
+	if !batch.Parallel() {
+		result, err := executeInstallStep(ctx, wf, snapshot, ctxData, execCtx, batch.PhaseName, batch.Steps[0], sink)
+		if err != nil {
+			return err
+		}
+		results[0] = result
+	} else {
+		group, groupCtx := errgroup.WithContext(ctx)
+		limit := batch.MaxParallelism
+		if limit <= 0 || limit > len(batch.Steps) {
+			limit = len(batch.Steps)
+		}
+		group.SetLimit(limit)
+		for i, step := range batch.Steps {
+			i := i
+			step := step
+			group.Go(func() error {
+				result, err := executeInstallStep(groupCtx, wf, snapshot, ctxData, execCtx, batch.PhaseName, step, sink)
+				if err != nil {
+					return err
+				}
+				results[i] = result
+				return nil
+			})
+		}
+		if err := group.Wait(); err != nil {
+			return err
 		}
 	}
-	return items
+	for i, step := range batch.Steps {
+		if results[i].skipped {
+			continue
+		}
+		if err := applyRegister(step, results[i].rendered, runtimeVars); err != nil {
+			return fmt.Errorf("step %s (%s): %w", step.ID, step.Kind, err)
+		}
+	}
+	return nil
+}
+
+func executeInstallStep(ctx context.Context, wf *config.Workflow, runtimeSnapshot map[string]any, ctxData map[string]any, execCtx ExecutionContext, phaseName string, step config.Step, sink StepEventSink) (installBatchResult, error) {
+	ok, err := evaluateWhen(step.When, wf.Vars, runtimeSnapshot)
+	if err != nil {
+		return installBatchResult{}, fmt.Errorf("step %s (%s): %w", step.ID, step.Kind, err)
+	}
+	if !ok {
+		emitStepEvent(sink, StepEvent{StepID: step.ID, Kind: step.Kind, Phase: phaseName, Status: "skipped", Reason: "when"})
+		return installBatchResult{skipped: true}, nil
+	}
+	attempts := step.Retry + 1
+	if attempts < 1 {
+		attempts = 1
+	}
+	var execErr error
+	for i := 0; i < attempts; i++ {
+		if err := ctx.Err(); err != nil {
+			execErr = err
+			break
+		}
+		startedAt := time.Now().UTC().Format(time.RFC3339Nano)
+		emitStepEvent(sink, StepEvent{StepID: step.ID, Kind: step.Kind, Phase: phaseName, Status: "started", Attempt: i + 1, StartedAt: startedAt})
+		rendered, renderErr := workflowexec.RenderSpec(step.Spec, wf, runtimeSnapshot, ctxData)
+		if renderErr != nil {
+			execErr = fmt.Errorf("render spec template: %w", renderErr)
+			emitStepEvent(sink, StepEvent{StepID: step.ID, Kind: step.Kind, Phase: phaseName, Status: "failed", Attempt: i + 1, StartedAt: startedAt, EndedAt: time.Now().UTC().Format(time.RFC3339Nano), Error: execErr.Error()})
+			break
+		}
+		if strings.TrimSpace(step.Timeout) != "" {
+			if _, exists := rendered["timeout"]; !exists {
+				rendered["timeout"] = strings.TrimSpace(step.Timeout)
+			}
+		}
+		execErr = executeStep(ctx, step.Kind, rendered, execCtx)
+		endedAt := time.Now().UTC().Format(time.RFC3339Nano)
+		if execErr != nil {
+			emitStepEvent(sink, StepEvent{StepID: step.ID, Kind: step.Kind, Phase: phaseName, Status: "failed", Attempt: i + 1, StartedAt: startedAt, EndedAt: endedAt, Error: execErr.Error()})
+		} else {
+			emitStepEvent(sink, StepEvent{StepID: step.ID, Kind: step.Kind, Phase: phaseName, Status: "succeeded", Attempt: i + 1, StartedAt: startedAt, EndedAt: endedAt})
+			return installBatchResult{rendered: rendered}, nil
+		}
+		if ctx.Err() != nil {
+			break
+		}
+	}
+	return installBatchResult{}, fmt.Errorf("step %s (%s): %w", step.ID, step.Kind, execErr)
+}
+
+func cloneRuntimeVars(input map[string]any) map[string]any {
+	if input == nil {
+		return map[string]any{}
+	}
+	out := make(map[string]any, len(input))
+	for key, value := range input {
+		out[key] = value
+	}
+	return out
 }
 
 func renderSpec(spec map[string]any, wf *config.Workflow, runtimeVars map[string]any) (map[string]any, error) {

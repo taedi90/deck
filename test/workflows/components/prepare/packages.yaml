@@ -1,6 +1,7 @@
 steps:
   - id: download-ubuntu2204-runtime-deps
     kind: DownloadPackage
+    parallelGroup: distro-package-downloads
     spec:
       packages: [containerd, containernetworking-plugins]
       distro:
@@ -16,6 +17,7 @@ steps:
       outputDir: packages/apt/ubuntu2204
   - id: download-ubuntu2404-runtime-deps
     kind: DownloadPackage
+    parallelGroup: distro-package-downloads
     spec:
       packages: [containerd, containernetworking-plugins]
       distro:
@@ -31,6 +33,7 @@ steps:
       outputDir: packages/apt/ubuntu2404
   - id: download-rocky9-runtime-deps
     kind: DownloadPackage
+    parallelGroup: distro-package-downloads
     spec:
       packages: [bash]
       distro:

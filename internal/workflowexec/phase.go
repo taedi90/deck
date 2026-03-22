@@ -6,7 +6,7 @@ func FindPhase(wf *config.Workflow, name string) (config.Phase, bool) {
 	if wf == nil {
 		return config.Phase{}, false
 	}
-	for _, phase := range wf.Phases {
+	for _, phase := range config.NormalizedPhases(wf) {
 		if phase.Name == name {
 			return phase, true
 		}

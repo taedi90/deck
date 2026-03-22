@@ -1,6 +1,7 @@
 steps:
   - id: download-kubelet-amd64
     kind: DownloadFile
+    parallelGroup: binary-downloads
     spec:
       source:
         url: https://dl.k8s.io/release/{{ .vars.kubernetesVersion }}/bin/linux/amd64/kubelet
@@ -8,6 +9,7 @@ steps:
       mode: "0755"
   - id: download-kubelet-arm64
     kind: DownloadFile
+    parallelGroup: binary-downloads
     spec:
       source:
         url: https://dl.k8s.io/release/{{ .vars.kubernetesVersion }}/bin/linux/arm64/kubelet
@@ -15,6 +17,7 @@ steps:
       mode: "0755"
   - id: download-kubeadm-amd64
     kind: DownloadFile
+    parallelGroup: binary-downloads
     spec:
       source:
         url: https://dl.k8s.io/release/{{ .vars.kubernetesVersion }}/bin/linux/amd64/kubeadm
@@ -22,6 +25,7 @@ steps:
       mode: "0755"
   - id: download-kubeadm-arm64
     kind: DownloadFile
+    parallelGroup: binary-downloads
     spec:
       source:
         url: https://dl.k8s.io/release/{{ .vars.kubernetesVersion }}/bin/linux/arm64/kubeadm
@@ -29,6 +33,7 @@ steps:
       mode: "0755"
   - id: download-kubectl-amd64
     kind: DownloadFile
+    parallelGroup: binary-downloads
     spec:
       source:
         url: https://dl.k8s.io/release/{{ .vars.kubernetesVersion }}/bin/linux/amd64/kubectl
@@ -36,6 +41,7 @@ steps:
       mode: "0755"
   - id: download-kubectl-arm64
     kind: DownloadFile
+    parallelGroup: binary-downloads
     spec:
       source:
         url: https://dl.k8s.io/release/{{ .vars.kubernetesVersion }}/bin/linux/arm64/kubectl
@@ -43,30 +49,35 @@ steps:
       mode: "0755"
   - id: download-crictl-amd64
     kind: DownloadFile
+    parallelGroup: binary-downloads
     spec:
       source:
         url: https://github.com/kubernetes-sigs/cri-tools/releases/download/v1.30.0/crictl-v1.30.0-linux-amd64.tar.gz
       outputPath: files/bin/linux/amd64/crictl.tar.gz
   - id: download-crictl-arm64
     kind: DownloadFile
+    parallelGroup: binary-downloads
     spec:
       source:
         url: https://github.com/kubernetes-sigs/cri-tools/releases/download/v1.30.0/crictl-v1.30.0-linux-arm64.tar.gz
       outputPath: files/bin/linux/arm64/crictl.tar.gz
   - id: download-containerd-amd64
     kind: DownloadFile
+    parallelGroup: binary-downloads
     spec:
       source:
         url: https://github.com/containerd/containerd/releases/download/v1.7.18/containerd-1.7.18-linux-amd64.tar.gz
       outputPath: files/bin/linux/amd64/containerd.tar.gz
   - id: download-containerd-arm64
     kind: DownloadFile
+    parallelGroup: binary-downloads
     spec:
       source:
         url: https://github.com/containerd/containerd/releases/download/v1.7.18/containerd-1.7.18-linux-arm64.tar.gz
       outputPath: files/bin/linux/arm64/containerd.tar.gz
   - id: download-runc-amd64
     kind: DownloadFile
+    parallelGroup: binary-downloads
     spec:
       source:
         url: https://github.com/opencontainers/runc/releases/download/v1.1.13/runc.amd64
@@ -74,6 +85,7 @@ steps:
       mode: "0755"
   - id: download-runc-arm64
     kind: DownloadFile
+    parallelGroup: binary-downloads
     spec:
       source:
         url: https://github.com/opencontainers/runc/releases/download/v1.1.13/runc.arm64
@@ -81,18 +93,21 @@ steps:
       mode: "0755"
   - id: download-cni-plugins-amd64
     kind: DownloadFile
+    parallelGroup: binary-downloads
     spec:
       source:
         url: https://github.com/containernetworking/plugins/releases/download/v1.5.1/cni-plugins-linux-amd64-v1.5.1.tgz
       outputPath: files/bin/linux/amd64/cni-plugins.tgz
   - id: download-cni-plugins-arm64
     kind: DownloadFile
+    parallelGroup: binary-downloads
     spec:
       source:
         url: https://github.com/containernetworking/plugins/releases/download/v1.5.1/cni-plugins-linux-arm64-v1.5.1.tgz
       outputPath: files/bin/linux/arm64/cni-plugins.tgz
   - id: download-upgrade-kubelet-amd64
     kind: DownloadFile
+    parallelGroup: binary-downloads
     when: vars.upgradeKubernetesVersion != ""
     spec:
       source:
@@ -101,6 +116,7 @@ steps:
       mode: "0755"
   - id: download-upgrade-kubelet-arm64
     kind: DownloadFile
+    parallelGroup: binary-downloads
     when: vars.upgradeKubernetesVersion != ""
     spec:
       source:
@@ -109,6 +125,7 @@ steps:
       mode: "0755"
   - id: download-upgrade-kubeadm-amd64
     kind: DownloadFile
+    parallelGroup: binary-downloads
     when: vars.upgradeKubernetesVersion != ""
     spec:
       source:
@@ -117,6 +134,7 @@ steps:
       mode: "0755"
   - id: download-upgrade-kubeadm-arm64
     kind: DownloadFile
+    parallelGroup: binary-downloads
     when: vars.upgradeKubernetesVersion != ""
     spec:
       source:
@@ -125,6 +143,7 @@ steps:
       mode: "0755"
   - id: download-upgrade-kubectl-amd64
     kind: DownloadFile
+    parallelGroup: binary-downloads
     when: vars.upgradeKubernetesVersion != ""
     spec:
       source:
@@ -133,6 +152,7 @@ steps:
       mode: "0755"
   - id: download-upgrade-kubectl-arm64
     kind: DownloadFile
+    parallelGroup: binary-downloads
     when: vars.upgradeKubernetesVersion != ""
     spec:
       source:

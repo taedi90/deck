@@ -137,8 +137,8 @@ func TestRun_InstallTools(t *testing.T) {
 	if err := json.Unmarshal(rawState, &st); err != nil {
 		t.Fatalf("parse state: %v", err)
 	}
-	if len(st.CompletedSteps) != 9 {
-		t.Fatalf("expected 9 completed steps, got %d", len(st.CompletedSteps))
+	if len(st.CompletedPhases) != 1 || st.CompletedPhases[0] != "install" {
+		t.Fatalf("unexpected completed phases: %#v", st.CompletedPhases)
 	}
 	if st.Phase != "completed" {
 		t.Fatalf("expected final phase state completed, got %q", st.Phase)
@@ -339,11 +339,11 @@ func TestRun_ResumeFromFailedStep(t *testing.T) {
 	if err := json.Unmarshal(rawState, &st); err != nil {
 		t.Fatalf("parse state: %v", err)
 	}
-	if len(st.CompletedSteps) != 1 || st.CompletedSteps[0] != "s1" {
-		t.Fatalf("unexpected completed steps after failure: %#v", st.CompletedSteps)
+	if len(st.CompletedPhases) != 0 {
+		t.Fatalf("unexpected completed phases after failure: %#v", st.CompletedPhases)
 	}
-	if st.FailedStep != "s2" {
-		t.Fatalf("expected failed step s2, got %q", st.FailedStep)
+	if st.FailedPhase != "install" {
+		t.Fatalf("expected failed phase install, got %q", st.FailedPhase)
 	}
 
 	wf.Phases[0].Steps[1].Spec = map[string]any{"command": []any{"true"}}
@@ -363,11 +363,11 @@ func TestRun_ResumeFromFailedStep(t *testing.T) {
 	if err := json.Unmarshal(rawState, &final); err != nil {
 		t.Fatalf("parse final state: %v", err)
 	}
-	if len(final.CompletedSteps) != 3 {
-		t.Fatalf("expected all steps completed, got %d", len(final.CompletedSteps))
+	if len(final.CompletedPhases) != 1 || final.CompletedPhases[0] != "install" {
+		t.Fatalf("unexpected completed phases after resume: %#v", final.CompletedPhases)
 	}
-	if final.FailedStep != "" {
-		t.Fatalf("expected empty failed step, got %q", final.FailedStep)
+	if final.FailedPhase != "" {
+		t.Fatalf("expected empty failed phase, got %q", final.FailedPhase)
 	}
 }
 
@@ -1705,9 +1705,49 @@ func TestRun_WhenAndRegisterSemantics(t *testing.T) {
 	if st.RuntimeVars["workerJoinFile"] != joinPath {
 		t.Fatalf("expected runtime var workerJoinFile=%q, got %#v", joinPath, st.RuntimeVars["workerJoinFile"])
 	}
-	if len(st.SkippedSteps) != 1 || st.SkippedSteps[0] != "skip-worker" {
-		t.Fatalf("unexpected skipped steps: %#v", st.SkippedSteps)
+	if len(st.CompletedPhases) != 1 || st.CompletedPhases[0] != "install" {
+		t.Fatalf("unexpected completed phases: %#v", st.CompletedPhases)
 	}
+}
+
+func TestRun_ParallelGroupRunsConcurrentlyAndRegistersAfterBatch(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state", "state.json")
+	starts := filepath.Join(dir, "starts.txt")
+	left := filepath.Join(dir, "left.txt")
+	right := filepath.Join(dir, "right.txt")
+	combined := filepath.Join(dir, "combined.txt")
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name:           "install",
+			MaxParallelism: 2,
+			Steps: []config.Step{
+				{ID: "left", Kind: "WriteFile", ParallelGroup: "pair", Spec: map[string]any{"path": left, "content": "L"}, Register: map[string]string{"leftPath": "path"}},
+				{ID: "right", Kind: "Command", ParallelGroup: "pair", Timeout: "2s", Spec: map[string]any{"command": []any{"sh", "-c", fmt.Sprintf("echo right >> '%s'; while [ $(wc -l < '%s' 2>/dev/null || printf 0) -lt 2 ]; do sleep 0.05; done; printf R > '%s'", shellEscapePath(starts), shellEscapePath(starts), shellEscapePath(right))}}},
+				{ID: "left-sync", Kind: "Command", ParallelGroup: "pair", Timeout: "2s", Spec: map[string]any{"command": []any{"sh", "-c", fmt.Sprintf("echo left >> '%s'; while [ $(wc -l < '%s' 2>/dev/null || printf 0) -lt 2 ]; do sleep 0.05; done", shellEscapePath(starts), shellEscapePath(starts))}}},
+				{ID: "combine", Kind: "WriteFile", Spec: map[string]any{"path": combined, "content": "{{ .runtime.leftPath }}"}},
+			},
+		}},
+	}
+
+	if err := Run(context.Background(), wf, RunOptions{StatePath: statePath, Fresh: true}); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+	if _, err := os.Stat(right); err != nil {
+		t.Fatalf("expected right command output: %v", err)
+	}
+	raw, err := os.ReadFile(combined)
+	if err != nil {
+		t.Fatalf("read combined: %v", err)
+	}
+	if strings.TrimSpace(string(raw)) != left {
+		t.Fatalf("expected combined output to equal left path %q, got %q", left, strings.TrimSpace(string(raw)))
+	}
+}
+
+func shellEscapePath(path string) string {
+	return strings.ReplaceAll(path, "'", "'\\''")
 }
 
 func TestRun_InitKubeadmSkipDoesNotRegisterMissingJoinFile(t *testing.T) {

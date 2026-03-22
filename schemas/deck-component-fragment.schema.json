@@ -882,6 +882,10 @@
             "additionalProperties": true,
             "type": "object"
           },
+          "parallelGroup": {
+            "minLength": 1,
+            "type": "string"
+          },
           "register": {
             "additionalProperties": {
               "type": "string"

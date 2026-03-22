@@ -24,6 +24,8 @@ import (
 var (
 	runtimeVarNamePattern      = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 	singleBraceTemplatePattern = regexp.MustCompile(`(^|[^\{])(\{\s*\.(vars|runtime)\.[^{}]+\})([^\}]|$)`)
+	runtimeWhenRefPattern      = regexp.MustCompile(`\bruntime\.([A-Za-z_][A-Za-z0-9_]*)`)
+	runtimeTemplateRefPattern  = regexp.MustCompile(`\.runtime\.([A-Za-z_][A-Za-z0-9_]*)`)
 )
 
 type documentKind string
@@ -507,6 +509,9 @@ func validateSemantics(name string, wf *config.Workflow) error {
 	if err := validateRoleKinds(name, wf); err != nil {
 		return err
 	}
+	if err := validatePhaseSemantics(wf, inferWorkflowMode(name, wf)); err != nil {
+		return err
+	}
 
 	seenStepID := map[string]bool{}
 	assignedRuntime := map[string]string{}
@@ -564,6 +569,172 @@ func validateSemantics(name string, wf *config.Workflow) error {
 	return nil
 }
 
+func validatePhaseSemantics(wf *config.Workflow, role string) error {
+	phases := config.NormalizedPhases(wf)
+	seenPhase := map[string]bool{}
+	for _, phase := range phases {
+		phaseName := strings.TrimSpace(phase.Name)
+		if phaseName == "" {
+			return fmt.Errorf("E_DUPLICATE_PHASE_NAME: empty phase name")
+		}
+		if seenPhase[phaseName] {
+			return fmt.Errorf("E_DUPLICATE_PHASE_NAME: %s", phaseName)
+		}
+		seenPhase[phaseName] = true
+		if err := validatePhaseParallelSemantics(phase, role); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validatePhaseParallelSemantics(phase config.Phase, role string) error {
+	if phase.MaxParallelism < 0 {
+		return fmt.Errorf("E_SCHEMA_INVALID: phase %s: maxParallelism must be >= 0", phase.Name)
+	}
+	closedGroups := map[string]bool{}
+	currentGroup := ""
+	for _, step := range phase.Steps {
+		group := strings.TrimSpace(step.ParallelGroup)
+		if group == "" {
+			if currentGroup != "" {
+				closedGroups[currentGroup] = true
+				currentGroup = ""
+			}
+			continue
+		}
+		if currentGroup != "" && currentGroup != group {
+			closedGroups[currentGroup] = true
+		}
+		if closedGroups[group] && currentGroup != group {
+			return fmt.Errorf("E_PARALLEL_GROUP_DISCONTIGUOUS: phase %s group %s must be contiguous", phase.Name, group)
+		}
+		currentGroup = group
+	}
+	batches := workflowexec.BuildPhaseBatches(phase)
+	for _, batch := range batches {
+		if !batch.Parallel() {
+			continue
+		}
+		if err := validateParallelBatch(batch, role); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateParallelBatch(batch workflowexec.StepBatch, role string) error {
+	registered := map[string]string{}
+	paths := map[string]string{}
+	prepareOutputs := map[string]string{}
+	for _, step := range batch.Steps {
+		if role == "apply" && !parallelApplyKindAllowed(step.Kind) {
+			return fmt.Errorf("E_PARALLEL_KIND_UNSAFE: phase %s step %s (%s) is not allowed in parallelGroup", batch.PhaseName, step.ID, step.Kind)
+		}
+		for runtimeVar := range step.Register {
+			registered[runtimeVar] = step.ID
+		}
+		if path := literalApplyTargetPath(step); path != "" {
+			if prev, exists := paths[path]; exists {
+				return fmt.Errorf("E_PARALLEL_PATH_CONFLICT: phase %s steps %s and %s both target %s in the same parallelGroup", batch.PhaseName, prev, step.ID, path)
+			}
+			paths[path] = step.ID
+		}
+		if output := literalPrepareOutputRoot(step); output != "" {
+			if prev, exists := prepareOutputs[output]; exists {
+				return fmt.Errorf("E_PARALLEL_OUTPUT_CONFLICT: phase %s steps %s and %s both write %s in the same parallelGroup", batch.PhaseName, prev, step.ID, output)
+			}
+			prepareOutputs[output] = step.ID
+		}
+	}
+	for _, step := range batch.Steps {
+		for _, runtimeVar := range referencedRuntimeVars(step) {
+			if producer, exists := registered[runtimeVar]; exists {
+				return fmt.Errorf("E_PARALLEL_RUNTIME_DEPENDENCY: phase %s step %s references runtime.%s from same parallelGroup producer %s", batch.PhaseName, step.ID, runtimeVar, producer)
+			}
+		}
+	}
+	return nil
+}
+
+func parallelApplyKindAllowed(kind string) bool {
+	switch kind {
+	case "Command", "CopyFile", "EnsureDirectory", "ExtractArchive", "WaitForCommand", "WaitForFile", "WaitForMissingFile", "WaitForService", "WaitForTCPPort", "WaitForMissingTCPPort", "WriteFile":
+		return true
+	default:
+		return false
+	}
+}
+
+func referencedRuntimeVars(step config.Step) []string {
+	seen := map[string]bool{}
+	for _, match := range runtimeWhenRefPattern.FindAllStringSubmatch(strings.TrimSpace(step.When), -1) {
+		if len(match) == 2 {
+			seen[match[1]] = true
+		}
+	}
+	collectRuntimeTemplateRefs(step.Spec, seen)
+	vars := make([]string, 0, len(seen))
+	for key := range seen {
+		vars = append(vars, key)
+	}
+	sort.Strings(vars)
+	return vars
+}
+
+func collectRuntimeTemplateRefs(value any, seen map[string]bool) {
+	switch typed := value.(type) {
+	case string:
+		for _, match := range runtimeTemplateRefPattern.FindAllStringSubmatch(typed, -1) {
+			if len(match) == 2 {
+				seen[match[1]] = true
+			}
+		}
+	case map[string]any:
+		for _, item := range typed {
+			collectRuntimeTemplateRefs(item, seen)
+		}
+	case []any:
+		for _, item := range typed {
+			collectRuntimeTemplateRefs(item, seen)
+		}
+	}
+}
+
+func literalApplyTargetPath(step config.Step) string {
+	if step.Kind == "WriteFile" || step.Kind == "CopyFile" || step.Kind == "EnsureDirectory" || step.Kind == "CreateSymlink" || step.Kind == "WriteContainerdConfig" || step.Kind == "WriteContainerdRegistryHosts" || step.Kind == "ConfigureRepository" {
+		return stableLiteralPath(stringValue(step.Spec, "path"))
+	}
+	if step.Kind == "ExtractArchive" || step.Kind == "EditFile" || step.Kind == "WriteSystemdUnit" {
+		if nested := mapValue(step.Spec, "output"); len(nested) > 0 {
+			if path := stableLiteralPath(stringValue(nested, "path")); path != "" {
+				return path
+			}
+		}
+		return stableLiteralPath(stringValue(step.Spec, "path"))
+	}
+	return ""
+}
+
+func literalPrepareOutputRoot(step config.Step) string {
+	switch step.Kind {
+	case "DownloadPackage", "DownloadImage":
+		return stableLiteralPath(stringValue(step.Spec, "outputDir"))
+	case "DownloadFile":
+		return stableLiteralPath(stringValue(step.Spec, "outputPath"))
+	default:
+		return ""
+	}
+}
+
+func stableLiteralPath(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" || strings.Contains(trimmed, "{{") {
+		return ""
+	}
+	return filepath.ToSlash(trimmed)
+}
+
 func validateRoleKinds(name string, wf *config.Workflow) error {
 	role := inferWorkflowMode(name, wf)
 	if role == "" {
@@ -615,15 +786,41 @@ func isValidOutputKey(kind string, spec map[string]any, outputKey string) bool {
 }
 
 func workflowSteps(wf *config.Workflow) []config.Step {
-	if len(wf.Phases) > 0 {
-		steps := make([]config.Step, 0)
-		for _, phase := range wf.Phases {
-			steps = append(steps, phase.Steps...)
-		}
-		return steps
+	steps := make([]config.Step, 0)
+	for _, phase := range config.NormalizedPhases(wf) {
+		steps = append(steps, phase.Steps...)
 	}
+	return steps
+}
 
-	return wf.Steps
+func stringValue(v map[string]any, key string) string {
+	if v == nil {
+		return ""
+	}
+	raw, ok := v[key]
+	if !ok {
+		return ""
+	}
+	s, ok := raw.(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(s)
+}
+
+func mapValue(v map[string]any, key string) map[string]any {
+	if v == nil {
+		return map[string]any{}
+	}
+	raw, ok := v[key]
+	if !ok {
+		return map[string]any{}
+	}
+	m, ok := raw.(map[string]any)
+	if !ok || m == nil {
+		return map[string]any{}
+	}
+	return m
 }
 
 func validateSingleBraceTemplates(name string, content []byte) error {

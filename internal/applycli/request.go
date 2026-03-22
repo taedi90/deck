@@ -29,6 +29,7 @@ type ExecutionRequestOptions struct {
 	AllowRemoteWorkflow          bool
 	NormalizeLocalWorkflowPath   bool
 	VarOverrides                 map[string]any
+	Fresh                        bool
 	SelectedPhase                string
 	DefaultPhase                 string
 	BuildExecutionWorkflow       bool
@@ -39,6 +40,7 @@ type ExecutionRequestOptions struct {
 type ExecutionRequest struct {
 	WorkflowPath      string
 	Workflow          *config.Workflow
+	Fresh             bool
 	SelectedPhase     string
 	ExecutionWorkflow *config.Workflow
 	StatePath         string
@@ -112,13 +114,21 @@ func ResolveExecutionRequest(ctx context.Context, opts ExecutionRequestOptions) 
 	return ExecutionRequest{
 		WorkflowPath:      workflowPath,
 		Workflow:          wf,
+		Fresh:             opts.Fresh,
 		SelectedPhase:     selectedPhase,
 		ExecutionWorkflow: executionWorkflow,
 		StatePath:         statePath,
 	}, nil
 }
 
-func LoadInstallDryRunState(wf *config.Workflow) (*install.State, error) {
+func LoadInstallDryRunState(request ExecutionRequest) (*install.State, error) {
+	if request.Fresh {
+		return &install.State{CompletedPhases: []string{}, RuntimeVars: map[string]any{}}, nil
+	}
+	wf := request.Workflow
+	if wf == nil {
+		wf = request.ExecutionWorkflow
+	}
 	statePath, err := ResolveInstallStatePath(wf)
 	if err != nil {
 		return nil, err
