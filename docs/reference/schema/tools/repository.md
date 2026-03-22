@@ -14,12 +14,12 @@ Shared step envelope fields such as `id`, `apiVersion`, `kind`, `when`, `retry`,
 
 ## Supported Kinds
 
-- `ConfigureRepository`: Write apt or yum repository definitions.
+- `ConfigureRepository`: Write deb or rpm repository definitions.
 - `RefreshRepository`: Refresh package metadata with repo filtering.
 
 ## `ConfigureRepository`
 
-Write apt or yum repository definitions.
+Write deb or rpm repository definitions.
 
 - schema: `../../../schemas/tools/repository.configure.schema.json`
 - outputs: `path`
