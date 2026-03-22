@@ -2,7 +2,7 @@
   "$id": "https://deck.local/schemas/tools/wait.file-absent.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Waits until a file, set of files, or glob match is absent.",
+  "description": "Wait until a file or directory is absent.",
   "properties": {
     "apiVersion": {
       "const": "deck/v1alpha1",

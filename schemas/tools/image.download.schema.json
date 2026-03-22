@@ -2,7 +2,7 @@
   "$id": "https://deck.local/schemas/tools/image.download.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Downloads images into bundle output storage.",
+  "description": "Download container images into prepared bundle storage.",
   "properties": {
     "apiVersion": {
       "const": "deck/v1alpha1",

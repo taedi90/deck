@@ -2,7 +2,7 @@
   "$id": "https://deck.local/schemas/tools/kubeadm.init.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Runs kubeadm init and writes a join command file.",
+  "description": "Run kubeadm init and write the join command to a file.",
   "properties": {
     "apiVersion": {
       "const": "deck/v1alpha1",

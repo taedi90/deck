@@ -2,7 +2,7 @@
   "$id": "https://deck.local/schemas/tools/kubeadm.join.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Runs kubeadm join.",
+  "description": "Run kubeadm join for a worker or additional control-plane node.",
   "properties": {
     "apiVersion": {
       "const": "deck/v1alpha1",

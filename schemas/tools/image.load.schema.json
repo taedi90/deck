@@ -2,7 +2,7 @@
   "$id": "https://deck.local/schemas/tools/image.load.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Loads prepared image archives into the local container runtime.",
+  "description": "Load prepared image archives into the local container runtime.",
   "properties": {
     "apiVersion": {
       "const": "deck/v1alpha1",

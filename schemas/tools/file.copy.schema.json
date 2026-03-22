@@ -2,7 +2,7 @@
   "$id": "https://deck.local/schemas/tools/file.copy.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Copies a file already present on the node.",
+  "description": "Copy a file from a declared source to a destination path.",
   "properties": {
     "apiVersion": {
       "const": "deck/v1alpha1",

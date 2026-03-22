@@ -2,39 +2,16 @@ package workflowexec
 
 import "strings"
 
-type StepContract struct {
-	SchemaFile string
-	Roles      map[string]bool
-	Outputs    map[string]bool
-}
-
-func stepContracts() map[StepTypeKey]StepContract {
-	contracts := make(map[StepTypeKey]StepContract, len(StepDefinitions()))
-	for _, def := range StepDefinitions() {
-		contracts[StepTypeKey{APIVersion: def.APIVersion, Kind: def.Kind}] = StepContract{
-			SchemaFile: def.SchemaFile,
-			Roles:      setOf(def.Roles...),
-			Outputs:    setOf(def.Outputs...),
-		}
-	}
-	return contracts
-}
-
 func normalizeStepKey(key StepTypeKey) StepTypeKey {
 	return StepTypeKey{APIVersion: strings.TrimSpace(key.APIVersion), Kind: strings.TrimSpace(key.Kind)}
 }
 
 func StepSchemaFileForKey(key StepTypeKey) (string, bool) {
-	contract, ok := stepContracts()[normalizeStepKey(key)]
-	if !ok || contract.SchemaFile == "" {
+	def, ok := BuiltInTypeDefinitionForKey(normalizeStepKey(key))
+	if !ok || def.Step.SchemaFile == "" {
 		return "", false
 	}
-	return contract.SchemaFile, true
-}
-
-func StepContractForKey(key StepTypeKey) (StepContract, bool) {
-	contract, ok := stepContracts()[normalizeStepKey(key)]
-	return contract, ok
+	return def.Step.SchemaFile, true
 }
 
 func StepKinds() []string {
@@ -47,25 +24,26 @@ func StepKinds() []string {
 }
 
 func StepAllowedForRoleForKey(role string, key StepTypeKey) bool {
-	contract, ok := StepContractForKey(key)
+	def, ok := BuiltInTypeDefinitionForKey(normalizeStepKey(key))
 	if !ok {
 		return false
 	}
-	return contract.Roles[role]
+	return containsString(def.Step.Roles, role)
 }
 
 func StepHasOutputForKey(key StepTypeKey, output string) bool {
-	contract, ok := StepContractForKey(key)
+	def, ok := BuiltInTypeDefinitionForKey(normalizeStepKey(key))
 	if !ok {
 		return false
 	}
-	return contract.Outputs[output]
+	return containsString(def.Step.Outputs, output)
 }
 
-func setOf(values ...string) map[string]bool {
-	out := make(map[string]bool, len(values))
+func containsString(values []string, want string) bool {
 	for _, value := range values {
-		out[value] = true
+		if value == want {
+			return true
+		}
 	}
-	return out
+	return false
 }

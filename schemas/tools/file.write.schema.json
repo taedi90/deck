@@ -2,7 +2,7 @@
   "$id": "https://deck.local/schemas/tools/file.write.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Writes inline or templated content to a node path.",
+  "description": "Write inline or templated file content to a destination path.",
   "properties": {
     "apiVersion": {
       "const": "deck/v1alpha1",

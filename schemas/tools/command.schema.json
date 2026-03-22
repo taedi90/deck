@@ -2,7 +2,7 @@
   "$id": "https://deck.local/schemas/tools/command.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Escape hatch for commands that are not yet covered by typed steps.",
+  "description": "Run an explicit command as an escape hatch.",
   "properties": {
     "apiVersion": {
       "const": "deck/v1alpha1",

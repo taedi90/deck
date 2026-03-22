@@ -2,7 +2,7 @@
   "$id": "https://deck.local/schemas/tools/file.download.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Downloads or stages a file into bundle output storage.",
+  "description": "Download a file into prepared bundle storage.",
   "properties": {
     "apiVersion": {
       "const": "deck/v1alpha1",

@@ -2,7 +2,7 @@
   "$id": "https://deck.local/schemas/tools/package.install.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Installs packages on the local node.",
+  "description": "Install packages on the local node.",
   "properties": {
     "apiVersion": {
       "const": "deck/v1alpha1",

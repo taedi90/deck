@@ -2,7 +2,7 @@
   "$id": "https://deck.local/schemas/tools/cluster-check.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Polls and verifies Kubernetes cluster state on the local node.",
+  "description": "Poll and verify Kubernetes cluster health on the local node.",
   "properties": {
     "apiVersion": {
       "const": "deck/v1alpha1",

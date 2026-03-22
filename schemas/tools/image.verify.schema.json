@@ -2,7 +2,7 @@
   "$id": "https://deck.local/schemas/tools/image.verify.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Verifies that required images already exist on the node.",
+  "description": "Verify that required container images already exist on the node.",
   "properties": {
     "apiVersion": {
       "const": "deck/v1alpha1",

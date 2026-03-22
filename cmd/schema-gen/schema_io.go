@@ -60,7 +60,8 @@ func loadToolPageInputs(dir string) ([]schemadoc.PageInput, error) {
 		return nil, err
 	}
 	pagesBySlug := map[string]*schemadoc.PageInput{}
-	for _, def := range workflowexec.StepDefinitions() {
+	for _, typedDef := range workflowexec.BuiltInTypeDefinitions() {
+		def := typedDef.Step
 		if def.Visibility != "public" {
 			continue
 		}
@@ -95,7 +96,7 @@ func loadToolPageInputs(dir string) ([]schemadoc.PageInput, error) {
 			Description: doc.Description,
 			SchemaPath:  filepath.ToSlash(filepath.Join("schemas", "tools", def.SchemaFile)),
 			Schema:      raw,
-			Meta:        schemadoc.ToolMetaForDefinition(def),
+			Meta:        schemadoc.ToolMetadataFromRegistry(typedDef.Docs),
 			Required:    nestedRequired(doc.Properties, "spec"),
 			Spec:        spec,
 			Outputs:     append([]string(nil), def.Outputs...),

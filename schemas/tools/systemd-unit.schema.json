@@ -2,7 +2,7 @@
   "$id": "https://deck.local/schemas/tools/systemd-unit.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Writes a systemd unit file on the node.",
+  "description": "Write a systemd unit file on the node.",
   "properties": {
     "apiVersion": {
       "const": "deck/v1alpha1",

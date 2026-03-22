@@ -2,7 +2,7 @@
   "$id": "https://deck.local/schemas/tools/host-check.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Runs host checks before prepare execution.",
+  "description": "Run host checks before prepare execution.",
   "properties": {
     "apiVersion": {
       "const": "deck/v1alpha1",

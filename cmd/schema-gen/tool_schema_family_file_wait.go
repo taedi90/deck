@@ -2,8 +2,7 @@ package main
 
 import "github.com/taedi90/deck/internal/stepspec"
 
-func generateDownloadFileToolSchema() map[string]any {
-	root := stepEnvelopeSchema("DownloadFile", "DownloadFileStep", "Downloads or stages a file into bundle output storage.", "public")
+func patchDownloadFileToolSchema(root map[string]any) {
 	props := propertyMap(root)
 	spec, err := reflectedSpecSchema(&stepspec.DownloadFile{})
 	if err != nil {
@@ -17,11 +16,9 @@ func generateDownloadFileToolSchema() map[string]any {
 	setMap(properties, "mode", modeSchema())
 	spec["required"] = []any{"source"}
 	setMap(props, "spec", spec)
-	return root
 }
 
-func generateWriteFileToolSchema() map[string]any {
-	root := stepEnvelopeSchema("WriteFile", "WriteFileStep", "Writes inline or templated content to a node path.", "public")
+func patchWriteFileToolSchema(root map[string]any) {
 	props := propertyMap(root)
 	spec, err := reflectedSpecSchema(&stepspec.WriteFile{})
 	if err != nil {
@@ -38,11 +35,9 @@ func generateWriteFileToolSchema() map[string]any {
 		map[string]any{"required": []any{"template"}, "not": map[string]any{"required": []any{"content"}}},
 	}
 	setMap(props, "spec", spec)
-	return root
 }
 
-func generateCopyFileToolSchema() map[string]any {
-	root := stepEnvelopeSchema("CopyFile", "CopyFileStep", "Copies a file already present on the node.", "public")
+func patchCopyFileToolSchema(root map[string]any) {
 	props := propertyMap(root)
 	spec, err := reflectedSpecSchema(&stepspec.CopyFile{})
 	if err != nil {
@@ -55,11 +50,9 @@ func generateCopyFileToolSchema() map[string]any {
 	setMap(properties, "mode", modeSchema())
 	spec["required"] = []any{"source", "path"}
 	setMap(props, "spec", spec)
-	return root
 }
 
-func generateExtractArchiveToolSchema() map[string]any {
-	root := stepEnvelopeSchema("ExtractArchive", "ExtractArchiveStep", "Extracts an archive from a declared source into a destination directory.", "public")
+func patchExtractArchiveToolSchema(root map[string]any) {
 	props := propertyMap(root)
 	spec, err := reflectedSpecSchema(&stepspec.ExtractArchive{})
 	if err != nil {
@@ -73,11 +66,9 @@ func generateExtractArchiveToolSchema() map[string]any {
 	setMap(properties, "mode", modeSchema())
 	spec["required"] = []any{"source", "path"}
 	setMap(props, "spec", spec)
-	return root
 }
 
-func generateEditFileToolSchema() map[string]any {
-	root := stepEnvelopeSchema("EditFile", "EditFileStep", "Edits an existing file in place.", "public")
+func patchEditFileToolSchema(root map[string]any) {
 	props := propertyMap(root)
 	spec, err := reflectedSpecSchema(&stepspec.EditFile{})
 	if err != nil {
@@ -90,7 +81,6 @@ func generateEditFileToolSchema() map[string]any {
 	setMap(properties, "mode", modeSchema())
 	spec["required"] = []any{"path", "edits"}
 	setMap(props, "spec", spec)
-	return root
 }
 
 func fileSourceSchema() map[string]any {
@@ -155,8 +145,8 @@ func fileEditsSchema() map[string]any {
 	}
 }
 
-func generateWaitForServiceToolSchema() map[string]any {
-	return generateWaitToolSchema("WaitForService", "WaitForServiceStep", "Waits until a systemd service reports active.", &stepspec.Wait{}, []string{"name"}, map[string]any{
+func patchWaitForServiceToolSchema(root map[string]any) {
+	patchWaitToolSchema(root, &stepspec.Wait{}, []string{"name"}, map[string]any{
 		"interval":     durationStringSchema(),
 		"initialDelay": durationStringSchema(),
 		"name":         minLenStringSchema(),
@@ -165,8 +155,8 @@ func generateWaitForServiceToolSchema() map[string]any {
 	})
 }
 
-func generateWaitForCommandToolSchema() map[string]any {
-	return generateWaitToolSchema("WaitForCommand", "WaitForCommandStep", "Waits until a command exits successfully.", &stepspec.Wait{}, []string{"command"}, map[string]any{
+func patchWaitForCommandToolSchema(root map[string]any) {
+	patchWaitToolSchema(root, &stepspec.Wait{}, []string{"command"}, map[string]any{
 		"interval":     durationStringSchema(),
 		"initialDelay": durationStringSchema(),
 		"command":      stringArraySchema(1, false),
@@ -175,8 +165,8 @@ func generateWaitForCommandToolSchema() map[string]any {
 	})
 }
 
-func generateWaitForFileToolSchema() map[string]any {
-	return generateWaitToolSchema("WaitForFile", "WaitForFileStep", "Waits until a file or directory exists.", &stepspec.Wait{}, []string{"path"}, map[string]any{
+func patchWaitForFileToolSchema(root map[string]any) {
+	patchWaitToolSchema(root, &stepspec.Wait{}, []string{"path"}, map[string]any{
 		"interval":     durationStringSchema(),
 		"initialDelay": durationStringSchema(),
 		"path":         minLenStringSchema(),
@@ -187,8 +177,8 @@ func generateWaitForFileToolSchema() map[string]any {
 	})
 }
 
-func generateWaitForMissingFileToolSchema() map[string]any {
-	return generateWaitToolSchema("WaitForMissingFile", "WaitForMissingFileStep", "Waits until a file, set of files, or glob match is absent.", &stepspec.Wait{}, nil, map[string]any{
+func patchWaitForMissingFileToolSchema(root map[string]any) {
+	patchWaitToolSchema(root, &stepspec.Wait{}, nil, map[string]any{
 		"interval":     durationStringSchema(),
 		"initialDelay": durationStringSchema(),
 		"path":         minLenStringSchema(),
@@ -204,8 +194,8 @@ func generateWaitForMissingFileToolSchema() map[string]any {
 	})
 }
 
-func generateWaitForTCPPortToolSchema() map[string]any {
-	return generateWaitToolSchema("WaitForTCPPort", "WaitForTCPPortStep", "Waits until a TCP port becomes reachable.", &stepspec.Wait{}, []string{"port"}, map[string]any{
+func patchWaitForTCPPortToolSchema(root map[string]any) {
+	patchWaitToolSchema(root, &stepspec.Wait{}, []string{"port"}, map[string]any{
 		"interval":     durationStringSchema(),
 		"initialDelay": durationStringSchema(),
 		"address":      minLenStringSchema(),
@@ -215,8 +205,8 @@ func generateWaitForTCPPortToolSchema() map[string]any {
 	})
 }
 
-func generateWaitForMissingTCPPortToolSchema() map[string]any {
-	return generateWaitToolSchema("WaitForMissingTCPPort", "WaitForMissingTCPPortStep", "Waits until a TCP port becomes unreachable.", &stepspec.Wait{}, []string{"port"}, map[string]any{
+func patchWaitForMissingTCPPortToolSchema(root map[string]any) {
+	patchWaitToolSchema(root, &stepspec.Wait{}, []string{"port"}, map[string]any{
 		"interval":     durationStringSchema(),
 		"initialDelay": durationStringSchema(),
 		"address":      minLenStringSchema(),
@@ -226,8 +216,7 @@ func generateWaitForMissingTCPPortToolSchema() map[string]any {
 	})
 }
 
-func generateWaitToolSchema(kind, title, description string, specType any, required []string, properties map[string]any, extraConstraints ...[]any) map[string]any {
-	root := stepEnvelopeSchema(kind, title, description, "public")
+func patchWaitToolSchema(root map[string]any, specType any, required []string, properties map[string]any, extraConstraints ...[]any) {
 	props := propertyMap(root)
 	spec, err := reflectedSpecSchema(specType)
 	if err != nil {
@@ -253,5 +242,4 @@ func generateWaitToolSchema(kind, title, description string, specType any, requi
 		spec["oneOf"] = extraConstraints[0]
 	}
 	setMap(props, "spec", spec)
-	return root
 }

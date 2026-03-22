@@ -2,7 +2,7 @@
   "$id": "https://deck.local/schemas/tools/directory.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Ensures a directory exists on the local node.",
+  "description": "Ensure a directory exists with an optional mode.",
   "properties": {
     "apiVersion": {
       "const": "deck/v1alpha1",

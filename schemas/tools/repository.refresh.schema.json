@@ -2,7 +2,7 @@
   "$id": "https://deck.local/schemas/tools/repository.refresh.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Refreshes package metadata and can restrict or exclude repos during refresh.",
+  "description": "Refresh package metadata with repo filtering.",
   "properties": {
     "apiVersion": {
       "const": "deck/v1alpha1",

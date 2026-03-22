@@ -2,7 +2,7 @@
   "$id": "https://deck.local/schemas/tools/kernel-module.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Loads and persists required kernel modules on the local node.",
+  "description": "Load and persist kernel modules.",
   "properties": {
     "apiVersion": {
       "const": "deck/v1alpha1",
@@ -36,6 +36,8 @@
       "type": "integer"
     },
     "spec": {
+      "$id": "https://github.com/taedi90/deck/internal/stepspec/kernel-module",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "oneOf": [
         {

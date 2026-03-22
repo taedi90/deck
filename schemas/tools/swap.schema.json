@@ -2,7 +2,7 @@
   "$id": "https://deck.local/schemas/tools/swap.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Enables or disables swap and its persistence settings.",
+  "description": "Enable or disable swap and its persistence.",
   "properties": {
     "apiVersion": {
       "const": "deck/v1alpha1",

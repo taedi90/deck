@@ -2,7 +2,7 @@
   "$id": "https://deck.local/schemas/tools/containerd.registry-hosts.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Writes containerd registry host configuration for mirrors and trust policy.",
+  "description": "Write containerd registry host configuration for mirrors and trust policy.",
   "properties": {
     "apiVersion": {
       "const": "deck/v1alpha1",
@@ -36,6 +36,8 @@
       "type": "integer"
     },
     "spec": {
+      "$id": "https://github.com/taedi90/deck/internal/stepspec/write-containerd-registry-hosts",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
         "path": {

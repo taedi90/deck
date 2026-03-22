@@ -12,10 +12,16 @@ import (
 
 	"github.com/taedi90/deck/internal/filemode"
 	"github.com/taedi90/deck/internal/fsutil"
+	"github.com/taedi90/deck/internal/stepspec"
+	"github.com/taedi90/deck/internal/workflowexec"
 )
 
 func runWriteContainerdConfig(ctx context.Context, spec map[string]any) error {
-	path := stringValue(spec, "path")
+	decoded, err := workflowexec.DecodeSpec[stepspec.WriteContainerdConfig](spec)
+	if err != nil {
+		return fmt.Errorf("decode WriteContainerdConfig spec: %w", err)
+	}
+	path := strings.TrimSpace(decoded.Path)
 	if path == "" {
 		path = "/etc/containerd/config.toml"
 	}
@@ -28,10 +34,10 @@ func runWriteContainerdConfig(ctx context.Context, spec map[string]any) error {
 		if !os.IsNotExist(err) {
 			return err
 		}
-		if createDefault, ok := spec["createDefault"].(bool); ok && !createDefault {
+		if decoded.CreateDefault != nil && !*decoded.CreateDefault {
 			content = []byte{}
 		} else {
-			generated, genErr := runCommandOutputWithContext(ctx, []string{"containerd", "config", "default"}, commandTimeoutWithDefault(spec, 30*time.Second))
+			generated, genErr := runCommandOutputWithContext(ctx, []string{"containerd", "config", "default"}, parseStepTimeout(decoded.Timeout, 30*time.Second))
 			if genErr != nil {
 				if errors.Is(genErr, ErrStepCommandTimeout) || errors.Is(genErr, context.DeadlineExceeded) {
 					return fmt.Errorf("containerd config default generation timed out: %w", genErr)
@@ -43,7 +49,7 @@ func runWriteContainerdConfig(ctx context.Context, spec map[string]any) error {
 	}
 
 	updated := string(content)
-	if configPath := stringValue(spec, "configPath"); configPath != "" {
+	if configPath := strings.TrimSpace(decoded.ConfigPath); configPath != "" {
 		target := fmt.Sprintf("config_path = %q", configPath)
 		re := regexp.MustCompile(`(?m)^\s*config_path\s*=\s*"[^"]*"\s*$`)
 		if re.MatchString(updated) {
@@ -56,8 +62,8 @@ func runWriteContainerdConfig(ctx context.Context, spec map[string]any) error {
 		}
 	}
 
-	if raw, ok := spec["systemdCgroup"].(bool); ok {
-		target := fmt.Sprintf("            SystemdCgroup = %t", raw)
+	if decoded.SystemdCgroup != nil {
+		target := fmt.Sprintf("            SystemdCgroup = %t", *decoded.SystemdCgroup)
 		re := regexp.MustCompile(`(?m)^\s*SystemdCgroup\s*=\s*(true|false)\s*$`)
 		if re.MatchString(updated) {
 			updated = re.ReplaceAllString(updated, target)
@@ -77,35 +83,28 @@ func runWriteContainerdConfig(ctx context.Context, spec map[string]any) error {
 }
 
 func runWriteContainerdRegistryHosts(spec map[string]any) error {
-	path := stringValue(spec, "path")
+	decoded, err := workflowexec.DecodeSpec[stepspec.WriteContainerdRegistryHosts](spec)
+	if err != nil {
+		return fmt.Errorf("decode WriteContainerdRegistryHosts spec: %w", err)
+	}
+	path := strings.TrimSpace(decoded.Path)
 	if path == "" {
 		path = "/etc/containerd/certs.d"
 	}
-	return writeContainerdRegistryHosts(path, spec)
+	return writeContainerdRegistryHosts(path, decoded)
 }
 
-func writeContainerdRegistryHosts(configRoot string, spec map[string]any) error {
-	rawHosts, ok := spec["registryHosts"]
-	if !ok {
+func writeContainerdRegistryHosts(configRoot string, spec stepspec.WriteContainerdRegistryHosts) error {
+	if len(spec.RegistryHosts) == 0 {
 		return nil
-	}
-
-	hostItems, ok := rawHosts.([]any)
-	if !ok {
-		return fmt.Errorf("registryHosts must be an array")
 	}
 
 	configPath := configRoot
 
-	for idx, raw := range hostItems {
-		entry, ok := raw.(map[string]any)
-		if !ok {
-			return fmt.Errorf("registryHosts[%d] must be an object", idx)
-		}
-
-		registry := stringValue(entry, "registry")
-		server := stringValue(entry, "server")
-		host := stringValue(entry, "host")
+	for idx, entry := range spec.RegistryHosts {
+		registry := strings.TrimSpace(entry.Registry)
+		server := strings.TrimSpace(entry.Server)
+		host := strings.TrimSpace(entry.Host)
 		if registry == "" {
 			return fmt.Errorf("registryHosts[%d].registry is required", idx)
 		}
@@ -116,14 +115,9 @@ func writeContainerdRegistryHosts(configRoot string, spec map[string]any) error 
 			return fmt.Errorf("registryHosts[%d].host is required", idx)
 		}
 
-		caps, err := parseContainerdHostCapabilities(entry["capabilities"], idx)
+		caps, err := parseContainerdHostCapabilities(entry.Capabilities, idx)
 		if err != nil {
 			return err
-		}
-
-		skipVerify, ok := entry["skipVerify"].(bool)
-		if !ok {
-			return fmt.Errorf("registryHosts[%d].skipVerify must be a boolean", idx)
 		}
 
 		hostsPath := filepath.Join(configPath, registry, "hosts.toml")
@@ -131,7 +125,7 @@ func writeContainerdRegistryHosts(configRoot string, spec map[string]any) error 
 			return err
 		}
 
-		content := renderWriteContainerdConfigHostsTOML(server, host, caps, skipVerify)
+		content := renderWriteContainerdConfigHostsTOML(server, host, caps, entry.SkipVerify)
 		if err := writeFileIfChanged(hostsPath, []byte(content), 0o644); err != nil {
 			return err
 		}
@@ -140,19 +134,15 @@ func writeContainerdRegistryHosts(configRoot string, spec map[string]any) error 
 	return nil
 }
 
-func parseContainerdHostCapabilities(raw any, idx int) ([]string, error) {
-	items, ok := raw.([]any)
-	if !ok {
-		return nil, fmt.Errorf("registryHosts[%d].capabilities must be an array", idx)
-	}
+func parseContainerdHostCapabilities(items []string, idx int) ([]string, error) {
 	if len(items) == 0 {
 		return nil, fmt.Errorf("registryHosts[%d].capabilities must not be empty", idx)
 	}
 
 	capabilities := make([]string, 0, len(items))
 	for i, item := range items {
-		capability, ok := item.(string)
-		if !ok || strings.TrimSpace(capability) == "" {
+		capability := item
+		if strings.TrimSpace(capability) == "" {
 			return nil, fmt.Errorf("registryHosts[%d].capabilities[%d] must be a non-empty string", idx, i)
 		}
 		capabilities = append(capabilities, strings.TrimSpace(capability))

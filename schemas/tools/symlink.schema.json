@@ -2,7 +2,7 @@
   "$id": "https://deck.local/schemas/tools/symlink.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Creates or replaces a symbolic link on the local node.",
+  "description": "Create or replace a symbolic link.",
   "properties": {
     "apiVersion": {
       "const": "deck/v1alpha1",

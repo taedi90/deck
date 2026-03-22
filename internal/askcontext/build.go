@@ -110,15 +110,15 @@ func buildStepKinds() []StepKindContext {
 	defs := workflowexec.BuiltInTypeDefinitions()
 	out := make([]StepKindContext, 0, len(defs))
 	for _, def := range defs {
-		meta := schemadoc.ToolMetaForDefinition(def.Step)
+		meta := def.Docs
 		ctx := StepKindContext{
 			Kind:         def.Step.Kind,
 			Category:     def.Step.Category,
 			Summary:      meta.Summary,
 			WhenToUse:    meta.WhenToUse,
 			SchemaFile:   def.Step.SchemaFile,
-			AllowedRoles: sortedKeys(def.Contract.Roles),
-			Outputs:      sortedKeys(def.Contract.Outputs),
+			AllowedRoles: append([]string(nil), def.Step.Roles...),
+			Outputs:      append([]string(nil), def.Step.Outputs...),
 			MinimalShape: strings.TrimSpace(meta.Example),
 			CuratedShape: strings.TrimSpace(meta.Example),
 			KeyFields:    buildStepKeyFields(def.Step.Kind, meta),
@@ -130,7 +130,7 @@ func buildStepKinds() []StepKindContext {
 	return out
 }
 
-func buildStepKeyFields(kind string, meta schemadoc.ToolMetadata) []StepFieldContext {
+func buildStepKeyFields(kind string, meta workflowexec.ToolMetadata) []StepFieldContext {
 	preferred := map[string][]string{
 		"DownloadPackage":     {"spec.packages", "spec.distro", "spec.repo", "spec.backend", "spec.outputDir"},
 		"InstallPackage":      {"spec.packages", "spec.source", "spec.restrictToRepos", "spec.excludeRepos"},
@@ -154,17 +154,6 @@ func buildStepKeyFields(kind string, meta schemadoc.ToolMetadata) []StepFieldCon
 		}
 		out = append(out, StepFieldContext{Path: key, Description: field.Description, Example: field.Example})
 	}
-	return out
-}
-
-func sortedKeys(values map[string]bool) []string {
-	out := make([]string, 0, len(values))
-	for value, ok := range values {
-		if ok {
-			out = append(out, value)
-		}
-	}
-	sort.Strings(out)
 	return out
 }
 

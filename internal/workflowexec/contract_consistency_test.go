@@ -37,17 +37,26 @@ func TestStepRegistryDelegatesToWorkflowContract(t *testing.T) {
 		if builtIn.Step.SchemaFile != want.SchemaFile {
 			t.Fatalf("built-in type definition schema mismatch for %s: got %q want %q", want.Kind, builtIn.Step.SchemaFile, want.SchemaFile)
 		}
+		if builtIn.Docs.Kind != want.Kind {
+			t.Fatalf("built-in docs kind mismatch for %s: got %q", want.Kind, builtIn.Docs.Kind)
+		}
+		if builtIn.Docs.Category != want.Category {
+			t.Fatalf("built-in docs category mismatch for %s: got %q want %q", want.Kind, builtIn.Docs.Category, want.Category)
+		}
+		if builtIn.Schema.GeneratorName == "" {
+			t.Fatalf("missing schema generator name for %s", want.Kind)
+		}
 	}
 }
 
 func TestRegisterableOutputsCoveredByContracts(t *testing.T) {
 	for _, def := range StepDefinitions() {
-		contract, ok := StepContractForKey(StepTypeKey{APIVersion: def.APIVersion, Kind: def.Kind})
+		builtIn, ok := BuiltInTypeDefinitionForKey(StepTypeKey{APIVersion: def.APIVersion, Kind: def.Kind})
 		if !ok {
-			t.Fatalf("missing keyed step contract for %s", def.Kind)
+			t.Fatalf("missing built-in type definition for %s", def.Kind)
 		}
 		for _, output := range def.Outputs {
-			if !contract.Outputs[output] {
+			if !containsString(builtIn.Step.Outputs, output) {
 				t.Fatalf("missing keyed top-level output %q for %s", output, def.Kind)
 			}
 		}

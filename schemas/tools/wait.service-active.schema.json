@@ -2,7 +2,7 @@
   "$id": "https://deck.local/schemas/tools/wait.service-active.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Waits until a systemd service reports active.",
+  "description": "Wait until a systemd service reports active.",
   "properties": {
     "apiVersion": {
       "const": "deck/v1alpha1",

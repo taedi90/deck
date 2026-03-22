@@ -2,7 +2,7 @@
   "$id": "https://deck.local/schemas/tools/kubeadm.upgrade.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Runs kubeadm upgrade apply and optionally restarts kubelet.",
+  "description": "Run kubeadm upgrade apply and optional kubelet restart.",
   "properties": {
     "apiVersion": {
       "const": "deck/v1alpha1",

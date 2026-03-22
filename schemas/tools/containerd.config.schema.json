@@ -2,7 +2,7 @@
   "$id": "https://deck.local/schemas/tools/containerd.config.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Writes the containerd config.toml file on the node.",
+  "description": "Write the containerd config file on the node.",
   "properties": {
     "apiVersion": {
       "const": "deck/v1alpha1",
@@ -36,6 +36,8 @@
       "type": "integer"
     },
     "spec": {
+      "$id": "https://github.com/taedi90/deck/internal/stepspec/write-containerd-config",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
         "configPath": {

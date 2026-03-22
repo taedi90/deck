@@ -2,7 +2,7 @@
   "$id": "https://deck.local/schemas/tools/wait.file-exists.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Waits until a file or directory exists.",
+  "description": "Wait until a file or directory exists.",
   "properties": {
     "apiVersion": {
       "const": "deck/v1alpha1",

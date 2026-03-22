@@ -2,7 +2,7 @@
   "$id": "https://deck.local/schemas/tools/service.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Starts, stops, enables, or disables local services.",
+  "description": "Start, stop, enable, disable, restart, or reload local services.",
   "properties": {
     "apiVersion": {
       "const": "deck/v1alpha1",
