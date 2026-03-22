@@ -7,115 +7,78 @@ import (
 	"github.com/taedi90/deck/internal/workflowexec"
 )
 
-var _ = workflowexec.RegisterSchemaMetadataBuilder(func(def workflowexec.StepDefinition) workflowexec.SchemaMetadata {
-	generatorName := def.ToolSchemaGenerator
-	if generatorName == "" {
-		generatorName = def.Kind
-	}
-	meta := workflowexec.SchemaMetadata{GeneratorName: generatorName}
-	switch def.Kind {
-	case "CheckHost":
-		meta.SpecType = &stepspec.CheckHost{}
-		meta.Patch = patchCheckHostToolSchema
-	case "Command":
-		meta.SpecType = &stepspec.Command{}
-		meta.Patch = patchCommandToolSchema
-	case "WriteContainerdConfig":
-		meta.SpecType = &stepspec.WriteContainerdConfig{}
-		meta.Patch = patchWriteContainerdConfigToolSchema
-	case "WriteContainerdRegistryHosts":
-		meta.SpecType = &stepspec.WriteContainerdRegistryHosts{}
-		meta.Patch = patchWriteContainerdRegistryHostsToolSchema
-	case "EnsureDirectory":
-		meta.SpecType = &stepspec.EnsureDirectory{}
-		meta.Patch = patchEnsureDirectoryToolSchema
-	case "DownloadFile":
-		meta.SpecType = &stepspec.DownloadFile{}
-		meta.Patch = patchDownloadFileToolSchema
-	case "WriteFile":
-		meta.SpecType = &stepspec.WriteFile{}
-		meta.Patch = patchWriteFileToolSchema
-	case "CopyFile":
-		meta.SpecType = &stepspec.CopyFile{}
-		meta.Patch = patchCopyFileToolSchema
-	case "EditFile":
-		meta.SpecType = &stepspec.EditFile{}
-		meta.Patch = patchEditFileToolSchema
-	case "ExtractArchive":
-		meta.SpecType = &stepspec.ExtractArchive{}
-		meta.Patch = patchExtractArchiveToolSchema
-	case "DownloadImage":
-		meta.SpecType = &stepspec.DownloadImage{}
-		meta.Patch = patchDownloadImageToolSchema
-	case "LoadImage":
-		meta.SpecType = &stepspec.LoadImage{}
-		meta.Patch = patchImageLoadToolSchema
-	case "VerifyImage":
-		meta.SpecType = &stepspec.VerifyImage{}
-		meta.Patch = patchVerifyImageToolSchema
-	case "KernelModule":
-		meta.SpecType = &stepspec.KernelModule{}
-		meta.Patch = patchKernelModuleToolSchema
-	case "CheckCluster":
-		meta.SpecType = &stepspec.ClusterCheck{}
-		meta.Patch = patchCheckClusterToolSchema
-	case "InitKubeadm":
-		meta.SpecType = &stepspec.KubeadmInit{}
-		meta.Patch = patchInitKubeadmToolSchema
-	case "JoinKubeadm":
-		meta.SpecType = &stepspec.KubeadmJoin{}
-		meta.Patch = patchJoinKubeadmToolSchema
-	case "ResetKubeadm":
-		meta.SpecType = &stepspec.KubeadmReset{}
-		meta.Patch = patchResetKubeadmToolSchema
-	case "UpgradeKubeadm":
-		meta.SpecType = &stepspec.KubeadmUpgrade{}
-		meta.Patch = patchUpgradeKubeadmToolSchema
-	case "DownloadPackage":
-		meta.SpecType = &stepspec.DownloadPackage{}
-		meta.Patch = patchDownloadPackageToolSchema
-	case "InstallPackage":
-		meta.SpecType = &stepspec.InstallPackage{}
-		meta.Patch = patchInstallPackageToolSchema
-	case "ConfigureRepository":
-		meta.SpecType = &stepspec.ConfigureRepository{}
-		meta.Patch = patchConfigureRepositoryToolSchema
-	case "RefreshRepository":
-		meta.SpecType = &stepspec.RefreshRepository{}
-		meta.Patch = patchRefreshRepositoryToolSchema
-	case "ManageService":
-		meta.SpecType = &stepspec.ManageService{}
-		meta.Patch = patchManageServiceToolSchema
-	case "Swap":
-		meta.SpecType = &stepspec.Swap{}
-		meta.Patch = patchSwapToolSchema
-	case "CreateSymlink":
-		meta.SpecType = &stepspec.CreateSymlink{}
-		meta.Patch = patchCreateSymlinkToolSchema
-	case "Sysctl":
-		meta.SpecType = &stepspec.Sysctl{}
-		meta.Patch = patchSysctlToolSchema
-	case "WriteSystemdUnit":
-		meta.SpecType = &stepspec.WriteSystemdUnit{}
-		meta.Patch = patchWriteSystemdUnitToolSchema
-	case "WaitForService", "WaitForCommand", "WaitForFile", "WaitForMissingFile", "WaitForTCPPort", "WaitForMissingTCPPort":
-		meta.SpecType = &stepspec.Wait{}
-		switch def.Kind {
-		case "WaitForService":
-			meta.Patch = patchWaitForServiceToolSchema
-		case "WaitForCommand":
-			meta.Patch = patchWaitForCommandToolSchema
-		case "WaitForFile":
-			meta.Patch = patchWaitForFileToolSchema
-		case "WaitForMissingFile":
-			meta.Patch = patchWaitForMissingFileToolSchema
-		case "WaitForTCPPort":
-			meta.Patch = patchWaitForTCPPortToolSchema
-		case "WaitForMissingTCPPort":
-			meta.Patch = patchWaitForMissingTCPPortToolSchema
+type builtInSchemaEntry struct {
+	Kind          string
+	GeneratorName string
+	SpecType      any
+	Patch         func(root map[string]any)
+}
+
+var builtInSchemaEntries = []builtInSchemaEntry{
+	{Kind: "CheckHost", GeneratorName: "host-check", SpecType: &stepspec.CheckHost{}, Patch: patchCheckHostToolSchema},
+	{Kind: "Command", GeneratorName: "command", SpecType: &stepspec.Command{}, Patch: patchCommandToolSchema},
+	{Kind: "WriteContainerdConfig", GeneratorName: "containerd.config", SpecType: &stepspec.WriteContainerdConfig{}, Patch: patchWriteContainerdConfigToolSchema},
+	{Kind: "WriteContainerdRegistryHosts", GeneratorName: "containerd.registry-hosts", SpecType: &stepspec.WriteContainerdRegistryHosts{}, Patch: patchWriteContainerdRegistryHostsToolSchema},
+	{Kind: "EnsureDirectory", GeneratorName: "directory", SpecType: &stepspec.EnsureDirectory{}, Patch: patchEnsureDirectoryToolSchema},
+	{Kind: "DownloadFile", GeneratorName: "file.download", SpecType: &stepspec.DownloadFile{}, Patch: patchDownloadFileToolSchema},
+	{Kind: "WriteFile", GeneratorName: "file.write", SpecType: &stepspec.WriteFile{}, Patch: patchWriteFileToolSchema},
+	{Kind: "CopyFile", GeneratorName: "file.copy", SpecType: &stepspec.CopyFile{}, Patch: patchCopyFileToolSchema},
+	{Kind: "EditFile", GeneratorName: "file.edit", SpecType: &stepspec.EditFile{}, Patch: patchEditFileToolSchema},
+	{Kind: "ExtractArchive", GeneratorName: "file.extract-archive", SpecType: &stepspec.ExtractArchive{}, Patch: patchExtractArchiveToolSchema},
+	{Kind: "DownloadImage", GeneratorName: "image.download", SpecType: &stepspec.DownloadImage{}, Patch: patchDownloadImageToolSchema},
+	{Kind: "LoadImage", GeneratorName: "image.load", SpecType: &stepspec.LoadImage{}, Patch: patchImageLoadToolSchema},
+	{Kind: "VerifyImage", GeneratorName: "image.verify", SpecType: &stepspec.VerifyImage{}, Patch: patchVerifyImageToolSchema},
+	{Kind: "KernelModule", GeneratorName: "kernel-module", SpecType: &stepspec.KernelModule{}, Patch: patchKernelModuleToolSchema},
+	{Kind: "CheckCluster", GeneratorName: "cluster-check", SpecType: &stepspec.ClusterCheck{}, Patch: patchCheckClusterToolSchema},
+	{Kind: "InitKubeadm", GeneratorName: "kubeadm.init", SpecType: &stepspec.KubeadmInit{}, Patch: patchInitKubeadmToolSchema},
+	{Kind: "JoinKubeadm", GeneratorName: "kubeadm.join", SpecType: &stepspec.KubeadmJoin{}, Patch: patchJoinKubeadmToolSchema},
+	{Kind: "ResetKubeadm", GeneratorName: "kubeadm.reset", SpecType: &stepspec.KubeadmReset{}, Patch: patchResetKubeadmToolSchema},
+	{Kind: "UpgradeKubeadm", GeneratorName: "kubeadm.upgrade", SpecType: &stepspec.KubeadmUpgrade{}, Patch: patchUpgradeKubeadmToolSchema},
+	{Kind: "DownloadPackage", GeneratorName: "package.download", SpecType: &stepspec.DownloadPackage{}, Patch: patchDownloadPackageToolSchema},
+	{Kind: "InstallPackage", GeneratorName: "package.install", SpecType: &stepspec.InstallPackage{}, Patch: patchInstallPackageToolSchema},
+	{Kind: "ConfigureRepository", GeneratorName: "repository.configure", SpecType: &stepspec.ConfigureRepository{}, Patch: patchConfigureRepositoryToolSchema},
+	{Kind: "RefreshRepository", GeneratorName: "repository.refresh", SpecType: &stepspec.RefreshRepository{}, Patch: patchRefreshRepositoryToolSchema},
+	{Kind: "ManageService", GeneratorName: "service", SpecType: &stepspec.ManageService{}, Patch: patchManageServiceToolSchema},
+	{Kind: "Swap", GeneratorName: "swap", SpecType: &stepspec.Swap{}, Patch: patchSwapToolSchema},
+	{Kind: "CreateSymlink", GeneratorName: "symlink", SpecType: &stepspec.CreateSymlink{}, Patch: patchCreateSymlinkToolSchema},
+	{Kind: "Sysctl", GeneratorName: "sysctl", SpecType: &stepspec.Sysctl{}, Patch: patchSysctlToolSchema},
+	{Kind: "WriteSystemdUnit", GeneratorName: "systemd-unit", SpecType: &stepspec.WriteSystemdUnit{}, Patch: patchWriteSystemdUnitToolSchema},
+	{Kind: "WaitForService", GeneratorName: "wait.service-active", SpecType: &stepspec.Wait{}, Patch: patchWaitForServiceToolSchema},
+	{Kind: "WaitForCommand", GeneratorName: "wait.command", SpecType: &stepspec.Wait{}, Patch: patchWaitForCommandToolSchema},
+	{Kind: "WaitForFile", GeneratorName: "wait.file-exists", SpecType: &stepspec.Wait{}, Patch: patchWaitForFileToolSchema},
+	{Kind: "WaitForMissingFile", GeneratorName: "wait.file-absent", SpecType: &stepspec.Wait{}, Patch: patchWaitForMissingFileToolSchema},
+	{Kind: "WaitForTCPPort", GeneratorName: "wait.tcp-port-open", SpecType: &stepspec.Wait{}, Patch: patchWaitForTCPPortToolSchema},
+	{Kind: "WaitForMissingTCPPort", GeneratorName: "wait.tcp-port-closed", SpecType: &stepspec.Wait{}, Patch: patchWaitForMissingTCPPortToolSchema},
+}
+
+var builtInSchemaIndex = func() map[string]builtInSchemaEntry {
+	index := make(map[string]builtInSchemaEntry, len(builtInSchemaEntries))
+	for _, entry := range builtInSchemaEntries {
+		if _, exists := index[entry.Kind]; exists {
+			panic(fmt.Sprintf("duplicate built-in schema entry for %s", entry.Kind))
 		}
+		index[entry.Kind] = entry
 	}
-	if meta.Patch == nil {
+	return index
+}()
+
+var _ = workflowexec.RegisterSchemaMetadataBuilder(func(def workflowexec.StepDefinition) workflowexec.SchemaMetadata {
+	entry, ok := builtInSchemaIndex[def.Kind]
+	if !ok {
+		panic(fmt.Sprintf("missing declarative schema entry for %s", def.Kind))
+	}
+	meta := workflowexec.SchemaMetadata{
+		GeneratorName: entry.GeneratorName,
+		SpecType:      entry.SpecType,
+		Patch:         entry.Patch,
+	}
+	if meta.GeneratorName == "" {
+		meta.GeneratorName = def.ToolSchemaGenerator
+	}
+	if meta.GeneratorName == "" {
+		meta.GeneratorName = def.Kind
+	}
+	if meta.Patch == nil || meta.SpecType == nil {
 		panic(fmt.Sprintf("missing direct schema patch hook for %s", def.Kind))
 	}
 	return meta
