@@ -5,6 +5,11 @@ steps:
       packages: "{{ .vars.runtimeDepPackages.rhel }}"
       restrictToRepos:
         - deck-os
+  - id: stop-containerd-rhel
+    kind: ManageService
+    spec:
+      name: containerd
+      state: stopped
   - id: extract-containerd-runtime-rhel
     kind: ExtractArchive
     timeout: 20m

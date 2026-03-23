@@ -60,7 +60,7 @@ steps:
   - id: bootstrap-load-control-plane-images
     kind: LoadImage
     spec:
-      sourceDir: images/control-plane
+      sourceDir: /tmp/deck/server-root/outputs/images/control-plane
       images: "{{ .vars.controlPlaneImages }}"
   - id: bootstrap-init
     kind: InitKubeadm

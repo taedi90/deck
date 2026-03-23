@@ -5,6 +5,11 @@ steps:
       packages: "{{ .vars.runtimeDepPackages.debian }}"
       restrictToRepos:
         - /etc/apt/sources.list.d/offline.list
+  - id: stop-containerd-debian
+    kind: ManageService
+    spec:
+      name: containerd
+      state: stopped
   - id: extract-containerd-runtime-debian
     kind: ExtractArchive
     timeout: 20m
