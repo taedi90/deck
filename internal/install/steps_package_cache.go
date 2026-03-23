@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/taedi90/deck/internal/errcode"
 	"github.com/taedi90/deck/internal/stepspec"
 	"github.com/taedi90/deck/internal/workflowexec"
 )
@@ -43,7 +44,7 @@ func runRefreshRepositoryWithRunnerSpec(spec stepspec.RefreshRepository, runner 
 	clean := spec.Clean
 	update := spec.Update
 	if !clean && !update {
-		return fmt.Errorf("%s: RefreshRepository requires clean and/or update", errCodeInstallRefreshRepositoryMgr)
+		return errcode.Newf(errCodeInstallRefreshRepositoryMgr, "RefreshRepository requires clean and/or update")
 	}
 
 	return runRefreshRepositoryCommands(
@@ -73,7 +74,7 @@ func resolveRefreshRepositoryManager(spec stepspec.RefreshRepository) (string, e
 		}
 		return repoConfigFormatToPackageManager(autoFormat), nil
 	default:
-		return "", fmt.Errorf("%s: RefreshRepository manager must be one of auto, apt, dnf", errCodeInstallRefreshRepositoryMgr)
+		return "", errcode.Newf(errCodeInstallRefreshRepositoryMgr, "RefreshRepository manager must be one of auto, apt, dnf")
 	}
 }
 
@@ -142,7 +143,7 @@ func runRefreshRepositoryCommands(
 			}
 		}
 	default:
-		return fmt.Errorf("%s: unsupported package cache manager %q", errCodeInstallRefreshRepositoryMgr, manager)
+		return errcode.Newf(errCodeInstallRefreshRepositoryMgr, "unsupported package cache manager %q", manager)
 	}
 
 	return nil

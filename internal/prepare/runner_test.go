@@ -25,6 +25,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 
 	"github.com/taedi90/deck/internal/config"
+	"github.com/taedi90/deck/internal/errcode"
 	"github.com/taedi90/deck/internal/workflowcontract"
 	"github.com/taedi90/deck/internal/workflowexec"
 )
@@ -383,6 +384,35 @@ func TestRun_DownloadPackageUsesOutputDir(t *testing.T) {
 	}
 }
 
+func TestRun_ExposesTypedRuntimeErrorCode(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	bundle := t.TempDir()
+
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "prepare",
+			Steps: []config.Step{{
+				ID:   "pkg",
+				Kind: "DownloadPackage",
+				Spec: map[string]any{
+					"packages": []any{"containerd"},
+					"backend": map[string]any{
+						"mode":    "container",
+						"runtime": "auto",
+						"image":   "ubuntu:22.04",
+					},
+				},
+			}},
+		}},
+	}
+
+	err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, CommandRunner: &noRuntimeRunner{}})
+	if !errcode.Is(err, errCodePrepareRuntimeMissing) {
+		t.Fatalf("expected typed code %s, got %v", errCodePrepareRuntimeMissing, err)
+	}
+}
+
 func TestRun_DownloadPackageReusesExportedArtifactCache(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -535,6 +565,9 @@ func TestRun_FileFallbackSourceMissing(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected source not found error")
 	}
+	if !errcode.Is(err, errCodeArtifactSourceNotFound) {
+		t.Fatalf("expected typed code %s, got %v", errCodeArtifactSourceNotFound, err)
+	}
 	if !strings.Contains(err.Error(), "E_PREPARE_SOURCE_NOT_FOUND") {
 		t.Fatalf("expected E_PREPARE_SOURCE_NOT_FOUND, got %v", err)
 	}
@@ -655,6 +688,9 @@ func TestRun_FileOfflinePolicyBlocksOnlineFallback(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected offline policy block error")
 	}
+	if !errcode.Is(err, errCodePrepareOfflinePolicyBlock) {
+		t.Fatalf("expected typed code %s, got %v", errCodePrepareOfflinePolicyBlock, err)
+	}
 	if !strings.Contains(err.Error(), "E_PREPARE_OFFLINE_POLICY_BLOCK") {
 		t.Fatalf("expected E_PREPARE_OFFLINE_POLICY_BLOCK, got %v", err)
 	}
@@ -687,6 +723,9 @@ func TestRun_FileOfflinePolicyBlocksDirectURL(t *testing.T) {
 	err := Run(context.Background(), wf, RunOptions{BundleRoot: bundleOut})
 	if err == nil {
 		t.Fatalf("expected offline policy block error")
+	}
+	if !errcode.Is(err, errCodePrepareOfflinePolicyBlock) {
+		t.Fatalf("expected typed code %s, got %v", errCodePrepareOfflinePolicyBlock, err)
 	}
 	if !strings.Contains(err.Error(), "E_PREPARE_OFFLINE_POLICY_BLOCK") {
 		t.Fatalf("expected E_PREPARE_OFFLINE_POLICY_BLOCK, got %v", err)
@@ -1002,11 +1041,55 @@ func TestRun_CheckHostStep(t *testing.T) {
 		if err == nil {
 			t.Fatalf("expected checkhost failure")
 		}
+		if !errcode.Is(err, errCodePrepareCheckHostFailed) {
+			t.Fatalf("expected typed code %s, got %v", errCodePrepareCheckHostFailed, err)
+		}
 		if !strings.Contains(err.Error(), "E_PREPARE_CHECKHOST_FAILED") {
 			t.Fatalf("expected E_PREPARE_CHECKHOST_FAILED, got %v", err)
 		}
 		if !strings.Contains(err.Error(), "os:") || !strings.Contains(err.Error(), "arch:") || !strings.Contains(err.Error(), "binaries:") {
 			t.Fatalf("expected aggregated failures, got %v", err)
+		}
+	})
+}
+
+func TestRun_ExposesTypedPrepareValidationCodes(t *testing.T) {
+	t.Run("unsupported image engine", func(t *testing.T) {
+		bundle := t.TempDir()
+		wf := &config.Workflow{
+			Version: "v1",
+			Phases: []config.Phase{{
+				Name: "prepare",
+				Steps: []config.Step{{
+					ID:   "img",
+					Kind: "DownloadImage",
+					Spec: map[string]any{"images": []any{"registry.k8s.io/pause:3.10.1"}, "backend": map[string]any{"engine": "other"}},
+				}},
+			}},
+		}
+		err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle})
+		if !errcode.Is(err, errCodePrepareEngineUnsupported) {
+			t.Fatalf("expected typed code %s, got %v", errCodePrepareEngineUnsupported, err)
+		}
+	})
+
+	t.Run("no package artifacts", func(t *testing.T) {
+		t.Setenv("HOME", t.TempDir())
+		bundle := t.TempDir()
+		wf := &config.Workflow{
+			Version: "v1",
+			Phases: []config.Phase{{
+				Name: "prepare",
+				Steps: []config.Step{{
+					ID:   "pkg",
+					Kind: "DownloadPackage",
+					Spec: map[string]any{"packages": []any{"containerd"}, "backend": map[string]any{"mode": "container", "runtime": "docker", "image": "ubuntu:22.04"}},
+				}},
+			}},
+		}
+		err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, CommandRunner: &noArtifactRunner{}})
+		if !errcode.Is(err, errCodePrepareArtifactEmpty) {
+			t.Fatalf("expected typed code %s, got %v", errCodePrepareArtifactEmpty, err)
 		}
 	})
 }

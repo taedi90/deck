@@ -1,11 +1,11 @@
 package install
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/taedi90/deck/internal/errcode"
 	"github.com/taedi90/deck/internal/filemode"
 	"github.com/taedi90/deck/internal/hostfs"
 )
@@ -118,7 +118,7 @@ func selectAPTRepoPaths(policy packageRepoPolicy) ([]string, error) {
 		filtered = append(filtered, path)
 	}
 	if len(filtered) == 0 {
-		return nil, fmt.Errorf("%s: no apt repo files remain after applying repo policy", errCodeInstallPkgSourceInvalid)
+		return nil, errcode.Newf(errCodeInstallPkgSourceInvalid, "no apt repo files remain after applying repo policy")
 	}
 	return filtered, nil
 }

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"sync/atomic"
+
+	"github.com/taedi90/deck/internal/errcode"
 )
 
 var packageContainerCounter uint64
@@ -42,7 +44,7 @@ func runPackageContainerWithExport(ctx context.Context, runner CommandRunner, ru
 func formatContainerCommandError(action string, err error, stderr string) error {
 	trimmed := strings.TrimSpace(stderr)
 	if trimmed == "" {
-		return fmt.Errorf("%s: %w", action, err)
+		return errcode.New(action, err)
 	}
-	return fmt.Errorf("%s: %w: %s", action, err, trimmed)
+	return errcode.New(action, fmt.Errorf("%w: %s", err, trimmed))
 }

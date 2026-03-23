@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/taedi90/deck/internal/config"
+	"github.com/taedi90/deck/internal/errcode"
 	"github.com/taedi90/deck/internal/filemode"
 	"github.com/taedi90/deck/internal/fsutil"
 	"github.com/taedi90/deck/internal/stepspec"
@@ -327,7 +328,7 @@ func runContainerDownloadPackageToCache(ctx context.Context, runner CommandRunne
 	}
 	if len(relFiles) == 0 {
 		_ = os.RemoveAll(cacheStage)
-		return nil, fmt.Errorf("%s: no package artifacts generated in %s", errCodePrepareArtifactEmpty, rootRel)
+		return nil, errcode.Newf(errCodePrepareArtifactEmpty, "no package artifacts generated in %s", rootRel)
 	}
 	meta := exportedPackageCacheMeta{RootRel: rootRel, Packages: packages, Files: relFiles}
 	if err := saveExportedPackageCacheMeta(cacheStage, meta); err != nil {
@@ -468,14 +469,14 @@ func detectRuntime(runner CommandRunner, preferred string) (string, error) {
 				return candidate, nil
 			}
 		}
-		return "", fmt.Errorf("%s: no supported container runtime found (docker/podman)", errCodePrepareRuntimeMissing)
+		return "", errcode.Newf(errCodePrepareRuntimeMissing, "no supported container runtime found (docker/podman)")
 	}
 
 	if pref != "docker" && pref != "podman" {
-		return "", fmt.Errorf("%s: unsupported runtime: %s", errCodePrepareRuntimeUnsupported, pref)
+		return "", errcode.Newf(errCodePrepareRuntimeUnsupported, "unsupported runtime: %s", pref)
 	}
 	if _, err := runner.LookPath(pref); err != nil {
-		return "", fmt.Errorf("%s: runtime not found: %s", errCodePrepareRuntimeMissing, pref)
+		return "", errcode.Newf(errCodePrepareRuntimeMissing, "runtime not found: %s", pref)
 	}
 	return pref, nil
 }

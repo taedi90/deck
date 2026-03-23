@@ -20,6 +20,7 @@ import (
 	"github.com/taedi90/deck/internal/install"
 	"github.com/taedi90/deck/internal/userdirs"
 	"github.com/taedi90/deck/internal/validate"
+	"github.com/taedi90/deck/internal/workspacepaths"
 )
 
 type ExecutionRequestOptions struct {
@@ -289,7 +290,7 @@ func sha256FileHex(path string) (string, error) {
 }
 
 func hasWorkflowDir(root string) bool {
-	workflowDir := filepath.Join(root, "workflows")
+	workflowDir := workspacepaths.WorkflowRootPath(root)
 	info, err := os.Stat(workflowDir)
 	if err != nil {
 		return false
@@ -305,14 +306,14 @@ func DiscoverApplyWorkflow(ctx context.Context, bundleRoot string) (string, erro
 	if err != nil {
 		return "", err
 	}
-	workflowDir, err := root.Resolve("workflows")
+	workflowDir, err := root.Resolve(workspacepaths.WorkflowRootDir)
 	if err != nil {
 		return "", err
 	}
 	if !hasWorkflowDir(root.Abs()) {
 		return "", fmt.Errorf("workflow directory not found: %s", workflowDir)
 	}
-	preferred, err := root.Resolve("workflows", "scenarios", "apply.yaml")
+	preferred, err := root.Resolve(workspacepaths.WorkflowRootDir, workspacepaths.WorkflowScenariosDir, "apply.yaml")
 	if err != nil {
 		return "", err
 	}

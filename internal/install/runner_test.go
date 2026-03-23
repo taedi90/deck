@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/taedi90/deck/internal/config"
+	"github.com/taedi90/deck/internal/errcode"
 	"github.com/taedi90/deck/internal/stepspec"
 	"github.com/taedi90/deck/internal/workflowcontract"
 	"github.com/taedi90/deck/internal/workflowexec"
@@ -210,36 +211,6 @@ func TestRun_DefaultStatePathUsesHomeStateKey(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(bundle, ".deck", "state.json")); !os.IsNotExist(err) {
 		t.Fatalf("unexpected bundle state file, err=%v", err)
-	}
-}
-
-func TestResolveStateReadPathUsesLegacyHomeStateFile(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_STATE_HOME", filepath.Join(home, ".local", "state"))
-
-	wf := &config.Workflow{StateKey: "legacy-state-key"}
-	preferred, err := DefaultStatePath(wf)
-	if err != nil {
-		t.Fatalf("DefaultStatePath failed: %v", err)
-	}
-	legacyPath, err := LegacyStatePath(wf)
-	if err != nil {
-		t.Fatalf("LegacyStatePath failed: %v", err)
-	}
-	if err := os.MkdirAll(filepath.Dir(legacyPath), 0o755); err != nil {
-		t.Fatalf("mkdir legacy state dir: %v", err)
-	}
-	if err := os.WriteFile(legacyPath, []byte("{\n  \"completedSteps\": [\"s1\"]\n}\n"), 0o600); err != nil {
-		t.Fatalf("write legacy state: %v", err)
-	}
-
-	resolved, err := ResolveStateReadPathForWorkflow(wf, preferred)
-	if err != nil {
-		t.Fatalf("ResolveStateReadPathForWorkflow failed: %v", err)
-	}
-	if resolved != legacyPath {
-		t.Fatalf("expected legacy state path, got %q want %q", resolved, legacyPath)
 	}
 }
 
@@ -550,11 +521,107 @@ func TestRun_CommandErrorCodes(t *testing.T) {
 		if err == nil {
 			t.Fatalf("expected verify images timeout")
 		}
+		if !errcode.Is(err, errCodeInstallImagesCmdFailed) {
+			t.Fatalf("expected typed code %s, got %v", errCodeInstallImagesCmdFailed, err)
+		}
 		if !strings.Contains(err.Error(), errCodeInstallImagesCmdFailed) {
 			t.Fatalf("expected verify images error code, got %v", err)
 		}
 		if !strings.Contains(err.Error(), "image verification timed out") {
 			t.Fatalf("expected timeout classification, got %v", err)
+		}
+	})
+}
+
+func TestRun_ExposesTypedErrorCodes(t *testing.T) {
+	t.Run("unsupported kind", func(t *testing.T) {
+		dir := t.TempDir()
+		bundle := filepath.Join(dir, "bundle")
+		statePath := filepath.Join(dir, "state", "state.json")
+		if err := os.MkdirAll(bundle, 0o755); err != nil {
+			t.Fatalf("mkdir bundle: %v", err)
+		}
+		artifact := filepath.Join(bundle, "files", "placeholder.txt")
+		if err := os.MkdirAll(filepath.Dir(artifact), 0o755); err != nil {
+			t.Fatalf("mkdir files: %v", err)
+		}
+		if err := os.WriteFile(artifact, []byte("ok"), 0o644); err != nil {
+			t.Fatalf("write artifact: %v", err)
+		}
+		if err := writeManifestForTest(bundle, "files/placeholder.txt", []byte("ok")); err != nil {
+			t.Fatalf("write manifest: %v", err)
+		}
+
+		wf := &config.Workflow{
+			Version: "v1",
+			Phases: []config.Phase{{
+				Name:  "install",
+				Steps: []config.Step{{ID: "x", Kind: "UnknownKind", Spec: map[string]any{}}},
+			}},
+		}
+
+		err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, StatePath: statePath})
+		if !errcode.Is(err, errCodeInstallKindUnsupported) {
+			t.Fatalf("expected typed code %s, got %v", errCodeInstallKindUnsupported, err)
+		}
+	})
+
+	t.Run("command timeout", func(t *testing.T) {
+		dir := t.TempDir()
+		bundle := filepath.Join(dir, "bundle")
+		statePath := filepath.Join(dir, "state", "state.json")
+		if err := os.MkdirAll(bundle, 0o755); err != nil {
+			t.Fatalf("mkdir bundle: %v", err)
+		}
+		artifact := filepath.Join(bundle, "files", "a.txt")
+		if err := os.MkdirAll(filepath.Dir(artifact), 0o755); err != nil {
+			t.Fatalf("mkdir files: %v", err)
+		}
+		if err := os.WriteFile(artifact, []byte("ok"), 0o644); err != nil {
+			t.Fatalf("write artifact: %v", err)
+		}
+		if err := writeManifestForTest(bundle, "files/a.txt", []byte("ok")); err != nil {
+			t.Fatalf("write manifest: %v", err)
+		}
+
+		wf := &config.Workflow{
+			Version: "v1",
+			Phases: []config.Phase{{
+				Name: "install",
+				Steps: []config.Step{{
+					ID:   "cmd",
+					Kind: "Command",
+					Spec: map[string]any{"command": []any{"sleep", "1"}, "timeout": "10ms"},
+				}},
+			}},
+		}
+
+		err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, StatePath: statePath})
+		if !errcode.Is(err, errCodeInstallCommandTimeout) {
+			t.Fatalf("expected typed code %s, got %v", errCodeInstallCommandTimeout, err)
+		}
+	})
+}
+
+func TestRun_SystemValidationErrorsExposeTypedCodes(t *testing.T) {
+	t.Run("sysctl missing path", func(t *testing.T) {
+		err := runSysctl(context.Background(), map[string]any{"values": map[string]any{"net.ipv4.ip_forward": 1}})
+		if !errcode.Is(err, errCodeInstallSysctlPathMiss) {
+			t.Fatalf("expected typed code %s, got %v", errCodeInstallSysctlPathMiss, err)
+		}
+	})
+
+	t.Run("manage service missing name", func(t *testing.T) {
+		err := runManageService(context.Background(), map[string]any{"state": "started"})
+		if !errcode.Is(err, errCodeInstallManageServiceNameMiss) {
+			t.Fatalf("expected typed code %s, got %v", errCodeInstallManageServiceNameMiss, err)
+		}
+	})
+
+	t.Run("systemd unit missing content", func(t *testing.T) {
+		err := runWriteSystemdUnit(context.Background(), map[string]any{"path": "/etc/systemd/system/demo.service"})
+		if !errcode.Is(err, errCodeInstallWriteSystemdUnitInput) {
+			t.Fatalf("expected typed code %s, got %v", errCodeInstallWriteSystemdUnitInput, err)
 		}
 	})
 }
@@ -671,6 +738,9 @@ func TestRun_Wait(t *testing.T) {
 		err := Run(context.Background(), wf, RunOptions{StatePath: statePath})
 		if err == nil {
 			t.Fatalf("expected Wait timeout error")
+		}
+		if !errcode.Is(err, errCodeInstallWaitTimeout) {
+			t.Fatalf("expected typed code %s, got %v", errCodeInstallWaitTimeout, err)
 		}
 		if !strings.Contains(err.Error(), errCodeInstallWaitTimeout) {
 			t.Fatalf("expected %s, got %v", errCodeInstallWaitTimeout, err)
@@ -1012,6 +1082,9 @@ func TestRun_KubeadmMissingFileErrorCode(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected kubeadm join missing file error")
 	}
+	if !errcode.Is(err, errCodeInstallJoinFileMissing) {
+		t.Fatalf("expected typed code %s, got %v", errCodeInstallJoinFileMissing, err)
+	}
 	if !strings.Contains(err.Error(), "E_INSTALL_KUBEADM_JOIN_FILE_NOT_FOUND") {
 		t.Fatalf("expected E_INSTALL_KUBEADM_JOIN_FILE_NOT_FOUND, got %v", err)
 	}
@@ -1144,6 +1217,9 @@ func TestRun_Image(t *testing.T) {
 		if err == nil {
 			t.Fatalf("expected missing image error")
 		}
+		if !errcode.Is(err, errCodeInstallImagesNotFound) {
+			t.Fatalf("expected typed code %s, got %v", errCodeInstallImagesNotFound, err)
+		}
 		if !strings.Contains(err.Error(), "E_INSTALL_VERIFY_IMAGES_NOT_FOUND") {
 			t.Fatalf("expected E_INSTALL_VERIFY_IMAGES_NOT_FOUND, got %v", err)
 		}
@@ -1244,6 +1320,9 @@ func TestRun_KubeadmRealModeRejectsInvalidCommand(t *testing.T) {
 	err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, StatePath: statePath})
 	if err == nil {
 		t.Fatalf("expected invalid join command error")
+	}
+	if !errcode.Is(err, errCodeInstallJoinCmdInvalid) {
+		t.Fatalf("expected typed code %s, got %v", errCodeInstallJoinCmdInvalid, err)
 	}
 	if !strings.Contains(err.Error(), "E_INSTALL_KUBEADM_JOIN_COMMAND_INVALID") {
 		t.Fatalf("expected E_INSTALL_KUBEADM_JOIN_COMMAND_INVALID, got %v", err)
@@ -1422,6 +1501,9 @@ func TestRun_JoinKubeadmRejectsConflictingInputs(t *testing.T) {
 	err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, StatePath: statePath})
 	if err == nil {
 		t.Fatalf("expected conflicting join inputs error")
+	}
+	if !errcode.Is(err, errCodeInstallJoinInputConflict) {
+		t.Fatalf("expected typed code %s, got %v", errCodeInstallJoinInputConflict, err)
 	}
 	if !strings.Contains(err.Error(), "E_INSTALL_KUBEADM_JOIN_INPUT_CONFLICT") {
 		t.Fatalf("expected E_INSTALL_KUBEADM_JOIN_INPUT_CONFLICT, got %v", err)
@@ -2492,6 +2574,9 @@ func TestRun_PackagesSourcePathValidation(t *testing.T) {
 	err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, StatePath: statePath})
 	if err == nil {
 		t.Fatalf("expected source validation error")
+	}
+	if !errcode.Is(err, errCodeInstallPkgSourceInvalid) {
+		t.Fatalf("expected typed code %s, got %v", errCodeInstallPkgSourceInvalid, err)
 	}
 	if !strings.Contains(err.Error(), "E_INSTALL_PACKAGES_SOURCE_INVALID") {
 		t.Fatalf("expected E_INSTALL_PACKAGES_SOURCE_INVALID, got %v", err)

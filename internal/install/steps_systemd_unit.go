@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/taedi90/deck/internal/errcode"
 	"github.com/taedi90/deck/internal/stepspec"
 	"github.com/taedi90/deck/internal/workflowexec"
 )
@@ -17,19 +18,19 @@ func runWriteSystemdUnit(ctx context.Context, spec map[string]any) error {
 	}
 	path := strings.TrimSpace(decoded.Path)
 	if path == "" {
-		return fmt.Errorf("%s: WriteSystemdUnit requires path", errCodeInstallWriteSystemdUnitPath)
+		return errcode.Newf(errCodeInstallWriteSystemdUnitPath, "WriteSystemdUnit requires path")
 	}
 
 	content := decoded.Content
 	templateContent := decoded.Template
 	if content != "" && templateContent != "" {
-		return fmt.Errorf("%s: WriteSystemdUnit accepts either content or template", errCodeInstallWriteSystemdUnitBoth)
+		return errcode.Newf(errCodeInstallWriteSystemdUnitBoth, "WriteSystemdUnit accepts either content or template")
 	}
 	if content == "" {
 		content = templateContent
 	}
 	if content == "" {
-		return fmt.Errorf("%s: WriteSystemdUnit requires content or template", errCodeInstallWriteSystemdUnitInput)
+		return errcode.Newf(errCodeInstallWriteSystemdUnitInput, "WriteSystemdUnit requires content or template")
 	}
 
 	if err := runWriteFile(map[string]any{

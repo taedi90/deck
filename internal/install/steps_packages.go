@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/taedi90/deck/internal/errcode"
 	"github.com/taedi90/deck/internal/executil"
 	"github.com/taedi90/deck/internal/stepspec"
 	"github.com/taedi90/deck/internal/workflowexec"
@@ -26,7 +27,7 @@ func runInstallPackages(ctx context.Context, spec map[string]any) error {
 	}
 	pkgs := decoded.Packages
 	if len(pkgs) == 0 {
-		return fmt.Errorf("%s: InstallPackages requires packages", errCodeInstallPackagesRequired)
+		return errcode.Newf(errCodeInstallPackagesRequired, "InstallPackages requires packages")
 	}
 
 	sourcePath := ""
@@ -34,11 +35,11 @@ func runInstallPackages(ctx context.Context, spec map[string]any) error {
 	if decoded.Source != nil {
 		typeVal := strings.TrimSpace(decoded.Source.Type)
 		if typeVal != "" && typeVal != "local-repo" {
-			return fmt.Errorf("%s: unsupported source type %q", errCodeInstallPkgSourceInvalid, typeVal)
+			return errcode.Newf(errCodeInstallPkgSourceInvalid, "unsupported source type %q", typeVal)
 		}
 		if path := strings.TrimSpace(decoded.Source.Path); path != "" {
 			if info, err := os.Stat(path); err != nil || !info.IsDir() {
-				return fmt.Errorf("%s: source path must be an existing directory: %s", errCodeInstallPkgSourceInvalid, path)
+				return errcode.Newf(errCodeInstallPkgSourceInvalid, "source path must be an existing directory: %s", path)
 			}
 			sourcePath = path
 		}
@@ -51,37 +52,37 @@ func runInstallPackages(ctx context.Context, spec map[string]any) error {
 		installer = "dnf"
 	}
 	if installer == "" {
-		return fmt.Errorf("%s: apt-get or dnf not found", errCodeInstallPkgMgrMissing)
+		return errcode.Newf(errCodeInstallPkgMgrMissing, "apt-get or dnf not found")
 	}
 
 	if sourcePath != "" {
 		if installer == "apt-get" {
 			artifacts, err := collectPackageArtifact(sourcePath, ".deb")
 			if err != nil {
-				return fmt.Errorf("%s: %w", errCodeInstallPkgSourceInvalid, err)
+				return errcode.New(errCodeInstallPkgSourceInvalid, err)
 			}
 			args := []string{"install", "-y"}
 			args = append(args, artifacts...)
 			if err := runTimedCommandWithContext(ctx, "apt-get", args, parseStepTimeout(decoded.Timeout, 10*time.Minute)); err != nil {
 				if errors.Is(err, ErrStepCommandTimeout) || errors.Is(err, context.DeadlineExceeded) {
-					return fmt.Errorf("%s: package installation timed out: %w", errCodeInstallPkgFailed, err)
+					return errcode.New(errCodeInstallPkgFailed, fmt.Errorf("package installation timed out: %w", err))
 				}
-				return fmt.Errorf("%s: package installation failed: %w", errCodeInstallPkgFailed, err)
+				return errcode.New(errCodeInstallPkgFailed, fmt.Errorf("package installation failed: %w", err))
 			}
 			return nil
 		}
 
 		artifacts, err := collectPackageArtifact(sourcePath, ".rpm")
 		if err != nil {
-			return fmt.Errorf("%s: %w", errCodeInstallPkgSourceInvalid, err)
+			return errcode.New(errCodeInstallPkgSourceInvalid, err)
 		}
 		args := []string{"install", "-y"}
 		args = append(args, artifacts...)
 		if err := runTimedCommandWithContext(ctx, "dnf", args, parseStepTimeout(decoded.Timeout, 10*time.Minute)); err != nil {
 			if errors.Is(err, ErrStepCommandTimeout) || errors.Is(err, context.DeadlineExceeded) {
-				return fmt.Errorf("%s: package installation timed out: %w", errCodeInstallPkgFailed, err)
+				return errcode.New(errCodeInstallPkgFailed, fmt.Errorf("package installation timed out: %w", err))
 			}
-			return fmt.Errorf("%s: package installation failed: %w", errCodeInstallPkgFailed, err)
+			return errcode.New(errCodeInstallPkgFailed, fmt.Errorf("package installation failed: %w", err))
 		}
 		return nil
 	}
@@ -92,7 +93,7 @@ func runInstallPackages(ctx context.Context, spec map[string]any) error {
 	if installer == "apt-get" {
 		repoArgs, repoCleanup, err := aptRepoArgs(policy)
 		if err != nil {
-			return fmt.Errorf("%s: %w", errCodeInstallPkgSourceInvalid, err)
+			return errcode.New(errCodeInstallPkgSourceInvalid, err)
 		}
 		if repoCleanup != nil {
 			cleanup = repoCleanup
@@ -105,9 +106,9 @@ func runInstallPackages(ctx context.Context, spec map[string]any) error {
 	args = append(args, pkgs...)
 	if err := runTimedCommandWithContext(ctx, installer, args, parseStepTimeout(decoded.Timeout, 10*time.Minute)); err != nil {
 		if errors.Is(err, ErrStepCommandTimeout) || errors.Is(err, context.DeadlineExceeded) {
-			return fmt.Errorf("%s: package installation timed out: %w", errCodeInstallPkgFailed, err)
+			return errcode.New(errCodeInstallPkgFailed, fmt.Errorf("package installation timed out: %w", err))
 		}
-		return fmt.Errorf("%s: package installation failed: %w", errCodeInstallPkgFailed, err)
+		return errcode.New(errCodeInstallPkgFailed, fmt.Errorf("package installation failed: %w", err))
 	}
 	return nil
 }

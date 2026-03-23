@@ -3,14 +3,14 @@ package schemadoc
 import (
 	"maps"
 
-	"github.com/taedi90/deck/internal/workflowexec"
+	"github.com/taedi90/deck/internal/workflowcontract"
 )
 
-var _ = workflowexec.RegisterToolMetadataBuilder(func(def workflowexec.StepDefinition) workflowexec.ToolMetadata {
+var _ = workflowcontract.RegisterToolMetadataBuilder(func(def workflowcontract.StepDefinition) workflowcontract.ToolMetadata {
 	return toRegistryToolMetadata(ToolMetaForDefinition(def))
 })
 
-func ToolMetadataFromRegistry(meta workflowexec.ToolMetadata) ToolMetadata {
+func ToolMetadataFromRegistry(meta workflowcontract.ToolMetadata) ToolMetadata {
 	return ToolMetadata{
 		Kind:           meta.Kind,
 		Category:       meta.Category,
@@ -24,8 +24,8 @@ func ToolMetadataFromRegistry(meta workflowexec.ToolMetadata) ToolMetadata {
 	}
 }
 
-func toRegistryToolMetadata(meta ToolMetadata) workflowexec.ToolMetadata {
-	return workflowexec.ToolMetadata{
+func toRegistryToolMetadata(meta ToolMetadata) workflowcontract.ToolMetadata {
+	return workflowcontract.ToolMetadata{
 		Kind:           meta.Kind,
 		Category:       meta.Category,
 		Summary:        meta.Summary,
@@ -38,18 +38,18 @@ func toRegistryToolMetadata(meta ToolMetadata) workflowexec.ToolMetadata {
 	}
 }
 
-func toRegistryFieldDocs(fieldDocs map[string]FieldDoc) map[string]workflowexec.FieldDoc {
+func toRegistryFieldDocs(fieldDocs map[string]FieldDoc) map[string]workflowcontract.FieldDoc {
 	if fieldDocs == nil {
 		return nil
 	}
-	out := make(map[string]workflowexec.FieldDoc, len(fieldDocs))
+	out := make(map[string]workflowcontract.FieldDoc, len(fieldDocs))
 	for key, value := range fieldDocs {
-		out[key] = workflowexec.FieldDoc{Description: value.Description, Example: value.Example}
+		out[key] = workflowcontract.FieldDoc{Description: value.Description, Example: value.Example}
 	}
 	return out
 }
 
-func fromRegistryFieldDocs(fieldDocs map[string]workflowexec.FieldDoc) map[string]FieldDoc {
+func fromRegistryFieldDocs(fieldDocs map[string]workflowcontract.FieldDoc) map[string]FieldDoc {
 	if fieldDocs == nil {
 		return nil
 	}

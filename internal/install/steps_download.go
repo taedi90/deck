@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/taedi90/deck/internal/errcode"
 	"github.com/taedi90/deck/internal/fetch"
 	"github.com/taedi90/deck/internal/filemode"
 	"github.com/taedi90/deck/internal/fsutil"
@@ -84,7 +85,7 @@ func runDownloadFile(ctx context.Context, bundleRoot string, spec map[string]any
 				return "", resolveErr
 			}
 			if offlineOnly {
-				return "", fmt.Errorf("%s: source.url fallback blocked by offline policy", errCodeInstallOfflineBlocked)
+				return "", errcode.Newf(errCodeInstallOfflineBlocked, "source.url fallback blocked by offline policy")
 			}
 			if _, err := f.Seek(0, 0); err != nil {
 				return "", fmt.Errorf("reset output file cursor: %w", err)
@@ -98,7 +99,7 @@ func runDownloadFile(ctx context.Context, bundleRoot string, spec map[string]any
 		}
 	} else {
 		if offlineOnly {
-			return "", fmt.Errorf("%s: source.url blocked by offline policy", errCodeInstallOfflineBlocked)
+			return "", errcode.Newf(errCodeInstallOfflineBlocked, "source.url blocked by offline policy")
 		}
 		if err := downloadURLToFile(ctx, f, url, parseStepTimeout(decoded.Timeout, 30*time.Second)); err != nil {
 			return "", err
@@ -162,7 +163,7 @@ func resolveSourceBytesFromSpec(ctx context.Context, spec stepspec.DownloadFile,
 			sources = append(sources, fetch.SourceConfig{Type: source.Type, Path: source.Path, URL: source.URL})
 		}
 		if len(sources) == 0 {
-			return nil, fmt.Errorf("%s: source.path %s not found in configured fetch sources", errCodeInstallSourceNotFound, sourcePath)
+			return nil, errcode.Newf(errCodeInstallSourceNotFound, "source.path %s not found in configured fetch sources", sourcePath)
 		}
 		raw, err := fetch.ResolveBytes(ctx, sourcePath, sources, fetch.ResolveOptions{OfflineOnly: spec.Fetch.OfflineOnly})
 		if err == nil {
@@ -174,14 +175,14 @@ func resolveSourceBytesFromSpec(ctx context.Context, spec stepspec.DownloadFile,
 		if ctx != nil && ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		return nil, fmt.Errorf("%s: source.path %s not found in configured fetch sources", errCodeInstallSourceNotFound, sourcePath)
+		return nil, errcode.Newf(errCodeInstallSourceNotFound, "source.path %s not found in configured fetch sources", sourcePath)
 	}
 
 	raw, err := fsutil.ReadFile(sourcePath)
 	if err == nil {
 		return raw, nil
 	}
-	return nil, fmt.Errorf("%s: source.path %s not found", errCodeInstallSourceNotFound, sourcePath)
+	return nil, errcode.Newf(errCodeInstallSourceNotFound, "source.path %s not found", sourcePath)
 }
 
 func verifyFileSHA256(path, expected string) error {
@@ -192,7 +193,7 @@ func verifyFileSHA256(path, expected string) error {
 	sum := sha256.Sum256(raw)
 	actual := hex.EncodeToString(sum[:])
 	if !strings.EqualFold(actual, expected) {
-		return fmt.Errorf("%s: expected %s got %s", errCodeInstallChecksumMismatch, expected, actual)
+		return errcode.Newf(errCodeInstallChecksumMismatch, "expected %s got %s", expected, actual)
 	}
 	return nil
 }

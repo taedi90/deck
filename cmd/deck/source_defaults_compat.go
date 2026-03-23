@@ -10,6 +10,8 @@ import (
 	"github.com/taedi90/deck/internal/userdirs"
 )
 
+// legacySourceDefaultsPath returns the pre-XDG config path for server
+// defaults. See docs/contributing/legacy-compatibility.md.
 func legacySourceDefaultsPath() (string, error) {
 	return userdirs.LegacyConfigFile("server.json")
 }

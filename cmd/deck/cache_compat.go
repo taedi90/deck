@@ -7,6 +7,8 @@ import (
 	"github.com/taedi90/deck/internal/userdirs"
 )
 
+// resolveLegacyDeckCacheRoot surfaces the pre-XDG cache root for inspection and
+// cleanup commands without writing new state there.
 func resolveLegacyDeckCacheRoot() (string, bool, error) {
 	legacyRoot, err := userdirs.LegacyCacheRoot()
 	if err != nil {

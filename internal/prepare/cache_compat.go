@@ -9,6 +9,7 @@ import (
 	"github.com/taedi90/deck/internal/fsutil"
 )
 
+// loadLegacyPackCacheState reads pre-XDG cache state as a fallback only.
 func loadLegacyPackCacheState(path string) ([]byte, bool, error) {
 	base := filepath.Base(path)
 	workflowSHA := strings.TrimSuffix(base, filepath.Ext(base))

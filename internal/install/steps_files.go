@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/taedi90/deck/internal/errcode"
 	"github.com/taedi90/deck/internal/filemode"
 	"github.com/taedi90/deck/internal/fsutil"
 	"github.com/taedi90/deck/internal/hostfs"
@@ -33,7 +34,7 @@ func runEditFile(spec map[string]any) error {
 	}
 	path := strings.TrimSpace(decoded.Path)
 	if path == "" {
-		return fmt.Errorf("%s: EditFile requires path", errCodeInstallEditPathMissing)
+		return errcode.Newf(errCodeInstallEditPathMissing, "EditFile requires path")
 	}
 	hostPath, err := hostfs.NewHostPath(path)
 	if err != nil {
@@ -56,7 +57,7 @@ func runEditFile(spec map[string]any) error {
 	updated := string(content)
 
 	if len(decoded.Edits) == 0 {
-		return fmt.Errorf("%s: EditFile requires edits", errCodeInstallEditsMissing)
+		return errcode.Newf(errCodeInstallEditsMissing, "EditFile requires edits")
 	}
 
 	for _, edit := range decoded.Edits {
@@ -71,7 +72,7 @@ func runEditFile(spec map[string]any) error {
 		case "append":
 			updated = strings.ReplaceAll(updated, match, match+with)
 		default:
-			return fmt.Errorf("%s: unsupported edit op %q", errCodeInstallEditsMissing, edit.Op)
+			return errcode.Newf(errCodeInstallEditsMissing, "unsupported edit op %q", edit.Op)
 		}
 	}
 
@@ -166,10 +167,10 @@ func runCopyFile(ctx context.Context, bundleRoot string, spec map[string]any) er
 	}
 	dest := strings.TrimSpace(decoded.Path)
 	if dest == "" {
-		return fmt.Errorf("%s: CopyFile requires path", errCodeInstallCopyPathMissing)
+		return errcode.Newf(errCodeInstallCopyPathMissing, "CopyFile requires path")
 	}
 	if strings.TrimSpace(decoded.Source.Path) == "" && strings.TrimSpace(decoded.Source.URL) == "" && decoded.Source.Bundle == nil {
-		return fmt.Errorf("%s: CopyFile requires source", errCodeInstallCopyPathMissing)
+		return errcode.Newf(errCodeInstallCopyPathMissing, "CopyFile requires source")
 	}
 	destPath, err := hostfs.NewHostPath(dest)
 	if err != nil {
@@ -225,7 +226,7 @@ func runEnsureDir(spec map[string]any) error {
 	}
 	path := strings.TrimSpace(decoded.Path)
 	if path == "" {
-		return fmt.Errorf("%s: EnsureDir requires path", errCodeInstallEnsureDirPathMis)
+		return errcode.Newf(errCodeInstallEnsureDirPathMis, "EnsureDir requires path")
 	}
 	hostPath, err := hostfs.NewHostPath(path)
 	if err != nil {
@@ -253,11 +254,11 @@ func runCreateSymlink(spec map[string]any) error {
 	}
 	path := strings.TrimSpace(decoded.Path)
 	if path == "" {
-		return fmt.Errorf("%s: CreateSymlink requires path", errCodeInstallCreateSymlinkPathMiss)
+		return errcode.Newf(errCodeInstallCreateSymlinkPathMiss, "CreateSymlink requires path")
 	}
 	target := strings.TrimSpace(decoded.Target)
 	if target == "" {
-		return fmt.Errorf("%s: CreateSymlink requires target", errCodeInstallCreateSymlinkTargetMis)
+		return errcode.Newf(errCodeInstallCreateSymlinkTargetMis, "CreateSymlink requires target")
 	}
 
 	pathRef, err := hostfs.NewHostPath(path)
@@ -321,7 +322,7 @@ func runWriteFile(spec map[string]any) error {
 	}
 	path := strings.TrimSpace(decoded.Path)
 	if path == "" {
-		return fmt.Errorf("%s: WriteFile requires path", errCodeInstallInstallFilePath)
+		return errcode.Newf(errCodeInstallInstallFilePath, "WriteFile requires path")
 	}
 	hostPath, err := hostfs.NewHostPath(path)
 	if err != nil {
@@ -334,7 +335,7 @@ func runWriteFile(spec map[string]any) error {
 		}
 	}
 	if content == "" {
-		return fmt.Errorf("%s: WriteFile requires content", errCodeInstallInstallFileInput)
+		return errcode.Newf(errCodeInstallInstallFileInput, "WriteFile requires content")
 	}
 	if !strings.HasSuffix(content, "\n") {
 		content += "\n"
@@ -372,11 +373,11 @@ func runTemplateFile(spec map[string]any) error {
 	}
 	path := strings.TrimSpace(decoded.Path)
 	if path == "" {
-		return fmt.Errorf("%s: TemplateFile requires path", errCodeInstallTemplatePathMiss)
+		return errcode.Newf(errCodeInstallTemplatePathMiss, "TemplateFile requires path")
 	}
 	body := decoded.Template
 	if body == "" {
-		return fmt.Errorf("%s: TemplateFile requires template", errCodeInstallTemplateBodyMiss)
+		return errcode.Newf(errCodeInstallTemplateBodyMiss, "TemplateFile requires template")
 	}
 	return runWriteFile(map[string]any{
 		"path":    path,
@@ -403,7 +404,7 @@ func runRepoConfig(ctx context.Context, spec map[string]any) error {
 		path = repoConfigDefaultPathFunc(format)
 	}
 	if path == "" {
-		return fmt.Errorf("%s: RepoConfig requires path", errCodeInstallRepoConfigPath)
+		return errcode.Newf(errCodeInstallRepoConfigPath, "RepoConfig requires path")
 	}
 
 	if len(decoded.Repositories) == 0 {

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/taedi90/deck/internal/fsutil"
+	"github.com/taedi90/deck/internal/workspacepaths"
 )
 
 type workflowOrigin struct {
@@ -63,21 +64,15 @@ func localComponentsRoot(localPath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(workflowRoot, "components"), nil
+	return workspacepaths.WorkflowComponentsPath(filepath.Dir(workflowRoot)), nil
 }
 
 func WorkflowRootForPath(localPath string) (string, error) {
-	current := filepath.Dir(localPath)
-	for {
-		if filepath.Base(current) == "workflows" {
-			return current, nil
-		}
-		next := filepath.Dir(current)
-		if next == current {
-			return "", fmt.Errorf("workflow import requires file under workflows/: %s", localPath)
-		}
-		current = next
+	workflowRoot, err := workspacepaths.LocateWorkflowTreeRoot(localPath)
+	if err != nil {
+		return "", fmt.Errorf("workflow import requires file under %s/: %s", workspacepaths.WorkflowRootDir, localPath)
 	}
+	return workflowRoot, nil
 }
 
 func remoteComponentsRoot(u *url.URL) (*url.URL, error) {
@@ -86,7 +81,7 @@ func remoteComponentsRoot(u *url.URL) (*url.URL, error) {
 		return nil, err
 	}
 	v := *workflowRoot
-	v.Path = path.Join(v.Path, "components")
+	v.Path = path.Join(v.Path, workspacepaths.WorkflowComponentsDir)
 	v.RawQuery = ""
 	v.Fragment = ""
 	return &v, nil
@@ -97,9 +92,9 @@ func remoteWorkflowRoot(u *url.URL) (*url.URL, error) {
 	marker := "/workflows/"
 	idx := strings.LastIndex(cleanPath, marker)
 	if idx < 0 {
-		return nil, fmt.Errorf("workflow import requires URL under /workflows/: %s", u.String())
+		return nil, fmt.Errorf("workflow import requires URL under /%s/: %s", workspacepaths.WorkflowRootDir, u.String())
 	}
-	rootPath := cleanPath[:idx+len("/workflows")]
+	rootPath := cleanPath[:idx+len("/"+workspacepaths.WorkflowRootDir)]
 	v := *u
 	v.Path = rootPath
 	v.RawQuery = ""

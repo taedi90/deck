@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/taedi90/deck/internal/errcode"
 	"github.com/taedi90/deck/internal/filemode"
 	"github.com/taedi90/deck/internal/hostfs"
 	"github.com/taedi90/deck/internal/stepspec"
@@ -59,7 +60,7 @@ func runCheckClusterReal(parent context.Context, spec stepspec.ClusterCheck) err
 	if initialDelay > 0 {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("%s: %w", errCodeInstallClusterCheckFailed, ctx.Err())
+			return errcode.New(errCodeInstallClusterCheckFailed, ctx.Err())
 		case <-time.After(initialDelay):
 		}
 	}
@@ -75,7 +76,7 @@ func runCheckClusterReal(parent context.Context, spec stepspec.ClusterCheck) err
 		lastErr = err
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("%s: %v", errCodeInstallClusterCheckFailed, lastErr)
+			return errcode.New(errCodeInstallClusterCheckFailed, lastErr)
 		case <-time.After(interval):
 		}
 	}

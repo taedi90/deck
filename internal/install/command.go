@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/taedi90/deck/internal/errcode"
 	"github.com/taedi90/deck/internal/executil"
 	"github.com/taedi90/deck/internal/stepspec"
 	"github.com/taedi90/deck/internal/workflowexec"
@@ -28,7 +29,7 @@ func runCommand(ctx context.Context, spec map[string]any) error {
 func runCommandDecoded(ctx context.Context, decoded stepspec.Command) error {
 	cmdArgs := decoded.Command
 	if len(cmdArgs) == 0 {
-		return fmt.Errorf("%s: Command requires command", errCodeInstallCommandMissing)
+		return errcode.Newf(errCodeInstallCommandMissing, "Command requires command")
 	}
 	timeout := parseStepTimeout(decoded.Timeout, 30*time.Second)
 
@@ -37,10 +38,10 @@ func runCommandDecoded(ctx context.Context, decoded stepspec.Command) error {
 		return nil
 	}
 	if errors.Is(err, ErrStepCommandTimeout) {
-		return fmt.Errorf("%s: command timed out after %s", errCodeInstallCommandTimeout, timeout)
+		return errcode.Newf(errCodeInstallCommandTimeout, "command timed out after %s", timeout)
 	}
 	if executil.IsExitError(err) {
-		return fmt.Errorf("%s: command exited non-zero: %w", errCodeInstallCommandFailed, err)
+		return errcode.New(errCodeInstallCommandFailed, fmt.Errorf("command exited non-zero: %w", err))
 	}
 	return err
 }

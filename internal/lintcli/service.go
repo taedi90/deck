@@ -10,6 +10,7 @@ import (
 
 	"github.com/taedi90/deck/internal/config"
 	"github.com/taedi90/deck/internal/validate"
+	"github.com/taedi90/deck/internal/workspacepaths"
 )
 
 type Report struct {
@@ -88,6 +89,12 @@ func Execute(ctx context.Context, opts Options) error {
 }
 
 func BuildReport(ctx context.Context, opts Options) (Report, error) {
+	if ctx == nil {
+		return Report{}, fmt.Errorf("context is nil")
+	}
+	if err := ctx.Err(); err != nil {
+		return Report{}, err
+	}
 	resolvedFile := strings.TrimSpace(opts.File)
 	resolvedScenario := strings.TrimSpace(opts.Scenario)
 	resolvedRoot := strings.TrimSpace(opts.Root)
@@ -112,7 +119,7 @@ func BuildReport(ctx context.Context, opts Options) (Report, error) {
 		if err != nil {
 			return Report{}, err
 		}
-		return finalizeReport(Report{Mode: "scenario", Root: resolvedRoot, Entrypoint: resolvedPath, Scenario: resolvedScenario, Workflows: files, Summary: Summary{WorkflowCount: len(files)}})
+		return finalizeReport(ctx, Report{Mode: "scenario", Root: resolvedRoot, Entrypoint: resolvedPath, Scenario: resolvedScenario, Workflows: files, Summary: Summary{WorkflowCount: len(files)}})
 	}
 	if resolvedFile != "" {
 		if isLocalComponentWorkflowPath(resolvedFile, opts.WorkflowRootDir) {
@@ -126,7 +133,7 @@ func BuildReport(ctx context.Context, opts Options) (Report, error) {
 			if err != nil {
 				return Report{}, err
 			}
-			return finalizeReport(Report{Mode: "entrypoint", Entrypoint: resolvedFile, Workflows: files, Summary: Summary{WorkflowCount: len(files)}})
+			return finalizeReport(ctx, Report{Mode: "entrypoint", Entrypoint: resolvedFile, Workflows: files, Summary: Summary{WorkflowCount: len(files)}})
 		}
 		if err := validate.FileWithContext(ctx, resolvedFile); err != nil {
 			return Report{}, err
@@ -138,7 +145,7 @@ func BuildReport(ctx context.Context, opts Options) (Report, error) {
 		if err := validate.Workflow(resolvedFile, wf); err != nil {
 			return Report{}, err
 		}
-		return finalizeReport(Report{Mode: "file", Entrypoint: resolvedFile, Workflows: []string{resolvedFile}, Summary: Summary{WorkflowCount: 1}})
+		return finalizeReport(ctx, Report{Mode: "file", Entrypoint: resolvedFile, Workflows: []string{resolvedFile}, Summary: Summary{WorkflowCount: 1}})
 	}
 	files, err := validate.WorkspaceWithContext(ctx, resolvedRoot)
 	if err != nil {
@@ -147,14 +154,14 @@ func BuildReport(ctx context.Context, opts Options) (Report, error) {
 	if err := verbosef(opts.Verbosef, 1, "deck: lint workspace=%s workflows=%d\n", resolvedRoot, len(files)); err != nil {
 		return Report{}, err
 	}
-	return finalizeReport(Report{Mode: "workspace", Root: resolvedRoot, Workflows: files, Summary: Summary{WorkflowCount: len(files)}})
+	return finalizeReport(ctx, Report{Mode: "workspace", Root: resolvedRoot, Workflows: files, Summary: Summary{WorkflowCount: len(files)}})
 }
 
-func finalizeReport(report Report) (Report, error) {
+func finalizeReport(ctx context.Context, report Report) (Report, error) {
 	if len(report.Workflows) == 0 {
 		report.Workflows = []string{}
 	}
-	findings, err := validate.AnalyzeFiles(report.Workflows)
+	findings, err := validate.AnalyzeFilesWithContext(ctx, report.Workflows)
 	if err != nil {
 		return Report{}, err
 	}
@@ -230,7 +237,10 @@ func resolveScenarioPath(root, scenario, workflowRootDir, scenarioDirName string
 	if resolvedRoot == "" {
 		resolvedRoot = "."
 	}
-	workflowDir := filepath.Join(resolvedRoot, workflowRootDir, scenarioDirName)
+	workflowDir := workspacepaths.WorkflowScenariosPath(resolvedRoot)
+	if strings.TrimSpace(workflowRootDir) != "" && workflowRootDir != workspacepaths.WorkflowRootDir {
+		workflowDir = filepath.Join(resolvedRoot, workflowRootDir, scenarioDirName)
+	}
 	for _, suffix := range []string{"", ".yaml", ".yml"} {
 		candidate := filepath.Join(workflowDir, trimmed+suffix)
 		info, err := os.Stat(candidate)
@@ -241,20 +251,14 @@ func resolveScenarioPath(root, scenario, workflowRootDir, scenarioDirName string
 	return "", fmt.Errorf("scenario not found under %s: %s", workflowDir, trimmed)
 }
 
-func isLocalComponentWorkflowPath(path, workflowRootDir string) bool {
-	trimmed := strings.TrimSpace(path)
-	if trimmed == "" || strings.Contains(trimmed, "://") {
-		return false
-	}
-	resolved, err := filepath.Abs(trimmed)
-	if err != nil {
-		return false
-	}
-	marker := string(filepath.Separator) + workflowRootDir + string(filepath.Separator) + "components" + string(filepath.Separator)
-	return strings.Contains(resolved, marker)
+func isLocalComponentWorkflowPath(path, _ string) bool {
+	return workspacepaths.IsComponentWorkflowPath(path)
 }
 
 func isLocalScenarioWorkflowPath(path, workflowRootDir, scenarioDirName string) bool {
+	if (strings.TrimSpace(workflowRootDir) == "" || workflowRootDir == workspacepaths.WorkflowRootDir) && (strings.TrimSpace(scenarioDirName) == "" || scenarioDirName == workspacepaths.WorkflowScenariosDir) {
+		return workspacepaths.IsScenarioWorkflowPath(path)
+	}
 	trimmed := strings.TrimSpace(path)
 	if trimmed == "" || strings.Contains(trimmed, "://") {
 		return false

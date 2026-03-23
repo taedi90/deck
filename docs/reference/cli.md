@@ -32,7 +32,7 @@ It supports a simple operator flow: author the workflow, lint it, prepare bundle
 - `ask config show`: show the effective ask config with a masked api key
 - `ask config unset`: clear saved ask config
 
-`ask` is experimental and available only in AI-ready builds. Lite builds keep the command surface but return a clear unsupported-feature error.
+`ask` is experimental and available only in AI-ready builds. Non-AI builds omit the `ask` command entirely.
 
 `ask` uses LLM-first intent classification and route-specific prompts. Workflow generation only runs for authoring routes (`draft`/`refine`), while explain/review/question routes return answer-oriented responses.
 

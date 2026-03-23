@@ -1,6 +1,7 @@
 package validate
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -22,8 +23,18 @@ type Finding struct {
 }
 
 func AnalyzeFiles(paths []string) ([]Finding, error) {
+	return AnalyzeFilesWithContext(context.Background(), paths)
+}
+
+func AnalyzeFilesWithContext(ctx context.Context, paths []string) ([]Finding, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("context is nil")
+	}
 	findings := make([]Finding, 0)
 	for _, path := range dedupeAndSort(paths) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		displayPath := relativeOrOriginal(path)
 		content, err := fsutil.ReadFile(path)
 		if err != nil {
@@ -35,14 +46,14 @@ func AnalyzeFiles(paths []string) ([]Finding, error) {
 			if err != nil {
 				return nil, withWorkflowName(path, err)
 			}
-			findings = append(findings, analyzeSteps(displayPath, "", fragment.Steps)...)
+			findings = append(findings, analyzeStepsWithContext(ctx, displayPath, "", fragment.Steps)...)
 			continue
 		}
 		wf, err := parseWorkflow(content)
 		if err != nil {
 			return nil, withWorkflowName(path, err)
 		}
-		findings = append(findings, analyzeWorkflow(displayPath, wf)...)
+		findings = append(findings, analyzeWorkflowWithContext(ctx, displayPath, wf)...)
 	}
 	slices.SortFunc(findings, func(a, b Finding) int {
 		if c := strings.Compare(a.Path, b.Path); c != 0 {
@@ -59,23 +70,32 @@ func AnalyzeFiles(paths []string) ([]Finding, error) {
 	return findings, nil
 }
 
-func analyzeWorkflow(path string, wf *config.Workflow) []Finding {
+func analyzeWorkflowWithContext(ctx context.Context, path string, wf *config.Workflow) []Finding {
 	if wf == nil {
 		return nil
 	}
 	findings := make([]Finding, 0)
 	for _, step := range wf.Steps {
+		if ctx.Err() != nil {
+			return findings
+		}
 		findings = append(findings, analyzeStep(path, "", step)...)
 	}
 	for _, phase := range wf.Phases {
-		findings = append(findings, analyzeSteps(path, phase.Name, phase.Steps)...)
+		if ctx.Err() != nil {
+			return findings
+		}
+		findings = append(findings, analyzeStepsWithContext(ctx, path, phase.Name, phase.Steps)...)
 	}
 	return findings
 }
 
-func analyzeSteps(path string, phase string, steps []config.Step) []Finding {
+func analyzeStepsWithContext(ctx context.Context, path string, phase string, steps []config.Step) []Finding {
 	findings := make([]Finding, 0, len(steps))
 	for _, step := range steps {
+		if ctx.Err() != nil {
+			return findings
+		}
 		findings = append(findings, analyzeStep(path, phase, step)...)
 	}
 	return findings

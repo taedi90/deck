@@ -21,6 +21,18 @@ func WorkflowPath(root string, rel string) string {
 	return filepath.Join(parts...)
 }
 
+func WorkflowRootPath(root string) string {
+	return filepath.Join(root, WorkflowRootDir)
+}
+
+func WorkflowScenariosPath(root string) string {
+	return filepath.Join(WorkflowRootPath(root), WorkflowScenariosDir)
+}
+
+func WorkflowComponentsPath(root string) string {
+	return filepath.Join(WorkflowRootPath(root), WorkflowComponentsDir)
+}
+
 func CanonicalPrepareWorkflowPath(root string) string {
 	return WorkflowPath(root, CanonicalPrepareWorkflowRel)
 }
@@ -54,4 +66,25 @@ func LocateWorkflowTreeRoot(workflowPath string) (string, error) {
 		dir = parent
 	}
 	return "", fmt.Errorf("workflow path is not under %s/: %s", WorkflowRootDir, resolved)
+}
+
+func IsPathUnderWorkflowSubdir(path string, subdir string) bool {
+	trimmed := strings.TrimSpace(path)
+	if trimmed == "" || strings.Contains(trimmed, "://") {
+		return false
+	}
+	resolved, err := filepath.Abs(trimmed)
+	if err != nil {
+		return false
+	}
+	marker := string(filepath.Separator) + WorkflowRootDir + string(filepath.Separator) + strings.Trim(subdir, string(filepath.Separator)) + string(filepath.Separator)
+	return strings.Contains(resolved, marker)
+}
+
+func IsScenarioWorkflowPath(path string) bool {
+	return IsPathUnderWorkflowSubdir(path, WorkflowScenariosDir)
+}
+
+func IsComponentWorkflowPath(path string) bool {
+	return IsPathUnderWorkflowSubdir(path, WorkflowComponentsDir)
 }

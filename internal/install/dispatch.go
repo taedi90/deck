@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/taedi90/deck/internal/config"
+	"github.com/taedi90/deck/internal/errcode"
 	"github.com/taedi90/deck/internal/stepspec"
 	"github.com/taedi90/deck/internal/workflowexec"
 )
@@ -14,7 +15,7 @@ func executeWorkflowStep(ctx context.Context, step config.Step, rendered map[str
 	kind := step.Kind
 	effectiveSpec := specWithStepTimeout(rendered, step.Timeout)
 	if !workflowexec.StepAllowedForRoleForKey("apply", key) {
-		return fmt.Errorf("%s: unsupported step kind %s", errCodeInstallKindUnsupported, kind)
+		return errcode.Newf(errCodeInstallKindUnsupported, "unsupported step kind %s", kind)
 	}
 
 	switch kind {
@@ -83,9 +84,9 @@ func executeWorkflowStep(ctx context.Context, step config.Step, rendered map[str
 		}
 		return runWaitDecoded(ctx, kind, decoded, commandTimeout(effectiveSpec))
 	case "CheckHost", "DownloadPackage", "DownloadImage":
-		return fmt.Errorf("%s: unsupported step kind %s for apply", errCodeInstallKindUnsupported, kind)
+		return errcode.Newf(errCodeInstallKindUnsupported, "unsupported step kind %s for apply", kind)
 	default:
-		return fmt.Errorf("%s: unsupported step kind %s", errCodeInstallKindUnsupported, kind)
+		return errcode.Newf(errCodeInstallKindUnsupported, "unsupported step kind %s", kind)
 	}
 }
 

@@ -8,50 +8,49 @@ import (
 )
 
 type builtInSchemaEntry struct {
-	Kind          string
-	GeneratorName string
-	SpecType      any
-	Patch         func(root map[string]any)
+	Kind     string
+	SpecType any
+	Patch    func(root map[string]any)
 }
 
 var builtInSchemaEntries = []builtInSchemaEntry{
-	{Kind: "CheckHost", GeneratorName: "host-check", SpecType: &stepspec.CheckHost{}, Patch: patchCheckHostToolSchema},
-	{Kind: "Command", GeneratorName: "command", SpecType: &stepspec.Command{}, Patch: patchCommandToolSchema},
-	{Kind: "WriteContainerdConfig", GeneratorName: "containerd.config", SpecType: &stepspec.WriteContainerdConfig{}, Patch: patchWriteContainerdConfigToolSchema},
-	{Kind: "WriteContainerdRegistryHosts", GeneratorName: "containerd.registry-hosts", SpecType: &stepspec.WriteContainerdRegistryHosts{}, Patch: patchWriteContainerdRegistryHostsToolSchema},
-	{Kind: "EnsureDirectory", GeneratorName: "directory", SpecType: &stepspec.EnsureDirectory{}, Patch: patchEnsureDirectoryToolSchema},
-	{Kind: "DownloadFile", GeneratorName: "file.download", SpecType: &stepspec.DownloadFile{}, Patch: patchDownloadFileToolSchema},
-	{Kind: "WriteFile", GeneratorName: "file.write", SpecType: &stepspec.WriteFile{}, Patch: patchWriteFileToolSchema},
-	{Kind: "CopyFile", GeneratorName: "file.copy", SpecType: &stepspec.CopyFile{}, Patch: patchCopyFileToolSchema},
-	{Kind: "EditFile", GeneratorName: "file.edit", SpecType: &stepspec.EditFile{}, Patch: patchEditFileToolSchema},
-	{Kind: "EditTOML", GeneratorName: "file.edit-toml", SpecType: &stepspec.EditTOML{}, Patch: patchEditTOMLToolSchema},
-	{Kind: "EditYAML", GeneratorName: "file.edit-yaml", SpecType: &stepspec.EditYAML{}, Patch: patchEditYAMLToolSchema},
-	{Kind: "EditJSON", GeneratorName: "file.edit-json", SpecType: &stepspec.EditJSON{}, Patch: patchEditJSONToolSchema},
-	{Kind: "ExtractArchive", GeneratorName: "file.extract-archive", SpecType: &stepspec.ExtractArchive{}, Patch: patchExtractArchiveToolSchema},
-	{Kind: "DownloadImage", GeneratorName: "image.download", SpecType: &stepspec.DownloadImage{}, Patch: patchDownloadImageToolSchema},
-	{Kind: "LoadImage", GeneratorName: "image.load", SpecType: &stepspec.LoadImage{}, Patch: patchImageLoadToolSchema},
-	{Kind: "VerifyImage", GeneratorName: "image.verify", SpecType: &stepspec.VerifyImage{}, Patch: patchVerifyImageToolSchema},
-	{Kind: "KernelModule", GeneratorName: "kernel-module", SpecType: &stepspec.KernelModule{}, Patch: patchKernelModuleToolSchema},
-	{Kind: "CheckCluster", GeneratorName: "cluster-check", SpecType: &stepspec.ClusterCheck{}, Patch: patchCheckClusterToolSchema},
-	{Kind: "InitKubeadm", GeneratorName: "kubeadm.init", SpecType: &stepspec.KubeadmInit{}, Patch: patchInitKubeadmToolSchema},
-	{Kind: "JoinKubeadm", GeneratorName: "kubeadm.join", SpecType: &stepspec.KubeadmJoin{}, Patch: patchJoinKubeadmToolSchema},
-	{Kind: "ResetKubeadm", GeneratorName: "kubeadm.reset", SpecType: &stepspec.KubeadmReset{}, Patch: patchResetKubeadmToolSchema},
-	{Kind: "UpgradeKubeadm", GeneratorName: "kubeadm.upgrade", SpecType: &stepspec.KubeadmUpgrade{}, Patch: patchUpgradeKubeadmToolSchema},
-	{Kind: "DownloadPackage", GeneratorName: "package.download", SpecType: &stepspec.DownloadPackage{}, Patch: patchDownloadPackageToolSchema},
-	{Kind: "InstallPackage", GeneratorName: "package.install", SpecType: &stepspec.InstallPackage{}, Patch: patchInstallPackageToolSchema},
-	{Kind: "ConfigureRepository", GeneratorName: "repository.configure", SpecType: &stepspec.ConfigureRepository{}, Patch: patchConfigureRepositoryToolSchema},
-	{Kind: "RefreshRepository", GeneratorName: "repository.refresh", SpecType: &stepspec.RefreshRepository{}, Patch: patchRefreshRepositoryToolSchema},
-	{Kind: "ManageService", GeneratorName: "service", SpecType: &stepspec.ManageService{}, Patch: patchManageServiceToolSchema},
-	{Kind: "Swap", GeneratorName: "swap", SpecType: &stepspec.Swap{}, Patch: patchSwapToolSchema},
-	{Kind: "CreateSymlink", GeneratorName: "symlink", SpecType: &stepspec.CreateSymlink{}, Patch: patchCreateSymlinkToolSchema},
-	{Kind: "Sysctl", GeneratorName: "sysctl", SpecType: &stepspec.Sysctl{}, Patch: patchSysctlToolSchema},
-	{Kind: "WriteSystemdUnit", GeneratorName: "systemd-unit", SpecType: &stepspec.WriteSystemdUnit{}, Patch: patchWriteSystemdUnitToolSchema},
-	{Kind: "WaitForService", GeneratorName: "wait.service-active", SpecType: &stepspec.Wait{}, Patch: patchWaitForServiceToolSchema},
-	{Kind: "WaitForCommand", GeneratorName: "wait.command", SpecType: &stepspec.Wait{}, Patch: patchWaitForCommandToolSchema},
-	{Kind: "WaitForFile", GeneratorName: "wait.file-exists", SpecType: &stepspec.Wait{}, Patch: patchWaitForFileToolSchema},
-	{Kind: "WaitForMissingFile", GeneratorName: "wait.file-absent", SpecType: &stepspec.Wait{}, Patch: patchWaitForMissingFileToolSchema},
-	{Kind: "WaitForTCPPort", GeneratorName: "wait.tcp-port-open", SpecType: &stepspec.Wait{}, Patch: patchWaitForTCPPortToolSchema},
-	{Kind: "WaitForMissingTCPPort", GeneratorName: "wait.tcp-port-closed", SpecType: &stepspec.Wait{}, Patch: patchWaitForMissingTCPPortToolSchema},
+	{Kind: "CheckHost", SpecType: &stepspec.CheckHost{}, Patch: patchCheckHostToolSchema},
+	{Kind: "Command", SpecType: &stepspec.Command{}, Patch: patchCommandToolSchema},
+	{Kind: "WriteContainerdConfig", SpecType: &stepspec.WriteContainerdConfig{}, Patch: patchWriteContainerdConfigToolSchema},
+	{Kind: "WriteContainerdRegistryHosts", SpecType: &stepspec.WriteContainerdRegistryHosts{}, Patch: patchWriteContainerdRegistryHostsToolSchema},
+	{Kind: "EnsureDirectory", SpecType: &stepspec.EnsureDirectory{}, Patch: patchEnsureDirectoryToolSchema},
+	{Kind: "DownloadFile", SpecType: &stepspec.DownloadFile{}, Patch: patchDownloadFileToolSchema},
+	{Kind: "WriteFile", SpecType: &stepspec.WriteFile{}, Patch: patchWriteFileToolSchema},
+	{Kind: "CopyFile", SpecType: &stepspec.CopyFile{}, Patch: patchCopyFileToolSchema},
+	{Kind: "EditFile", SpecType: &stepspec.EditFile{}, Patch: patchEditFileToolSchema},
+	{Kind: "EditTOML", SpecType: &stepspec.EditTOML{}, Patch: patchEditTOMLToolSchema},
+	{Kind: "EditYAML", SpecType: &stepspec.EditYAML{}, Patch: patchEditYAMLToolSchema},
+	{Kind: "EditJSON", SpecType: &stepspec.EditJSON{}, Patch: patchEditJSONToolSchema},
+	{Kind: "ExtractArchive", SpecType: &stepspec.ExtractArchive{}, Patch: patchExtractArchiveToolSchema},
+	{Kind: "DownloadImage", SpecType: &stepspec.DownloadImage{}, Patch: patchDownloadImageToolSchema},
+	{Kind: "LoadImage", SpecType: &stepspec.LoadImage{}, Patch: patchImageLoadToolSchema},
+	{Kind: "VerifyImage", SpecType: &stepspec.VerifyImage{}, Patch: patchVerifyImageToolSchema},
+	{Kind: "KernelModule", SpecType: &stepspec.KernelModule{}, Patch: patchKernelModuleToolSchema},
+	{Kind: "CheckCluster", SpecType: &stepspec.ClusterCheck{}, Patch: patchCheckClusterToolSchema},
+	{Kind: "InitKubeadm", SpecType: &stepspec.KubeadmInit{}, Patch: patchInitKubeadmToolSchema},
+	{Kind: "JoinKubeadm", SpecType: &stepspec.KubeadmJoin{}, Patch: patchJoinKubeadmToolSchema},
+	{Kind: "ResetKubeadm", SpecType: &stepspec.KubeadmReset{}, Patch: patchResetKubeadmToolSchema},
+	{Kind: "UpgradeKubeadm", SpecType: &stepspec.KubeadmUpgrade{}, Patch: patchUpgradeKubeadmToolSchema},
+	{Kind: "DownloadPackage", SpecType: &stepspec.DownloadPackage{}, Patch: patchDownloadPackageToolSchema},
+	{Kind: "InstallPackage", SpecType: &stepspec.InstallPackage{}, Patch: patchInstallPackageToolSchema},
+	{Kind: "ConfigureRepository", SpecType: &stepspec.ConfigureRepository{}, Patch: patchConfigureRepositoryToolSchema},
+	{Kind: "RefreshRepository", SpecType: &stepspec.RefreshRepository{}, Patch: patchRefreshRepositoryToolSchema},
+	{Kind: "ManageService", SpecType: &stepspec.ManageService{}, Patch: patchManageServiceToolSchema},
+	{Kind: "Swap", SpecType: &stepspec.Swap{}, Patch: patchSwapToolSchema},
+	{Kind: "CreateSymlink", SpecType: &stepspec.CreateSymlink{}, Patch: patchCreateSymlinkToolSchema},
+	{Kind: "Sysctl", SpecType: &stepspec.Sysctl{}, Patch: patchSysctlToolSchema},
+	{Kind: "WriteSystemdUnit", SpecType: &stepspec.WriteSystemdUnit{}, Patch: patchWriteSystemdUnitToolSchema},
+	{Kind: "WaitForService", SpecType: &stepspec.Wait{}, Patch: patchWaitForServiceToolSchema},
+	{Kind: "WaitForCommand", SpecType: &stepspec.Wait{}, Patch: patchWaitForCommandToolSchema},
+	{Kind: "WaitForFile", SpecType: &stepspec.Wait{}, Patch: patchWaitForFileToolSchema},
+	{Kind: "WaitForMissingFile", SpecType: &stepspec.Wait{}, Patch: patchWaitForMissingFileToolSchema},
+	{Kind: "WaitForTCPPort", SpecType: &stepspec.Wait{}, Patch: patchWaitForTCPPortToolSchema},
+	{Kind: "WaitForMissingTCPPort", SpecType: &stepspec.Wait{}, Patch: patchWaitForMissingTCPPortToolSchema},
 }
 
 var builtInSchemaIndex = func() map[string]builtInSchemaEntry {
@@ -71,7 +70,7 @@ var _ = workflowexec.RegisterSchemaMetadataBuilder(func(def workflowexec.StepDef
 		panic(fmt.Sprintf("missing declarative schema entry for %s", def.Kind))
 	}
 	meta := workflowexec.SchemaMetadata{
-		GeneratorName: entry.GeneratorName,
+		GeneratorName: def.ToolSchemaGenerator,
 		SpecType:      entry.SpecType,
 		Patch:         entry.Patch,
 	}

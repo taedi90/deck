@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/taedi90/deck/internal/errcode"
 	"github.com/taedi90/deck/internal/stepspec"
 	"github.com/taedi90/deck/internal/workflowexec"
 )
@@ -18,7 +19,7 @@ func runVerifyImages(ctx context.Context, spec map[string]any) error {
 	}
 	required := decoded.Images
 	if len(required) == 0 {
-		return fmt.Errorf("%s: VerifyImages requires images", errCodeInstallImagesMissing)
+		return errcode.Newf(errCodeInstallImagesMissing, "VerifyImages requires images")
 	}
 
 	cmdArgs := decoded.Command
@@ -31,9 +32,9 @@ func runVerifyImages(ctx context.Context, spec map[string]any) error {
 	output, err := runCommandOutputWithContext(ctx, cmdArgs, timeout)
 	if err != nil {
 		if errors.Is(err, ErrStepCommandTimeout) || errors.Is(err, context.DeadlineExceeded) {
-			return fmt.Errorf("%s: image verification timed out: %w", errCodeInstallImagesCmdFailed, err)
+			return errcode.New(errCodeInstallImagesCmdFailed, fmt.Errorf("image verification timed out: %w", err))
 		}
-		return fmt.Errorf("%s: %w", errCodeInstallImagesCmdFailed, err)
+		return errcode.New(errCodeInstallImagesCmdFailed, err)
 	}
 
 	available := map[string]bool{}
@@ -53,7 +54,7 @@ func runVerifyImages(ctx context.Context, spec map[string]any) error {
 	}
 
 	if len(missing) > 0 {
-		return fmt.Errorf("%s: missing images: %s", errCodeInstallImagesNotFound, strings.Join(missing, ", "))
+		return errcode.Newf(errCodeInstallImagesNotFound, "missing images: %s", strings.Join(missing, ", "))
 	}
 
 	return nil

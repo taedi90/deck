@@ -19,6 +19,7 @@ import (
 	"github.com/taedi90/deck/internal/workflowcontract"
 	"github.com/taedi90/deck/internal/workflowexec"
 	"github.com/taedi90/deck/internal/workflowexpr"
+	"github.com/taedi90/deck/internal/workspacepaths"
 	deckschemas "github.com/taedi90/deck/schemas"
 )
 
@@ -70,11 +71,14 @@ func WorkspaceWithContext(ctx context.Context, root string) ([]string, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("context is nil")
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	resolvedRoot := strings.TrimSpace(root)
 	if resolvedRoot == "" {
 		resolvedRoot = "."
 	}
-	workflowRoot := filepath.Join(resolvedRoot, "workflows")
+	workflowRoot := workspacepaths.WorkflowRootPath(resolvedRoot)
 	info, err := os.Stat(workflowRoot)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -94,13 +98,16 @@ func WorkspaceWithContext(ctx context.Context, root string) ([]string, error) {
 		}
 	}
 
-	scenarioRoot := filepath.Join(workflowRoot, "scenarios")
+	scenarioRoot := filepath.Join(workflowRoot, workspacepaths.WorkflowScenariosDir)
 	if info, err := os.Stat(scenarioRoot); err != nil || !info.IsDir() {
 		return nil, fmt.Errorf("workflow scenarios directory not found: %s", scenarioRoot)
 	}
 
 	files := make([]string, 0)
 	err = filepath.WalkDir(scenarioRoot, func(path string, d os.DirEntry, walkErr error) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if walkErr != nil {
 			return walkErr
 		}
@@ -124,6 +131,9 @@ func WorkspaceWithContext(ctx context.Context, root string) ([]string, error) {
 	validated := make([]string, 0)
 	visited := map[string]bool{}
 	for _, path := range files {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		validatedFiles, err := lintLocalEntrypoint(ctx, path, nil, workflowSupportedVersion, visited)
 		if err != nil {
 			return nil, err
@@ -142,6 +152,9 @@ func Entrypoint(path string) ([]string, error) {
 func EntrypointWithContext(ctx context.Context, path string) ([]string, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("context is nil")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	absPath, err := filepath.Abs(strings.TrimSpace(path))
 	if err != nil {
@@ -333,7 +346,7 @@ func validateComponentFragmentWithWorkflowVersion(name string, fragment *compone
 
 func detectDocumentKind(name string) documentKind {
 	trimmed := filepath.ToSlash(strings.TrimSpace(name))
-	if strings.Contains(trimmed, "/workflows/components/") || strings.HasPrefix(trimmed, "workflows/components/") {
+	if workspacepaths.IsComponentWorkflowPath(trimmed) {
 		return documentKindComponentFragment
 	}
 	return documentKindWorkflow
@@ -364,7 +377,7 @@ func resolveLocalWorkflowImport(originPath string, importRef string) (string, er
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(workflowRoot, "components", filepath.FromSlash(filepath.Clean(cleaned))), nil
+	return filepath.Join(workflowRoot, workspacepaths.WorkflowComponentsDir, filepath.FromSlash(filepath.Clean(cleaned))), nil
 }
 
 func cloneAnyMap(input map[string]any) map[string]any {

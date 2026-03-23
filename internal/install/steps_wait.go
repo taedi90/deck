@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/taedi90/deck/internal/errcode"
 	"github.com/taedi90/deck/internal/executil"
 	"github.com/taedi90/deck/internal/stepspec"
 )
@@ -61,7 +62,7 @@ func runWaitDecoded(parent context.Context, kind string, decoded stepspec.Wait, 
 			} else if kind == "WaitForMissingFile" {
 				detail = waitMissingPathExpectedCondition(decoded)
 			}
-			return fmt.Errorf("%s: timed out after %s for %s", errCodeInstallWaitTimeout, timeout, detail)
+			return errcode.Newf(errCodeInstallWaitTimeout, "timed out after %s for %s", timeout, detail)
 		case <-time.After(interval):
 		}
 	}

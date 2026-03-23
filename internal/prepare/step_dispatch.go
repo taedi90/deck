@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/taedi90/deck/internal/config"
+	"github.com/taedi90/deck/internal/errcode"
 	"github.com/taedi90/deck/internal/stepspec"
 	"github.com/taedi90/deck/internal/workflowexec"
 )
@@ -12,7 +13,7 @@ import (
 func runPrepareRenderedStepWithKey(ctx context.Context, runner CommandRunner, bundleRoot string, step config.Step, rendered map[string]any, key workflowexec.StepTypeKey, inputVars map[string]string, opts RunOptions) ([]string, map[string]any, error) {
 	kind := step.Kind
 	if !workflowexec.StepAllowedForRoleForKey("prepare", key) {
-		return nil, nil, fmt.Errorf("%s: unsupported step kind %s", errCodePrepareKindUnsupported, kind)
+		return nil, nil, errcode.Newf(errCodePrepareKindUnsupported, "unsupported step kind %s", kind)
 	}
 
 	switch kind {
@@ -45,6 +46,6 @@ func runPrepareRenderedStepWithKey(ctx context.Context, runner CommandRunner, bu
 		}
 		return nil, outputs, nil
 	default:
-		return nil, nil, fmt.Errorf("%s: unsupported step kind %s", errCodePrepareKindUnsupported, kind)
+		return nil, nil, errcode.Newf(errCodePrepareKindUnsupported, "unsupported step kind %s", kind)
 	}
 }

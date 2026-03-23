@@ -3,7 +3,6 @@ package test
 import (
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -266,14 +265,12 @@ func runWorkflowApplyExpectError(t *testing.T, repoRoot, workflowPath string, va
 	if err := os.MkdirAll(filepath.Join(bundleRoot, "workflows"), 0o755); err != nil {
 		t.Fatalf("mkdir bundle workflows: %v", err)
 	}
-	args := []string{"run", "./cmd/deck", "apply", "--workflow", workflowPath, "--phase", "install"}
+	args := []string{"apply", "--workflow", workflowPath, "--phase", "install"}
 	for _, item := range vars {
 		args = append(args, "--var", item)
 	}
 	args = append(args, bundleRoot)
-	cmd := exec.Command("go", args...)
-	cmd.Dir = repoRoot
-	out, err := cmd.CombinedOutput()
+	out, err := runDeckCommand(t, repoRoot, args...)
 	if err == nil {
 		t.Fatalf("expected workflow apply to fail\noutput:\n%s", string(out))
 	}
@@ -314,17 +311,14 @@ func runWorkflowApplyDryRun(t *testing.T, repoRoot, workflowPath string, vars ..
 		t.Fatalf("mkdir bundle workflows: %v", err)
 	}
 
-	args := []string{"run", "./cmd/deck", "apply", "--workflow", workflowPath, "--dry-run"}
+	args := []string{"apply", "--workflow", workflowPath, "--dry-run"}
 	for _, item := range vars {
 		args = append(args, "--var", item)
 	}
 	args = append(args, bundleRoot)
-
-	cmd := exec.Command("go", args...)
-	cmd.Dir = repoRoot
-	out, err := cmd.CombinedOutput()
+	out, err := runDeckCommand(t, repoRoot, args...)
 	if err != nil {
-		t.Fatalf("go run dry-run failed: %v\noutput:\n%s", err, string(out))
+		t.Fatalf("deck dry-run failed: %v\noutput:\n%s", err, string(out))
 	}
 	return string(out)
 }

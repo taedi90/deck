@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/taedi90/deck/internal/errcode"
 	"github.com/taedi90/deck/internal/filemode"
 	"github.com/taedi90/deck/internal/fsutil"
 	"github.com/taedi90/deck/internal/hostfs"
@@ -62,7 +63,7 @@ func runUpgradeKubeadm(ctx context.Context, spec map[string]any) error {
 func runInitKubeadmReal(parent context.Context, spec stepspec.KubeadmInit) error {
 	joinFile := strings.TrimSpace(spec.OutputJoinFile)
 	if joinFile == "" {
-		return fmt.Errorf("%s: InitKubeadm requires outputJoinFile", errCodeInstallInitJoinMissing)
+		return errcode.Newf(errCodeInstallInitJoinMissing, "InitKubeadm requires outputJoinFile")
 	}
 	if shouldSkipInitKubeadm(spec) {
 		return nil
@@ -75,12 +76,12 @@ func runInitKubeadmReal(parent context.Context, spec stepspec.KubeadmInit) error
 
 	advertiseAddress, err := resolveKubeadmAdvertiseAddress(parent, spec, configTemplate, timeout)
 	if err != nil {
-		return fmt.Errorf("%s: %w", errCodeInstallInitFailed, err)
+		return errcode.New(errCodeInstallInitFailed, err)
 	}
 
 	if configTemplate != "" {
 		if configFile == "" {
-			return fmt.Errorf("%s: configTemplate requires configFile", errCodeInstallInitFailed)
+			return errcode.Newf(errCodeInstallInitFailed, "configTemplate requires configFile")
 		}
 		configBody := configTemplate
 		if strings.EqualFold(configTemplate, "default") {
@@ -125,22 +126,22 @@ func runInitKubeadmReal(parent context.Context, spec stepspec.KubeadmInit) error
 
 	if err := runTimedCommandWithContext(parent, "kubeadm", args, timeout); err != nil {
 		if errors.Is(err, ErrStepCommandTimeout) {
-			return fmt.Errorf("%s: kubeadm init timed out: %w", errCodeInstallInitFailed, err)
+			return errcode.New(errCodeInstallInitFailed, fmt.Errorf("kubeadm init timed out: %w", err))
 		}
-		return fmt.Errorf("%s: kubeadm init failed: %w", errCodeInstallInitFailed, err)
+		return errcode.New(errCodeInstallInitFailed, fmt.Errorf("kubeadm init failed: %w", err))
 	}
 
 	joinArgs := []string{"token", "create", "--print-join-command"}
 	joinOut, err := runCommandOutputWithContext(parent, append([]string{"kubeadm"}, joinArgs...), timeout)
 	if err != nil {
 		if errors.Is(err, ErrStepCommandTimeout) {
-			return fmt.Errorf("%s: kubeadm token create timed out", errCodeInstallInitFailed)
+			return errcode.Newf(errCodeInstallInitFailed, "kubeadm token create timed out")
 		}
-		return fmt.Errorf("%s: kubeadm token create failed: %w", errCodeInstallInitFailed, err)
+		return errcode.New(errCodeInstallInitFailed, fmt.Errorf("kubeadm token create failed: %w", err))
 	}
 	joinCmd := strings.TrimSpace(joinOut)
 	if joinCmd == "" {
-		return fmt.Errorf("%s: empty kubeadm join command output", errCodeInstallInitFailed)
+		return errcode.Newf(errCodeInstallInitFailed, "empty kubeadm join command output")
 	}
 
 	return filemode.WritePrivateFile(joinFile, []byte(joinCmd+"\n"))
@@ -250,30 +251,30 @@ func runJoinKubeadmReal(ctx context.Context, spec stepspec.KubeadmJoin) error {
 	joinFile := strings.TrimSpace(spec.JoinFile)
 	configFile := strings.TrimSpace(spec.ConfigFile)
 	if joinFile != "" && configFile != "" {
-		return fmt.Errorf("%s: JoinKubeadm accepts joinFile or configFile, not both", errCodeInstallJoinInputConflict)
+		return errcode.Newf(errCodeInstallJoinInputConflict, "JoinKubeadm accepts joinFile or configFile, not both")
 	}
 	if joinFile == "" && configFile == "" {
-		return fmt.Errorf("%s: JoinKubeadm requires joinFile or configFile", errCodeInstallJoinPathMissing)
+		return errcode.Newf(errCodeInstallJoinPathMissing, "JoinKubeadm requires joinFile or configFile")
 	}
 
 	args := []string{"kubeadm", "join"}
 	if configFile != "" {
 		if _, err := os.Stat(configFile); err != nil {
-			return fmt.Errorf("%s: config file not found: %w", errCodeInstallJoinFileMissing, err)
+			return errcode.New(errCodeInstallJoinFileMissing, fmt.Errorf("config file not found: %w", err))
 		}
 		args = append(args, "--config", configFile)
 	} else {
 		raw, err := fsutil.ReadFile(joinFile)
 		if err != nil {
-			return fmt.Errorf("%s: join file not found: %w", errCodeInstallJoinFileMissing, err)
+			return errcode.New(errCodeInstallJoinFileMissing, fmt.Errorf("join file not found: %w", err))
 		}
 		joinCommand := strings.TrimSpace(string(raw))
 		if joinCommand == "" {
-			return fmt.Errorf("%s: join command is empty", errCodeInstallJoinCmdMissing)
+			return errcode.Newf(errCodeInstallJoinCmdMissing, "join command is empty")
 		}
 		args = strings.Fields(joinCommand)
 		if len(args) == 0 || args[0] != "kubeadm" {
-			return fmt.Errorf("%s: join command must start with kubeadm", errCodeInstallJoinCmdInvalid)
+			return errcode.Newf(errCodeInstallJoinCmdInvalid, "join command must start with kubeadm")
 		}
 	}
 	if spec.AsControlPlane && !stringSliceContains(args[1:], "--control-plane") {
@@ -285,9 +286,9 @@ func runJoinKubeadmReal(ctx context.Context, spec stepspec.KubeadmJoin) error {
 
 	if err := runTimedCommandWithContext(ctx, args[0], args[1:], parseStepTimeout(spec.Timeout, 5*time.Minute)); err != nil {
 		if errors.Is(err, ErrStepCommandTimeout) {
-			return fmt.Errorf("%s: kubeadm join timed out: %w", errCodeInstallJoinFailed, err)
+			return errcode.New(errCodeInstallJoinFailed, fmt.Errorf("kubeadm join timed out: %w", err))
 		}
-		return fmt.Errorf("%s: kubeadm join failed: %w", errCodeInstallJoinFailed, err)
+		return errcode.New(errCodeInstallJoinFailed, fmt.Errorf("kubeadm join failed: %w", err))
 	}
 	return nil
 }
@@ -327,22 +328,22 @@ func runResetKubeadmReal(ctx context.Context, decoded stepspec.KubeadmReset) err
 	resetErr := runTimedCommandWithContext(ctx, "kubeadm", kubeadmArgs, parseStepTimeout(decoded.Timeout, 10*time.Minute))
 	if resetErr != nil && !decoded.IgnoreErrors {
 		if errors.Is(resetErr, ErrStepCommandTimeout) {
-			return fmt.Errorf("%s: kubeadm reset timed out: %w", errCodeInstallResetFailed, resetErr)
+			return errcode.New(errCodeInstallResetFailed, fmt.Errorf("kubeadm reset timed out: %w", resetErr))
 		}
-		return fmt.Errorf("%s: kubeadm reset failed: %w", errCodeInstallResetFailed, resetErr)
+		return errcode.New(errCodeInstallResetFailed, fmt.Errorf("kubeadm reset failed: %w", resetErr))
 	}
 
 	if err := removeResetPaths(decoded.RemovePaths); err != nil {
-		return fmt.Errorf("%s: remove reset paths: %w", errCodeInstallResetFailed, err)
+		return errcode.New(errCodeInstallResetFailed, fmt.Errorf("remove reset paths: %w", err))
 	}
 	if err := removeResetFiles(decoded.RemoveFiles); err != nil {
-		return fmt.Errorf("%s: remove reset files: %w", errCodeInstallResetFailed, err)
+		return errcode.New(errCodeInstallResetFailed, fmt.Errorf("remove reset files: %w", err))
 	}
 
 	cleanupContainers := trimmedStringSlice(decoded.CleanupContainers)
 	for _, name := range cleanupContainers {
 		if err := cleanupContainerByName(ctx, name, strings.TrimSpace(decoded.CriSocket), parseStepTimeout(decoded.Timeout, 2*time.Minute)); err != nil {
-			return fmt.Errorf("%s: cleanup stale container %s: %w", errCodeInstallResetFailed, name, err)
+			return errcode.New(errCodeInstallResetFailed, fmt.Errorf("cleanup stale container %s: %w", name, err))
 		}
 	}
 
@@ -350,14 +351,14 @@ func runResetKubeadmReal(ctx context.Context, decoded stepspec.KubeadmReset) err
 	if restartRuntime != "" {
 		if err := runTimedCommandWithContext(ctx, "systemctl", []string{"restart", restartRuntime}, parseStepTimeout(decoded.Timeout, 2*time.Minute)); err != nil {
 			if errors.Is(err, ErrStepCommandTimeout) {
-				return fmt.Errorf("%s: restart runtime service %s timed out: %w", errCodeInstallResetFailed, restartRuntime, err)
+				return errcode.New(errCodeInstallResetFailed, fmt.Errorf("restart runtime service %s timed out: %w", restartRuntime, err))
 			}
-			return fmt.Errorf("%s: restart runtime service %s failed: %w", errCodeInstallResetFailed, restartRuntime, err)
+			return errcode.New(errCodeInstallResetFailed, fmt.Errorf("restart runtime service %s failed: %w", restartRuntime, err))
 		}
 	}
 	if decoded.WaitForRuntimeService && restartRuntime != "" {
 		if err := runWaitDecoded(ctx, "WaitForService", stepspec.Wait{Name: restartRuntime}, parseStepTimeout(decoded.Timeout, 2*time.Minute)); err != nil {
-			return fmt.Errorf("%s: runtime service did not become active: %w", errCodeInstallResetFailed, err)
+			return errcode.New(errCodeInstallResetFailed, fmt.Errorf("runtime service did not become active: %w", err))
 		}
 	}
 	if decoded.WaitForRuntimeReady {
@@ -367,21 +368,21 @@ func runResetKubeadmReal(ctx context.Context, decoded stepspec.KubeadmReset) err
 		}
 		command = append(command, "info")
 		if err := runWaitDecoded(ctx, "WaitForCommand", stepspec.Wait{Command: command}, parseStepTimeout(decoded.Timeout, 2*time.Minute)); err != nil {
-			return fmt.Errorf("%s: runtime did not become ready: %w", errCodeInstallResetFailed, err)
+			return errcode.New(errCodeInstallResetFailed, fmt.Errorf("runtime did not become ready: %w", err))
 		}
 	}
 	if glob := strings.TrimSpace(decoded.WaitForMissingManifestsGlob); glob != "" {
 		if err := runWaitDecoded(ctx, "WaitForMissingFile", stepspec.Wait{Glob: glob}, parseStepTimeout(decoded.Timeout, 2*time.Minute)); err != nil {
-			return fmt.Errorf("%s: manifests did not disappear: %w", errCodeInstallResetFailed, err)
+			return errcode.New(errCodeInstallResetFailed, fmt.Errorf("manifests did not disappear: %w", err))
 		}
 	}
 	for _, name := range trimmedStringSlice(decoded.VerifyContainersAbsent) {
 		present, err := kubeadmContainerPresent(ctx, name, strings.TrimSpace(decoded.CriSocket), parseStepTimeout(decoded.Timeout, 2*time.Minute))
 		if err != nil {
-			return fmt.Errorf("%s: verify stale container %s: %w", errCodeInstallResetFailed, name, err)
+			return errcode.New(errCodeInstallResetFailed, fmt.Errorf("verify stale container %s: %w", name, err))
 		}
 		if present {
-			return fmt.Errorf("%s: stale container still present: %s", errCodeInstallResetFailed, name)
+			return errcode.Newf(errCodeInstallResetFailed, "stale container still present: %s", name)
 		}
 	}
 	if decoded.StopKubeletAfterReset {
@@ -389,7 +390,7 @@ func runResetKubeadmReal(ctx context.Context, decoded stepspec.KubeadmReset) err
 	}
 	if reportPath := strings.TrimSpace(decoded.ReportFile); reportPath != "" {
 		if err := writeResetReport(ctx, decoded, reportPath); err != nil {
-			return fmt.Errorf("%s: write reset report: %w", errCodeInstallResetFailed, err)
+			return errcode.New(errCodeInstallResetFailed, fmt.Errorf("write reset report: %w", err))
 		}
 	}
 
@@ -399,7 +400,7 @@ func runResetKubeadmReal(ctx context.Context, decoded stepspec.KubeadmReset) err
 func runUpgradeKubeadmReal(ctx context.Context, spec stepspec.KubeadmUpgrade) error {
 	version := strings.TrimSpace(spec.KubernetesVersion)
 	if version == "" {
-		return fmt.Errorf("%s: UpgradeKubeadm requires kubernetesVersion", errCodeInstallUpgradeFailed)
+		return errcode.Newf(errCodeInstallUpgradeFailed, "UpgradeKubeadm requires kubernetesVersion")
 	}
 	timeout := parseStepTimeout(spec.Timeout, 20*time.Minute)
 	args := []string{"upgrade", "apply", "-y", version}
@@ -411,9 +412,9 @@ func runUpgradeKubeadmReal(ctx context.Context, spec stepspec.KubeadmUpgrade) er
 	}
 	if err := runTimedCommandWithContext(ctx, "kubeadm", args, timeout); err != nil {
 		if errors.Is(err, ErrStepCommandTimeout) {
-			return fmt.Errorf("%s: kubeadm upgrade timed out: %w", errCodeInstallUpgradeFailed, err)
+			return errcode.New(errCodeInstallUpgradeFailed, fmt.Errorf("kubeadm upgrade timed out: %w", err))
 		}
-		return fmt.Errorf("%s: kubeadm upgrade failed: %w", errCodeInstallUpgradeFailed, err)
+		return errcode.New(errCodeInstallUpgradeFailed, fmt.Errorf("kubeadm upgrade failed: %w", err))
 	}
 	restartKubelet := true
 	if spec.RestartKubelet != nil {
@@ -428,9 +429,9 @@ func runUpgradeKubeadmReal(ctx context.Context, spec stepspec.KubeadmUpgrade) er
 	}
 	if err := runTimedCommandWithContext(ctx, "systemctl", []string{"restart", service}, parseStepTimeout(spec.Timeout, 2*time.Minute)); err != nil {
 		if errors.Is(err, ErrStepCommandTimeout) {
-			return fmt.Errorf("%s: restart service %s timed out: %w", errCodeInstallUpgradeFailed, service, err)
+			return errcode.New(errCodeInstallUpgradeFailed, fmt.Errorf("restart service %s timed out: %w", service, err))
 		}
-		return fmt.Errorf("%s: restart service %s failed: %w", errCodeInstallUpgradeFailed, service, err)
+		return errcode.New(errCodeInstallUpgradeFailed, fmt.Errorf("restart service %s failed: %w", service, err))
 	}
 	return nil
 }

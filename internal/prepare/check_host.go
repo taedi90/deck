@@ -1,11 +1,11 @@
 package prepare
 
 import (
-	"fmt"
 	"os"
 	"runtime"
 	"strings"
 
+	"github.com/taedi90/deck/internal/errcode"
 	"github.com/taedi90/deck/internal/stepspec"
 	"github.com/taedi90/deck/internal/workflowexec"
 )
@@ -34,7 +34,7 @@ func resolveCheckHostRuntime(opts RunOptions) checksRuntime {
 func runCheckHostDecoded(runner CommandRunner, decoded stepspec.CheckHost, deps checksRuntime) (map[string]any, error) {
 	checks := decoded.Checks
 	if len(checks) == 0 {
-		return nil, fmt.Errorf("%s: CheckHost requires checks", errCodePrepareCheckHostFailed)
+		return nil, errcode.Newf(errCodePrepareCheckHostFailed, "CheckHost requires checks")
 	}
 	host := detectHostFacts(deps)
 
@@ -47,7 +47,7 @@ func runCheckHostDecoded(runner CommandRunner, decoded stepspec.CheckHost, deps 
 	fail := func(name, reason string) error {
 		failed = append(failed, name+":"+reason)
 		if failFast {
-			return fmt.Errorf("%s: %s", errCodePrepareCheckHostFailed, strings.Join(failed, ", "))
+			return errcode.Newf(errCodePrepareCheckHostFailed, "%s", strings.Join(failed, ", "))
 		}
 		return nil
 	}
@@ -122,7 +122,7 @@ func runCheckHostDecoded(runner CommandRunner, decoded stepspec.CheckHost, deps 
 	}
 
 	if len(failed) > 0 {
-		return map[string]any{"passed": false, "failedChecks": failed, "host": host}, fmt.Errorf("%s: %s", errCodePrepareCheckHostFailed, strings.Join(failed, ", "))
+		return map[string]any{"passed": false, "failedChecks": failed, "host": host}, errcode.Newf(errCodePrepareCheckHostFailed, "%s", strings.Join(failed, ", "))
 	}
 	return map[string]any{"passed": true, "failedChecks": []string{}, "host": host}, nil
 }

@@ -8,6 +8,8 @@ import (
 	"github.com/taedi90/deck/internal/config"
 )
 
+// resolveLegacyStateReadPath keeps read-only fallback support for pre-XDG apply
+// state files while new writes continue to use the canonical state root.
 func resolveLegacyStateReadPath(wf *config.Workflow, preferredPath string) (string, bool, error) {
 	if wf == nil || strings.TrimSpace(wf.StateKey) == "" {
 		return strings.TrimSpace(preferredPath), false, nil

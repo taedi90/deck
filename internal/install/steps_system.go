@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/taedi90/deck/internal/errcode"
 	"github.com/taedi90/deck/internal/filemode"
 	"github.com/taedi90/deck/internal/fsutil"
 	"github.com/taedi90/deck/internal/hostfs"
@@ -21,7 +22,7 @@ func runSysctl(ctx context.Context, spec map[string]any) error {
 	}
 	path := strings.TrimSpace(decoded.WriteFile)
 	if path == "" {
-		return fmt.Errorf("%s: Sysctl requires writeFile", errCodeInstallSysctlPathMiss)
+		return errcode.Newf(errCodeInstallSysctlPathMiss, "Sysctl requires writeFile")
 	}
 	hostPath, err := hostfs.NewHostPath(path)
 	if err != nil {
@@ -30,7 +31,7 @@ func runSysctl(ctx context.Context, spec map[string]any) error {
 
 	values := decoded.Values
 	if len(values) == 0 {
-		return fmt.Errorf("%s: Sysctl requires values", errCodeInstallSysctlValsMiss)
+		return errcode.Newf(errCodeInstallSysctlValsMiss, "Sysctl requires values")
 	}
 
 	lines := make([]string, 0, len(values))
@@ -59,10 +60,10 @@ func runManageService(ctx context.Context, spec map[string]any) error {
 	name := strings.TrimSpace(decoded.Name)
 	names := decoded.Names
 	if name == "" && len(names) == 0 {
-		return fmt.Errorf("%s: ManageService requires name or names", errCodeInstallManageServiceNameMiss)
+		return errcode.Newf(errCodeInstallManageServiceNameMiss, "ManageService requires name or names")
 	}
 	if name != "" && len(names) > 0 {
-		return fmt.Errorf("%s: ManageService accepts either name or names", errCodeInstallManageServiceNameMiss)
+		return errcode.Newf(errCodeInstallManageServiceNameMiss, "ManageService accepts either name or names")
 	}
 	if name != "" {
 		names = []string{name}
@@ -238,10 +239,10 @@ func runKernelModule(ctx context.Context, spec map[string]any) error {
 	}
 	modules := kernelModuleNames(decoded)
 	if len(modules) == 0 {
-		return fmt.Errorf("%s: KernelModule requires name or names", errCodeInstallKernelModuleMiss)
+		return errcode.Newf(errCodeInstallKernelModuleMiss, "KernelModule requires name or names")
 	}
 	if decoded.Name != "" && len(decoded.Names) > 0 {
-		return fmt.Errorf("%s: KernelModule accepts either name or names", errCodeInstallKernelModuleMiss)
+		return errcode.Newf(errCodeInstallKernelModuleMiss, "KernelModule accepts either name or names")
 	}
 
 	load := true

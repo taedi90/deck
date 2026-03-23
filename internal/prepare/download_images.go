@@ -14,6 +14,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 
+	"github.com/taedi90/deck/internal/errcode"
 	"github.com/taedi90/deck/internal/filemode"
 	"github.com/taedi90/deck/internal/stepspec"
 	"github.com/taedi90/deck/internal/workflowexec"
@@ -66,7 +67,7 @@ func runDownloadImage(ctx context.Context, runner CommandRunner, bundleRoot stri
 	}
 
 	if engine != "go-containerregistry" {
-		return nil, fmt.Errorf("%s: unsupported image engine: %s", errCodePrepareEngineUnsupported, engine)
+		return nil, errcode.Newf(errCodePrepareEngineUnsupported, "unsupported image engine: %s", engine)
 	}
 
 	auth, err := parseImageRegistryAuth(decoded)
