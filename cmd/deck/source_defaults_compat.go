@@ -10,8 +10,8 @@ import (
 	"github.com/taedi90/deck/internal/userdirs"
 )
 
-// loadLegacySourceDefaults keeps read-only fallback support for the pre-XDG
-// ~/.deck/server.json location. See docs/contributing/legacy-compatibility.md.
+// legacySourceDefaultsPath returns the pre-XDG config path for server
+// defaults. See docs/contributing/legacy-compatibility.md.
 func legacySourceDefaultsPath() (string, error) {
 	return userdirs.LegacyConfigFile("server.json")
 }

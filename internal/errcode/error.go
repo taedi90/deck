@@ -1,6 +1,9 @@
 package errcode
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 type Error struct {
 	Code string
@@ -40,7 +43,7 @@ func Newf(code string, format string, args ...any) error {
 
 func Code(err error) string {
 	var coded *Error
-	if !As(err, &coded) || coded == nil {
+	if !errors.As(err, &coded) || coded == nil {
 		return ""
 	}
 	return coded.Code
@@ -48,23 +51,4 @@ func Code(err error) string {
 
 func Is(err error, code string) bool {
 	return Code(err) == code
-}
-
-func As(err error, target **Error) bool {
-	if err == nil {
-		return false
-	}
-	for err != nil {
-		coded, ok := err.(*Error)
-		if ok {
-			*target = coded
-			return true
-		}
-		unwrapper, ok := err.(interface{ Unwrap() error })
-		if !ok {
-			return false
-		}
-		err = unwrapper.Unwrap()
-	}
-	return false
 }

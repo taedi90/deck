@@ -2,6 +2,7 @@ package fsutil
 
 import (
 	"context"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -17,7 +18,7 @@ func (r Root) WalkDir(fn fs.WalkDirFunc, segments ...string) error {
 
 func (r Root) WalkDirWithContext(ctx context.Context, fn fs.WalkDirFunc, segments ...string) error {
 	if ctx == nil {
-		return context.Canceled
+		return fmt.Errorf("context cannot be nil")
 	}
 	return r.WalkDir(func(path string, d fs.DirEntry, walkErr error) error {
 		if err := ctx.Err(); err != nil {
