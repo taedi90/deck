@@ -6,7 +6,7 @@ Reference for the `File` family of typed workflow steps.
 ## Summary
 
 - family: `file`
-- kinds: `DownloadFile`, `WriteFile`, `CopyFile`, `EditFile`, `ExtractArchive`
+- kinds: `DownloadFile`, `WriteFile`, `CopyFile`, `EditFile`, `EditTOML`, `EditYAML`, `EditJSON`, `ExtractArchive`
 
 ## Shared Step Fields
 
@@ -18,6 +18,9 @@ Shared step envelope fields such as `id`, `apiVersion`, `kind`, `when`, `retry`,
 - `WriteFile`: Write inline or templated file content to a destination path.
 - `CopyFile`: Copy a file from a declared source to a destination path.
 - `EditFile`: Edit an existing file in place using ordered match rules.
+- `EditTOML`: Edit a TOML file in place using structured path operations.
+- `EditYAML`: Edit a YAML file in place using structured path operations.
+- `EditJSON`: Edit a JSON file in place using structured path operations.
 - `ExtractArchive`: Extract an archive from a declared source into a destination directory.
 
 ## `DownloadFile`
@@ -228,6 +231,115 @@ spec:
 - `DownloadFile` writes into prepared bundle storage through `outputPath`, while `WriteFile`, `CopyFile`, `EditFile`, and `ExtractArchive` operate on node paths through `path`.
 - Use `source.path` when the input is a simple local path and `source.bundle` or `source.url` when the source is structured or external.
 - Use `template` instead of `content` when the body includes variable substitution.
+
+## `EditTOML`
+
+Edit a TOML file in place using structured path operations.
+
+- schema: `../../../schemas/tools/file.edit-toml.schema.json`
+- outputs: `path`
+
+### When To Use
+
+Use this when TOML configuration should be updated without brittle string replacement.
+
+### Example
+
+```yaml
+kind: EditTOML
+spec:
+  path: /etc/containerd/config.toml
+  edits:
+    - op: set
+      rawPath: plugins."io.containerd.grpc.v1.cri".registry.config_path
+      value: /etc/containerd/certs.d
+```
+
+### Spec Fields
+
+| Key | Type | Required | Default | Enum | Description | Example |
+|---|---|---:|---|---|---|---|
+| `spec.createIfMissing` | `boolean` | no | `false` | `` | Create a new empty TOML document when the file does not exist. Defaults to `false`. | `true` |
+| `spec.edits` | `array<object>` | yes | `` | `` | Ordered list of structured edits applied sequentially to the TOML document. | `[{op:set,rawPath:plugins."io.containerd.grpc.v1.cri".registry.config_path,value:/etc/containerd/certs.d}]` |
+| `spec.mode` | `string` | no | `` | `` | Optional file permissions to apply after the edit completes. | `0644` |
+| `spec.path` | `string` | yes | `` | `` | TOML file path to edit in place. | `/etc/containerd/config.toml` |
+
+### Notes
+
+- Use this for generic TOML editing when a domain-specific step is unnecessary.
+
+## `EditYAML`
+
+Edit a YAML file in place using structured path operations.
+
+- schema: `../../../schemas/tools/file.edit-yaml.schema.json`
+- outputs: `path`
+
+### When To Use
+
+Use this for common map/list YAML updates where direct text replacement is too fragile.
+
+### Example
+
+```yaml
+kind: EditYAML
+spec:
+  path: /etc/kubernetes/kubeadm-config.yaml
+  edits:
+    - op: set
+      rawPath: ClusterConfiguration.imageRepository
+      value: registry.local/k8s
+```
+
+### Spec Fields
+
+| Key | Type | Required | Default | Enum | Description | Example |
+|---|---|---:|---|---|---|---|
+| `spec.createIfMissing` | `boolean` | no | `false` | `` | Create a new empty YAML document when the file does not exist. Defaults to `false`. | `true` |
+| `spec.edits` | `array<object>` | yes | `` | `` | Ordered list of structured edits applied sequentially to the YAML document. | `[{op:set,rawPath:spec.template.spec.containers.0.image,value:registry.local/app:v1}]` |
+| `spec.mode` | `string` | no | `` | `` | Optional file permissions to apply after the edit completes. | `0644` |
+| `spec.path` | `string` | yes | `` | `` | YAML file path to edit in place. | `/etc/kubernetes/kubeadm-config.yaml` |
+
+### Notes
+
+- YAML support targets common map/list documents rather than advanced YAML features.
+- Comment placement, anchors, aliases, merge keys, and style preservation are not guaranteed.
+
+## `EditJSON`
+
+Edit a JSON file in place using structured path operations.
+
+- schema: `../../../schemas/tools/file.edit-json.schema.json`
+- outputs: `path`
+
+### When To Use
+
+Use this when JSON configuration should be modified by path instead of full rewrites.
+
+### Example
+
+```yaml
+kind: EditJSON
+spec:
+  path: /etc/cni/net.d/10-custom.conflist
+  edits:
+    - op: set
+      rawPath: plugins.0.type
+      value: bridge
+```
+
+### Spec Fields
+
+| Key | Type | Required | Default | Enum | Description | Example |
+|---|---|---:|---|---|---|---|
+| `spec.createIfMissing` | `boolean` | no | `false` | `` | Create a new empty JSON object when the file does not exist. Defaults to `false`. | `true` |
+| `spec.edits` | `array<object>` | yes | `` | `` | Ordered list of structured edits applied sequentially to the JSON document. | `[{op:set,rawPath:plugins.0.type,value:bridge}]` |
+| `spec.mode` | `string` | no | `` | `` | Optional file permissions to apply after the edit completes. | `0644` |
+| `spec.path` | `string` | yes | `` | `` | JSON file path to edit in place. | `/etc/cni/net.d/10-custom.conflist` |
+
+### Notes
+
+- Use this when JSON configuration should be updated by path rather than rewritten entirely.
 
 ## `ExtractArchive`
 

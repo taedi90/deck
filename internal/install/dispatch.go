@@ -26,6 +26,12 @@ func executeWorkflowStep(ctx context.Context, step config.Step, rendered map[str
 		return runCopyFile(ctx, execCtx.BundleRoot, rendered)
 	case "EditFile":
 		return runEditFile(rendered)
+	case "EditTOML":
+		return runEditTOML(rendered)
+	case "EditYAML":
+		return runEditYAML(rendered)
+	case "EditJSON":
+		return runEditJSON(rendered)
 	case "ExtractArchive":
 		return runExtractArchive(ctx, execCtx.BundleRoot, rendered)
 	case "Sysctl":

@@ -24,7 +24,7 @@ func stepOutputs(kind string, rendered map[string]any) map[string]any {
 			outputs["outputPath"] = path
 			outputs["artifacts"] = []string{path}
 		}
-	case "WriteFile", "EditFile", "ExtractArchive":
+	case "WriteFile", "EditFile", "EditTOML", "EditYAML", "EditJSON", "ExtractArchive":
 		if path := stringValue(mapValue(rendered, "output"), "path"); path != "" {
 			outputs["path"] = path
 		} else if path := stringValue(rendered, "path"); path != "" {

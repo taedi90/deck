@@ -14,6 +14,7 @@ import (
 	"github.com/taedi90/deck/internal/fsutil"
 	"github.com/taedi90/deck/internal/hostfs"
 	"github.com/taedi90/deck/internal/stepspec"
+	"github.com/taedi90/deck/internal/structurededit"
 	"github.com/taedi90/deck/internal/workflowexec"
 )
 
@@ -78,6 +79,81 @@ func runEditFile(spec map[string]any) error {
 		return err
 	}
 	return applyOptionalFileMode(hostPath, strings.TrimSpace(decoded.Mode))
+}
+
+func runEditTOML(spec map[string]any) error {
+	decoded, err := workflowexec.DecodeSpec[stepspec.EditTOML](spec)
+	if err != nil {
+		return fmt.Errorf("decode EditTOML spec: %w", err)
+	}
+	return runStructuredEdit(decoded.Path, decoded.CreateIfMissing, decoded.Edits, decoded.Mode, structurededit.FormatTOML)
+}
+
+func runEditYAML(spec map[string]any) error {
+	decoded, err := workflowexec.DecodeSpec[stepspec.EditYAML](spec)
+	if err != nil {
+		return fmt.Errorf("decode EditYAML spec: %w", err)
+	}
+	return runStructuredEdit(decoded.Path, decoded.CreateIfMissing, decoded.Edits, decoded.Mode, structurededit.FormatYAML)
+}
+
+func runEditJSON(spec map[string]any) error {
+	decoded, err := workflowexec.DecodeSpec[stepspec.EditJSON](spec)
+	if err != nil {
+		return fmt.Errorf("decode EditJSON spec: %w", err)
+	}
+	return runStructuredEdit(decoded.Path, decoded.CreateIfMissing, decoded.Edits, decoded.Mode, structurededit.FormatJSON)
+}
+
+func runStructuredEdit(path string, createIfMissing *bool, edits []stepspec.StructuredEdit, mode string, format structurededit.Format) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return fmt.Errorf("structured edit requires path")
+	}
+	if len(edits) == 0 {
+		return fmt.Errorf("structured edit requires edits")
+	}
+	content, err := readStructuredEditContent(path, createIfMissing)
+	if err != nil {
+		return err
+	}
+	return applyStructuredEdits(path, content, edits, mode, format)
+}
+
+func readStructuredEditContent(path string, createIfMissing *bool) ([]byte, error) {
+	hostPath, err := hostfs.NewHostPath(path)
+	if err != nil {
+		return nil, err
+	}
+	content, err := hostPath.ReadFile()
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return nil, err
+		}
+		if createIfMissing == nil || !*createIfMissing {
+			return nil, err
+		}
+		return []byte{}, nil
+	}
+	return content, nil
+}
+
+func applyStructuredEdits(path string, content []byte, edits []stepspec.StructuredEdit, mode string, format structurededit.Format) error {
+	hostPath, err := hostfs.NewHostPath(path)
+	if err != nil {
+		return err
+	}
+	updated, err := structurededit.Apply(format, content, edits)
+	if err != nil {
+		return err
+	}
+	if err := hostPath.EnsureParentDir(filemode.PublishedArtifact); err != nil {
+		return err
+	}
+	if err := hostPath.WriteFile(updated, filemode.PublishedArtifact); err != nil {
+		return err
+	}
+	return applyOptionalFileMode(hostPath, strings.TrimSpace(mode))
 }
 
 func runCopyFile(ctx context.Context, bundleRoot string, spec map[string]any) error {

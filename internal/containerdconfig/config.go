@@ -2,13 +2,13 @@ package containerdconfig
 
 import (
 	"fmt"
-	"math"
 	"regexp"
 	"strings"
 
 	toml "github.com/pelletier/go-toml/v2"
 
 	"github.com/taedi90/deck/internal/stepspec"
+	"github.com/taedi90/deck/internal/structurededit"
 )
 
 type Version int
@@ -52,7 +52,19 @@ type resolvedKeySpec struct {
 var runtimeNamePattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 func Apply(raw []byte, settings []stepspec.ContainerdConfigSetting, versionPolicy string) ([]byte, error) {
-	doc, version, hasVersion, err := parse(raw)
+	edits, err := StructuredEdits(raw, settings, versionPolicy)
+	if err != nil {
+		return nil, err
+	}
+	encoded, err := structurededit.Apply(structurededit.FormatTOML, raw, edits)
+	if err != nil {
+		return nil, fmt.Errorf("apply containerd config edits: %w", err)
+	}
+	return encoded, nil
+}
+
+func StructuredEdits(raw []byte, settings []stepspec.ContainerdConfigSetting, versionPolicy string) ([]stepspec.StructuredEdit, error) {
+	_, version, hasVersion, err := parse(raw)
 	if err != nil {
 		return nil, err
 	}
@@ -62,22 +74,20 @@ func Apply(raw []byte, settings []stepspec.ContainerdConfigSetting, versionPolic
 		return nil, err
 	}
 
+	edits := make([]stepspec.StructuredEdit, 0, len(settings)+1)
 	for idx, setting := range settings {
 		resolved, err := resolveSettingTarget(setting, version)
 		if err != nil {
 			return nil, fmt.Errorf("settings[%d]: %w", idx, err)
 		}
-		if err := applySetting(doc, resolved, setting); err != nil {
+		edit, err := toStructuredEdit(resolved, setting)
+		if err != nil {
 			return nil, fmt.Errorf("settings[%d]: %w", idx, err)
 		}
+		edits = append(edits, edit)
 	}
-
-	doc["version"] = int64(version)
-	encoded, err := toml.Marshal(doc)
-	if err != nil {
-		return nil, fmt.Errorf("marshal containerd config: %w", err)
-	}
-	return encoded, nil
+	edits = append(edits, stepspec.StructuredEdit{Op: "set", RawPath: "version", Value: int64(version)})
+	return edits, nil
 }
 
 func resolveSettingTarget(setting stepspec.ContainerdConfigSetting, version Version) (resolvedKeySpec, error) {
@@ -90,13 +100,9 @@ func resolveSettingTarget(setting stepspec.ContainerdConfigSetting, version Vers
 		return resolvedKeySpec{}, fmt.Errorf("key and rawPath cannot be set together")
 	}
 	if rawPath != "" {
-		path, err := parseRawPath(rawPath)
-		if err != nil {
-			return resolvedKeySpec{}, err
-		}
 		return resolvedKeySpec{
 			spec: keySpec{allowDelete: true, allowAppend: true, allowReplace: true, kind: inferRawValueKind(setting)},
-			path: path,
+			path: []string{rawPath},
 		}, nil
 	}
 	return resolveLogicalKey(key, version)
@@ -409,82 +415,48 @@ func runtimeCNIRoot(version Version) []string {
 	return append(runtimeRoot(version), "cni")
 }
 
-func parseRawPath(rawPath string) ([]string, error) {
-	segments := make([]string, 0)
-	var current strings.Builder
-	inQuotes := false
-	escaped := false
-	for i := 0; i < len(rawPath); i++ {
-		ch := rawPath[i]
-		switch {
-		case escaped:
-			current.WriteByte(ch)
-			escaped = false
-		case ch == '\\' && inQuotes:
-			escaped = true
-		case ch == '"':
-			inQuotes = !inQuotes
-		case ch == '.' && !inQuotes:
-			segment := strings.TrimSpace(current.String())
-			if segment == "" {
-				return nil, fmt.Errorf("invalid rawPath %q", rawPath)
-			}
-			segments = append(segments, segment)
-			current.Reset()
-		default:
-			current.WriteByte(ch)
-		}
-	}
-	if inQuotes || escaped {
-		return nil, fmt.Errorf("invalid rawPath %q", rawPath)
-	}
-	segment := strings.TrimSpace(current.String())
-	if segment == "" {
-		return nil, fmt.Errorf("invalid rawPath %q", rawPath)
-	}
-	segments = append(segments, segment)
-	return segments, nil
-}
-
-func applySetting(doc map[string]any, resolved resolvedKeySpec, setting stepspec.ContainerdConfigSetting) error {
+func toStructuredEdit(resolved resolvedKeySpec, setting stepspec.ContainerdConfigSetting) (stepspec.StructuredEdit, error) {
 	op := strings.TrimSpace(setting.Op)
 	if op == "" {
-		return fmt.Errorf("op is required")
+		return stepspec.StructuredEdit{}, fmt.Errorf("op is required")
+	}
+	rawPath := strings.TrimSpace(setting.RawPath)
+	if rawPath == "" {
+		rawPath = formatRawPath(resolved.path)
 	}
 
 	switch op {
 	case "set":
 		value, err := normalizeValue(setting.Value, resolved.spec.kind, op)
 		if err != nil {
-			return err
+			return stepspec.StructuredEdit{}, err
 		}
-		return setPathValue(doc, resolved.path, value)
+		return stepspec.StructuredEdit{Op: op, RawPath: rawPath, Value: value}, nil
 	case "delete":
 		if !resolved.spec.allowDelete {
-			return fmt.Errorf("op %q is not allowed for key %q", op, setting.Key)
+			return stepspec.StructuredEdit{}, fmt.Errorf("op %q is not allowed for key %q", op, setting.Key)
 		}
-		return deletePathValue(doc, resolved.path)
+		return stepspec.StructuredEdit{Op: op, RawPath: rawPath}, nil
 	case "appendUnique":
 		if !resolved.spec.allowAppend {
-			return fmt.Errorf("op %q is not allowed for key %q", op, setting.Key)
+			return stepspec.StructuredEdit{}, fmt.Errorf("op %q is not allowed for key %q", op, setting.Key)
 		}
 		value, err := normalizeValue(setting.Value, valueKindStringList, op)
 		if err != nil {
-			return err
+			return stepspec.StructuredEdit{}, err
 		}
-		items := value.([]string)
-		return appendUniqueStringList(doc, resolved.path, items)
+		return stepspec.StructuredEdit{Op: op, RawPath: rawPath, Value: value}, nil
 	case "replaceList":
 		if !resolved.spec.allowReplace {
-			return fmt.Errorf("op %q is not allowed for key %q", op, setting.Key)
+			return stepspec.StructuredEdit{}, fmt.Errorf("op %q is not allowed for key %q", op, setting.Key)
 		}
 		value, err := normalizeValue(setting.Value, valueKindStringList, op)
 		if err != nil {
-			return err
+			return stepspec.StructuredEdit{}, err
 		}
-		return setPathValue(doc, resolved.path, toAnySlice(value.([]string)))
+		return stepspec.StructuredEdit{Op: op, RawPath: rawPath, Value: value}, nil
 	default:
-		return fmt.Errorf("unsupported op %q", op)
+		return stepspec.StructuredEdit{}, fmt.Errorf("unsupported op %q", op)
 	}
 }
 
@@ -553,106 +525,6 @@ func normalizeStringSlice(items []string) ([]string, error) {
 	return result, nil
 }
 
-func asInt(raw any) (int64, error) {
-	switch value := raw.(type) {
-	case int:
-		return int64(value), nil
-	case int64:
-		return value, nil
-	case int32:
-		return int64(value), nil
-	case float64:
-		if math.Trunc(value) != value {
-			return 0, fmt.Errorf("got non-integer number %v", value)
-		}
-		return int64(value), nil
-	default:
-		return 0, fmt.Errorf("got %T", raw)
-	}
-}
-
-func setPathValue(doc map[string]any, path []string, value any) error {
-	if len(path) == 0 {
-		return fmt.Errorf("path is required")
-	}
-	parent, leaf, err := ensureParentTable(doc, path)
-	if err != nil {
-		return err
-	}
-	parent[leaf] = value
-	return nil
-}
-
-func ensureParentTable(doc map[string]any, path []string) (map[string]any, string, error) {
-	current := doc
-	for _, segment := range path[:len(path)-1] {
-		next, ok := current[segment]
-		if !ok {
-			created := map[string]any{}
-			current[segment] = created
-			current = created
-			continue
-		}
-		table, ok := next.(map[string]any)
-		if !ok {
-			return nil, "", fmt.Errorf("path %q conflicts with non-table value", strings.Join(path, "."))
-		}
-		current = table
-	}
-	return current, path[len(path)-1], nil
-}
-
-func deletePathValue(doc map[string]any, path []string) error {
-	if len(path) == 0 {
-		return nil
-	}
-	current := doc
-	for _, segment := range path[:len(path)-1] {
-		next, ok := current[segment]
-		if !ok {
-			return nil
-		}
-		table, ok := next.(map[string]any)
-		if !ok {
-			return fmt.Errorf("path %q conflicts with non-table value", strings.Join(path, "."))
-		}
-		current = table
-	}
-	delete(current, path[len(path)-1])
-	return nil
-}
-
-func appendUniqueStringList(doc map[string]any, path []string, items []string) error {
-	parent, leaf, err := ensureParentTable(doc, path)
-	if err != nil {
-		return err
-	}
-	existingRaw, ok := parent[leaf]
-	if !ok {
-		parent[leaf] = toAnySlice(items)
-		return nil
-	}
-	existingSlice, err := readStringList(existingRaw)
-	if err != nil {
-		return fmt.Errorf("existing value at %q is not a string list", strings.Join(path, "."))
-	}
-	seen := map[string]struct{}{}
-	merged := make([]string, 0, len(existingSlice)+len(items))
-	for _, item := range existingSlice {
-		merged = append(merged, item)
-		seen[item] = struct{}{}
-	}
-	for _, item := range items {
-		if _, ok := seen[item]; ok {
-			continue
-		}
-		merged = append(merged, item)
-		seen[item] = struct{}{}
-	}
-	parent[leaf] = toAnySlice(merged)
-	return nil
-}
-
 func readStringList(raw any) ([]string, error) {
 	switch value := raw.(type) {
 	case []string:
@@ -672,10 +544,32 @@ func readStringList(raw any) ([]string, error) {
 	}
 }
 
-func toAnySlice(items []string) []any {
-	out := make([]any, 0, len(items))
-	for _, item := range items {
-		out = append(out, item)
+func asInt(raw any) (int64, error) {
+	switch value := raw.(type) {
+	case int:
+		return int64(value), nil
+	case int64:
+		return value, nil
+	case int32:
+		return int64(value), nil
+	case float64:
+		if value != float64(int64(value)) {
+			return 0, fmt.Errorf("got non-integer number %v", value)
+		}
+		return int64(value), nil
+	default:
+		return 0, fmt.Errorf("got %T", raw)
 	}
-	return out
+}
+
+func formatRawPath(path []string) string {
+	parts := make([]string, 0, len(path))
+	for _, segment := range path {
+		if strings.Contains(segment, ".") || strings.Contains(segment, `"`) {
+			parts = append(parts, `"`+strings.ReplaceAll(segment, `"`, `\"`)+`"`)
+			continue
+		}
+		parts = append(parts, segment)
+	}
+	return strings.Join(parts, ".")
 }

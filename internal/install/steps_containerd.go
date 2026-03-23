@@ -13,6 +13,7 @@ import (
 	"github.com/taedi90/deck/internal/filemode"
 	"github.com/taedi90/deck/internal/fsutil"
 	"github.com/taedi90/deck/internal/stepspec"
+	"github.com/taedi90/deck/internal/structurededit"
 	"github.com/taedi90/deck/internal/workflowexec"
 )
 
@@ -24,9 +25,6 @@ func runWriteContainerdConfig(ctx context.Context, spec map[string]any) error {
 	path := strings.TrimSpace(decoded.Path)
 	if path == "" {
 		path = "/etc/containerd/config.toml"
-	}
-	if err := filemode.EnsureParentDir(path, filemode.PublishedArtifact); err != nil {
-		return err
 	}
 
 	content, err := fsutil.ReadFile(path)
@@ -48,12 +46,11 @@ func runWriteContainerdConfig(ctx context.Context, spec map[string]any) error {
 		}
 	}
 
-	updated, err := containerdconfig.Apply(content, decoded.RawSettings, decoded.VersionPolicy)
+	edits, err := containerdconfig.StructuredEdits(content, decoded.RawSettings, decoded.VersionPolicy)
 	if err != nil {
 		return err
 	}
-
-	if err := writeFileIfChanged(path, updated, 0o644); err != nil {
+	if err := applyStructuredEdits(path, content, edits, "0644", structurededit.FormatTOML); err != nil {
 		return err
 	}
 

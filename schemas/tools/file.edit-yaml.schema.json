@@ -1,0 +1,139 @@
+{
+  "$id": "https://deck.local/schemas/tools/file.edit-yaml.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Edit a YAML file in place using structured path operations.",
+  "properties": {
+    "apiVersion": {
+      "const": "deck/v1alpha1",
+      "type": "string"
+    },
+    "id": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "EditYAML"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "parallelGroup": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "register": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      },
+      "type": "object"
+    },
+    "retry": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "spec": {
+      "$id": "https://github.com/taedi90/deck/internal/stepspec/edit-yaml",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "createIfMissing": {
+          "default": false,
+          "type": "boolean"
+        },
+        "edits": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "op": {
+                "enum": [
+                  "set",
+                  "delete",
+                  "appendUnique",
+                  "replaceList"
+                ],
+                "type": "string"
+              },
+              "rawPath": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "value": {
+                "oneOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "items": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  {
+                    "type": "array"
+                  },
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "op",
+              "rawPath"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "mode": {
+          "pattern": "^[0-7]{4}$",
+          "type": "string"
+        },
+        "path": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "edits"
+      ],
+      "type": "object"
+    },
+    "timeout": {
+      "pattern": "^[0-9]+(ms|s|m|h)$",
+      "type": "string"
+    },
+    "when": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "kind",
+    "spec"
+  ],
+  "title": "EditYAMLStep",
+  "type": "object",
+  "x-deck-visibility": "public"
+}

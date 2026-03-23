@@ -83,6 +83,61 @@ func patchEditFileToolSchema(root map[string]any) {
 	setMap(props, "spec", spec)
 }
 
+func patchEditTOMLToolSchema(root map[string]any) {
+	patchStructuredEditToolSchema(root, &stepspec.EditTOML{})
+}
+
+func patchEditYAMLToolSchema(root map[string]any) {
+	patchStructuredEditToolSchema(root, &stepspec.EditYAML{})
+}
+
+func patchEditJSONToolSchema(root map[string]any) {
+	patchStructuredEditToolSchema(root, &stepspec.EditJSON{})
+}
+
+func patchStructuredEditToolSchema(root map[string]any, specType any) {
+	props := propertyMap(root)
+	spec, err := reflectedSpecSchema(specType)
+	if err != nil {
+		panic(err)
+	}
+	properties := propertyMap(spec)
+	setMap(properties, "path", minLenStringSchema())
+	setMap(properties, "createIfMissing", map[string]any{"type": "boolean", "default": false})
+	setMap(properties, "mode", modeSchema())
+	setMap(properties, "edits", structuredEditsSchema())
+	spec["required"] = []any{"path", "edits"}
+	setMap(props, "spec", spec)
+}
+
+func structuredEditsSchema() map[string]any {
+	return map[string]any{
+		"type":     "array",
+		"minItems": 1,
+		"items": map[string]any{
+			"type":                 "object",
+			"additionalProperties": false,
+			"required":             []any{"op", "rawPath"},
+			"properties": map[string]any{
+				"op":      enumStringSchema("set", "delete", "appendUnique", "replaceList"),
+				"rawPath": minLenStringSchema(),
+				"value": map[string]any{
+					"oneOf": []any{
+						minLenStringSchema(),
+						map[string]any{"type": "boolean"},
+						map[string]any{"type": "integer"},
+						map[string]any{"type": "number"},
+						stringArraySchema(1, true),
+						map[string]any{"type": "array"},
+						map[string]any{"type": "object"},
+						map[string]any{"type": "null"},
+					},
+				},
+			},
+		},
+	}
+}
+
 func fileSourceSchema() map[string]any {
 	return map[string]any{
 		"type":                 "object",

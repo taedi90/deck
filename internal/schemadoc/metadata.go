@@ -99,6 +99,55 @@ var toolMetadata = map[string]ToolMetadata{
 		},
 	},
 
+	"EditTOML": {
+		Example: "kind: EditTOML\nspec:\n  path: /etc/containerd/config.toml\n  edits:\n    - op: set\n      rawPath: plugins.\"io.containerd.grpc.v1.cri\".registry.config_path\n      value: /etc/containerd/certs.d\n",
+		FieldDocs: map[string]FieldDoc{
+			"spec.path":            {Description: "TOML file path to edit in place.", Example: "/etc/containerd/config.toml"},
+			"spec.createIfMissing": {Description: "Create a new empty TOML document when the file does not exist. Defaults to `false`.", Example: "true"},
+			"spec.edits":           {Description: "Ordered list of structured edits applied sequentially to the TOML document.", Example: "[{op:set,rawPath:plugins.\"io.containerd.grpc.v1.cri\".registry.config_path,value:/etc/containerd/certs.d}]"},
+			"spec.edits[].op":      {Description: "Structured edit operation. Use `set`, `delete`, `appendUnique`, or `replaceList`.", Example: "set"},
+			"spec.edits[].rawPath": {Description: "Quoted-segment TOML path. Segments are dot-separated and keys containing dots may be quoted.", Example: "plugins.\"io.containerd.grpc.v1.cri\".registry.config_path"},
+			"spec.edits[].value":   {Description: "Typed edit value. Supported values include string, boolean, number, list, object, and null depending on the operation.", Example: "/etc/containerd/certs.d"},
+			"spec.mode":            {Description: "Optional file permissions to apply after the edit completes.", Example: "0644"},
+		},
+		Notes: []string{
+			"Use this for generic TOML editing when a domain-specific step is unnecessary.",
+		},
+	},
+
+	"EditYAML": {
+		Example: "kind: EditYAML\nspec:\n  path: /etc/kubernetes/kubeadm-config.yaml\n  edits:\n    - op: set\n      rawPath: ClusterConfiguration.imageRepository\n      value: registry.local/k8s\n",
+		FieldDocs: map[string]FieldDoc{
+			"spec.path":            {Description: "YAML file path to edit in place.", Example: "/etc/kubernetes/kubeadm-config.yaml"},
+			"spec.createIfMissing": {Description: "Create a new empty YAML document when the file does not exist. Defaults to `false`.", Example: "true"},
+			"spec.edits":           {Description: "Ordered list of structured edits applied sequentially to the YAML document.", Example: "[{op:set,rawPath:spec.template.spec.containers.0.image,value:registry.local/app:v1}]"},
+			"spec.edits[].op":      {Description: "Structured edit operation. Use `set`, `delete`, `appendUnique`, or `replaceList`.", Example: "set"},
+			"spec.edits[].rawPath": {Description: "Dot-path with optional quoted key segments and numeric array indexes.", Example: "spec.template.spec.containers.0.image"},
+			"spec.edits[].value":   {Description: "Typed edit value. Supported values include string, boolean, number, list, object, and null depending on the operation.", Example: "registry.local/k8s"},
+			"spec.mode":            {Description: "Optional file permissions to apply after the edit completes.", Example: "0644"},
+		},
+		Notes: []string{
+			"YAML support targets common map/list documents rather than advanced YAML features.",
+			"Comment placement, anchors, aliases, merge keys, and style preservation are not guaranteed.",
+		},
+	},
+
+	"EditJSON": {
+		Example: "kind: EditJSON\nspec:\n  path: /etc/cni/net.d/10-custom.conflist\n  edits:\n    - op: set\n      rawPath: plugins.0.type\n      value: bridge\n",
+		FieldDocs: map[string]FieldDoc{
+			"spec.path":            {Description: "JSON file path to edit in place.", Example: "/etc/cni/net.d/10-custom.conflist"},
+			"spec.createIfMissing": {Description: "Create a new empty JSON object when the file does not exist. Defaults to `false`.", Example: "true"},
+			"spec.edits":           {Description: "Ordered list of structured edits applied sequentially to the JSON document.", Example: "[{op:set,rawPath:plugins.0.type,value:bridge}]"},
+			"spec.edits[].op":      {Description: "Structured edit operation. Use `set`, `delete`, `appendUnique`, or `replaceList`.", Example: "set"},
+			"spec.edits[].rawPath": {Description: "Dot-path with optional quoted key segments and numeric array indexes.", Example: "plugins.0.type"},
+			"spec.edits[].value":   {Description: "Typed edit value. Supported values include string, boolean, number, list, object, and null depending on the operation.", Example: "bridge"},
+			"spec.mode":            {Description: "Optional file permissions to apply after the edit completes.", Example: "0644"},
+		},
+		Notes: []string{
+			"Use this when JSON configuration should be updated by path rather than rewritten entirely.",
+		},
+	},
+
 	"EnsureDirectory": {
 		Example: "kind: EnsureDirectory\nspec:\n  path: /home/vagrant/.kube\n  mode: \"0755\"\n",
 		FieldDocs: map[string]FieldDoc{
