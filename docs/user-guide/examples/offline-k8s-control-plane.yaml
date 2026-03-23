@@ -41,7 +41,10 @@ phases:
         kind: WriteContainerdConfig
         spec:
           path: /etc/containerd/config.toml
-          systemdCgroup: true
+          rawSettings:
+            - op: set
+              rawPath: plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options.SystemdCgroup
+              value: true
       - id: prep-containerd-runtime
         apiVersion: deck/v1alpha1
         kind: ManageService

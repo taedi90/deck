@@ -1,8 +1,8 @@
 {
-  "$id": "https://deck.local/schemas/tools/containerd.config.schema.json",
+  "$id": "https://deck.local/schemas/tools/file.edit-toml.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Write the containerd config file on the node.",
+  "description": "Edit a TOML file in place using structured path operations.",
   "properties": {
     "apiVersion": {
       "const": "deck/v1alpha1",
@@ -12,7 +12,7 @@
       "type": "string"
     },
     "kind": {
-      "const": "WriteContainerdConfig"
+      "const": "EditTOML"
     },
     "metadata": {
       "additionalProperties": true,
@@ -36,38 +36,18 @@
       "type": "integer"
     },
     "spec": {
-      "$id": "https://github.com/taedi90/deck/internal/stepspec/write-containerd-config",
+      "$id": "https://github.com/taedi90/deck/internal/stepspec/edit-toml",
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
-        "createDefault": {
-          "default": true,
+        "createIfMissing": {
+          "default": false,
           "type": "boolean"
         },
-        "path": {
-          "minLength": 1,
-          "type": "string"
-        },
-        "rawSettings": {
+        "edits": {
           "items": {
             "additionalProperties": false,
-            "oneOf": [
-              {
-                "required": [
-                  "key"
-                ]
-              },
-              {
-                "required": [
-                  "rawPath"
-                ]
-              }
-            ],
             "properties": {
-              "key": {
-                "minLength": 1,
-                "type": "string"
-              },
               "op": {
                 "enum": [
                   "set",
@@ -94,6 +74,9 @@
                     "type": "integer"
                   },
                   {
+                    "type": "number"
+                  },
+                  {
                     "items": {
                       "minLength": 1,
                       "type": "string"
@@ -102,29 +85,39 @@
                     "type": "array"
                   },
                   {
+                    "type": "array"
+                  },
+                  {
                     "type": "object"
+                  },
+                  {
+                    "type": "null"
                   }
                 ]
               }
             },
             "required": [
-              "op"
+              "op",
+              "rawPath"
             ],
             "type": "object"
           },
           "minItems": 1,
           "type": "array"
         },
-        "versionPolicy": {
-          "enum": [
-            "preserve",
-            "require-v1",
-            "require-v2",
-            "require-v3"
-          ],
+        "mode": {
+          "pattern": "^[0-7]{4}$",
+          "type": "string"
+        },
+        "path": {
+          "minLength": 1,
           "type": "string"
         }
       },
+      "required": [
+        "path",
+        "edits"
+      ],
       "type": "object"
     },
     "timeout": {
@@ -140,7 +133,7 @@
     "kind",
     "spec"
   ],
-  "title": "WriteContainerdConfigStep",
+  "title": "EditTOMLStep",
   "type": "object",
   "x-deck-visibility": "public"
 }

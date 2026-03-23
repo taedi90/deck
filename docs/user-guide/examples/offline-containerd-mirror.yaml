@@ -14,7 +14,10 @@ phases:
         kind: WriteContainerdConfig
         spec:
           path: /etc/containerd/config.toml
-          configPath: /etc/containerd/certs.d
+          rawSettings:
+            - op: set
+              rawPath: plugins."io.containerd.grpc.v1.cri".registry.config_path
+              value: /etc/containerd/certs.d
       - id: prep-containerd-registry-hosts
         apiVersion: deck/v1alpha1
         kind: WriteContainerdRegistryHosts

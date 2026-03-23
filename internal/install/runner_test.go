@@ -3701,12 +3701,15 @@ func TestWriteContainerdConfigStep(t *testing.T) {
 	t.Run("updates existing config.toml fields", func(t *testing.T) {
 		dir := t.TempDir()
 		target := filepath.Join(dir, "config.toml")
-		initial := "config_path = \"\"\n            SystemdCgroup = false\n"
+		initial := "version = 2\n[plugins.\"io.containerd.grpc.v1.cri\".registry]\n  config_path = \"\"\n[plugins.\"io.containerd.grpc.v1.cri\".containerd.runtimes.runc.options]\n  SystemdCgroup = false\n"
 		if err := os.WriteFile(target, []byte(initial), 0o644); err != nil {
 			t.Fatalf("write initial config: %v", err)
 		}
 
-		spec := map[string]any{"path": target, "configPath": "/etc/containerd/certs.d", "systemdCgroup": true}
+		spec := map[string]any{"path": target, "rawSettings": []any{
+			map[string]any{"op": "set", "key": "registry.configPath", "value": "/etc/containerd/certs.d"},
+			map[string]any{"op": "set", "key": "runtime.runtimes.runc.options.SystemdCgroup", "value": true},
+		}}
 		if err := runWriteContainerdConfig(context.Background(), spec); err != nil {
 			t.Fatalf("runWriteContainerdConfig failed: %v", err)
 		}
@@ -3716,7 +3719,7 @@ func TestWriteContainerdConfigStep(t *testing.T) {
 			t.Fatalf("read config: %v", err)
 		}
 		got := string(raw)
-		if !strings.Contains(got, "config_path = \"/etc/containerd/certs.d\"") || !strings.Contains(got, "SystemdCgroup = true") {
+		if !strings.Contains(got, "/etc/containerd/certs.d") || !strings.Contains(got, "SystemdCgroup = true") {
 			t.Fatalf("unexpected config content: %q", got)
 		}
 	})
@@ -3828,6 +3831,52 @@ func TestWriteContainerdConfigStep(t *testing.T) {
 		}
 		if strings.Contains(string(configRaw), "config_path") {
 			t.Fatalf("did not expect config_path to be injected when configPath is omitted: %q", string(configRaw))
+		}
+	})
+
+	t.Run("applies structured edits for toml yaml and json", func(t *testing.T) {
+		dir := t.TempDir()
+
+		tomlPath := filepath.Join(dir, "config.toml")
+		if err := os.WriteFile(tomlPath, []byte("[plugins.\"io.containerd.grpc.v1.cri\".registry]\nconfig_path = \"\"\n"), 0o644); err != nil {
+			t.Fatalf("write toml: %v", err)
+		}
+		if err := runEditTOML(map[string]any{"path": tomlPath, "edits": []any{map[string]any{"op": "set", "rawPath": `plugins."io.containerd.grpc.v1.cri".registry.config_path`, "value": "/etc/containerd/certs.d"}}}); err != nil {
+			t.Fatalf("runEditTOML failed: %v", err)
+		}
+		tomlRaw, err := os.ReadFile(tomlPath)
+		if err != nil {
+			t.Fatalf("read toml: %v", err)
+		}
+		if !strings.Contains(string(tomlRaw), "/etc/containerd/certs.d") {
+			t.Fatalf("unexpected toml content: %q", string(tomlRaw))
+		}
+
+		yamlPath := filepath.Join(dir, "kubeadm.yaml")
+		if err := runEditYAML(map[string]any{"path": yamlPath, "createIfMissing": true, "edits": []any{map[string]any{"op": "set", "rawPath": "ClusterConfiguration.imageRepository", "value": "registry.local/k8s"}}}); err != nil {
+			t.Fatalf("runEditYAML failed: %v", err)
+		}
+		yamlRaw, err := os.ReadFile(yamlPath)
+		if err != nil {
+			t.Fatalf("read yaml: %v", err)
+		}
+		if !strings.Contains(string(yamlRaw), "imageRepository: registry.local/k8s") {
+			t.Fatalf("unexpected yaml content: %q", string(yamlRaw))
+		}
+
+		jsonPath := filepath.Join(dir, "cni.json")
+		if err := os.WriteFile(jsonPath, []byte(`{"plugins":[{"type":"loopback"}]}`), 0o644); err != nil {
+			t.Fatalf("write json: %v", err)
+		}
+		if err := runEditJSON(map[string]any{"path": jsonPath, "edits": []any{map[string]any{"op": "set", "rawPath": "plugins.0.type", "value": "bridge"}}}); err != nil {
+			t.Fatalf("runEditJSON failed: %v", err)
+		}
+		jsonRaw, err := os.ReadFile(jsonPath)
+		if err != nil {
+			t.Fatalf("read json: %v", err)
+		}
+		if !strings.Contains(string(jsonRaw), `"type": "bridge"`) {
+			t.Fatalf("unexpected json content: %q", string(jsonRaw))
 		}
 	})
 }

@@ -26,7 +26,7 @@ Reference documentation for each typed workflow step supported by deck.
 ## [File](file.md)
 
 - **Summary**: Reference for the `File` family of typed workflow steps.
-- **Kinds**: `DownloadFile`, `WriteFile`, `CopyFile`, `EditFile`, `ExtractArchive`
+- **Kinds**: `DownloadFile`, `WriteFile`, `CopyFile`, `EditFile`, `EditTOML`, `EditYAML`, `EditJSON`, `ExtractArchive`
 
 ## [HostCheck](host-check.md)
 

@@ -3,8 +3,13 @@ steps:
     kind: WriteContainerdConfig
     spec:
       path: /etc/containerd/config.toml
-      configPath: /etc/containerd/certs.d
-      systemdCgroup: true
+      rawSettings:
+        - op: set
+          rawPath: plugins."io.containerd.grpc.v1.cri".registry.config_path
+          value: /etc/containerd/certs.d
+        - op: set
+          rawPath: plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options.SystemdCgroup
+          value: true
   - id: configure-containerd-registry-hosts
     kind: WriteContainerdRegistryHosts
     spec:

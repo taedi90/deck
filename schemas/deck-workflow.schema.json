@@ -603,6 +603,162 @@
                       {
                         "properties": {
                           "kind": {
+                            "const": "EditJSON"
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ]
+                      },
+                      {
+                        "anyOf": [
+                          {
+                            "not": {
+                              "required": [
+                                "apiVersion"
+                              ]
+                            }
+                          },
+                          {
+                            "properties": {
+                              "apiVersion": {
+                                "const": "deck/v1alpha1"
+                              }
+                            },
+                            "required": [
+                              "apiVersion"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "register": {
+                        "additionalProperties": {
+                          "enum": [
+                            "path"
+                          ]
+                        },
+                        "propertyNames": {
+                          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                        },
+                        "type": "object"
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "allOf": [
+                      {
+                        "properties": {
+                          "kind": {
+                            "const": "EditTOML"
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ]
+                      },
+                      {
+                        "anyOf": [
+                          {
+                            "not": {
+                              "required": [
+                                "apiVersion"
+                              ]
+                            }
+                          },
+                          {
+                            "properties": {
+                              "apiVersion": {
+                                "const": "deck/v1alpha1"
+                              }
+                            },
+                            "required": [
+                              "apiVersion"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "register": {
+                        "additionalProperties": {
+                          "enum": [
+                            "path"
+                          ]
+                        },
+                        "propertyNames": {
+                          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                        },
+                        "type": "object"
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "allOf": [
+                      {
+                        "properties": {
+                          "kind": {
+                            "const": "EditYAML"
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ]
+                      },
+                      {
+                        "anyOf": [
+                          {
+                            "not": {
+                              "required": [
+                                "apiVersion"
+                              ]
+                            }
+                          },
+                          {
+                            "properties": {
+                              "apiVersion": {
+                                "const": "deck/v1alpha1"
+                              }
+                            },
+                            "required": [
+                              "apiVersion"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "register": {
+                        "additionalProperties": {
+                          "enum": [
+                            "path"
+                          ]
+                        },
+                        "propertyNames": {
+                          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                        },
+                        "type": "object"
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "allOf": [
+                      {
+                        "properties": {
+                          "kind": {
                             "const": "EnsureDirectory"
                           }
                         },
@@ -1826,6 +1982,9 @@
                     "DownloadImage",
                     "DownloadPackage",
                     "EditFile",
+                    "EditJSON",
+                    "EditTOML",
+                    "EditYAML",
                     "EnsureDirectory",
                     "ExtractArchive",
                     "InitKubeadm",
@@ -2379,6 +2538,162 @@
                   "properties": {
                     "kind": {
                       "const": "EditFile"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "not": {
+                        "required": [
+                          "apiVersion"
+                        ]
+                      }
+                    },
+                    {
+                      "properties": {
+                        "apiVersion": {
+                          "const": "deck/v1alpha1"
+                        }
+                      },
+                      "required": [
+                        "apiVersion"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "then": {
+              "properties": {
+                "register": {
+                  "additionalProperties": {
+                    "enum": [
+                      "path"
+                    ]
+                  },
+                  "propertyNames": {
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                  },
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "allOf": [
+                {
+                  "properties": {
+                    "kind": {
+                      "const": "EditJSON"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "not": {
+                        "required": [
+                          "apiVersion"
+                        ]
+                      }
+                    },
+                    {
+                      "properties": {
+                        "apiVersion": {
+                          "const": "deck/v1alpha1"
+                        }
+                      },
+                      "required": [
+                        "apiVersion"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "then": {
+              "properties": {
+                "register": {
+                  "additionalProperties": {
+                    "enum": [
+                      "path"
+                    ]
+                  },
+                  "propertyNames": {
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                  },
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "allOf": [
+                {
+                  "properties": {
+                    "kind": {
+                      "const": "EditTOML"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "not": {
+                        "required": [
+                          "apiVersion"
+                        ]
+                      }
+                    },
+                    {
+                      "properties": {
+                        "apiVersion": {
+                          "const": "deck/v1alpha1"
+                        }
+                      },
+                      "required": [
+                        "apiVersion"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "then": {
+              "properties": {
+                "register": {
+                  "additionalProperties": {
+                    "enum": [
+                      "path"
+                    ]
+                  },
+                  "propertyNames": {
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                  },
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "allOf": [
+                {
+                  "properties": {
+                    "kind": {
+                      "const": "EditYAML"
                     }
                   },
                   "required": [
@@ -3653,6 +3968,9 @@
               "DownloadImage",
               "DownloadPackage",
               "EditFile",
+              "EditJSON",
+              "EditTOML",
+              "EditYAML",
               "EnsureDirectory",
               "ExtractArchive",
               "InitKubeadm",

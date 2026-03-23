@@ -2049,8 +2049,13 @@ steps:
     kind: WriteContainerdConfig
     spec:
       path: /etc/containerd/config.toml
-      configPath: /etc/containerd/certs.d
-      systemdCgroup: true
+      rawSettings:
+        - op: set
+          key: registry.configPath
+          value: /etc/containerd/certs.d
+        - op: set
+          key: runtime.runtimes.runc.options.SystemdCgroup
+          value: true
   - id: containerd-registry-hosts
     kind: WriteContainerdRegistryHosts
     spec:
@@ -2061,6 +2066,31 @@ steps:
           host: http://127.0.0.1:5000
           capabilities: [pull, resolve]
           skipVerify: true
+  - id: edit-toml
+    kind: EditTOML
+    spec:
+      path: /etc/containerd/config.toml
+      edits:
+        - op: set
+          rawPath: plugins."io.containerd.grpc.v1.cri".registry.config_path
+          value: /etc/containerd/certs.d
+  - id: edit-yaml
+    kind: EditYAML
+    spec:
+      path: /etc/kubernetes/kubeadm-config.yaml
+      createIfMissing: true
+      edits:
+        - op: set
+          rawPath: ClusterConfiguration.imageRepository
+          value: registry.local/k8s
+  - id: edit-json
+    kind: EditJSON
+    spec:
+      path: /etc/cni/net.d/10-custom.conflist
+      edits:
+        - op: set
+          rawPath: plugins.0.type
+          value: bridge
   - id: swap
     kind: Swap
     spec:

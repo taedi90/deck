@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
+	"github.com/taedi90/deck/internal/containerdconfig"
 	"github.com/taedi90/deck/internal/filemode"
 	"github.com/taedi90/deck/internal/fsutil"
 	"github.com/taedi90/deck/internal/stepspec"
+	"github.com/taedi90/deck/internal/structurededit"
 	"github.com/taedi90/deck/internal/workflowexec"
 )
 
@@ -24,9 +25,6 @@ func runWriteContainerdConfig(ctx context.Context, spec map[string]any) error {
 	path := strings.TrimSpace(decoded.Path)
 	if path == "" {
 		path = "/etc/containerd/config.toml"
-	}
-	if err := filemode.EnsureParentDir(path, filemode.PublishedArtifact); err != nil {
-		return err
 	}
 
 	content, err := fsutil.ReadFile(path)
@@ -48,34 +46,11 @@ func runWriteContainerdConfig(ctx context.Context, spec map[string]any) error {
 		}
 	}
 
-	updated := string(content)
-	if configPath := strings.TrimSpace(decoded.ConfigPath); configPath != "" {
-		target := fmt.Sprintf("config_path = %q", configPath)
-		re := regexp.MustCompile(`(?m)^\s*config_path\s*=\s*"[^"]*"\s*$`)
-		if re.MatchString(updated) {
-			updated = re.ReplaceAllString(updated, target)
-		} else {
-			if !strings.HasSuffix(updated, "\n") && updated != "" {
-				updated += "\n"
-			}
-			updated += target + "\n"
-		}
+	edits, err := containerdconfig.StructuredEdits(content, decoded.RawSettings, decoded.VersionPolicy)
+	if err != nil {
+		return err
 	}
-
-	if decoded.SystemdCgroup != nil {
-		target := fmt.Sprintf("            SystemdCgroup = %t", *decoded.SystemdCgroup)
-		re := regexp.MustCompile(`(?m)^\s*SystemdCgroup\s*=\s*(true|false)\s*$`)
-		if re.MatchString(updated) {
-			updated = re.ReplaceAllString(updated, target)
-		} else {
-			if !strings.HasSuffix(updated, "\n") && updated != "" {
-				updated += "\n"
-			}
-			updated += target + "\n"
-		}
-	}
-
-	if err := writeFileIfChanged(path, []byte(updated), 0o644); err != nil {
+	if err := applyStructuredEdits(path, content, edits, "0644", structurededit.FormatTOML); err != nil {
 		return err
 	}
 

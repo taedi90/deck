@@ -1,11 +1,18 @@
 package stepspec
 
 type WriteContainerdConfig struct {
-	Path          string `json:"path"`
-	ConfigPath    string `json:"configPath"`
-	SystemdCgroup *bool  `json:"systemdCgroup"`
-	CreateDefault *bool  `json:"createDefault"`
-	Timeout       string `json:"timeout"`
+	Path          string                    `json:"path"`
+	CreateDefault *bool                     `json:"createDefault"`
+	VersionPolicy string                    `json:"versionPolicy"`
+	RawSettings   []ContainerdConfigSetting `json:"rawSettings"`
+	Timeout       string                    `json:"timeout"`
+}
+
+type ContainerdConfigSetting struct {
+	Op      string `json:"op"`
+	Key     string `json:"key"`
+	RawPath string `json:"rawPath"`
+	Value   any    `json:"value,omitempty"`
 }
 
 type ContainerdRegistryHost struct {
