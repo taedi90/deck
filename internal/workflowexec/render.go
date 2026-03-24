@@ -7,6 +7,7 @@ import (
 	"text/template"
 	"text/template/parse"
 
+	"github.com/taedi90/deck/internal/cloneutil"
 	"github.com/taedi90/deck/internal/config"
 )
 
@@ -20,7 +21,7 @@ func RenderSpec(spec map[string]any, wf *config.Workflow, runtimeVars map[string
 	}
 	ctx := map[string]any{
 		"vars":    vars,
-		"context": cloneMap(ctxData),
+		"context": cloneutil.DeepMap(ctxData),
 		"runtime": runtimeVars,
 	}
 	if ctx["context"] == nil {
@@ -40,7 +41,7 @@ func RenderSpecWithExtra(spec map[string]any, wf *config.Workflow, runtimeVars m
 	}
 	ctx := map[string]any{
 		"vars":    vars,
-		"context": cloneMap(ctxData),
+		"context": cloneutil.DeepMap(ctxData),
 		"runtime": runtimeVars,
 	}
 	if ctx["context"] == nil {
@@ -84,7 +85,7 @@ func renderAny(v any, ctx map[string]any) (any, error) {
 		}
 		return out, nil
 	default:
-		return cloneValue(v), nil
+		return cloneutil.DeepValue(v), nil
 	}
 }
 
@@ -101,11 +102,11 @@ func renderStringOrValue(input string, ctx map[string]any) (any, error) {
 func renderInjectedValue(value any, original string, ctx map[string]any) (any, error) {
 	switch typed := value.(type) {
 	case map[string]any:
-		return renderMap(cloneMap(typed), ctx)
+		return renderMap(cloneutil.DeepMap(typed), ctx)
 	case []any:
 		out := make([]any, 0, len(typed))
 		for idx, item := range typed {
-			rendered, err := renderAny(cloneValue(item), ctx)
+			rendered, err := renderAny(cloneutil.DeepValue(item), ctx)
 			if err != nil {
 				return nil, fmt.Errorf("[%d]: %w", idx, err)
 			}
@@ -141,7 +142,7 @@ func renderWholeValue(input string, ctx map[string]any) (any, bool, error) {
 	if !ok {
 		return nil, false, nil
 	}
-	return cloneValue(value), true, nil
+	return cloneutil.DeepValue(value), true, nil
 }
 
 func evalActionNode(action *parse.ActionNode, ctx map[string]any) (any, bool, error) {
@@ -188,7 +189,7 @@ func evalIndexCommand(args []parse.Node, ctx map[string]any) (any, bool, error) 
 func evalArgNode(node parse.Node, ctx map[string]any) (any, bool, error) {
 	switch typed := node.(type) {
 	case *parse.DotNode:
-		return cloneValue(ctx), true, nil
+		return cloneutil.DeepValue(ctx), true, nil
 	case *parse.FieldNode:
 		value, err := resolveTemplatePath(ctx, typed.Ident)
 		if err != nil {
@@ -306,30 +307,4 @@ func renderString(input string, ctx map[string]any) (string, error) {
 		return "", err
 	}
 	return out.String(), nil
-}
-
-func cloneValue(v any) any {
-	switch typed := v.(type) {
-	case map[string]any:
-		return cloneMap(typed)
-	case []any:
-		out := make([]any, 0, len(typed))
-		for _, item := range typed {
-			out = append(out, cloneValue(item))
-		}
-		return out
-	default:
-		return v
-	}
-}
-
-func cloneMap(input map[string]any) map[string]any {
-	if input == nil {
-		return map[string]any{}
-	}
-	out := make(map[string]any, len(input))
-	for k, v := range input {
-		out[k] = cloneValue(v)
-	}
-	return out
 }

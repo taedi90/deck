@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 
+	"github.com/taedi90/deck/internal/cloneutil"
 	"gopkg.in/yaml.v3"
 
 	"github.com/taedi90/deck/internal/fsutil"
@@ -79,7 +80,7 @@ func mergeVars(dst map[string]any, src map[string]any) {
 				continue
 			}
 		}
-		dst[k] = cloneVarValue(v)
+		dst[k] = cloneutil.DeepValue(v)
 	}
 }
 
@@ -92,33 +93,7 @@ func mergeVarValue(dst, src any) (any, bool) {
 	if !ok {
 		return nil, false
 	}
-	merged := cloneVarMap(dstMap)
+	merged := cloneutil.DeepMap(dstMap)
 	mergeVars(merged, srcMap)
 	return merged, true
-}
-
-func cloneVarValue(v any) any {
-	switch typed := v.(type) {
-	case map[string]any:
-		return cloneVarMap(typed)
-	case []any:
-		out := make([]any, 0, len(typed))
-		for _, item := range typed {
-			out = append(out, cloneVarValue(item))
-		}
-		return out
-	default:
-		return v
-	}
-}
-
-func cloneVarMap(input map[string]any) map[string]any {
-	if input == nil {
-		return map[string]any{}
-	}
-	out := make(map[string]any, len(input))
-	for key, value := range input {
-		out[key] = cloneVarValue(value)
-	}
-	return out
 }
