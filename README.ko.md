@@ -57,7 +57,7 @@ deck apply
 ```bash
 # Homebrew tap
 brew tap Airgap-Castaways/tap
-brew install deck
+brew install Airgap-Castaways/tap/deck
 ```
 
 릴리즈 자산은 `https://github.com/Airgap-Castaways/deck/releases`에서 내려받을 수 있습니다.
