@@ -19,6 +19,7 @@ import (
 type stubClient struct {
 	responses []string
 	calls     int
+	prompts   []askprovider.Request
 }
 
 type flushBuffer struct {
@@ -31,7 +32,8 @@ func (b *flushBuffer) Flush() error {
 	return nil
 }
 
-func (s *stubClient) Generate(_ context.Context, _ askprovider.Request) (askprovider.Response, error) {
+func (s *stubClient) Generate(_ context.Context, req askprovider.Request) (askprovider.Response, error) {
+	s.prompts = append(s.prompts, req)
 	defer func() { s.calls++ }()
 	idx := s.calls
 	if idx >= len(s.responses) {
@@ -127,6 +129,31 @@ func TestGenerateWithValidationRepairsKubeadmStyleCheckHostFailure(t *testing.T)
 	}
 	if retries != 1 || len(gen.Files) != 2 {
 		t.Fatalf("unexpected result: retries=%d files=%d", retries, len(gen.Files))
+	}
+}
+
+func TestGenerateWithValidationRetryPromptIncludesRawValidatorErrorAndRepairGuidance(t *testing.T) {
+	client := &stubClient{responses: []string{
+		`{"summary":"invalid kubeadm draft","review":[],"files":[{"path":"workflows/prepare.yaml","content":"version: v1alpha1\nsteps:\n  - id: preflight\n    kind: CheckHost\n    spec:\n      os:\n        type: rhel\n        version: \"9\"\n"}]}`,
+		`{"summary":"repaired kubeadm draft","review":[],"files":[{"path":"workflows/prepare.yaml","content":"version: v1alpha1\nsteps:\n  - id: preflight\n    kind: CheckHost\n    spec:\n      checks: [os, arch, swap]\n      failFast: true\n"}]}`,
+	}}
+	plan := askcontract.PlanResponse{
+		Request:       "create an air-gapped rhel9 single-node kubeadm workflow using typed steps where possible",
+		TargetOutcome: "Generate a prepare workflow for kubeadm",
+		Files:         []askcontract.PlanFile{{Path: "workflows/prepare.yaml", Action: "create"}},
+	}
+	_, _, _, _, err := generateWithValidation(context.Background(), client, askprovider.Request{Kind: "generate", Provider: "openai", Model: "gpt-5.4", APIKey: "test-key", Prompt: plan.Request}, t.TempDir(), 2, newAskLogger(io.Discard, "trace"), askintent.Decision{Route: askintent.RouteDraft}, plan)
+	if err != nil {
+		t.Fatalf("expected repair success: %v", err)
+	}
+	if len(client.prompts) != 2 {
+		t.Fatalf("expected two generate calls, got %d", len(client.prompts))
+	}
+	retryPrompt := client.prompts[1].Prompt
+	for _, want := range []string{"Raw validator error:", "CheckHost", "spec.checks", "spec.os", "Blocking and advisory feedback as JSON:"} {
+		if !strings.Contains(retryPrompt, want) {
+			t.Fatalf("expected %q in retry prompt, got %q", want, retryPrompt)
+		}
 	}
 }
 

@@ -416,6 +416,7 @@ func generateWithValidation(ctx context.Context, client askprovider.Client, req 
 		currentPrompt := req.Prompt
 		if attempt > 1 && lastValidation != "" {
 			currentPrompt += "\n\nLocal validation failed. Fix the response and return full JSON again."
+			currentPrompt += "\nRaw validator error:\n" + strings.TrimSpace(lastValidation)
 			for _, chunk := range askretrieve.RepairChunks(req.Prompt, lastValidation) {
 				currentPrompt += "\n" + chunk.Content
 			}
