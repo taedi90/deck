@@ -489,6 +489,10 @@ prepare_shared_bundle_cache() {
   mkdir -p "${PREPARED_BUNDLE_WORKFLOW_DIR}" "${PREPARED_BUNDLE_FRAGMENT_DIR}"
   deck_vagrant_prepare_workflow_bundle
   prepare_args=(prepare --root outputs
+    --bundle-binary-source local
+    --bundle-binary-dir "${ROOT_DIR}/test/artifacts/bin"
+    --bundle-binary linux/amd64
+    --bundle-binary linux/arm64
     --var "kubernetesVersion=${kubernetes_version}"
     --var "arch=${arch}"
     --var "backendRuntime=${backend_runtime}")
@@ -509,7 +513,6 @@ prepare_shared_bundle_cache() {
 }
 
 prepare_rsync_stage_root() {
-  local deck_bin_source="${ROOT_DIR}/test/artifacts/bin/deck-linux-${HOST_ARCH}"
   local vm_stage_path="${DECK_VAGRANT_VM_STAGED_PATH:-test/e2e/vagrant/run-scenario-vm.sh}"
   local dispatcher_source="${ROOT_DIR}/test/e2e/vagrant/run-scenario-vm.sh"
   local dispatcher_stage_path="${DECK_VAGRANT_VM_DISPATCHER_STAGED_PATH:-test/e2e/vagrant/run-scenario-vm.sh}"
@@ -518,19 +521,18 @@ prepare_rsync_stage_root() {
   local include_legacy_workflows="0"
   local rsync_key=""
 
-  rsync_key="$(python3 - <<'PY' "${ROOT_DIR}" "${deck_bin_source}" "${DECK_VAGRANT_VM_SCENARIO_SCRIPT}" "${dispatcher_source}" "${dispatcher_scenario_helper_source}" "${PREPARED_BUNDLE_ABS}"
+  rsync_key="$(python3 - <<'PY' "${ROOT_DIR}" "${DECK_VAGRANT_VM_SCENARIO_SCRIPT}" "${dispatcher_source}" "${dispatcher_scenario_helper_source}" "${PREPARED_BUNDLE_ABS}"
 import hashlib
 from pathlib import Path
 import sys
 
 root = Path(sys.argv[1])
-deck_bin = Path(sys.argv[2])
-scenario_script = Path(sys.argv[3])
-dispatcher_script = Path(sys.argv[4]) if sys.argv[4] else None
-dispatcher_scenario_helper = Path(sys.argv[5]) if sys.argv[5] else None
-prepared_bundle = Path(sys.argv[6])
+scenario_script = Path(sys.argv[2])
+dispatcher_script = Path(sys.argv[3]) if sys.argv[3] else None
+dispatcher_scenario_helper = Path(sys.argv[4]) if sys.argv[4] else None
+prepared_bundle = Path(sys.argv[5])
 
-paths = [scenario_script, deck_bin]
+paths = [scenario_script]
 if dispatcher_script:
     paths.append(dispatcher_script)
 if dispatcher_scenario_helper and dispatcher_scenario_helper.is_file():
@@ -559,7 +561,7 @@ PY
   fi
 
   rm -rf "${RSYNC_STAGE_STAGE_ABS}" "${RSYNC_STAGE_ABS}"
-  mkdir -p "${RSYNC_STAGE_STAGE_ABS}/$(dirname "${vm_stage_path}")" "${RSYNC_STAGE_STAGE_ABS}/test/artifacts/bin"
+  mkdir -p "${RSYNC_STAGE_STAGE_ABS}/$(dirname "${vm_stage_path}")"
   cp "${DECK_VAGRANT_VM_SCENARIO_SCRIPT}" "${RSYNC_STAGE_STAGE_ABS}/${vm_stage_path}"
   if [[ -n "${dispatcher_source}" ]] && [[ -n "${dispatcher_stage_path}" ]]; then
     mkdir -p "${RSYNC_STAGE_STAGE_ABS}/$(dirname "${dispatcher_stage_path}")"
@@ -580,13 +582,6 @@ PY
   mkdir -p "${RSYNC_STAGE_STAGE_ABS}/test/e2e"
   cp -a "${ROOT_DIR}/test/e2e/scenario-meta" "${RSYNC_STAGE_STAGE_ABS}/test/e2e/"
   cp -a "${ROOT_DIR}/test/e2e/scenario-hooks" "${RSYNC_STAGE_STAGE_ABS}/test/e2e/"
-  cp "${deck_bin_source}" "${RSYNC_STAGE_STAGE_ABS}/test/artifacts/bin/deck-linux-${HOST_ARCH}"
-  if [[ -f "${ROOT_DIR}/test/artifacts/bin/deck-linux-amd64" && "${HOST_ARCH}" != "amd64" ]]; then
-    cp "${ROOT_DIR}/test/artifacts/bin/deck-linux-amd64" "${RSYNC_STAGE_STAGE_ABS}/test/artifacts/bin/deck-linux-amd64"
-  fi
-  if [[ -f "${ROOT_DIR}/test/artifacts/bin/deck-linux-arm64" && "${HOST_ARCH}" != "arm64" ]]; then
-    cp "${ROOT_DIR}/test/artifacts/bin/deck-linux-arm64" "${RSYNC_STAGE_STAGE_ABS}/test/artifacts/bin/deck-linux-arm64"
-  fi
   if [[ -d "${PREPARED_BUNDLE_ABS}" ]]; then
     mkdir -p "${RSYNC_STAGE_STAGE_ABS}/${PREPARED_BUNDLE_REL}"
     cp -a "${PREPARED_BUNDLE_ABS}/." "${RSYNC_STAGE_STAGE_ABS}/${PREPARED_BUNDLE_REL}"

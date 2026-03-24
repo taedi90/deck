@@ -8,8 +8,9 @@ The bundle is the unit of offline handoff. Everything the workflow needs to run 
 
 `deck bundle build` archives the following workspace paths:
 
-- `deck`: the current `deck` binary copied to the workspace root during `prepare`
+- `deck`: a launcher script written to the workspace root during `prepare`
 - `workflows/`: scenario, component, and variable files used at the site
+- `outputs/bin/`: platform-specific runtime binaries selected during `prepare`
 - `outputs/packages/`: OS or Kubernetes packages fetched during `prepare`
 - `outputs/images/`: container image archives fetched during `prepare`
 - `outputs/files/`: supporting files copied or downloaded during `prepare`
@@ -27,13 +28,14 @@ deck
 workflows/scenarios/apply.yaml
 workflows/prepare.yaml
 workflows/vars.yaml
+outputs/bin/linux/amd64/deck
 outputs/packages/kubernetes-1.29.tar.gz
 outputs/images/pause-3.9.tar
 outputs/images/coredns-1.11.tar
 outputs/files/kubeadm.conf
 ```
 
-The operator unpacks this on the target node, then runs `deck apply` — no internet access or external coordination required.
+The operator unpacks this on the target node, then runs `./deck apply`. The launcher selects the matching runtime binary from `outputs/bin/<os>/<arch>/deck` when that platform is included in the bundle.
 
 ## Core rule
 

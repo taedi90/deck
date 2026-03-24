@@ -63,7 +63,7 @@ deck prepare
 deck bundle build --out ./bundle.tar
 ```
 
-`prepare` writes generated artifacts under `./demo/outputs/`, refreshes `./demo/deck`, and updates `./demo/.deck/manifest.json`. `bundle build` turns the current workspace into the archive you carry into the site.
+`prepare` writes generated artifacts under `./demo/outputs/`, writes a root `./demo/deck` launcher, and updates `./demo/.deck/manifest.json`. `bundle build` turns the current workspace into the archive you carry into the site.
 
 ## 5. Apply locally at the target site
 

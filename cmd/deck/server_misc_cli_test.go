@@ -665,7 +665,7 @@ func TestRunWorkflowLintAndLegacyValidateMigration(t *testing.T) {
 
 	t.Run("lint does not emit legacy artifact integrity warnings for DownloadFile steps", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "prepare.yaml")
-		writeWorkflowYAML(t, path, "version: v1alpha1\nphases:\n  - name: prepare\n    steps:\n      - id: rpm\n        kind: DownloadFile\n        spec:\n          source:\n            url: https://example.com/pkg.rpm\n          outputPath: pkg.rpm\n")
+		writeWorkflowYAML(t, path, "version: v1alpha1\nphases:\n  - name: prepare\n    steps:\n      - id: rpm\n        kind: DownloadFile\n        spec:\n          source:\n            url: https://example.com/pkg.rpm\n          outputPath: files/pkg.rpm\n")
 
 		res := execute([]string{"lint", "--file", path, "-o", "json"})
 		if res.err != nil {

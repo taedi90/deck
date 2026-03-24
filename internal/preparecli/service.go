@@ -21,13 +21,18 @@ import (
 )
 
 type Options struct {
-	PreparedRoot string
-	DryRun       bool
-	Refresh      bool
-	Clean        bool
-	VarOverrides map[string]any
-	Stdout       io.Writer
-	Diagnosticf  func(level int, format string, args ...any) error
+	PreparedRoot      string
+	DryRun            bool
+	Refresh           bool
+	Clean             bool
+	BinarySource      string
+	BinaryDir         string
+	BinaryVer         string
+	Binaries          []string
+	VarOverrides      map[string]any
+	Stdout            io.Writer
+	Diagnosticf       func(level int, format string, args ...any) error
+	runtimeBinaryDeps runtimeBinaryDeps
 }
 
 type preparedManifest struct {
@@ -120,6 +125,10 @@ func Run(ctx context.Context, opts Options) error {
 	}
 
 	if opts.DryRun {
+		runtimeWrites, err := dryRunRuntimeBinaryWrites(preparedRoot.Abs(), opts)
+		if err != nil {
+			return err
+		}
 		if err := emitDiagnostic(opts, 1, "deck: prepare dry-run outputsRoot=%s\n", filepath.ToSlash(preparedRoot.Abs())); err != nil {
 			return err
 		}
@@ -137,6 +146,11 @@ func Run(ctx context.Context, opts Options) error {
 			fmt.Sprintf("WRITE=%s", filepath.ToSlash(filepath.Join(filepath.Dir(preparedRoot.Abs()), ".deck", "manifest.json"))),
 		} {
 			if err := printLine(opts.Stdout, line); err != nil {
+				return err
+			}
+		}
+		for _, path := range runtimeWrites {
+			if err := printLine(opts.Stdout, fmt.Sprintf("WRITE=%s", filepath.ToSlash(path))); err != nil {
 				return err
 			}
 		}
@@ -172,19 +186,11 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 
-	execPath, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("resolve deck binary path: %w", err)
-	}
-	if err := emitDiagnostic(opts, 2, "deck: prepare binary=%s\n", filepath.ToSlash(execPath)); err != nil {
+	preparedWorkspaceRoot := filepath.Dir(preparedRoot.Abs())
+	if err := stageRuntimeBinaries(preparedRoot.Abs(), opts); err != nil {
 		return err
 	}
-	binaryBytes, err := fsutil.ReadFile(execPath)
-	if err != nil {
-		return fmt.Errorf("read deck binary: %w", err)
-	}
-	preparedWorkspaceRoot := filepath.Dir(preparedRoot.Abs())
-	if err := writeBytes(filepath.Join(preparedWorkspaceRoot, "deck"), binaryBytes, 0o755); err != nil {
+	if err := writeBytes(filepath.Join(preparedWorkspaceRoot, "deck"), []byte(renderLauncherScript()), 0o755); err != nil {
 		return err
 	}
 
@@ -290,7 +296,7 @@ func writeBytes(path string, data []byte, mode os.FileMode) error {
 func buildPreparedManifest(bundleRoot fsutil.PreparedRoot) (preparedManifest, error) {
 	entries := make([]preparedManifestEntry, 0)
 	workspaceRoot := filepath.Dir(bundleRoot.Abs())
-	for _, root := range []string{"packages", "images", "files"} {
+	for _, root := range []string{"packages", "images", "files", "bin"} {
 		if _, _, err := bundleRoot.Stat(root); err != nil {
 			if os.IsNotExist(err) {
 				continue
@@ -322,6 +328,46 @@ func buildPreparedManifest(bundleRoot fsutil.PreparedRoot) (preparedManifest, er
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Path < entries[j].Path })
 	return preparedManifest{Entries: entries}, nil
+}
+
+func renderLauncherScript() string {
+	return strings.TrimSpace(`#!/bin/sh
+set -eu
+
+os_name="$(uname -s)"
+arch_name="$(uname -m)"
+
+case "$os_name" in
+	Linux) deck_os="linux" ;;
+	Darwin) deck_os="darwin" ;;
+	*)
+		echo "deck: unsupported OS: $os_name" >&2
+		exit 1
+		;;
+esac
+
+case "$arch_name" in
+	x86_64|amd64) deck_arch="amd64" ;;
+	aarch64|arm64) deck_arch="arm64" ;;
+	*)
+		echo "deck: unsupported architecture: $arch_name" >&2
+		exit 1
+		;;
+esac
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+runtime_bin="$script_dir/outputs/bin/$deck_os/$deck_arch/deck"
+
+if [ ! -x "$runtime_bin" ]; then
+	if [ -e "$runtime_bin" ]; then
+		echo "deck: runtime binary is not executable: outputs/bin/$deck_os/$deck_arch/deck" >&2
+	else
+		echo "deck: bundle does not include a runtime binary for $deck_os/$deck_arch" >&2
+	fi
+	exit 1
+fi
+
+exec "$runtime_bin" "$@"`)
 }
 
 func writePreparedManifest(path string, manifest preparedManifest) error {

@@ -19,6 +19,10 @@ type varFlag struct {
 	values map[string]string
 }
 
+type stringSliceFlag struct {
+	values []string
+}
+
 func (v *varFlag) Type() string {
 	return "stringToString"
 }
@@ -59,6 +63,33 @@ func (v *varFlag) AsMap() map[string]string {
 		cloned[key] = value
 	}
 	return cloned
+}
+
+func (s *stringSliceFlag) Type() string {
+	return "stringSlice"
+}
+
+func (s *stringSliceFlag) String() string {
+	if s == nil || len(s.values) == 0 {
+		return ""
+	}
+	return strings.Join(s.values, ",")
+}
+
+func (s *stringSliceFlag) Set(raw string) error {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return errors.New("value must not be empty")
+	}
+	s.values = append(s.values, trimmed)
+	return nil
+}
+
+func (s *stringSliceFlag) Values() []string {
+	if s == nil || len(s.values) == 0 {
+		return nil
+	}
+	return append([]string(nil), s.values...)
 }
 
 func varsAsAnyMap(vars map[string]string) map[string]any {

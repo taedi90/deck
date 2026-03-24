@@ -28,7 +28,7 @@ The mental model is straightforward:
 prepare artifacts -> build bundle -> transfer bundle -> run locally on each node
 ```
 
-`prepare` gathers what the site needs before transport. `apply` executes the procedure locally on the node. This separation means the operator on the far side of the air gap only needs the bundle and the `deck` binary inside it — no external dependencies at run time.
+`prepare` gathers what the site needs before transport. `apply` executes the procedure locally on the node. This separation means the operator on the far side of the air gap only needs the bundle: a root `deck` launcher plus the matching runtime binaries under `outputs/bin/` — no external dependencies at run time.
 
 ## 3. Model the procedure clearly
 
@@ -51,7 +51,7 @@ deck prepare
 deck bundle build --out ./bundle.tar
 ```
 
-The bundle includes the canonical workspace inputs: `outputs/packages/`, `outputs/images/`, `outputs/files/`, `workflows/`, the `deck` binary, and `.deck/manifest.json` checksums.
+The bundle includes the canonical workspace inputs: `outputs/packages/`, `outputs/images/`, `outputs/files/`, `outputs/bin/`, `workflows/`, the root `deck` launcher, and `.deck/manifest.json` checksums.
 
 ## 5. Move the bundle into the offline site
 

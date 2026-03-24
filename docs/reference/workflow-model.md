@@ -261,9 +261,9 @@ Supported kinds:
 
 `prepare` uses the same step grammar as `apply`, but command context determines which kinds are valid.
 
-- `DownloadFile` writes bundle-relative outputs through `outputPath`
-- `DownloadImage` writes prepared image archives under `outputDir` or the default `images/` root
-- `DownloadPackage` writes prepared package content under `outputDir` or the default `packages/` root
+- `DownloadFile` is prepare-only and writes bundle-relative outputs under the canonical `files/` root
+- `DownloadImage` is prepare-only and writes prepared image archives under `images/` or an `images/...` subdirectory
+- `DownloadPackage` is prepare-only and writes prepared package content under `packages/` or a `packages/...` subdirectory
 - container-backed `DownloadPackage` reuses a host-owned exported artifact cache after successful exports instead of bind-mounting apt/dnf package-manager cache directories
 - `workflows/prepare.yaml` is the fixed entrypoint for prepare workflows
 

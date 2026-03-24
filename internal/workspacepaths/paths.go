@@ -14,7 +14,18 @@ const (
 	CanonicalApplyWorkflowRel   = "scenarios/apply.yaml"
 	WorkflowVarsRel             = "vars.yaml"
 	PreparedDirRel              = "outputs"
+	PreparedFilesRoot           = "files"
+	PreparedPackagesRoot        = "packages"
+	PreparedImagesRoot          = "images"
+	PreparedBinRoot             = "bin"
 )
+
+var canonicalPreparedRoots = []string{
+	PreparedFilesRoot,
+	PreparedPackagesRoot,
+	PreparedImagesRoot,
+	PreparedBinRoot,
+}
 
 func WorkflowPath(root string, rel string) string {
 	parts := append([]string{root, WorkflowRootDir}, strings.Split(filepath.ToSlash(rel), "/")...)
@@ -47,6 +58,43 @@ func CanonicalVarsPath(root string) string {
 
 func DefaultPreparedRoot(root string) string {
 	return filepath.Join(root, PreparedDirRel)
+}
+
+func CanonicalPreparedRoots() []string {
+	return append([]string(nil), canonicalPreparedRoots...)
+}
+
+func IsCanonicalPreparedPath(rel string) bool {
+	trimmed := filepath.ToSlash(strings.TrimSpace(rel))
+	if trimmed == "" {
+		return false
+	}
+	cleaned := filepath.ToSlash(filepath.Clean(filepath.FromSlash(trimmed)))
+	if cleaned == "." {
+		return false
+	}
+	for _, root := range canonicalPreparedRoots {
+		if cleaned == root || strings.HasPrefix(cleaned, root+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+func IsPreparedPathUnderRoot(rel string, root string) bool {
+	trimmedRoot := filepath.ToSlash(strings.TrimSpace(root))
+	if trimmedRoot == "" {
+		return false
+	}
+	cleanedRoot := filepath.ToSlash(filepath.Clean(filepath.FromSlash(trimmedRoot)))
+	if cleanedRoot == "." {
+		return false
+	}
+	cleaned := filepath.ToSlash(filepath.Clean(filepath.FromSlash(strings.TrimSpace(rel))))
+	if cleaned == "." {
+		return false
+	}
+	return cleaned == cleanedRoot || strings.HasPrefix(cleaned, cleanedRoot+"/")
 }
 
 func LocateWorkflowTreeRoot(workflowPath string) (string, error) {

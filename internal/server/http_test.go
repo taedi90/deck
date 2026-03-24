@@ -29,6 +29,9 @@ func TestServe_StaticReadOnly(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, "outputs", "images"), 0o755); err != nil {
 		t.Fatalf("mkdir images: %v", err)
 	}
+	if err := os.MkdirAll(filepath.Join(root, "outputs", "bin", "linux", "amd64"), 0o755); err != nil {
+		t.Fatalf("mkdir bin: %v", err)
+	}
 	if err := os.MkdirAll(filepath.Join(root, "workflows"), 0o755); err != nil {
 		t.Fatalf("mkdir workflows: %v", err)
 	}
@@ -37,8 +40,16 @@ func TestServe_StaticReadOnly(t *testing.T) {
 	}
 
 	originalBody := []byte("payload-123\n")
+	launcherBody := []byte("#!/bin/sh\nexec ./outputs/bin/linux/amd64/deck \"$@\"\n")
+	runtimeBody := []byte("linux-amd64-runtime\n")
 	if err := os.WriteFile(filepath.Join(root, "outputs", "files", "a.txt"), originalBody, 0o644); err != nil {
 		t.Fatalf("write seed file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "deck"), launcherBody, 0o755); err != nil {
+		t.Fatalf("write deck launcher: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "outputs", "bin", "linux", "amd64", "deck"), runtimeBody, 0o755); err != nil {
+		t.Fatalf("write runtime binary: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(root, "workflows", "scenarios", "apply.yaml"), []byte("version: v1alpha1\nsteps: []\n"), 0o644); err != nil {
 		t.Fatalf("write workflow scenario: %v", err)
@@ -131,6 +142,7 @@ func TestServe_StaticReadOnly(t *testing.T) {
 			{path: "/", want: "deck server"},
 			{path: "/", want: "server health: ok"},
 			{path: "/browse/files/", want: "a.txt"},
+			{path: "/browse/bin/", want: "linux"},
 			{path: "/browse/workflows/", want: "scenarios"},
 			{path: "/browse/images/", want: "kube-apiserver"},
 			{path: "/browse/images/coredns/coredns/", want: "v1.11.1"},
@@ -286,6 +298,28 @@ func TestServe_StaticReadOnly(t *testing.T) {
 		}
 	})
 
+	t.Run("deck launcher and runtime binary downloads", func(t *testing.T) {
+		launcherReq := httptest.NewRequest(http.MethodGet, "/deck", nil)
+		launcherRR := httptest.NewRecorder()
+		h.ServeHTTP(launcherRR, launcherReq)
+		if launcherRR.Code != http.StatusOK {
+			t.Fatalf("expected /deck 200, got %d", launcherRR.Code)
+		}
+		if !bytes.Equal(launcherRR.Body.Bytes(), launcherBody) {
+			t.Fatalf("unexpected launcher body: %q", launcherRR.Body.String())
+		}
+
+		runtimeReq := httptest.NewRequest(http.MethodGet, "/bin/linux/amd64/deck", nil)
+		runtimeRR := httptest.NewRecorder()
+		h.ServeHTTP(runtimeRR, runtimeReq)
+		if runtimeRR.Code != http.StatusOK {
+			t.Fatalf("expected /bin/linux/amd64/deck 200, got %d", runtimeRR.Code)
+		}
+		if !bytes.Equal(runtimeRR.Body.Bytes(), runtimeBody) {
+			t.Fatalf("unexpected runtime body: %q", runtimeRR.Body.String())
+		}
+	})
+
 	t.Run("legacy PUT uploads rejected", func(t *testing.T) {
 		for _, tc := range []struct {
 			path string
@@ -334,7 +368,7 @@ func TestServe_StaticReadOnly(t *testing.T) {
 			t.Fatalf("write .deckignore: %v", err)
 		}
 
-		for _, tc := range []string{"/files/a.txt", "/deck", "/workflows/scenarios/apply.yaml"} {
+		for _, tc := range []string{"/files/a.txt", "/bin/linux/amd64/deck", "/deck", "/workflows/scenarios/apply.yaml"} {
 			req := httptest.NewRequest(http.MethodGet, tc, nil)
 			rr := httptest.NewRecorder()
 			h.ServeHTTP(rr, req)

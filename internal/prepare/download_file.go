@@ -100,6 +100,11 @@ func runDownloadFileItem(ctx context.Context, bundleRoot string, decoded prepare
 	if strings.TrimSpace(outPath) == "" {
 		outPath = filepath.ToSlash(filepath.Join("files", inferDownloadFileName(sourcePath, url)))
 	}
+	validatedPath, err := ensurePreparedPathUnderRoot("DownloadFile", "outputPath", outPath, "files")
+	if err != nil {
+		return "", err
+	}
+	outPath = validatedPath
 	if strings.TrimSpace(sourcePath) == "" && strings.TrimSpace(url) == "" {
 		return "", fmt.Errorf("file action download requires source.path or source.url")
 	}

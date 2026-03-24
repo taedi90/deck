@@ -8,7 +8,7 @@ It supports a simple operator flow: author the workflow, lint it, prepare bundle
 
 - `init`: create starter workflow files under `workflows/`
 - `lint`: validate a workflow file or workspace against the workflow and step schemas (`-o text|json`)
-- `prepare`: gather artifacts into `outputs/`, refresh the local `deck` binary, and write `.deck/manifest.json`
+- `prepare`: gather artifacts into `outputs/`, write a local `deck` launcher, and write `.deck/manifest.json`
 - `plan`: inspect which apply steps would run or skip before execution (`-o text|json`)
 - `apply`: execute the `apply` workflow locally
 
@@ -119,11 +119,21 @@ deck lint --file ./demo/workflows/prepare.yaml
 
 cd ./demo
 deck prepare
+deck prepare --bundle-binary-source local --bundle-binary-dir ../test/artifacts/bin --bundle-binary linux/amd64 --bundle-binary linux/arm64
+deck prepare --bundle-binary-source release --bundle-binary-version v0.1.0 --bundle-binary linux/amd64
 deck bundle build --out ./bundle.tar
 deck plan --scenario apply --source local
 deck plan --scenario apply --source local -o json
 deck apply --scenario apply --source local
 ```
+
+Prepare runtime binary notes:
+
+- `prepare` always writes a root `./deck` launcher and stores real runtime binaries under `outputs/bin/<os>/<arch>/deck`
+- `--bundle-binary` is repeatable and selects which runtime tuples land in the bundle
+- `--bundle-binary-source=local` reads from the current executable or from `--bundle-binary-dir`
+- `--bundle-binary-source=release` downloads matching GitHub Release archives and extracts `deck`
+- `auto` defaults to `release` for tagged builds and `local` for `dev` builds
 
 Optional site-local helper example:
 
@@ -194,8 +204,7 @@ Optional ask augmentation config example:
 - `apply` runs all phases by default when phases are used; `--phase` narrows execution to one phase.
 - top-level `steps` execute as an implicit `default` phase.
 - `parallelGroup` only parallelizes consecutive steps inside one phase.
-- `apply --prefetch` is not supported for workflows that use explicit `parallelGroup` batches.
-- `bundle build` archives the canonical workspace bundle inputs: `deck`, `workflows/`, `outputs/`, and `.deck/manifest.json`, and respects `.deckignore` within those paths.
+- `bundle build` archives the canonical workspace bundle inputs: the root `deck` launcher, `workflows/`, `outputs/`, and `.deck/manifest.json`, and respects `.deckignore` within those paths.
 - Help text is shown on stdout only when you request it with `--help` or `help`.
 - Command and flag errors are written to stderr without automatic usage output.
 - `version` prints `deck <version>` by default and supports `--json` for machine-readable metadata.

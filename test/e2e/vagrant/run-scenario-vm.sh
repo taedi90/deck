@@ -93,13 +93,13 @@ case "${ARCH_RAW}" in
     ;;
 esac
 
-if [[ ! -f "/workspace/test/artifacts/bin/deck-linux-${ARCH}" ]]; then
-  echo "[deck] missing host-built deck binary: /workspace/test/artifacts/bin/deck-linux-${ARCH}"
+if [[ ! -f "/workspace/${PREPARED_BUNDLE_REL}/outputs/bin/linux/${ARCH}/deck" ]]; then
+  echo "[deck] missing prepared bundle runtime binary: /workspace/${PREPARED_BUNDLE_REL}/outputs/bin/linux/${ARCH}/deck"
   exit 1
 fi
 
 if [[ ! -x "${DECK_BIN}" ]]; then
-  cp "/workspace/test/artifacts/bin/deck-linux-${ARCH}" "${DECK_BIN}"
+  cp "/workspace/${PREPARED_BUNDLE_REL}/outputs/bin/linux/${ARCH}/deck" "${DECK_BIN}"
   chmod +x "${DECK_BIN}"
 fi
 

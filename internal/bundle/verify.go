@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/Airgap-Castaways/deck/internal/fsutil"
+	"github.com/Airgap-Castaways/deck/internal/workspacepaths"
 )
 
 type ManifestFile struct {
@@ -351,7 +352,11 @@ func tarManifestPath() string {
 }
 
 func isManifestTrackedPath(rel string) bool {
-	return strings.HasPrefix(rel, "outputs/packages/") || strings.HasPrefix(rel, "outputs/images/") || strings.HasPrefix(rel, "outputs/files/") || strings.HasPrefix(rel, "packages/") || strings.HasPrefix(rel, "images/") || strings.HasPrefix(rel, "files/")
+	trimmed := strings.TrimSpace(rel)
+	if strings.HasPrefix(trimmed, "outputs/") {
+		trimmed = strings.TrimPrefix(trimmed, "outputs/")
+	}
+	return workspacepaths.IsCanonicalPreparedPath(trimmed)
 }
 
 func verifyOfflineArtifactCoverage(bundleRoot string, manifestPaths map[string]struct{}) error {

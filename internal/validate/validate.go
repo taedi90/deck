@@ -593,6 +593,11 @@ func validateSemantics(name string, wf *config.Workflow) error {
 				return fmt.Errorf("E_SCHEMA_INVALID: step %s (%s): spec.refreshCache is no longer supported; use a separate `RefreshRepository` step", step.ID, step.Kind)
 			}
 		}
+		if output := literalPrepareOutputRoot(step); output != "" {
+			if err := validatePrepareOutputRoot(step, output); err != nil {
+				return err
+			}
+		}
 
 		if strings.TrimSpace(step.When) != "" {
 			if _, err := workflowexpr.CompileWhen(step.When); err != nil {
@@ -799,6 +804,29 @@ func literalPrepareOutputRoot(step config.Step) string {
 		return stableLiteralPath(stringValue(step.Spec, "outputPath"))
 	default:
 		return ""
+	}
+}
+
+func validatePrepareOutputRoot(step config.Step, output string) error {
+	trimmed := strings.TrimSpace(output)
+	switch step.Kind {
+	case "DownloadFile":
+		if workspacepaths.IsPreparedPathUnderRoot(trimmed, workspacepaths.PreparedFilesRoot) {
+			return nil
+		}
+		return fmt.Errorf("E_PREPARE_OUTPUT_ROOT_INVALID: step %s (%s) outputPath must stay under %s/", step.ID, step.Kind, workspacepaths.PreparedFilesRoot)
+	case "DownloadImage":
+		if workspacepaths.IsPreparedPathUnderRoot(trimmed, workspacepaths.PreparedImagesRoot) {
+			return nil
+		}
+		return fmt.Errorf("E_PREPARE_OUTPUT_ROOT_INVALID: step %s (%s) outputDir must stay under %s/", step.ID, step.Kind, workspacepaths.PreparedImagesRoot)
+	case "DownloadPackage":
+		if workspacepaths.IsPreparedPathUnderRoot(trimmed, workspacepaths.PreparedPackagesRoot) {
+			return nil
+		}
+		return fmt.Errorf("E_PREPARE_OUTPUT_ROOT_INVALID: step %s (%s) outputDir must stay under %s/", step.ID, step.Kind, workspacepaths.PreparedPackagesRoot)
+	default:
+		return nil
 	}
 }
 

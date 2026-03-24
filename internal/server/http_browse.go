@@ -41,8 +41,11 @@ func (h *serverHandler) handleLanding(w http.ResponseWriter, r *http.Request) {
 	if h.hasBrowseEntries("packages") {
 		fileLinks = append(fileLinks, landingLink{Title: "packages", Href: "/browse/packages/", Desc: "Offline package repos"})
 	}
+	if h.hasBrowseEntries("bin") {
+		fileLinks = append(fileLinks, landingLink{Title: "bin", Href: "/browse/bin/", Desc: "Platform runtime binaries"})
+	}
 	if h.hasDeckBinary() {
-		fileLinks = append(fileLinks, landingLink{Title: "deck", Href: "/deck", Desc: "Current binary"})
+		fileLinks = append(fileLinks, landingLink{Title: "deck", Href: "/deck", Desc: "Launcher script"})
 	}
 	imageLinks := make([]landingLink, 0, 1)
 	if h.hasImageEntries() {
@@ -86,7 +89,7 @@ func (h *serverHandler) handleBrowse(w http.ResponseWriter, r *http.Request) {
 		h.handleBrowseImages(w, r)
 		return
 	}
-	for _, category := range []string{"files", "packages", "workflows"} {
+	for _, category := range []string{"files", "packages", "bin", "workflows"} {
 		prefix := "/browse/" + category
 		if r.URL.Path == prefix || r.URL.Path == prefix+"/" || strings.HasPrefix(r.URL.Path, prefix+"/") {
 			h.handleBrowseDir(w, r, category)
@@ -132,7 +135,7 @@ func (h *serverHandler) listBrowseEntries(category, relPath string) ([]browseEnt
 		return nil, "", err
 	}
 	baseDir := category
-	if category == "files" || category == "packages" {
+	if category == "files" || category == "packages" || category == "bin" {
 		baseDir = filepath.ToSlash(filepath.Join(serverOutputsDir, category))
 	}
 	info, _, err := root.Stat(filepath.FromSlash(baseDir), filepath.FromSlash(relPath))

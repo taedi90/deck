@@ -243,6 +243,30 @@ func TestRun_DownloadImageUsesOutputDir(t *testing.T) {
 	}
 }
 
+func TestRun_DownloadImageRejectsNonCanonicalOutputDir(t *testing.T) {
+	bundle := t.TempDir()
+	imageOps := stubDownloadImageOps()
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "prepare",
+			Steps: []config.Step{{
+				ID:   "img",
+				Kind: "DownloadImage",
+				Spec: map[string]any{
+					"images":    []any{"registry.k8s.io/kube-apiserver:v1.30.1"},
+					"outputDir": "artifacts/images",
+				},
+			}},
+		}},
+	}
+
+	err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, imageDownloadOps: imageOps})
+	if err == nil || !strings.Contains(err.Error(), "DownloadImage outputDir must stay under images/") {
+		t.Fatalf("expected canonical outputDir error, got %v", err)
+	}
+}
+
 func stubDownloadImageOps() imageDownloadOps {
 	return imageDownloadOps{
 		parseReference: func(v string) (name.Reference, error) {
@@ -381,6 +405,30 @@ func TestRun_DownloadPackageUsesOutputDir(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(bundle, "packages", "custom", "containerd.txt")); err != nil {
 		t.Fatalf("expected package artifact in custom dir: %v", err)
+	}
+}
+
+func TestRun_DownloadPackageRejectsNonCanonicalOutputDir(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	bundle := t.TempDir()
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "prepare",
+			Steps: []config.Step{{
+				ID:   "pkg",
+				Kind: "DownloadPackage",
+				Spec: map[string]any{
+					"packages":  []any{"containerd"},
+					"outputDir": "artifacts/packages",
+				},
+			}},
+		}},
+	}
+
+	err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle})
+	if err == nil || !strings.Contains(err.Error(), "DownloadPackage outputDir must stay under packages/") {
+		t.Fatalf("expected canonical outputDir error, got %v", err)
 	}
 }
 
@@ -570,6 +618,29 @@ func TestRun_FileFallbackSourceMissing(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "E_PREPARE_SOURCE_NOT_FOUND") {
 		t.Fatalf("expected E_PREPARE_SOURCE_NOT_FOUND, got %v", err)
+	}
+}
+
+func TestRun_DownloadFileRejectsNonCanonicalOutputPath(t *testing.T) {
+	bundleOut := t.TempDir()
+	wf := &config.Workflow{
+		Version: "v1",
+		Phases: []config.Phase{{
+			Name: "prepare",
+			Steps: []config.Step{{
+				ID:   "download-file",
+				Kind: "DownloadFile",
+				Spec: map[string]any{
+					"source":     map[string]any{"url": "https://example.invalid/artifact.bin"},
+					"outputPath": "artifacts/out.bin",
+				},
+			}},
+		}},
+	}
+
+	err := Run(context.Background(), wf, RunOptions{BundleRoot: bundleOut})
+	if err == nil || !strings.Contains(err.Error(), "DownloadFile outputPath must stay under files/") {
+		t.Fatalf("expected canonical outputPath error, got %v", err)
 	}
 }
 

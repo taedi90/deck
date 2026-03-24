@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Airgap-Castaways/deck/internal/config"
 	"github.com/Airgap-Castaways/deck/internal/install"
 )
 
@@ -21,7 +20,6 @@ type ExecuteOptions struct {
 	BundleRoot     string
 	WorkflowSource string
 	Scenario       string
-	Prefetch       bool
 	DryRun         bool
 	Verbosef       func(level int, format string, args ...any) error
 	StdoutPrintf   func(format string, args ...any) error
@@ -41,7 +39,7 @@ func Execute(ctx context.Context, opts ExecuteOptions) (err error) {
 	if request.ExecutionWorkflow == nil {
 		return fmt.Errorf("execution workflow is nil")
 	}
-	if err := verbosef(opts.Verbosef, 1, "deck: apply workflow=%s phase=%s state=%s bundle=%s dryRun=%t prefetch=%t fresh=%t\n", request.WorkflowPath, request.SelectedPhase, request.StatePath, strings.TrimSpace(opts.BundleRoot), opts.DryRun, opts.Prefetch, request.Fresh); err != nil {
+	if err := verbosef(opts.Verbosef, 1, "deck: apply workflow=%s phase=%s state=%s bundle=%s dryRun=%t fresh=%t\n", request.WorkflowPath, request.SelectedPhase, request.StatePath, strings.TrimSpace(opts.BundleRoot), opts.DryRun, request.Fresh); err != nil {
 		return err
 	}
 	if opts.DryRun {
@@ -68,21 +66,6 @@ func Execute(ctx context.Context, opts ExecuteOptions) (err error) {
 			err = closeErr
 		}
 	}()
-
-	if opts.Prefetch {
-		if workflowUsesParallelGroups(request.ExecutionWorkflow) {
-			return fmt.Errorf("prefetch is not supported for workflows that use parallelGroup")
-		}
-		prefetchWorkflow := BuildPrefetchWorkflow(request.Workflow)
-		if len(prefetchWorkflow.Phases) > 0 && len(prefetchWorkflow.Phases[0].Steps) > 0 {
-			if err := verbosef(opts.Verbosef, 1, "deck: apply prefetchSteps=%d\n", len(prefetchWorkflow.Phases[0].Steps)); err != nil {
-				return err
-			}
-			if err := install.Run(ctx, prefetchWorkflow, install.RunOptions{BundleRoot: opts.BundleRoot, StatePath: request.StatePath, EventSink: eventSink, Fresh: request.Fresh}); err != nil {
-				return err
-			}
-		}
-	}
 
 	if err := install.Run(ctx, request.ExecutionWorkflow, install.RunOptions{BundleRoot: opts.BundleRoot, StatePath: request.StatePath, EventSink: eventSink, Fresh: request.Fresh}); err != nil {
 		return err
@@ -149,21 +132,6 @@ func writeApplyDryRun(stdoutPrintf func(format string, args ...any) error, reque
 
 	return nil
 }
-
-func workflowUsesParallelGroups(wf *config.Workflow) bool {
-	if wf == nil {
-		return false
-	}
-	for _, phase := range config.NormalizedPhases(wf) {
-		for _, step := range phase.Steps {
-			if strings.TrimSpace(step.ParallelGroup) != "" {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func combineStepEventSinks(sinks ...install.StepEventSink) install.StepEventSink {
 	filtered := make([]install.StepEventSink, 0, len(sinks))
 	for _, sink := range sinks {

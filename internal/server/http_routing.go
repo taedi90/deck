@@ -24,6 +24,7 @@ func (h *serverHandler) routeRequest(w http.ResponseWriter, r *http.Request) {
 
 func (h *serverHandler) isStaticPath(urlPath string) bool {
 	return urlPath == "/deck" ||
+		urlPath == "/bin" || urlPath == "/bin/" || strings.HasPrefix(urlPath, "/bin/") ||
 		urlPath == "/files" || urlPath == "/files/" || strings.HasPrefix(urlPath, "/files/") ||
 		urlPath == "/packages" || urlPath == "/packages/" || strings.HasPrefix(urlPath, "/packages/") ||
 		urlPath == "/images" || urlPath == "/images/" || strings.HasPrefix(urlPath, "/images/") ||

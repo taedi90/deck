@@ -19,6 +19,7 @@ import (
 	"github.com/Airgap-Castaways/deck/internal/filemode"
 	"github.com/Airgap-Castaways/deck/internal/fsutil"
 	"github.com/Airgap-Castaways/deck/internal/workflowexec"
+	"github.com/Airgap-Castaways/deck/internal/workspacepaths"
 )
 
 type RunOptions struct {
@@ -349,7 +350,7 @@ func isManifestTrackedPath(rel string) bool {
 	if normalized == "." {
 		return false
 	}
-	return strings.HasPrefix(normalized, "packages/") || strings.HasPrefix(normalized, "images/") || strings.HasPrefix(normalized, "files/")
+	return workspacepaths.IsCanonicalPreparedPath(normalized)
 }
 
 func renderSpec(spec map[string]any, wf *config.Workflow, runtimeVars map[string]any) (map[string]any, error) {

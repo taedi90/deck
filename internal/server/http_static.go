@@ -155,6 +155,8 @@ func (h *serverHandler) resolveCategoryPath(urlPath string) (string, string, str
 		category = "deck"
 	case strings.HasPrefix(urlPath, "/files/"):
 		category = "files"
+	case strings.HasPrefix(urlPath, "/bin/"):
+		category = "bin"
 	case strings.HasPrefix(urlPath, "/packages/"):
 		category = "packages"
 	case strings.HasPrefix(urlPath, "/images/"):
@@ -198,7 +200,7 @@ func (h *serverHandler) resolveCategoryPath(urlPath string) (string, string, str
 		cleanRel = ""
 	}
 	ignorePath := filepath.ToSlash(filepath.Join(category, cleanRel))
-	if category == "files" || category == "packages" || category == "images" {
+	if category == "files" || category == "packages" || category == "images" || category == "bin" {
 		ignorePath = filepath.ToSlash(filepath.Join(serverOutputsDir, category, cleanRel))
 	}
 	if cleanRel != "" && ignore.Matches(ignorePath, false) {
@@ -209,7 +211,7 @@ func (h *serverHandler) resolveCategoryPath(urlPath string) (string, string, str
 	}
 
 	baseDir := category
-	if category == "files" || category == "packages" || category == "images" {
+	if category == "files" || category == "packages" || category == "images" || category == "bin" {
 		root, err := fsutil.NewRoot(h.rootAbs)
 		if err != nil {
 			return "", "", "", http.StatusInternalServerError

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -49,6 +50,7 @@ func TestRunPrepareCreatesPreparedBundleDir(t *testing.T) {
 	}
 	for _, required := range []string{
 		filepath.Join("files", "source.bin"),
+		filepath.Join("bin", runtime.GOOS, runtime.GOARCH, "deck"),
 	} {
 		if _, err := os.Stat(filepath.Join(preparedRoot, required)); err != nil {
 			t.Fatalf("missing prepared path %s: %v", required, err)
@@ -58,6 +60,13 @@ func TestRunPrepareCreatesPreparedBundleDir(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(root, required)); err != nil {
 			t.Fatalf("missing workspace path %s: %v", required, err)
 		}
+	}
+	raw, err := os.ReadFile(filepath.Join(root, "deck"))
+	if err != nil {
+		t.Fatalf("read deck launcher: %v", err)
+	}
+	if !strings.Contains(string(raw), "outputs/bin/") {
+		t.Fatalf("expected launcher to point at outputs/bin, got %q", string(raw))
 	}
 }
 

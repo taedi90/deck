@@ -55,6 +55,11 @@ func runDownloadImage(ctx context.Context, runner CommandRunner, bundleRoot stri
 	if dir == "" {
 		dir = "images"
 	}
+	validatedDir, err := ensurePreparedPathUnderRoot("DownloadImage", "outputDir", dir, "images")
+	if err != nil {
+		return nil, err
+	}
+	dir = validatedDir
 
 	images := decoded.Images
 	if len(images) == 0 {

@@ -192,82 +192,6 @@ phases:
 	}
 }
 
-func TestApplyDownloadFileRemainsUnsupportedEvenWithPrefetch(t *testing.T) {
-	home := filepath.Join(t.TempDir(), "home")
-	if err := os.MkdirAll(home, 0o755); err != nil {
-		t.Fatalf("mkdir home: %v", err)
-	}
-	t.Setenv("HOME", home)
-
-	bundle := t.TempDir()
-	createValidBundleManifest(t, bundle)
-	if err := os.MkdirAll(filepath.Join(bundle, "workflows"), 0o755); err != nil {
-		t.Fatalf("mkdir bundle workflows: %v", err)
-	}
-
-	downloadedRelPath := filepath.ToSlash(filepath.Join("files", "prefetched.txt"))
-	downloadedPath := filepath.Join(bundle, filepath.FromSlash(downloadedRelPath))
-	workflowPath := filepath.Join(t.TempDir(), "apply-prefetch.yaml")
-
-	var mu sync.Mutex
-	downloadCount := 0
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		downloadCount++
-		mu.Unlock()
-		_, _ = w.Write([]byte("prefetched\n"))
-	}))
-	defer srv.Close()
-
-	workflowBody := fmt.Sprintf(`version: v1alpha1
-phases:
-  - name: install
-    steps:
-      - id: requires-prefetch
-        kind: Command
-        spec:
-          command:
-            - sh
-            - -c
-            - 'test -f %s'
-      - id: download-file
-        kind: DownloadFile
-        spec:
-          source:
-            url: '%s'
-          outputPath: '%s'
-`, downloadedPath, srv.URL+"/payload", downloadedRelPath)
-	if err := os.WriteFile(workflowPath, []byte(workflowBody), 0o644); err != nil {
-		t.Fatalf("write workflow: %v", err)
-	}
-
-	_, err := runWithCapturedStdout([]string{"apply", "--workflow", workflowPath, bundle})
-	if err == nil {
-		t.Fatalf("expected apply without prefetch to fail")
-	}
-	if !strings.Contains(err.Error(), "requires-prefetch") {
-		t.Fatalf("unexpected error without prefetch: %v", err)
-	}
-
-	_, err = runWithCapturedStdout([]string{"apply", "--workflow", workflowPath, "--prefetch", bundle})
-	if err == nil {
-		t.Fatalf("expected apply with prefetch to fail")
-	}
-	if !strings.Contains(err.Error(), "unsupported step kind DownloadFile") {
-		t.Fatalf("unexpected error with prefetch: %v", err)
-	}
-
-	mu.Lock()
-	gotDownloads := downloadCount
-	mu.Unlock()
-	if gotDownloads != 0 {
-		t.Fatalf("expected no downloads for unsupported apply DownloadFile path, got %d", gotDownloads)
-	}
-	if _, err := os.Stat(downloadedPath); !os.IsNotExist(err) {
-		t.Fatalf("unexpected downloaded file, stat err=%v", err)
-	}
-}
-
 func TestApplyRemoteWorkflow(t *testing.T) {
 	t.Run("vars.yaml 200 changes state key when vars changes", func(t *testing.T) {
 		home := filepath.Join(t.TempDir(), "home")
@@ -558,16 +482,6 @@ func TestApplyAndPlanFresh(t *testing.T) {
 	}
 	if got := strings.Count(strings.TrimSpace(string(raw)), "run"); got != 2 {
 		t.Fatalf("expected 2 executions after fresh apply, got %d (%q)", got, string(raw))
-	}
-}
-
-func TestApplyPrefetchRejectsParallelGroupWorkflow(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
-	wfPath := filepath.Join(t.TempDir(), "apply-prefetch-parallel.yaml")
-	writeWorkflowYAML(t, wfPath, "version: v1alpha1\nphases:\n  - name: install\n    steps:\n      - id: step-a\n        kind: Command\n        parallelGroup: pair\n        spec:\n          command: [\"true\"]\n      - id: step-b\n        kind: Command\n        parallelGroup: pair\n        spec:\n          command: [\"true\"]\n")
-	_, err := runWithCapturedStdout([]string{"apply", "--workflow", wfPath, "--prefetch"})
-	if err == nil || !strings.Contains(err.Error(), "prefetch is not supported") {
-		t.Fatalf("expected prefetch/parallelGroup incompatibility error, got %v", err)
 	}
 }
 

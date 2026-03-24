@@ -17,6 +17,10 @@ A `deck` workspace is organized into three main functional areas: **Workflows**,
 ├── packages/           # Local package sources or override lists
 ├── images/             # Container image lists or local tarballs
 ├── outputs/            # (Generated) Collected artifacts after 'deck prepare'
+│   ├── files/          # Prepared file payloads
+│   ├── packages/       # Prepared package payloads
+│   ├── images/         # Prepared image payloads
+│   └── bin/            # Prepared runtime binaries by os/arch
 └── .deck/              # (Internal) Checksums, manifest, and run history
 ```
 
@@ -45,7 +49,8 @@ A central YAML file for shared defaults. Values defined here are available to al
 ## Local Sources (`files/`, `packages/`, `images/`)
 
 These directories hold the source material for your workflows.
-- During `deck prepare`, artifacts are gathered from these locations (or remote URLs) and placed into the `outputs/` directory.
+- During `deck prepare`, artifacts are gathered from these locations (or remote URLs) and placed into canonical `outputs/files/`, `outputs/packages/`, or `outputs/images/` roots.
+- Runtime binaries for offline execution are written under `outputs/bin/<os>/<arch>/deck`, while the workspace root `deck` file is a launcher script.
 - Once bundled, these sources are no longer needed; the target node only sees the final bundle content.
 
 ## Internal Metadata (`.deck/`)

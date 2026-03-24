@@ -120,7 +120,6 @@ type applyOptions struct {
 	scenario      string
 	source        string
 	selectedPhase string
-	prefetch      bool
 	fresh         bool
 	dryRun        bool
 	varOverrides  map[string]string
@@ -155,10 +154,6 @@ func newApplyCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			prefetch, err := cmdFlagBoolValue(cmd, "prefetch")
-			if err != nil {
-				return err
-			}
 			fresh, err := cmdFlagBoolValue(cmd, "fresh")
 			if err != nil {
 				return err
@@ -172,7 +167,6 @@ func newApplyCommand() *cobra.Command {
 				scenario:      scenario,
 				source:        source,
 				selectedPhase: selectedPhase,
-				prefetch:      prefetch,
 				fresh:         fresh,
 				dryRun:        dryRun,
 				varOverrides:  vars.AsMap(),
@@ -185,7 +179,6 @@ func newApplyCommand() *cobra.Command {
 	cmd.Flags().String("scenario", "", "scenario name to execute")
 	cmd.Flags().String("source", scenarioSourceLocal, "scenario source (local|server)")
 	cmd.Flags().String("phase", "", "phase name to execute (defaults to all phases)")
-	cmd.Flags().Bool("prefetch", false, "execute File download steps before other steps")
 	cmd.Flags().Bool("fresh", false, "ignore saved apply state for this invocation")
 	cmd.Flags().Bool("dry-run", false, "print apply plan without executing steps")
 	cmd.Flags().Var(vars, "var", "set variable override (key=value), repeatable")
@@ -230,7 +223,6 @@ func runApplyWithOptions(ctx context.Context, opts applyOptions) error {
 		BundleRoot:     bundleRoot,
 		WorkflowSource: inferWorkflowSource(resolvedRequest.WorkflowPath, strings.TrimSpace(opts.source)),
 		Scenario:       strings.TrimSpace(opts.scenario),
-		Prefetch:       opts.prefetch,
 		DryRun:         opts.dryRun,
 		Verbosef:       verbosef,
 		StdoutPrintf:   stdoutPrintf,

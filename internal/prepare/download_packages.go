@@ -38,6 +38,11 @@ func runDownloadPackage(ctx context.Context, runner CommandRunner, bundleRoot st
 	if dir == "" {
 		dir = defaultDir
 	}
+	validatedDir, err := ensurePreparedPathUnderRoot("DownloadPackage", "outputDir", dir, "packages")
+	if err != nil {
+		return nil, err
+	}
+	dir = validatedDir
 
 	packages := decoded.Packages
 	if len(packages) == 0 {

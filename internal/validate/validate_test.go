@@ -1304,6 +1304,79 @@ phases:
 		}
 	})
 
+	t.Run("tool schema rejects File download outside canonical root", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "workflow.yaml")
+		content := []byte(`version: v1alpha1
+phases:
+  - name: prepare
+    steps:
+      - id: download-file
+        apiVersion: deck/v1alpha1
+        kind: DownloadFile
+        spec:
+          source:
+            url: https://example.invalid/payload.bin
+          outputPath: artifacts/payload.bin
+`)
+		if err := os.WriteFile(path, content, 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+
+		err := File(path)
+		if err == nil || !strings.Contains(err.Error(), "E_PREPARE_OUTPUT_ROOT_INVALID") {
+			t.Fatalf("expected canonical root error, got %v", err)
+		}
+	})
+
+	t.Run("tool schema rejects Image download outside canonical root", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "workflow.yaml")
+		content := []byte(`version: v1alpha1
+phases:
+  - name: prepare
+    steps:
+      - id: download-images
+        apiVersion: deck/v1alpha1
+        kind: DownloadImage
+        spec:
+          images: [registry.k8s.io/pause:3.9]
+          outputDir: artifacts/images
+`)
+		if err := os.WriteFile(path, content, 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+
+		err := File(path)
+		if err == nil || !strings.Contains(err.Error(), "E_PREPARE_OUTPUT_ROOT_INVALID") {
+			t.Fatalf("expected canonical root error, got %v", err)
+		}
+	})
+
+	t.Run("tool schema rejects Package download outside canonical root", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "workflow.yaml")
+		content := []byte(`version: v1alpha1
+phases:
+  - name: prepare
+    steps:
+      - id: download-packages
+        apiVersion: deck/v1alpha1
+        kind: DownloadPackage
+        spec:
+          packages: [containerd]
+          outputDir: artifacts/packages
+`)
+		if err := os.WriteFile(path, content, 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+
+		err := File(path)
+		if err == nil || !strings.Contains(err.Error(), "E_PREPARE_OUTPUT_ROOT_INVALID") {
+			t.Fatalf("expected canonical root error, got %v", err)
+		}
+	})
+
 	t.Run("tool schema rejects invalid WriteSystemdUnit", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
