@@ -97,7 +97,7 @@ run_role_action() {
       ;;
     worker|worker-2)
       worker_release="$(role_release "${role}")"
-      role_env="DECK_OFFLINE_RELEASE=${worker_release} DECK_KUBERNETES_VERSION=${kubernetes_version} DECK_KUBERNETES_UPGRADE_VERSION=${upgrade_kubernetes_version}"
+      role_env="DECK_OFFLINE_RELEASE=${worker_release} DECK_PREPARED_BUNDLE_REL=${PREPARED_BUNDLE_REL:-} DECK_KUBERNETES_VERSION=${kubernetes_version} DECK_KUBERNETES_UPGRADE_VERSION=${upgrade_kubernetes_version}"
       ;;
   esac
 
