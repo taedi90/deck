@@ -10,6 +10,7 @@ import (
 	lspaugment "github.com/Airgap-Castaways/deck/internal/askaugment/lsp"
 	mcpaugment "github.com/Airgap-Castaways/deck/internal/askaugment/mcp"
 	"github.com/Airgap-Castaways/deck/internal/askconfig"
+	"github.com/Airgap-Castaways/deck/internal/askcontext"
 	"github.com/Airgap-Castaways/deck/internal/askcontract"
 	"github.com/Airgap-Castaways/deck/internal/askhooks"
 	"github.com/Airgap-Castaways/deck/internal/askintent"
@@ -415,6 +416,9 @@ func generateWithValidation(ctx context.Context, client askprovider.Client, req 
 		currentPrompt := req.Prompt
 		if attempt > 1 && lastValidation != "" {
 			currentPrompt += "\n\nLocal validation failed. Fix the response and return full JSON again."
+			for _, chunk := range askretrieve.RepairChunks(req.Prompt, lastValidation) {
+				currentPrompt += "\n" + chunk.Content
+			}
 			if len(lastCritic.Blocking) > 0 || len(lastCritic.Advisory) > 0 {
 				logger.logf("debug", "\n[ask][phase:repair:critic]\n%s\n", criticJSON(lastCritic))
 				currentPrompt += "\nBlocking and advisory feedback as JSON:\n" + criticJSON(lastCritic)
@@ -506,7 +510,7 @@ func validateGeneration(ctx context.Context, root string, gen askcontract.Genera
 	for _, path := range entrypoints {
 		files, err := validate.EntrypointWithContext(ctx, path)
 		if err != nil {
-			return "", askcontract.CriticResponse{Blocking: []string{err.Error()}, RequiredFixes: []string{"Fix workflow lint and schema errors"}}, err
+			return "", askcontract.CriticResponse{Blocking: []string{err.Error()}, RequiredFixes: requiredFixesForValidation(err.Error())}, err
 		}
 		validated = append(validated, files...)
 	}
@@ -524,5 +528,6 @@ func requiredFixesForValidation(message string) []string {
 	if strings.Contains(lower, "invalid map key") && (strings.Contains(lower, "{{") || strings.Contains(lower, ".vars.")) {
 		fixes = append(fixes, "Do not use whole-value template expressions like `{{ .vars.* }}` for typed YAML arrays or objects such as spec.packages or spec.repositories; inline concrete YAML lists or objects instead")
 	}
-	return fixes
+	fixes = append(fixes, askcontext.ValidationFixesForError(message)...)
+	return dedupe(fixes)
 }

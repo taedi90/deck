@@ -462,8 +462,10 @@ func validateSemanticGeneration(gen askcontract.GenerationResponse, decision ask
 func semanticCritic(gen askcontract.GenerationResponse, decision askintent.Decision, plan askcontract.PlanResponse) askcontract.CriticResponse {
 	critic := askcontract.CriticResponse{}
 	generated := map[string]askcontract.GeneratedFile{}
+	commandCount := 0
 	for _, file := range gen.Files {
 		generated[filepath.ToSlash(strings.TrimSpace(file.Path))] = file
+		commandCount += countStepKind(file.Content, "Command")
 	}
 	for _, file := range gen.Files {
 		if err := validateGeneratedPath(file.Path); err != nil {
@@ -533,6 +535,16 @@ func semanticCritic(gen askcontract.GenerationResponse, decision askintent.Decis
 			critic.Advisory = append(critic.Advisory, fmt.Sprintf("generated component has no scenario import: %s", clean))
 		}
 	}
+	if typedPreferenceRequested(plan) && commandCount > 0 {
+		alternatives := askcontext.StrongTypedAlternatives(plan.Request)
+		if len(alternatives) > 0 {
+			kinds := make([]string, 0, len(alternatives))
+			for _, step := range alternatives {
+				kinds = append(kinds, step.Kind)
+			}
+			critic.Advisory = append(critic.Advisory, fmt.Sprintf("request prefers typed steps but generation still relies on Command; consider %s before falling back to Command", strings.Join(dedupe(kinds), ", ")))
+		}
+	}
 	critic.Blocking = dedupe(critic.Blocking)
 	critic.Advisory = dedupe(critic.Advisory)
 	critic.MissingFiles = dedupe(critic.MissingFiles)
@@ -540,6 +552,28 @@ func semanticCritic(gen askcontract.GenerationResponse, decision askintent.Decis
 	critic.CoverageGaps = dedupe(critic.CoverageGaps)
 	critic.RequiredFixes = dedupe(critic.RequiredFixes)
 	return critic
+}
+
+func typedPreferenceRequested(plan askcontract.PlanResponse) bool {
+	text := strings.ToLower(strings.Join([]string{plan.Request, plan.TargetOutcome, strings.Join(plan.ValidationChecklist, "\n")}, "\n"))
+	if strings.Contains(text, "typed step") || strings.Contains(text, "typed steps") || strings.Contains(text, "where possible") {
+		return true
+	}
+	return false
+}
+
+func countStepKind(content string, want string) int {
+	if strings.TrimSpace(content) == "" || strings.TrimSpace(want) == "" {
+		return 0
+	}
+	count := 0
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "kind: "+want {
+			count++
+		}
+	}
+	return count
 }
 
 func criticJSON(critic askcontract.CriticResponse) string {

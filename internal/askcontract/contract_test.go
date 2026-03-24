@@ -50,3 +50,20 @@ func TestParsePlanMissingRequiredFields(t *testing.T) {
 		t.Fatalf("expected parse error")
 	}
 }
+
+func TestParsePlanRejectsDescriptiveEntryScenario(t *testing.T) {
+	_, err := ParsePlan(`{"version":1,"request":"create workflow","intent":"draft","complexity":"complex","blockers":[],"targetOutcome":"generate files","assumptions":[],"openQuestions":[],"entryScenario":"the apply scenario for this workspace","files":[{"path":"workflows/scenarios/apply.yaml","kind":"scenario","action":"create","purpose":"entry"}],"validationChecklist":["lint"]}`)
+	if err == nil {
+		t.Fatalf("expected semantic entryScenario error")
+	}
+	if err != nil && err.Error() == "" {
+		t.Fatalf("expected non-empty error")
+	}
+}
+
+func TestParsePlanRejectsEntryScenarioMissingFromFiles(t *testing.T) {
+	_, err := ParsePlan(`{"version":1,"request":"create workflow","intent":"draft","complexity":"complex","blockers":[],"targetOutcome":"generate files","assumptions":[],"openQuestions":[],"entryScenario":"workflows/scenarios/apply.yaml","files":[{"path":"workflows/components/base.yaml","kind":"component","action":"create","purpose":"support"}],"validationChecklist":["lint"]}`)
+	if err == nil {
+		t.Fatalf("expected entryScenario planned file mismatch")
+	}
+}

@@ -161,6 +161,33 @@ func TestRelevantStepKindsBlockIncludesTypedShapeGuidance(t *testing.T) {
 	}
 }
 
+func TestRelevantStepKindsBlockIncludesCheckHostShapeAndMistakes(t *testing.T) {
+	block := RelevantStepKindsBlock("create an air-gapped rhel9 kubeadm workflow with typed steps where possible")
+	for _, want := range []string{
+		"CheckHost",
+		"spec.checks",
+		"[os, arch, swap]",
+		"spec.os",
+	} {
+		if !strings.Contains(block, want) {
+			t.Fatalf("expected %q in typed step guidance block, got %q", want, block)
+		}
+	}
+}
+
+func TestRelevantStepKindsMatchesKubeadmAirGapRequest(t *testing.T) {
+	relevant := RelevantStepKinds("create an air-gapped rhel9 single-node kubeadm workflow")
+	joined := make([]string, 0, len(relevant))
+	for _, step := range relevant {
+		joined = append(joined, step.Kind)
+	}
+	for _, want := range []string{"CheckHost", "LoadImage", "CheckCluster"} {
+		if !contains(joined, want) {
+			t.Fatalf("expected %s in relevant steps, got %v", want, joined)
+		}
+	}
+}
+
 func TestDocBlocksExposeAskContext(t *testing.T) {
 	if got := AuthoringDocBlock(); !strings.Contains(got, "workflows/components/") || !strings.Contains(got, "workflows/vars.yaml") {
 		t.Fatalf("unexpected authoring doc block: %q", got)

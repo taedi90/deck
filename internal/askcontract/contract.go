@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/Airgap-Castaways/deck/internal/askcontext"
 )
 
 type GeneratedFile struct {
@@ -163,6 +165,24 @@ func ParsePlan(raw string) (PlanResponse, error) {
 		}
 		if resp.Files[i].Action == "" {
 			resp.Files[i].Action = "create"
+		}
+		if !askcontext.AllowedGeneratedPath(resp.Files[i].Path) {
+			return PlanResponse{}, fmt.Errorf("plan response has file outside allowed ask paths: %s", resp.Files[i].Path)
+		}
+	}
+	if resp.EntryScenario != "" {
+		if !askcontext.AllowedGeneratedPath(resp.EntryScenario) || !strings.HasPrefix(resp.EntryScenario, "workflows/scenarios/") {
+			return PlanResponse{}, fmt.Errorf("plan response entryScenario must be a scenario path under workflows/scenarios/: %s", resp.EntryScenario)
+		}
+		matched := false
+		for _, file := range resp.Files {
+			if file.Path == resp.EntryScenario {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return PlanResponse{}, fmt.Errorf("plan response entryScenario must match a planned file: %s", resp.EntryScenario)
 		}
 	}
 	return resp, nil

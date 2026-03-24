@@ -20,6 +20,8 @@ const (
 	TopicComponentsImports    Topic = "components-imports"
 	TopicVarsGuidance         Topic = "vars-guidance"
 	TopicTypedSteps           Topic = "typed-steps"
+	TopicStepRepair           Topic = "step-repair"
+	TopicStepQuality          Topic = "step-quality-rules"
 	TopicCLIHints             Topic = "cli-hints"
 	TopicProjectPhilosophy    Topic = "project-philosophy"
 )
@@ -89,19 +91,26 @@ type VarsGuidance struct {
 }
 
 type StepKindContext struct {
-	Kind         string
-	Category     string
-	Summary      string
-	WhenToUse    string
-	SchemaFile   string
-	AllowedRoles []string
-	Actions      []string
-	Outputs      []string
-	MinimalShape string
-	CuratedShape string
-	KeyFields    []StepFieldContext
-	ActionGuides []StepActionContext
-	Notes        []string
+	Kind            string
+	Category        string
+	Summary         string
+	WhenToUse       string
+	SchemaFile      string
+	AllowedRoles    []string
+	Actions         []string
+	Outputs         []string
+	MinimalShape    string
+	CuratedShape    string
+	KeyFields       []StepFieldContext
+	ActionGuides    []StepActionContext
+	PromptExamples  []StepExampleContext
+	CommonMistakes  []string
+	RepairHints     []string
+	ValidationHints []ValidationHint
+	MatchSignals    []string
+	AntiSignals     []string
+	QualityRules    []QualityRule
+	Notes           []string
 }
 
 type StepFieldContext struct {
@@ -114,4 +123,25 @@ type StepActionContext struct {
 	Action  string
 	Note    string
 	Example string
+}
+
+type ValidationHint struct {
+	ErrorContains string
+	Fix           string
+}
+
+type StepExampleContext struct {
+	Purpose string
+	YAML    string
+}
+
+type QualityRule struct {
+	Trigger string
+	Message string
+	Level   string
+}
+
+type SelectedStepGuidance struct {
+	Step        StepKindContext
+	WhyRelevant string
 }

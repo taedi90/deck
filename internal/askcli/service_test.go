@@ -110,6 +110,26 @@ func TestGenerateWithValidationRepairsSemanticFailure(t *testing.T) {
 	}
 }
 
+func TestGenerateWithValidationRepairsKubeadmStyleCheckHostFailure(t *testing.T) {
+	client := &stubClient{responses: []string{
+		`{"summary":"invalid kubeadm draft","review":[],"files":[{"path":"workflows/prepare.yaml","content":"version: v1alpha1\nsteps:\n  - id: preflight\n    kind: CheckHost\n    spec:\n      os:\n        type: rhel\n        version: \"9\"\n"},{"path":"workflows/scenarios/apply.yaml","content":"version: v1alpha1\nsteps:\n  - id: run\n    kind: Command\n    spec:\n      command: [\"true\"]\n"}]}`,
+		`{"summary":"repaired kubeadm draft","review":[],"files":[{"path":"workflows/prepare.yaml","content":"version: v1alpha1\nsteps:\n  - id: preflight\n    kind: CheckHost\n    spec:\n      checks: [os, arch, swap]\n      failFast: true\n"},{"path":"workflows/scenarios/apply.yaml","content":"version: v1alpha1\nsteps:\n  - id: run\n    kind: Command\n    spec:\n      command: [\"true\"]\n"}]}`,
+	}}
+	plan := askcontract.PlanResponse{
+		Request:             "create an air-gapped rhel9 single-node kubeadm workflow using typed steps where possible",
+		TargetOutcome:       "Generate a prepare and apply workflow for kubeadm",
+		Files:               []askcontract.PlanFile{{Path: "workflows/prepare.yaml", Action: "create"}, {Path: "workflows/scenarios/apply.yaml", Action: "create"}},
+		ValidationChecklist: []string{"Typed steps should be used where applicable"},
+	}
+	gen, _, _, retries, err := generateWithValidation(context.Background(), client, askprovider.Request{Kind: "generate", Provider: "openai", Model: "gpt-5.4", APIKey: "test-key", Prompt: plan.Request}, t.TempDir(), 2, newAskLogger(io.Discard, "trace"), askintent.Decision{Route: askintent.RouteDraft}, plan)
+	if err != nil {
+		t.Fatalf("expected kubeadm-style repair success: %v", err)
+	}
+	if retries != 1 || len(gen.Files) != 2 {
+		t.Fatalf("unexpected result: retries=%d files=%d", retries, len(gen.Files))
+	}
+}
+
 func TestLocalExplainDescribesScenarioStructure(t *testing.T) {
 	workspace := askretrieve.WorkspaceSummary{
 		Files: []askretrieve.WorkspaceFile{
@@ -147,7 +167,7 @@ func TestAskLoggerDebugAndTrace(t *testing.T) {
 
 func TestGenerationSystemPromptIncludesAskContextBlocks(t *testing.T) {
 	prompt := generationSystemPrompt(askintent.RouteDraft, askintent.Target{Kind: "workspace"}, askretrieve.RetrievalResult{})
-	for _, want := range []string{"Workflow invariants:", "Workflow authoring policy:", "Detailed topology, component/import guidance, vars guidance, and typed-step references are provided through retrieved context.", "Do not use whole-value template expressions such as `{{ .vars.dockerPackages }}`"} {
+	for _, want := range []string{"Workflow invariants:", "Workflow authoring policy:", "Detailed topology, component/import guidance, vars guidance, and typed-step references are provided through retrieved context rendered from ask metadata.", "Do not use whole-value template expressions such as `{{ .vars.dockerPackages }}`", "Use Command only as an escape hatch"} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("expected %q in generation prompt, got %q", want, prompt)
 		}
@@ -161,11 +181,22 @@ func TestGenerationSystemPromptIncludesAskContextBlocks(t *testing.T) {
 
 func TestRequiredFixesForValidationFlagsTemplatedCollections(t *testing.T) {
 	fixes := requiredFixesForValidation("parse yaml: yaml: invalid map key: map[string]interface {}{\".vars.dockerPackages\":interface {}(nil)}")
-	if len(fixes) != 2 {
-		t.Fatalf("expected extra required fix, got %v", fixes)
+	if len(fixes) < 2 {
+		t.Fatalf("expected extra required fixes, got %v", fixes)
 	}
-	if !strings.Contains(fixes[1], "whole-value template expressions") {
+	joined := strings.Join(fixes, "\n")
+	if !strings.Contains(joined, "whole-value template expressions") {
 		t.Fatalf("unexpected templated collection fix: %v", fixes)
+	}
+}
+
+func TestRequiredFixesForValidationIncludesCheckHostRepairHint(t *testing.T) {
+	fixes := requiredFixesForValidation("E_SCHEMA_INVALID: step check-rhel9-host (CheckHost): spec: checks is required; spec: Additional property os is not allowed")
+	joined := strings.Join(fixes, "\n")
+	for _, want := range []string{"spec.checks", "spec.os"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("expected %q in fixes, got %v", want, fixes)
+		}
 	}
 }
 
@@ -256,6 +287,20 @@ func TestValidateSemanticGenerationRefineRejectsUnplannedFile(t *testing.T) {
 	err := validateSemanticGeneration(gen, askintent.Decision{Route: askintent.RouteRefine}, plan)
 	if err == nil {
 		t.Fatalf("expected refine semantic validation failure")
+	}
+}
+
+func TestSemanticCriticWarnsWhenTypedStepsRequestedButOnlyCommandUsed(t *testing.T) {
+	gen := askcontract.GenerationResponse{Files: []askcontract.GeneratedFile{{Path: "workflows/scenarios/apply.yaml", Content: "version: v1alpha1\nsteps:\n  - id: run\n    kind: Command\n    spec:\n      command: [\"true\"]\n"}}}
+	plan := askcontract.PlanResponse{
+		Request:             "create an air-gapped rhel9 single-node kubeadm workflow using typed steps where possible",
+		TargetOutcome:       "Generate typed-step focused workflows",
+		ValidationChecklist: []string{"Typed steps should be used where applicable"},
+	}
+	critic := semanticCritic(gen, askintent.Decision{Route: askintent.RouteDraft}, plan)
+	joined := strings.Join(critic.Advisory, "\n")
+	if !strings.Contains(joined, "Prefer") && !strings.Contains(joined, "typed") {
+		t.Fatalf("expected typed-step advisory, got %#v", critic)
 	}
 }
 

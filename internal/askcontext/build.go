@@ -124,10 +124,143 @@ func buildStepKinds() []StepKindContext {
 			KeyFields:    buildStepKeyFields(def.Step.Kind, meta),
 			Notes:        append([]string(nil), meta.Notes...),
 		}
+		applyCuratedStepMetadata(&ctx)
 		ctx.Outputs = dedupe(ctx.Outputs)
 		out = append(out, ctx)
 	}
 	return out
+}
+
+func applyCuratedStepMetadata(ctx *StepKindContext) {
+	// Derived fields come from workflow contracts and schema doc metadata assembled in
+	// buildStepKinds. This helper adds a narrow curated layer only for recurring ask
+	// quality issues such as common schema mistakes, repair hints, and prompt-ready
+	// examples that are awkward to infer directly from validator output.
+	ctx.MatchSignals = append([]string(nil), defaultMatchSignals(ctx.Kind)...)
+	ctx.PromptExamples = append([]StepExampleContext(nil), defaultPromptExamples(ctx)...)
+	ctx.CommonMistakes = append([]string(nil), defaultCommonMistakes(ctx.Kind)...)
+	ctx.RepairHints = append([]string(nil), defaultRepairHints(ctx.Kind)...)
+	ctx.ValidationHints = append([]ValidationHint(nil), defaultValidationHints(ctx.Kind)...)
+	ctx.QualityRules = append([]QualityRule(nil), defaultQualityRules(ctx.Kind)...)
+	if ctx.Kind == "Command" {
+		ctx.AntiSignals = []string{"typed", "typed steps", "where possible"}
+	}
+}
+
+func defaultMatchSignals(kind string) []string {
+	switch kind {
+	case "CheckHost":
+		return []string{"host", "preflight", "rhel", "rocky", "ubuntu", "air-gapped", "single-node"}
+	case "LoadImage":
+		return []string{"air-gapped", "image", "images", "archive", "containerd", "docker", "offline"}
+	case "CheckCluster":
+		return []string{"kubernetes", "kubeadm", "cluster", "verify", "health", "ready"}
+	case "InstallPackage":
+		return []string{"install", "package", "packages", "rpm", "dnf", "apt"}
+	case "DownloadPackage":
+		return []string{"download", "package", "packages", "rpm", "dnf", "air-gapped", "offline"}
+	case "ConfigureRepository":
+		return []string{"repo", "repository", "mirror", "yum", "dnf", "apt"}
+	case "RefreshRepository":
+		return []string{"repo", "repository", "metadata", "refresh", "cache", "dnf", "apt"}
+	case "ManageService":
+		return []string{"service", "enable", "restart", "reload", "systemctl"}
+	case "KernelModule":
+		return []string{"kernel", "module", "br_netfilter", "overlay", "kubernetes"}
+	case "WriteFile":
+		return []string{"write", "file", "config", "motd", "content"}
+	case "EditYAML":
+		return []string{"yaml", "edit", "patch", "config"}
+	case "Command":
+		return []string{"shell", "command", "script", "escape hatch"}
+	default:
+		return nil
+	}
+}
+
+func defaultPromptExamples(ctx *StepKindContext) []StepExampleContext {
+	if strings.TrimSpace(ctx.CuratedShape) == "" {
+		return nil
+	}
+	return []StepExampleContext{{Purpose: "compact shape", YAML: strings.TrimSpace(ctx.CuratedShape)}}
+}
+
+func defaultCommonMistakes(kind string) []string {
+	switch kind {
+	case "CheckHost":
+		return []string{
+			"Use spec.checks as a YAML string array such as [os, arch, swap].",
+			"Do not invent nested objects like spec.os or object items under spec.checks.",
+		}
+	case "LoadImage":
+		return []string{
+			"Keep spec.images in the schema-supported shape from the step example.",
+			"Do not replace the whole images collection with a single quoted template scalar.",
+		}
+	case "CheckCluster":
+		return []string{
+			"Follow the documented checks shape from the example instead of inventing custom polling fields.",
+		}
+	case "InstallPackage", "DownloadPackage":
+		return []string{
+			"spec.packages must stay a real YAML array, not a quoted template string.",
+			"Do not set spec.packages to `{{ .vars.* }}` or any other whole-value template expression; inline package items instead.",
+		}
+	case "ConfigureRepository":
+		return []string{
+			"spec.repositories must stay a real YAML array of repository objects, not a scalar shortcut.",
+			"Do not set spec.repositories to `{{ .vars.* }}` or any other whole-value template expression; inline repository objects instead.",
+		}
+	default:
+		return nil
+	}
+}
+
+func defaultRepairHints(kind string) []string {
+	switch kind {
+	case "CheckHost":
+		return []string{
+			"For CheckHost, use spec.checks as a string array like [os, arch, swap].",
+			"If binary presence matters, keep names under spec.binaries and include binaries in spec.checks.",
+		}
+	case "LoadImage":
+		return []string{"Return a schema-valid LoadImage spec using the documented image archive shape from ask metadata."}
+	case "CheckCluster":
+		return []string{"Return a schema-valid CheckCluster spec using documented checks instead of ad hoc readiness fields."}
+	case "InstallPackage", "DownloadPackage":
+		return []string{"Inline concrete YAML arrays for spec.packages rather than using a whole-value template expression."}
+	case "ConfigureRepository":
+		return []string{"Inline repository objects under spec.repositories rather than using a scalar or whole-value template."}
+	default:
+		return nil
+	}
+}
+
+func defaultValidationHints(kind string) []ValidationHint {
+	switch kind {
+	case "CheckHost":
+		return []ValidationHint{
+			{ErrorContains: "checkhost", Fix: "For CheckHost, use spec.checks as a YAML string array like [os, arch, swap]."},
+			{ErrorContains: "checks is required", Fix: "CheckHost requires spec.checks. Example: spec: {checks: [os, arch, swap]}."},
+			{ErrorContains: "additional property os is not allowed", Fix: "Do not use spec.os for CheckHost; put named checks under spec.checks instead."},
+			{ErrorContains: "spec.checks.0: invalid type", Fix: "Each CheckHost spec.checks item must be a plain string such as os or arch, not an object."},
+		}
+	case "InstallPackage", "DownloadPackage":
+		return []ValidationHint{{ErrorContains: "invalid map key", Fix: "Do not use whole-value template expressions for package arrays; inline YAML list items under spec.packages."}}
+	case "ConfigureRepository":
+		return []ValidationHint{{ErrorContains: "invalid map key", Fix: "Do not use whole-value template expressions for spec.repositories; inline YAML repository objects instead."}}
+	default:
+		return nil
+	}
+}
+
+func defaultQualityRules(kind string) []QualityRule {
+	switch kind {
+	case "Command":
+		return []QualityRule{{Trigger: "typed-preferred", Message: "Prefer a typed step when one clearly matches the requested host action instead of using Command only.", Level: "advisory"}}
+	default:
+		return nil
+	}
 }
 
 func buildStepKeyFields(kind string, meta workflowexec.ToolMetadata) []StepFieldContext {
