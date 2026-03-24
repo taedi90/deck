@@ -10,10 +10,10 @@ import (
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/taedi90/deck/internal/askconfig"
-	"github.com/taedi90/deck/internal/askcontext"
-	"github.com/taedi90/deck/internal/askintent"
-	"github.com/taedi90/deck/internal/askretrieve"
+	"github.com/Airgap-Castaways/deck/internal/askconfig"
+	"github.com/Airgap-Castaways/deck/internal/askcontext"
+	"github.com/Airgap-Castaways/deck/internal/askintent"
+	"github.com/Airgap-Castaways/deck/internal/askretrieve"
 )
 
 func Gather(ctx context.Context, cfg askconfig.MCP, route askintent.Route, prompt string) ([]askretrieve.Chunk, []string) {

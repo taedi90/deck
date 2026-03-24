@@ -3,7 +3,7 @@ package main
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/taedi90/deck/internal/buildinfo"
+	"github.com/Airgap-Castaways/deck/internal/buildinfo"
 )
 
 func newVersionCommand() *cobra.Command {

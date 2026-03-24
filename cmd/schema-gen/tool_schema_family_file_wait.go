@@ -1,6 +1,6 @@
 package main
 
-import "github.com/taedi90/deck/internal/stepspec"
+import "github.com/Airgap-Castaways/deck/internal/stepspec"
 
 func patchDownloadFileToolSchema(root map[string]any) {
 	props := propertyMap(root)

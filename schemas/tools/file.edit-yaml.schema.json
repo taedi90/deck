@@ -36,7 +36,7 @@
       "type": "integer"
     },
     "spec": {
-      "$id": "https://github.com/taedi90/deck/internal/stepspec/edit-yaml",
+      "$id": "https://github.com/Airgap-Castaways/deck/internal/stepspec/edit-yaml",
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {

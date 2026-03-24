@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/taedi90/deck/internal/validate"
-	"github.com/taedi90/deck/internal/workflowexec"
-	deckschemas "github.com/taedi90/deck/schemas"
+	"github.com/Airgap-Castaways/deck/internal/validate"
+	"github.com/Airgap-Castaways/deck/internal/workflowexec"
+	deckschemas "github.com/Airgap-Castaways/deck/schemas"
 )
 
 func TestManifestIncludesAllStepKinds(t *testing.T) {

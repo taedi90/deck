@@ -15,8 +15,8 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/taedi90/deck/internal/filemode"
-	"github.com/taedi90/deck/internal/userdirs"
+	"github.com/Airgap-Castaways/deck/internal/filemode"
+	"github.com/Airgap-Castaways/deck/internal/userdirs"
 )
 
 const exportedPackageCacheMetaFile = "meta.json"

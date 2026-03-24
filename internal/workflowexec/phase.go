@@ -1,6 +1,6 @@
 package workflowexec
 
-import "github.com/taedi90/deck/internal/config"
+import "github.com/Airgap-Castaways/deck/internal/config"
 
 func FindPhase(wf *config.Workflow, name string) (config.Phase, bool) {
 	if wf == nil {

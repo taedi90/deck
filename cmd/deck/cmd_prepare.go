@@ -3,8 +3,8 @@ package main
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/taedi90/deck/internal/preparecli"
-	"github.com/taedi90/deck/internal/workspacepaths"
+	"github.com/Airgap-Castaways/deck/internal/preparecli"
+	"github.com/Airgap-Castaways/deck/internal/workspacepaths"
 )
 
 type prepareOptions struct {

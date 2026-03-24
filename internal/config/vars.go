@@ -9,8 +9,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/taedi90/deck/internal/cloneutil"
-	"github.com/taedi90/deck/internal/fsutil"
+	"github.com/Airgap-Castaways/deck/internal/cloneutil"
+	"github.com/Airgap-Castaways/deck/internal/fsutil"
 )
 
 func loadBaseVars(ctx context.Context, origin workflowOrigin) (map[string]any, error) {

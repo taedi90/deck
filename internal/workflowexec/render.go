@@ -7,8 +7,8 @@ import (
 	"text/template"
 	"text/template/parse"
 
-	"github.com/taedi90/deck/internal/cloneutil"
-	"github.com/taedi90/deck/internal/config"
+	"github.com/Airgap-Castaways/deck/internal/cloneutil"
+	"github.com/Airgap-Castaways/deck/internal/config"
 )
 
 func RenderSpec(spec map[string]any, wf *config.Workflow, runtimeVars map[string]any, ctxData map[string]any) (map[string]any, error) {

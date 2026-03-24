@@ -6,10 +6,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/taedi90/deck/internal/schemadoc"
-	"github.com/taedi90/deck/internal/validate"
-	"github.com/taedi90/deck/internal/workflowexec"
-	"github.com/taedi90/deck/internal/workspacepaths"
+	"github.com/Airgap-Castaways/deck/internal/schemadoc"
+	"github.com/Airgap-Castaways/deck/internal/validate"
+	"github.com/Airgap-Castaways/deck/internal/workflowexec"
+	"github.com/Airgap-Castaways/deck/internal/workspacepaths"
 )
 
 var (

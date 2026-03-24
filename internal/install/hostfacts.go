@@ -4,7 +4,7 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/taedi90/deck/internal/workflowexec"
+	"github.com/Airgap-Castaways/deck/internal/workflowexec"
 )
 
 func detectHostFacts() map[string]any {

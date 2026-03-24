@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/taedi90/deck/internal/stepspec"
-	"github.com/taedi90/deck/internal/workflowexec"
+	"github.com/Airgap-Castaways/deck/internal/stepspec"
+	"github.com/Airgap-Castaways/deck/internal/workflowexec"
 )
 
 func runLoadImage(ctx context.Context, bundleRoot string, spec map[string]any) error {

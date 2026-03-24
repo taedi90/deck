@@ -1,4 +1,4 @@
-module github.com/taedi90/deck
+module github.com/Airgap-Castaways/deck
 
 go 1.25.8
 

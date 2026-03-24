@@ -10,11 +10,11 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/taedi90/deck/internal/askcontext"
-	"github.com/taedi90/deck/internal/askcontract"
-	"github.com/taedi90/deck/internal/askintent"
-	"github.com/taedi90/deck/internal/askprovider"
-	"github.com/taedi90/deck/internal/askretrieve"
+	"github.com/Airgap-Castaways/deck/internal/askcontext"
+	"github.com/Airgap-Castaways/deck/internal/askcontract"
+	"github.com/Airgap-Castaways/deck/internal/askintent"
+	"github.com/Airgap-Castaways/deck/internal/askprovider"
+	"github.com/Airgap-Castaways/deck/internal/askretrieve"
 )
 
 func isAuthoringRoute(route askintent.Route) bool {

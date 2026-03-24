@@ -8,9 +8,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/taedi90/deck/internal/applycli"
-	"github.com/taedi90/deck/internal/install"
-	"github.com/taedi90/deck/internal/lintcli"
+	"github.com/Airgap-Castaways/deck/internal/applycli"
+	"github.com/Airgap-Castaways/deck/internal/install"
+	"github.com/Airgap-Castaways/deck/internal/lintcli"
 )
 
 type diffOptions struct {

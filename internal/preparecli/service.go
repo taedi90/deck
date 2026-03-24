@@ -12,12 +12,12 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/taedi90/deck/internal/config"
-	"github.com/taedi90/deck/internal/filemode"
-	"github.com/taedi90/deck/internal/fsutil"
-	"github.com/taedi90/deck/internal/hostfs"
-	"github.com/taedi90/deck/internal/prepare"
-	"github.com/taedi90/deck/internal/workspacepaths"
+	"github.com/Airgap-Castaways/deck/internal/config"
+	"github.com/Airgap-Castaways/deck/internal/filemode"
+	"github.com/Airgap-Castaways/deck/internal/fsutil"
+	"github.com/Airgap-Castaways/deck/internal/hostfs"
+	"github.com/Airgap-Castaways/deck/internal/prepare"
+	"github.com/Airgap-Castaways/deck/internal/workspacepaths"
 )
 
 type Options struct {

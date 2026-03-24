@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/taedi90/deck/internal/filemode"
-	"github.com/taedi90/deck/internal/install"
-	"github.com/taedi90/deck/internal/userdirs"
+	"github.com/Airgap-Castaways/deck/internal/filemode"
+	"github.com/Airgap-Castaways/deck/internal/install"
+	"github.com/Airgap-Castaways/deck/internal/userdirs"
 )
 
 type applyRunRecord struct {

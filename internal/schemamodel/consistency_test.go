@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/taedi90/deck/schemas"
+	"github.com/Airgap-Castaways/deck/schemas"
 )
 
 func TestFileSchemaModelMatchesToolSchema(t *testing.T) {

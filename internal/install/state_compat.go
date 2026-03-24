@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/taedi90/deck/internal/config"
+	"github.com/Airgap-Castaways/deck/internal/config"
 )
 
 // resolveLegacyStateReadPath keeps read-only fallback support for pre-XDG apply

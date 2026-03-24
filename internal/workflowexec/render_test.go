@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/taedi90/deck/internal/config"
+	"github.com/Airgap-Castaways/deck/internal/config"
 )
 
 func TestRenderSpec_MissingKeyReportsNestedMapPath(t *testing.T) {

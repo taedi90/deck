@@ -7,7 +7,7 @@ import (
 	toml "github.com/pelletier/go-toml/v2"
 	"gopkg.in/yaml.v3"
 
-	"github.com/taedi90/deck/internal/stepspec"
+	"github.com/Airgap-Castaways/deck/internal/stepspec"
 )
 
 func TestApplyTOMLQuotedPath(t *testing.T) {

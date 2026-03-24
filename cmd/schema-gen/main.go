@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/taedi90/deck/internal/schemadoc"
+	"github.com/Airgap-Castaways/deck/internal/schemadoc"
 )
 
 type schemaDoc struct {

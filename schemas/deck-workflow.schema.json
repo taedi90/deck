@@ -32,7 +32,7 @@
   "properties": {
     "phases": {
       "items": {
-        "$id": "https://github.com/taedi90/deck/internal/schemamodel/workflow-phase",
+        "$id": "https://github.com/Airgap-Castaways/deck/internal/schemamodel/workflow-phase",
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "anyOf": [

@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/taedi90/deck/internal/containerdconfig"
-	"github.com/taedi90/deck/internal/filemode"
-	"github.com/taedi90/deck/internal/fsutil"
-	"github.com/taedi90/deck/internal/stepspec"
-	"github.com/taedi90/deck/internal/structurededit"
-	"github.com/taedi90/deck/internal/workflowexec"
+	"github.com/Airgap-Castaways/deck/internal/containerdconfig"
+	"github.com/Airgap-Castaways/deck/internal/filemode"
+	"github.com/Airgap-Castaways/deck/internal/fsutil"
+	"github.com/Airgap-Castaways/deck/internal/stepspec"
+	"github.com/Airgap-Castaways/deck/internal/structurededit"
+	"github.com/Airgap-Castaways/deck/internal/workflowexec"
 )
 
 func runWriteContainerdConfig(ctx context.Context, spec map[string]any) error {

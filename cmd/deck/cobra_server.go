@@ -10,7 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/taedi90/deck/internal/executil"
+	"github.com/Airgap-Castaways/deck/internal/executil"
 )
 
 func newServerCommand() *cobra.Command {

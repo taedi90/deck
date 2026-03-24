@@ -5,7 +5,7 @@ import (
 
 	"github.com/invopop/jsonschema"
 
-	"github.com/taedi90/deck/internal/filemode"
+	"github.com/Airgap-Castaways/deck/internal/filemode"
 )
 
 func writeFile(path string, content []byte) error {

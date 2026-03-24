@@ -8,9 +8,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/taedi90/deck/internal/bundle"
-	"github.com/taedi90/deck/internal/filemode"
-	"github.com/taedi90/deck/internal/workspacepaths"
+	"github.com/Airgap-Castaways/deck/internal/bundle"
+	"github.com/Airgap-Castaways/deck/internal/filemode"
+	"github.com/Airgap-Castaways/deck/internal/workspacepaths"
 )
 
 func executeInit(output string) error {

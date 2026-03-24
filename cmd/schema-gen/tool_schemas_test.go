@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/taedi90/deck/internal/workflowexec"
+	"github.com/Airgap-Castaways/deck/internal/workflowexec"
 )
 
 func TestToolSchemaGeneratorsCoverStepDefinitions(t *testing.T) {

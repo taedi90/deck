@@ -9,7 +9,7 @@ import (
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/common/types"
 
-	"github.com/taedi90/deck/internal/workflowcontract"
+	"github.com/Airgap-Castaways/deck/internal/workflowcontract"
 )
 
 type Inputs struct {

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/taedi90/deck/internal/executil"
+	"github.com/Airgap-Castaways/deck/internal/executil"
 )
 
 func isManageServiceEnabled(ctx context.Context, name string, timeout time.Duration) (bool, error) {

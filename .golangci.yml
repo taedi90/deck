@@ -73,9 +73,9 @@ formatters:
       sections:
         - standard
         - default
-        - prefix(github.com/taedi90/deck)
+        - prefix(github.com/Airgap-Castaways/deck)
     gofumpt:
-      module-path: github.com/taedi90/deck
+      module-path: github.com/Airgap-Castaways/deck
 
 issues:
   max-issues-per-linter: 0

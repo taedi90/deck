@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/taedi90/deck/internal/askconfig"
-	"github.com/taedi90/deck/internal/askcontext"
-	"github.com/taedi90/deck/internal/askprovider"
+	"github.com/Airgap-Castaways/deck/internal/askconfig"
+	"github.com/Airgap-Castaways/deck/internal/askcontext"
+	"github.com/Airgap-Castaways/deck/internal/askprovider"
 )
 
 type mockAskClient struct {

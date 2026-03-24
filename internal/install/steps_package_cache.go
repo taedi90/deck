@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/taedi90/deck/internal/errcode"
-	"github.com/taedi90/deck/internal/stepspec"
-	"github.com/taedi90/deck/internal/workflowexec"
+	"github.com/Airgap-Castaways/deck/internal/errcode"
+	"github.com/Airgap-Castaways/deck/internal/stepspec"
+	"github.com/Airgap-Castaways/deck/internal/workflowexec"
 )
 
 const defaultRefreshRepositoryTimeout = 2 * time.Minute

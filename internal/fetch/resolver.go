@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/taedi90/deck/internal/fsutil"
+	"github.com/Airgap-Castaways/deck/internal/fsutil"
 )
 
 type SourceConfig struct {

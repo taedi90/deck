@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/taedi90/deck/internal/userdirs"
+	"github.com/Airgap-Castaways/deck/internal/userdirs"
 )
 
 type cacheEntry struct {

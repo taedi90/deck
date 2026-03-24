@@ -9,7 +9,7 @@ import (
 
 	openai "github.com/sashabaranov/go-openai"
 
-	"github.com/taedi90/deck/internal/askprovider"
+	"github.com/Airgap-Castaways/deck/internal/askprovider"
 )
 
 type Client struct{}

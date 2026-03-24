@@ -3,7 +3,7 @@ package workflowexec
 import (
 	"strings"
 
-	"github.com/taedi90/deck/internal/workflowcontract"
+	"github.com/Airgap-Castaways/deck/internal/workflowcontract"
 )
 
 type (

@@ -8,9 +8,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/taedi90/deck/internal/fsutil"
-	"github.com/taedi90/deck/internal/schemadoc"
-	"github.com/taedi90/deck/internal/workflowexec"
+	"github.com/Airgap-Castaways/deck/internal/fsutil"
+	"github.com/Airgap-Castaways/deck/internal/schemadoc"
+	"github.com/Airgap-Castaways/deck/internal/workflowexec"
 )
 
 func repoRoot() (string, error) {

@@ -6,7 +6,7 @@ import (
 
 	toml "github.com/pelletier/go-toml/v2"
 
-	"github.com/taedi90/deck/internal/stepspec"
+	"github.com/Airgap-Castaways/deck/internal/stepspec"
 )
 
 func TestApplyPreservesVersionAndMapsLogicalKeys(t *testing.T) {

@@ -14,13 +14,13 @@ import (
 	"github.com/xeipuuv/gojsonschema"
 	"gopkg.in/yaml.v3"
 
-	"github.com/taedi90/deck/internal/config"
-	"github.com/taedi90/deck/internal/fsutil"
-	"github.com/taedi90/deck/internal/workflowcontract"
-	"github.com/taedi90/deck/internal/workflowexec"
-	"github.com/taedi90/deck/internal/workflowexpr"
-	"github.com/taedi90/deck/internal/workspacepaths"
-	deckschemas "github.com/taedi90/deck/schemas"
+	"github.com/Airgap-Castaways/deck/internal/config"
+	"github.com/Airgap-Castaways/deck/internal/fsutil"
+	"github.com/Airgap-Castaways/deck/internal/workflowcontract"
+	"github.com/Airgap-Castaways/deck/internal/workflowexec"
+	"github.com/Airgap-Castaways/deck/internal/workflowexpr"
+	"github.com/Airgap-Castaways/deck/internal/workspacepaths"
+	deckschemas "github.com/Airgap-Castaways/deck/schemas"
 )
 
 var (

@@ -3,7 +3,7 @@ package workflowexec
 import (
 	"fmt"
 
-	"github.com/taedi90/deck/internal/workflowexpr"
+	"github.com/Airgap-Castaways/deck/internal/workflowexpr"
 )
 
 func EvaluateWhen(expr string, vars map[string]any, runtime map[string]any, errCode string) (bool, error) {

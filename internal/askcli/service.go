@@ -7,17 +7,17 @@ import (
 	"path/filepath"
 	"strings"
 
-	lspaugment "github.com/taedi90/deck/internal/askaugment/lsp"
-	mcpaugment "github.com/taedi90/deck/internal/askaugment/mcp"
-	"github.com/taedi90/deck/internal/askconfig"
-	"github.com/taedi90/deck/internal/askcontract"
-	"github.com/taedi90/deck/internal/askhooks"
-	"github.com/taedi90/deck/internal/askintent"
-	"github.com/taedi90/deck/internal/askprovider"
-	"github.com/taedi90/deck/internal/askretrieve"
-	"github.com/taedi90/deck/internal/askreview"
-	"github.com/taedi90/deck/internal/askstate"
-	"github.com/taedi90/deck/internal/validate"
+	lspaugment "github.com/Airgap-Castaways/deck/internal/askaugment/lsp"
+	mcpaugment "github.com/Airgap-Castaways/deck/internal/askaugment/mcp"
+	"github.com/Airgap-Castaways/deck/internal/askconfig"
+	"github.com/Airgap-Castaways/deck/internal/askcontract"
+	"github.com/Airgap-Castaways/deck/internal/askhooks"
+	"github.com/Airgap-Castaways/deck/internal/askintent"
+	"github.com/Airgap-Castaways/deck/internal/askprovider"
+	"github.com/Airgap-Castaways/deck/internal/askretrieve"
+	"github.com/Airgap-Castaways/deck/internal/askreview"
+	"github.com/Airgap-Castaways/deck/internal/askstate"
+	"github.com/Airgap-Castaways/deck/internal/validate"
 )
 
 func Execute(ctx context.Context, opts Options, client askprovider.Client) error {

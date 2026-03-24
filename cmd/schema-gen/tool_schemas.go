@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/taedi90/deck/internal/stepspec"
-	"github.com/taedi90/deck/internal/workflowexec"
+	"github.com/Airgap-Castaways/deck/internal/stepspec"
+	"github.com/Airgap-Castaways/deck/internal/workflowexec"
 )
 
 type builtInSchemaEntry struct {

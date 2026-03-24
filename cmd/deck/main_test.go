@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/taedi90/deck/internal/buildinfo"
+	"github.com/Airgap-Castaways/deck/internal/buildinfo"
 )
 
 func TestVersionCommand(t *testing.T) {
