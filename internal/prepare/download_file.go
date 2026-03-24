@@ -44,17 +44,41 @@ type prepareFileFetchSpec struct {
 }
 
 type prepareDownloadFileSpec struct {
+	Items      []prepareDownloadFileItemSpec `json:"items"`
 	Source     prepareDownloadFileSourceSpec `json:"source"`
 	Fetch      prepareFileFetchSpec          `json:"fetch"`
 	OutputPath string                        `json:"outputPath"`
 	Mode       string                        `json:"mode"`
 }
 
-func runDownloadFile(ctx context.Context, bundleRoot string, spec map[string]any, opts RunOptions) (string, error) {
+type prepareDownloadFileItemSpec struct {
+	Source     prepareDownloadFileSourceSpec `json:"source"`
+	Fetch      prepareFileFetchSpec          `json:"fetch"`
+	OutputPath string                        `json:"outputPath"`
+	Mode       string                        `json:"mode"`
+}
+
+func runDownloadFiles(ctx context.Context, bundleRoot string, spec map[string]any, opts RunOptions) ([]string, error) {
 	decoded, err := workflowexec.DecodeSpec[prepareDownloadFileSpec](spec)
 	if err != nil {
-		return "", fmt.Errorf("decode prepare File spec: %w", err)
+		return nil, fmt.Errorf("decode prepare File spec: %w", err)
 	}
+	items := normalizePrepareDownloadFileItems(decoded)
+	if len(items) == 0 {
+		return nil, fmt.Errorf("file action download requires source.path or source.url")
+	}
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		artifact, err := runDownloadFileItem(ctx, bundleRoot, item, opts)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, artifact)
+	}
+	return out, nil
+}
+
+func runDownloadFileItem(ctx context.Context, bundleRoot string, decoded prepareDownloadFileItemSpec, opts RunOptions) (string, error) {
 	bundleRef := decoded.Source.Bundle
 	if bundleRef != nil {
 		root := strings.TrimSpace(bundleRef.Root)
@@ -177,10 +201,17 @@ func resolveSourceBytes(ctx context.Context, spec map[string]any, sourcePath str
 	if err != nil {
 		return nil, fmt.Errorf("decode prepare File spec: %w", err)
 	}
-	return resolveSourceBytesFromSpec(ctx, decoded, sourcePath)
+	items := normalizePrepareDownloadFileItems(decoded)
+	if len(items) == 0 {
+		items = []prepareDownloadFileItemSpec{{Fetch: decoded.Fetch}}
+	}
+	if len(items) != 1 {
+		return nil, fmt.Errorf("resolveSourceBytes expects a single DownloadFile item")
+	}
+	return resolveSourceBytesFromSpec(ctx, items[0], sourcePath)
 }
 
-func resolveSourceBytesFromSpec(ctx context.Context, spec prepareDownloadFileSpec, sourcePath string) ([]byte, error) {
+func resolveSourceBytesFromSpec(ctx context.Context, spec prepareDownloadFileItemSpec, sourcePath string) ([]byte, error) {
 	if len(spec.Fetch.Sources) > 0 {
 		sources := make([]fetch.SourceConfig, 0, len(spec.Fetch.Sources))
 		for _, source := range spec.Fetch.Sources {
@@ -251,7 +282,7 @@ func fileSHA256(path string) (string, error) {
 	return hex.EncodeToString(sum[:]), nil
 }
 
-func canReuseDownloadFile(ctx context.Context, bundleRoot string, spec prepareDownloadFileSpec, target string, opts RunOptions) (bool, error) {
+func canReuseDownloadFile(ctx context.Context, bundleRoot string, spec prepareDownloadFileItemSpec, target string, opts RunOptions) (bool, error) {
 	if opts.ForceRedownload {
 		return false, nil
 	}
@@ -288,4 +319,19 @@ func canReuseDownloadFile(ctx context.Context, bundleRoot string, spec prepareDo
 	}
 	sum := sha256.Sum256(raw)
 	return strings.EqualFold(targetSHA, hex.EncodeToString(sum[:])), nil
+}
+
+func normalizePrepareDownloadFileItems(spec prepareDownloadFileSpec) []prepareDownloadFileItemSpec {
+	if len(spec.Items) > 0 {
+		return spec.Items
+	}
+	if strings.TrimSpace(spec.Source.URL) == "" && strings.TrimSpace(spec.Source.Path) == "" && spec.Source.Bundle == nil {
+		return nil
+	}
+	return []prepareDownloadFileItemSpec{{
+		Source:     spec.Source,
+		Fetch:      spec.Fetch,
+		OutputPath: spec.OutputPath,
+		Mode:       spec.Mode,
+	}}
 }

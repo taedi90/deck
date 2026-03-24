@@ -242,7 +242,7 @@ func lintLocalEntrypoint(ctx context.Context, path string, inheritedVars map[str
 		if err != nil {
 			return nil, withWorkflowName(absPath, err)
 		}
-		if err := validateComponentFragmentWithWorkflowVersion(absPath, fragment, workflowVersion); err != nil {
+		if err := validateComponentFragmentWithWorkflowVersion(absPath, fragment, workflowVersion, inheritedVars); err != nil {
 			return nil, withWorkflowName(absPath, err)
 		}
 		delete(visiting, absPath)
@@ -323,17 +323,17 @@ func validateLoadedWorkflow(name string, wf *config.Workflow) error {
 }
 
 func validateComponentFragment(name string, fragment *componentFragment) error {
-	return validateComponentFragmentWithWorkflowVersion(name, fragment, workflowSupportedVersion)
+	return validateComponentFragmentWithWorkflowVersion(name, fragment, workflowSupportedVersion, nil)
 }
 
-func validateComponentFragmentWithWorkflowVersion(name string, fragment *componentFragment, workflowVersion string) error {
+func validateComponentFragmentWithWorkflowVersion(name string, fragment *componentFragment, workflowVersion string, vars map[string]any) error {
 	if fragment == nil {
 		return fmt.Errorf("component fragment is nil")
 	}
 	if len(fragment.Steps) == 0 {
 		return fmt.Errorf("steps is required")
 	}
-	wf := &config.Workflow{Version: workflowVersion, Steps: fragment.Steps}
+	wf := &config.Workflow{Version: workflowVersion, Steps: fragment.Steps, Vars: cloneAnyMap(vars)}
 	if err := validateToolSchemas(wf); err != nil {
 		return err
 	}
@@ -447,6 +447,7 @@ func validateToolSchemas(wf *config.Workflow) error {
 
 		stepForSchema := step
 		stepForSchema.APIVersion = key.APIVersion
+		stepForSchema.Spec = materializeVarTemplateValues(stepForSchema.Spec, wf.Vars)
 
 		raw, err := json.Marshal(stepForSchema)
 		if err != nil {
@@ -472,6 +473,53 @@ func validateToolSchemas(wf *config.Workflow) error {
 	}
 
 	return nil
+}
+
+func materializeVarTemplateValues(input map[string]any, vars map[string]any) map[string]any {
+	if input == nil {
+		return map[string]any{}
+	}
+	out := make(map[string]any, len(input))
+	ctx := map[string]any{"vars": vars}
+	for key, value := range input {
+		out[key] = materializeVarTemplateValue(value, ctx)
+	}
+	return out
+}
+
+func materializeVarTemplateValue(value any, ctx map[string]any) any {
+	switch typed := value.(type) {
+	case string:
+		trimmed := strings.TrimSpace(typed)
+		if !strings.Contains(trimmed, "{{") || !strings.Contains(trimmed, ".vars.") {
+			return typed
+		}
+		resolved, ok, err := workflowexec.ResolveWholeValueTemplate(typed, ctx)
+		if err != nil || !ok {
+			return typed
+		}
+		if s, ok := resolved.(string); ok {
+			if strings.TrimSpace(s) == "" {
+				return typed
+			}
+			return s
+		}
+		return resolved
+	case map[string]any:
+		out := make(map[string]any, len(typed))
+		for key, item := range typed {
+			out[key] = materializeVarTemplateValue(item, ctx)
+		}
+		return out
+	case []any:
+		out := make([]any, 0, len(typed))
+		for _, item := range typed {
+			out = append(out, materializeVarTemplateValue(item, ctx))
+		}
+		return out
+	default:
+		return value
+	}
 }
 
 func validateSchema(name string, content []byte, kind documentKind) error {

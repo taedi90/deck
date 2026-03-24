@@ -31,7 +31,7 @@ func TestRunPrepareStepOutputsCoverContracts(t *testing.T) {
 			kind:   "DownloadFile",
 			spec:   map[string]any{"source": map[string]any{"path": localFile}},
 			runner: &noArtifactRunner{},
-			expect: []string{"outputPath", "artifacts"},
+			expect: []string{"outputPath", "outputPaths", "artifacts"},
 		},
 		{
 			name:   "packages download",

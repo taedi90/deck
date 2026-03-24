@@ -9,6 +9,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/taedi90/deck/internal/cloneutil"
 	"github.com/taedi90/deck/internal/fsutil"
 )
 
@@ -72,6 +73,27 @@ func parseVarsYAML(content []byte) (map[string]any, error) {
 
 func mergeVars(dst map[string]any, src map[string]any) {
 	for k, v := range src {
-		dst[k] = v
+		if existing, ok := dst[k]; ok {
+			merged, didMerge := mergeVarValue(existing, v)
+			if didMerge {
+				dst[k] = merged
+				continue
+			}
+		}
+		dst[k] = cloneutil.DeepValue(v)
 	}
+}
+
+func mergeVarValue(dst, src any) (any, bool) {
+	srcMap, ok := src.(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	dstMap, ok := dst.(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	merged := cloneutil.DeepMap(dstMap)
+	mergeVars(merged, srcMap)
+	return merged, true
 }

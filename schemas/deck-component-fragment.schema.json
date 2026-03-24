@@ -357,7 +357,8 @@
                   "additionalProperties": {
                     "enum": [
                       "artifacts",
-                      "outputPath"
+                      "outputPath",
+                      "outputPaths"
                     ]
                   },
                   "propertyNames": {

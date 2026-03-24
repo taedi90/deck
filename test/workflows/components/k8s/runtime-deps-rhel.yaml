@@ -1,11 +1,21 @@
 steps:
+  - id: install-runtime-dependency-packages-rhel
+    kind: InstallPackage
+    spec:
+      packages: "{{ .vars.runtimeDepPackages.rhel }}"
+      restrictToRepos:
+        - deck-os
+  - id: stop-containerd-rhel
+    kind: ManageService
+    spec:
+      name: containerd
+      state: stopped
   - id: extract-containerd-runtime-rhel
     kind: ExtractArchive
     timeout: 20m
     spec:
-      source:
-        url: http://{{ .vars.serverURL }}/files/bin/linux/{{ .runtime.host.arch }}/containerd.tar.gz
-      path: /usr/local
+      source: "{{ .vars.install.runtimeDeps.rhel.extractContainerd.source }}"
+      path: "{{ .vars.install.runtimeDeps.rhel.extractContainerd.path }}"
   - id: install-containerd-rhel
     kind: CopyFile
     spec:
@@ -30,16 +40,14 @@ steps:
   - id: install-runc-rhel
     kind: CopyFile
     spec:
-      source:
-        url: http://{{ .vars.serverURL }}/files/bin/linux/{{ .runtime.host.arch }}/runc
-      path: /usr/local/sbin/runc
-      mode: "0755"
+      source: "{{ .vars.install.runtimeDeps.rhel.installRunc.source }}"
+      path: "{{ .vars.install.runtimeDeps.rhel.installRunc.path }}"
+      mode: "{{ .vars.install.runtimeDeps.rhel.installRunc.mode }}"
   - id: extract-cni-plugins-rhel
     kind: ExtractArchive
     spec:
-      source:
-        url: http://{{ .vars.serverURL }}/files/bin/linux/{{ .runtime.host.arch }}/cni-plugins.tgz
-      path: /opt/cni/bin
+      source: "{{ .vars.install.runtimeDeps.rhel.extractCNIPlugins.source }}"
+      path: "{{ .vars.install.runtimeDeps.rhel.extractCNIPlugins.path }}"
   - id: symlink-runc-rhel
     kind: CreateSymlink
     spec:

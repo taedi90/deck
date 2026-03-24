@@ -1,11 +1,21 @@
 steps:
+  - id: install-runtime-dependency-packages-debian
+    kind: InstallPackage
+    spec:
+      packages: "{{ .vars.runtimeDepPackages.debian }}"
+      restrictToRepos:
+        - /etc/apt/sources.list.d/offline.list
+  - id: stop-containerd-debian
+    kind: ManageService
+    spec:
+      name: containerd
+      state: stopped
   - id: extract-containerd-runtime-debian
     kind: ExtractArchive
     timeout: 20m
     spec:
-      source:
-        url: http://{{ .vars.serverURL }}/files/bin/linux/{{ .runtime.host.arch }}/containerd.tar.gz
-      path: /usr/local
+      source: "{{ .vars.install.runtimeDeps.debian.extractContainerd.source }}"
+      path: "{{ .vars.install.runtimeDeps.debian.extractContainerd.path }}"
   - id: install-containerd-debian
     kind: CopyFile
     spec:
@@ -30,16 +40,14 @@ steps:
   - id: install-runc-debian
     kind: CopyFile
     spec:
-      source:
-        url: http://{{ .vars.serverURL }}/files/bin/linux/{{ .runtime.host.arch }}/runc
-      path: /usr/local/sbin/runc
-      mode: "0755"
+      source: "{{ .vars.install.runtimeDeps.debian.installRunc.source }}"
+      path: "{{ .vars.install.runtimeDeps.debian.installRunc.path }}"
+      mode: "{{ .vars.install.runtimeDeps.debian.installRunc.mode }}"
   - id: extract-cni-plugins-debian
     kind: ExtractArchive
     spec:
-      source:
-        url: http://{{ .vars.serverURL }}/files/bin/linux/{{ .runtime.host.arch }}/cni-plugins.tgz
-      path: /opt/cni/bin
+      source: "{{ .vars.install.runtimeDeps.debian.extractCNIPlugins.source }}"
+      path: "{{ .vars.install.runtimeDeps.debian.extractCNIPlugins.path }}"
   - id: symlink-runc-debian
     kind: CreateSymlink
     spec:

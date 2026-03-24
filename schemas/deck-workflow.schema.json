@@ -430,7 +430,8 @@
                         "additionalProperties": {
                           "enum": [
                             "artifacts",
-                            "outputPath"
+                            "outputPath",
+                            "outputPaths"
                           ]
                         },
                         "propertyNames": {
@@ -2416,7 +2417,8 @@
                   "additionalProperties": {
                     "enum": [
                       "artifacts",
-                      "outputPath"
+                      "outputPath",
+                      "outputPaths"
                     ]
                   },
                   "propertyNames": {

@@ -43,6 +43,88 @@ func TestVarsPrecedence(t *testing.T) {
 	}
 }
 
+func TestVarsDeepMerge(t *testing.T) {
+	dir := t.TempDir()
+	workflowPath := filepath.Join(dir, "apply.yaml")
+
+	if err := os.WriteFile(filepath.Join(dir, "vars.yaml"), []byte("registry:\n  host: base.example.invalid\n  auth:\n    user: base-user\n    pass: base-pass\ndownloads:\n  binaries:\n    - kubelet\n    - kubeadm\n"), 0o644); err != nil {
+		t.Fatalf("write vars.yaml: %v", err)
+	}
+	if err := os.WriteFile(workflowPath, []byte("version: v1alpha1\nvars:\n  registry:\n    auth:\n      user: workflow-user\n    mirror: workflow-mirror\n  downloads:\n    binaries:\n      - kubectl\nphases: []\n"), 0o644); err != nil {
+		t.Fatalf("write workflow: %v", err)
+	}
+
+	wf, err := LoadWithOptions(context.Background(), workflowPath, LoadOptions{})
+	if err != nil {
+		t.Fatalf("LoadWithOptions failed: %v", err)
+	}
+
+	registry, ok := wf.Vars["registry"].(map[string]any)
+	if !ok {
+		t.Fatalf("registry should be a map, got %#v", wf.Vars["registry"])
+	}
+	if got := registry["host"]; got != "base.example.invalid" {
+		t.Fatalf("expected base registry.host, got %#v", got)
+	}
+	auth, ok := registry["auth"].(map[string]any)
+	if !ok {
+		t.Fatalf("registry.auth should be a map, got %#v", registry["auth"])
+	}
+	if got := auth["user"]; got != "workflow-user" {
+		t.Fatalf("expected workflow override for registry.auth.user, got %#v", got)
+	}
+	if got := auth["pass"]; got != "base-pass" {
+		t.Fatalf("expected base registry.auth.pass, got %#v", got)
+	}
+	if got := registry["mirror"]; got != "workflow-mirror" {
+		t.Fatalf("expected workflow registry.mirror, got %#v", got)
+	}
+	binaries, ok := wf.Vars["downloads"].(map[string]any)
+	if !ok {
+		t.Fatalf("downloads should be a map, got %#v", wf.Vars["downloads"])
+	}
+	items, ok := binaries["binaries"].([]any)
+	if !ok {
+		t.Fatalf("downloads.binaries should be a list, got %#v", binaries["binaries"])
+	}
+	if len(items) != 1 || items[0] != "kubectl" {
+		t.Fatalf("expected workflow list replacement, got %#v", items)
+	}
+}
+
+func TestVarsOverridesDeepMerge(t *testing.T) {
+	dir := t.TempDir()
+	workflowPath := filepath.Join(dir, "apply.yaml")
+
+	if err := os.WriteFile(filepath.Join(dir, "vars.yaml"), []byte("registry:\n  host: base.example.invalid\n  auth:\n    user: base-user\n    pass: base-pass\n"), 0o644); err != nil {
+		t.Fatalf("write vars.yaml: %v", err)
+	}
+	if err := os.WriteFile(workflowPath, []byte("version: v1alpha1\nvars:\n  registry:\n    auth:\n      pass: workflow-pass\nphases: []\n"), 0o644); err != nil {
+		t.Fatalf("write workflow: %v", err)
+	}
+
+	wf, err := LoadWithOptions(context.Background(), workflowPath, LoadOptions{VarOverrides: map[string]any{
+		"registry": map[string]any{
+			"auth": map[string]any{"user": "cli-user"},
+		},
+	}})
+	if err != nil {
+		t.Fatalf("LoadWithOptions failed: %v", err)
+	}
+
+	registry := wf.Vars["registry"].(map[string]any)
+	auth := registry["auth"].(map[string]any)
+	if got := registry["host"]; got != "base.example.invalid" {
+		t.Fatalf("expected base host to survive override, got %#v", got)
+	}
+	if got := auth["user"]; got != "cli-user" {
+		t.Fatalf("expected cli auth.user override, got %#v", got)
+	}
+	if got := auth["pass"]; got != "workflow-pass" {
+		t.Fatalf("expected workflow auth.pass override, got %#v", got)
+	}
+}
+
 func TestVarsURLFetch(t *testing.T) {
 	t.Run("loads vars yaml when present", func(t *testing.T) {
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

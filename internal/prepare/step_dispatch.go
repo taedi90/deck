@@ -18,11 +18,15 @@ func runPrepareRenderedStepWithKey(ctx context.Context, runner CommandRunner, bu
 
 	switch kind {
 	case "DownloadFile":
-		f, err := runDownloadFile(ctx, bundleRoot, rendered, opts)
+		files, err := runDownloadFiles(ctx, bundleRoot, rendered, opts)
 		if err != nil {
 			return nil, nil, err
 		}
-		return []string{f}, map[string]any{"outputPath": f, "artifacts": []string{f}}, nil
+		outputs := map[string]any{"artifacts": files, "outputPaths": files}
+		if len(files) == 1 {
+			outputs["outputPath"] = files[0]
+		}
+		return files, outputs, nil
 	case "DownloadPackage":
 		files, err := runDownloadPackage(ctx, runner, bundleRoot, step, rendered, inputVars, "packages", opts)
 		if err != nil {

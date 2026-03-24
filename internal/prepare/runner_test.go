@@ -800,6 +800,60 @@ func TestRun_WhenAndRegisterSemantics(t *testing.T) {
 	}
 }
 
+func TestRunPrepareStep_DownloadFileItems(t *testing.T) {
+	bundle := t.TempDir()
+	localCache := t.TempDir()
+
+	firstRel := filepath.ToSlash(filepath.Join("files", "first.bin"))
+	secondRel := filepath.ToSlash(filepath.Join("files", "second.bin"))
+	for rel, content := range map[string]string{firstRel: "first", secondRel: "second"} {
+		abs := filepath.Join(localCache, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+			t.Fatalf("mkdir source dir: %v", err)
+		}
+		if err := os.WriteFile(abs, []byte(content), 0o644); err != nil {
+			t.Fatalf("write source: %v", err)
+		}
+	}
+
+	step := config.Step{Kind: "DownloadFile"}
+	key := workflowexec.StepTypeKey{APIVersion: workflowcontract.BuiltInStepAPIVersion, Kind: "DownloadFile"}
+	rendered := map[string]any{
+		"items": []any{
+			map[string]any{
+				"source":     map[string]any{"path": firstRel},
+				"fetch":      map[string]any{"sources": []any{map[string]any{"type": "local", "path": localCache}}},
+				"outputPath": "files/out-first.bin",
+			},
+			map[string]any{
+				"source":     map[string]any{"path": secondRel},
+				"fetch":      map[string]any{"sources": []any{map[string]any{"type": "local", "path": localCache}}},
+				"outputPath": "files/out-second.bin",
+			},
+		},
+	}
+
+	files, outputs, err := runPrepareRenderedStepWithKey(context.Background(), nil, bundle, step, rendered, key, nil, RunOptions{})
+	if err != nil {
+		t.Fatalf("runPrepareRenderedStepWithKey failed: %v", err)
+	}
+	if len(files) != 2 || files[0] != "files/out-first.bin" || files[1] != "files/out-second.bin" {
+		t.Fatalf("unexpected files: %#v", files)
+	}
+	if _, ok := outputs["outputPath"]; ok {
+		t.Fatalf("did not expect single outputPath for multi-item download: %#v", outputs)
+	}
+	paths, ok := outputs["outputPaths"].([]string)
+	if !ok || len(paths) != 2 {
+		t.Fatalf("expected outputPaths list, got %#v", outputs["outputPaths"])
+	}
+	for _, rel := range files {
+		if _, err := os.Stat(filepath.Join(bundle, filepath.FromSlash(rel))); err != nil {
+			t.Fatalf("expected artifact %s: %v", rel, err)
+		}
+	}
+}
+
 func TestRun_RetrySemantics(t *testing.T) {
 	t.Run("retry succeeds on second attempt", func(t *testing.T) {
 		t.Setenv("HOME", t.TempDir())
@@ -1494,12 +1548,23 @@ func writeFakeTar(w io.Writer, payload map[string][]byte) error {
 }
 
 func TestTemplate_RenderVarsAndRuntime(t *testing.T) {
-	wf := &config.Workflow{Vars: map[string]any{"kubernetesVersion": "v1.30.1", "registry": map[string]any{"host": "registry.k8s.io"}}}
+	wf := &config.Workflow{Vars: map[string]any{
+		"kubernetesVersion": "v1.30.1",
+		"registry":          map[string]any{"host": "registry.k8s.io"},
+		"downloads": []any{
+			map[string]any{"source": map[string]any{"path": "files/a.bin"}, "outputPath": "files/download-a.bin"},
+			map[string]any{"source": map[string]any{"url": "https://example.invalid/b"}, "outputPath": "files/download-b.bin"},
+		},
+		"downloadSpec": map[string]any{"source": map[string]any{"path": "files/spec.bin"}, "outputPath": "files/spec-out.bin"},
+	}}
 	runtimeVars := map[string]any{"downloaded": "files/a.bin"}
 
 	rendered, err := renderSpec(map[string]any{
 		"source":     map[string]any{"path": "{{ .runtime.downloaded }}"},
 		"outputPath": "files/{{ .vars.kubernetesVersion }}.bin",
+		"downloads":  "{{ .vars.downloads }}",
+		"download":   "{{ .vars.downloadSpec }}",
+		"firstPath":  "{{ index .vars.downloads 0 \"outputPath\" }}",
 		"images": []any{
 			"{{ .vars.registry.host }}/kube-apiserver:{{ .vars.kubernetesVersion }}",
 			map[string]any{"tag": "{{ .runtime.downloaded }}"},
@@ -1531,6 +1596,21 @@ func TestTemplate_RenderVarsAndRuntime(t *testing.T) {
 	}
 	if got := images[2]; got != 7 {
 		t.Fatalf("unexpected rendered images[2]: %#v", got)
+	}
+	downloads, ok := rendered["downloads"].([]any)
+	if !ok || len(downloads) != 2 {
+		t.Fatalf("downloads should be structured slice, got %#v", rendered["downloads"])
+	}
+	firstDownload, ok := downloads[0].(map[string]any)
+	if !ok || firstDownload["outputPath"] != "files/download-a.bin" {
+		t.Fatalf("unexpected rendered downloads[0]: %#v", downloads[0])
+	}
+	download, ok := rendered["download"].(map[string]any)
+	if !ok || download["outputPath"] != "files/spec-out.bin" {
+		t.Fatalf("download should be structured map, got %#v", rendered["download"])
+	}
+	if got := rendered["firstPath"]; got != "files/download-a.bin" {
+		t.Fatalf("unexpected indexed render value: %#v", got)
 	}
 
 	_, err = renderSpec(map[string]any{"content": "{{ .vars.missing }}"}, wf, runtimeVars)

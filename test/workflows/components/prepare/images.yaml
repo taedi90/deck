@@ -2,25 +2,11 @@ steps:
   - id: download-control-plane-images
     kind: DownloadImage
     spec:
-      images:
-        - registry.k8s.io/kube-apiserver:{{ .vars.kubernetesVersion }}
-        - registry.k8s.io/kube-controller-manager:{{ .vars.kubernetesVersion }}
-        - registry.k8s.io/kube-scheduler:{{ .vars.kubernetesVersion }}
-        - registry.k8s.io/kube-proxy:{{ .vars.kubernetesVersion }}
-        - registry.k8s.io/pause:3.9
-        - registry.k8s.io/etcd:3.5.12-0
-        - registry.k8s.io/coredns/coredns:v1.11.1
+      images: "{{ .vars.controlPlaneImages }}"
       outputDir: images/control-plane
   - id: download-upgrade-control-plane-images
     kind: DownloadImage
     when: vars.upgradeKubernetesVersion != ""
     spec:
-      images:
-        - registry.k8s.io/kube-apiserver:{{ .vars.upgradeKubernetesVersion }}
-        - registry.k8s.io/kube-controller-manager:{{ .vars.upgradeKubernetesVersion }}
-        - registry.k8s.io/kube-scheduler:{{ .vars.upgradeKubernetesVersion }}
-        - registry.k8s.io/kube-proxy:{{ .vars.upgradeKubernetesVersion }}
-        - "{{ .vars.upgradePauseImage }}"
-        - "{{ .vars.upgradeEtcdImage }}"
-        - "{{ .vars.upgradeCoreDNSImage }}"
+      images: "{{ .vars.upgradeControlPlaneImages }}"
       outputDir: images/control-plane

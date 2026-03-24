@@ -13,6 +13,14 @@ type DownloadFileStepDocument struct {
 }
 
 type DownloadFileStepSpec struct {
+	Items      []DownloadFileItem `json:"items,omitempty"`
+	Source     *FileSource        `json:"source,omitempty"`
+	Fetch      *FileFetch         `json:"fetch,omitempty"`
+	OutputPath string             `json:"outputPath,omitempty"`
+	Mode       string             `json:"mode,omitempty"`
+}
+
+type DownloadFileItem struct {
 	Source     *FileSource `json:"source,omitempty"`
 	Fetch      *FileFetch  `json:"fetch,omitempty"`
 	OutputPath string      `json:"outputPath,omitempty"`

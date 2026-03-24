@@ -12,3 +12,157 @@ osFamily: debian
 sharedFlavor: k8s-shared
 enableJoin: "true"
 allowDestructive: "false"
+controlPlaneImages:
+  - registry.k8s.io/kube-apiserver:{{ .vars.kubernetesVersion }}
+  - registry.k8s.io/kube-controller-manager:{{ .vars.kubernetesVersion }}
+  - registry.k8s.io/kube-scheduler:{{ .vars.kubernetesVersion }}
+  - registry.k8s.io/kube-proxy:{{ .vars.kubernetesVersion }}
+  - registry.k8s.io/pause:3.9
+  - registry.k8s.io/etcd:3.5.12-0
+  - registry.k8s.io/coredns/coredns:v1.11.1
+upgradeControlPlaneImages:
+  - registry.k8s.io/kube-apiserver:{{ .vars.upgradeKubernetesVersion }}
+  - registry.k8s.io/kube-controller-manager:{{ .vars.upgradeKubernetesVersion }}
+  - registry.k8s.io/kube-scheduler:{{ .vars.upgradeKubernetesVersion }}
+  - registry.k8s.io/kube-proxy:{{ .vars.upgradeKubernetesVersion }}
+  - "{{ .vars.upgradePauseImage }}"
+  - "{{ .vars.upgradeEtcdImage }}"
+  - "{{ .vars.upgradeCoreDNSImage }}"
+binaryDownloads:
+  - source:
+      url: https://dl.k8s.io/release/{{ .vars.kubernetesVersion }}/bin/linux/amd64/kubelet
+    outputPath: files/bin/linux/amd64/kubelet
+    mode: "0755"
+  - source:
+      url: https://dl.k8s.io/release/{{ .vars.kubernetesVersion }}/bin/linux/arm64/kubelet
+    outputPath: files/bin/linux/arm64/kubelet
+    mode: "0755"
+  - source:
+      url: https://dl.k8s.io/release/{{ .vars.kubernetesVersion }}/bin/linux/amd64/kubeadm
+    outputPath: files/bin/linux/amd64/kubeadm
+    mode: "0755"
+  - source:
+      url: https://dl.k8s.io/release/{{ .vars.kubernetesVersion }}/bin/linux/arm64/kubeadm
+    outputPath: files/bin/linux/arm64/kubeadm
+    mode: "0755"
+  - source:
+      url: https://dl.k8s.io/release/{{ .vars.kubernetesVersion }}/bin/linux/amd64/kubectl
+    outputPath: files/bin/linux/amd64/kubectl
+    mode: "0755"
+  - source:
+      url: https://dl.k8s.io/release/{{ .vars.kubernetesVersion }}/bin/linux/arm64/kubectl
+    outputPath: files/bin/linux/arm64/kubectl
+    mode: "0755"
+  - source:
+      url: https://github.com/kubernetes-sigs/cri-tools/releases/download/v1.30.0/crictl-v1.30.0-linux-amd64.tar.gz
+    outputPath: files/bin/linux/amd64/crictl.tar.gz
+  - source:
+      url: https://github.com/kubernetes-sigs/cri-tools/releases/download/v1.30.0/crictl-v1.30.0-linux-arm64.tar.gz
+    outputPath: files/bin/linux/arm64/crictl.tar.gz
+  - source:
+      url: https://github.com/containerd/containerd/releases/download/v1.7.18/containerd-1.7.18-linux-amd64.tar.gz
+    outputPath: files/bin/linux/amd64/containerd.tar.gz
+  - source:
+      url: https://github.com/containerd/containerd/releases/download/v1.7.18/containerd-1.7.18-linux-arm64.tar.gz
+    outputPath: files/bin/linux/arm64/containerd.tar.gz
+  - source:
+      url: https://github.com/opencontainers/runc/releases/download/v1.1.13/runc.amd64
+    outputPath: files/bin/linux/amd64/runc
+    mode: "0755"
+  - source:
+      url: https://github.com/opencontainers/runc/releases/download/v1.1.13/runc.arm64
+    outputPath: files/bin/linux/arm64/runc
+    mode: "0755"
+  - source:
+      url: https://github.com/containernetworking/plugins/releases/download/v1.5.1/cni-plugins-linux-amd64-v1.5.1.tgz
+    outputPath: files/bin/linux/amd64/cni-plugins.tgz
+  - source:
+      url: https://github.com/containernetworking/plugins/releases/download/v1.5.1/cni-plugins-linux-arm64-v1.5.1.tgz
+    outputPath: files/bin/linux/arm64/cni-plugins.tgz
+upgradeBinaryDownloads:
+  - source:
+      url: https://dl.k8s.io/release/{{ .vars.upgradeKubernetesVersion }}/bin/linux/amd64/kubelet
+    outputPath: files/bin/linux/amd64/upgrade/{{ .vars.upgradeKubernetesVersion }}/kubelet
+    mode: "0755"
+  - source:
+      url: https://dl.k8s.io/release/{{ .vars.upgradeKubernetesVersion }}/bin/linux/arm64/kubelet
+    outputPath: files/bin/linux/arm64/upgrade/{{ .vars.upgradeKubernetesVersion }}/kubelet
+    mode: "0755"
+  - source:
+      url: https://dl.k8s.io/release/{{ .vars.upgradeKubernetesVersion }}/bin/linux/amd64/kubeadm
+    outputPath: files/bin/linux/amd64/upgrade/{{ .vars.upgradeKubernetesVersion }}/kubeadm
+    mode: "0755"
+  - source:
+      url: https://dl.k8s.io/release/{{ .vars.upgradeKubernetesVersion }}/bin/linux/arm64/kubeadm
+    outputPath: files/bin/linux/arm64/upgrade/{{ .vars.upgradeKubernetesVersion }}/kubeadm
+    mode: "0755"
+  - source:
+      url: https://dl.k8s.io/release/{{ .vars.upgradeKubernetesVersion }}/bin/linux/amd64/kubectl
+    outputPath: files/bin/linux/amd64/upgrade/{{ .vars.upgradeKubernetesVersion }}/kubectl
+    mode: "0755"
+  - source:
+      url: https://dl.k8s.io/release/{{ .vars.upgradeKubernetesVersion }}/bin/linux/arm64/kubectl
+    outputPath: files/bin/linux/arm64/upgrade/{{ .vars.upgradeKubernetesVersion }}/kubectl
+    mode: "0755"
+runtimeDepPackages:
+  debian:
+    - conntrack
+    - socat
+    - iptables
+  rhel:
+    - conntrack-tools
+    - socat
+    - iptables
+install:
+  k8sBinaries:
+    kubelet:
+      source:
+        url: http://{{ .vars.serverURL }}/files/bin/linux/{{ .runtime.host.arch }}/kubelet
+      path: /usr/bin/kubelet
+      mode: "0755"
+    kubeadm:
+      source:
+        url: http://{{ .vars.serverURL }}/files/bin/linux/{{ .runtime.host.arch }}/kubeadm
+      path: /usr/bin/kubeadm
+      mode: "0755"
+    kubectl:
+      source:
+        url: http://{{ .vars.serverURL }}/files/bin/linux/{{ .runtime.host.arch }}/kubectl
+      path: /usr/bin/kubectl
+      mode: "0755"
+    crictl:
+      source:
+        url: http://{{ .vars.serverURL }}/files/bin/linux/{{ .runtime.host.arch }}/crictl.tar.gz
+      path: /usr/bin
+      include:
+        - crictl
+      mode: "0755"
+  runtimeDeps:
+    debian:
+      extractContainerd:
+        source:
+          url: http://{{ .vars.serverURL }}/files/bin/linux/{{ .runtime.host.arch }}/containerd.tar.gz
+        path: /usr/local
+      installRunc:
+        source:
+          url: http://{{ .vars.serverURL }}/files/bin/linux/{{ .runtime.host.arch }}/runc
+        path: /usr/local/sbin/runc
+        mode: "0755"
+      extractCNIPlugins:
+        source:
+          url: http://{{ .vars.serverURL }}/files/bin/linux/{{ .runtime.host.arch }}/cni-plugins.tgz
+        path: /opt/cni/bin
+    rhel:
+      extractContainerd:
+        source:
+          url: http://{{ .vars.serverURL }}/files/bin/linux/{{ .runtime.host.arch }}/containerd.tar.gz
+        path: /usr/local
+      installRunc:
+        source:
+          url: http://{{ .vars.serverURL }}/files/bin/linux/{{ .runtime.host.arch }}/runc
+        path: /usr/local/sbin/runc
+        mode: "0755"
+      extractCNIPlugins:
+        source:
+          url: http://{{ .vars.serverURL }}/files/bin/linux/{{ .runtime.host.arch }}/cni-plugins.tgz
+        path: /opt/cni/bin

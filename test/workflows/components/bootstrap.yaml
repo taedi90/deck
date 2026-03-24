@@ -60,15 +60,8 @@ steps:
   - id: bootstrap-load-control-plane-images
     kind: LoadImage
     spec:
-      sourceDir: images/control-plane
-      images:
-        - registry.k8s.io/kube-apiserver:{{ .vars.kubernetesVersion }}
-        - registry.k8s.io/kube-controller-manager:{{ .vars.kubernetesVersion }}
-        - registry.k8s.io/kube-scheduler:{{ .vars.kubernetesVersion }}
-        - registry.k8s.io/kube-proxy:{{ .vars.kubernetesVersion }}
-        - registry.k8s.io/pause:3.9
-        - registry.k8s.io/etcd:3.5.12-0
-        - registry.k8s.io/coredns/coredns:v1.11.1
+      sourceDir: /tmp/deck/server-root/outputs/images/control-plane
+      images: "{{ .vars.controlPlaneImages }}"
   - id: bootstrap-init
     kind: InitKubeadm
     timeout: 20m

@@ -24,11 +24,19 @@ type FileFetch struct {
 }
 
 type DownloadFile struct {
+	Items      []DownloadFileItem `json:"items,omitempty"`
+	Source     FileSource         `json:"source"`
+	Fetch      FileFetch          `json:"fetch"`
+	OutputPath string             `json:"outputPath"`
+	Mode       string             `json:"mode"`
+	Timeout    string             `json:"timeout"`
+}
+
+type DownloadFileItem struct {
 	Source     FileSource `json:"source"`
 	Fetch      FileFetch  `json:"fetch"`
 	OutputPath string     `json:"outputPath"`
 	Mode       string     `json:"mode"`
-	Timeout    string     `json:"timeout"`
 }
 
 type WriteFile struct {

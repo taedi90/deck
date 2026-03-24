@@ -12,9 +12,28 @@ func patchDownloadFileToolSchema(root map[string]any) {
 	properties := propertyMap(spec)
 	setMap(properties, "source", fileSourceSchema())
 	setMap(properties, "fetch", fileFetchSchema())
+	setMap(properties, "items", map[string]any{
+		"type":     "array",
+		"minItems": 1,
+		"items": map[string]any{
+			"type":                 "object",
+			"additionalProperties": false,
+			"properties": map[string]any{
+				"source":     fileSourceSchema(),
+				"fetch":      fileFetchSchema(),
+				"outputPath": map[string]any{"type": "string"},
+				"mode":       map[string]any{"type": "string"},
+			},
+			"required": []any{"source"},
+		},
+	})
 	setMap(properties, "outputPath", minLenStringSchema())
 	setMap(properties, "mode", modeSchema())
-	spec["required"] = []any{"source"}
+	spec["anyOf"] = []any{
+		map[string]any{"required": []any{"source"}},
+		map[string]any{"required": []any{"items"}},
+	}
+	delete(spec, "required")
 	setMap(props, "spec", spec)
 }
 

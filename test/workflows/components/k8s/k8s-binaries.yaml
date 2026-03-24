@@ -2,29 +2,25 @@ steps:
   - id: install-kubelet
     kind: CopyFile
     spec:
-      source:
-        url: http://{{ .vars.serverURL }}/files/bin/linux/{{ .runtime.host.arch }}/kubelet
-      path: /usr/bin/kubelet
-      mode: "0755"
+      source: "{{ .vars.install.k8sBinaries.kubelet.source }}"
+      path: "{{ .vars.install.k8sBinaries.kubelet.path }}"
+      mode: "{{ .vars.install.k8sBinaries.kubelet.mode }}"
   - id: install-kubeadm
     kind: CopyFile
     spec:
-      source:
-        url: http://{{ .vars.serverURL }}/files/bin/linux/{{ .runtime.host.arch }}/kubeadm
-      path: /usr/bin/kubeadm
-      mode: "0755"
+      source: "{{ .vars.install.k8sBinaries.kubeadm.source }}"
+      path: "{{ .vars.install.k8sBinaries.kubeadm.path }}"
+      mode: "{{ .vars.install.k8sBinaries.kubeadm.mode }}"
   - id: install-kubectl
     kind: CopyFile
     spec:
-      source:
-        url: http://{{ .vars.serverURL }}/files/bin/linux/{{ .runtime.host.arch }}/kubectl
-      path: /usr/bin/kubectl
-      mode: "0755"
+      source: "{{ .vars.install.k8sBinaries.kubectl.source }}"
+      path: "{{ .vars.install.k8sBinaries.kubectl.path }}"
+      mode: "{{ .vars.install.k8sBinaries.kubectl.mode }}"
   - id: install-crictl
     kind: ExtractArchive
     spec:
-      source:
-        url: http://{{ .vars.serverURL }}/files/bin/linux/{{ .runtime.host.arch }}/crictl.tar.gz
-      path: /usr/bin
-      include: [crictl]
-      mode: "0755"
+      source: "{{ .vars.install.k8sBinaries.crictl.source }}"
+      path: "{{ .vars.install.k8sBinaries.crictl.path }}"
+      include: "{{ .vars.install.k8sBinaries.crictl.include }}"
+      mode: "{{ .vars.install.k8sBinaries.crictl.mode }}"

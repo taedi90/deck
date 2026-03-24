@@ -34,6 +34,64 @@ phases:
 		}
 	})
 
+	t.Run("download file accepts structured vars items template", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "workflow.yaml")
+		content := []byte(`version: v1alpha1
+vars:
+  downloads:
+    binaries:
+      - source:
+          url: https://example.local/a
+        outputPath: files/a
+      - source:
+          url: https://example.local/b
+        outputPath: files/b
+phases:
+  - name: prepare
+    steps:
+      - id: download-many
+        apiVersion: deck/v1alpha1
+        kind: DownloadFile
+        register:
+          allFiles: outputPaths
+        spec:
+          items: "{{ .vars.downloads.binaries }}"
+`)
+		if err := os.WriteFile(path, content, 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+
+		if err := File(path); err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+	})
+
+	t.Run("conditional step keeps empty string template for schema validation", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "workflow.yaml")
+		content := []byte(`version: v1alpha1
+vars:
+  upgradeKubernetesVersion: ""
+phases:
+  - name: apply
+    steps:
+      - id: upgrade-control-plane
+        apiVersion: deck/v1alpha1
+        kind: UpgradeKubeadm
+        when: vars.upgradeKubernetesVersion != ""
+        spec:
+          kubernetesVersion: "{{ .vars.upgradeKubernetesVersion }}"
+`)
+		if err := os.WriteFile(path, content, 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+
+		if err := File(path); err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+	})
+
 	t.Run("tool schema valid Image download with auth", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")

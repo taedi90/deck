@@ -3,7 +3,7 @@ steps:
     kind: DownloadPackage
     parallelGroup: distro-package-downloads
     spec:
-      packages: [containerd, containernetworking-plugins]
+      packages: "{{ .vars.runtimeDepPackages.debian }}"
       distro:
         family: debian
         release: ubuntu2204
@@ -19,7 +19,7 @@ steps:
     kind: DownloadPackage
     parallelGroup: distro-package-downloads
     spec:
-      packages: [containerd, containernetworking-plugins]
+      packages: "{{ .vars.runtimeDepPackages.debian }}"
       distro:
         family: debian
         release: ubuntu2404
@@ -35,7 +35,7 @@ steps:
     kind: DownloadPackage
     parallelGroup: distro-package-downloads
     spec:
-      packages: [bash]
+      packages: "{{ .vars.runtimeDepPackages.rhel }}"
       distro:
         family: rhel
         release: rocky9

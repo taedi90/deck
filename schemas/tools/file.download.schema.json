@@ -39,6 +39,18 @@
       "$id": "https://github.com/taedi90/deck/internal/stepspec/download-file",
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "source"
+          ]
+        },
+        {
+          "required": [
+            "items"
+          ]
+        }
+      ],
       "properties": {
         "fetch": {
           "additionalProperties": false,
@@ -89,6 +101,132 @@
             }
           },
           "type": "object"
+        },
+        "items": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "fetch": {
+                "additionalProperties": false,
+                "properties": {
+                  "offlineOnly": {
+                    "type": "boolean"
+                  },
+                  "sources": {
+                    "items": {
+                      "additionalProperties": false,
+                      "anyOf": [
+                        {
+                          "required": [
+                            "path"
+                          ]
+                        },
+                        {
+                          "required": [
+                            "url"
+                          ]
+                        }
+                      ],
+                      "properties": {
+                        "path": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "type": {
+                          "enum": [
+                            "local",
+                            "bundle",
+                            "repo",
+                            "online"
+                          ],
+                          "type": "string"
+                        },
+                        "url": {
+                          "minLength": 1,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              },
+              "mode": {
+                "type": "string"
+              },
+              "outputPath": {
+                "type": "string"
+              },
+              "source": {
+                "additionalProperties": false,
+                "anyOf": [
+                  {
+                    "required": [
+                      "url"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "path"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "bundle"
+                    ]
+                  }
+                ],
+                "properties": {
+                  "bundle": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "path": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "root": {
+                        "enum": [
+                          "files",
+                          "images",
+                          "packages"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "root",
+                      "path"
+                    ],
+                    "type": "object"
+                  },
+                  "path": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "sha256": {
+                    "pattern": "^[a-fA-F0-9]{64}$",
+                    "type": "string"
+                  },
+                  "url": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "required": [
+              "source"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
         },
         "mode": {
           "pattern": "^[0-7]{4}$",
@@ -156,9 +294,6 @@
           "type": "object"
         }
       },
-      "required": [
-        "source"
-      ],
       "type": "object"
     },
     "timeout": {

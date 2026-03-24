@@ -474,7 +474,7 @@ ensure_worker_rejoin_stable() {
       echo "[deck] empty join command for raw kubeadm fallback" | tee -a "${rejoin_log_path}"
       exit 1
     fi
-    sudo -n bash -o pipefail -c "${raw_join_cmd} --cri-socket unix:///run/containerd/containerd.sock --ignore-preflight-errors=Swap,FileExisting-crictl,FileExisting-conntrack,FileExisting-socat" >> "${rejoin_log_path}" 2>&1
+    sudo -n bash -o pipefail -c "${raw_join_cmd} --cri-socket unix:///run/containerd/containerd.sock --ignore-preflight-errors=Swap,FileExisting-crictl,FileExisting-conntrack,FileExisting-socat,FileAvailable--etc-kubernetes-pki-ca.crt" >> "${rejoin_log_path}" 2>&1
   fi
   reconcile_worker_cni_after_rejoin >> "${rejoin_log_path}" 2>&1
   sudo -n systemctl enable --now kubelet

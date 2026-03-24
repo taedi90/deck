@@ -16,6 +16,26 @@ func stepOutputs(kind string, rendered map[string]any) map[string]any {
 			outputs["path"] = path
 		}
 	case "DownloadFile":
+		if items := mapItems(rendered["items"]); len(items) > 0 {
+			paths := make([]string, 0, len(items))
+			for _, item := range items {
+				path := stringValue(item, "outputPath")
+				if path == "" {
+					path = filepath.ToSlash(filepath.Join("files", inferDownloadFileName(stringValue(mapValue(item, "source"), "path"), stringValue(mapValue(item, "source"), "url"))))
+				}
+				if path != "" {
+					paths = append(paths, path)
+				}
+			}
+			if len(paths) > 0 {
+				outputs["artifacts"] = paths
+				outputs["outputPaths"] = paths
+				if len(paths) == 1 {
+					outputs["outputPath"] = paths[0]
+				}
+			}
+			break
+		}
 		path := stringValue(rendered, "outputPath")
 		if path == "" {
 			path = filepath.ToSlash(filepath.Join("files", inferDownloadFileName(stringValue(mapValue(rendered, "source"), "path"), stringValue(mapValue(rendered, "source"), "url"))))
@@ -23,6 +43,7 @@ func stepOutputs(kind string, rendered map[string]any) map[string]any {
 		if path != "" {
 			outputs["outputPath"] = path
 			outputs["artifacts"] = []string{path}
+			outputs["outputPaths"] = []string{path}
 		}
 	case "WriteFile", "EditFile", "EditTOML", "EditYAML", "EditJSON", "ExtractArchive":
 		if path := stringValue(mapValue(rendered, "output"), "path"); path != "" {
@@ -54,6 +75,22 @@ func stepOutputs(kind string, rendered map[string]any) map[string]any {
 		}
 	}
 	return outputs
+}
+
+func mapItems(v any) []map[string]any {
+	items, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		mapped, ok := item.(map[string]any)
+		if !ok || mapped == nil {
+			continue
+		}
+		out = append(out, mapped)
+	}
+	return out
 }
 
 func applyRegister(step config.Step, rendered map[string]any, runtimeVars map[string]any) error {

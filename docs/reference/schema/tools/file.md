@@ -28,7 +28,7 @@ Shared step envelope fields such as `id`, `apiVersion`, `kind`, `when`, `retry`,
 Download a file into prepared bundle storage.
 
 - schema: `../../../schemas/tools/file.download.schema.json`
-- outputs: `artifacts`, `outputPath`
+- outputs: `artifacts`, `outputPath`, `outputPaths`
 
 ### When To Use
 
@@ -52,9 +52,10 @@ spec:
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
 | `spec.fetch` | `object` | no | `` | `` | Optional download transport settings applied to `DownloadFile` fetches. | `{offlineOnly:true}` |
+| `spec.items` | `array<object>` | no | `` | `` |  | `[{...}]` |
 | `spec.mode` | `string` | no | `` | `` | File permissions in octal notation applied after `write`, `copy`, `edit`, or `extractArchive` completes. | `0644` |
 | `spec.outputPath` | `string` | no | `` | `` | Prepare-side output path for a downloaded file written into bundle storage. Defaults to `files/<basename>` when omitted. | `files/bin/runc` |
-| `spec.source` | `object` | yes | `` | `` | Structured source descriptor for download, copy, or archive extraction. `path`, `bundle`, or `url` may be used depending on the step. | `{url:https://example.invalid/file.tar.gz}` |
+| `spec.source` | `object` | no | `` | `` | Structured source descriptor for download, copy, or archive extraction. `path`, `bundle`, or `url` may be used depending on the step. | `{url:https://example.invalid/file.tar.gz}` |
 
 ### Nested Objects
 
@@ -64,6 +65,29 @@ spec:
 |---|---|---:|---|---|---|---|
 | `spec.fetch.offlineOnly` | `boolean` | no | `` | `` |  | `true` |
 | `spec.fetch.sources` | `array<object>` | no | `` | `` |  | `[{...}]` |
+
+### `spec.items[].fetch`
+
+| Key | Type | Required | Default | Enum | Description | Example |
+|---|---|---:|---|---|---|---|
+| `spec.items[].fetch.offlineOnly` | `boolean` | no | `` | `` |  | `true` |
+| `spec.items[].fetch.sources` | `array<object>` | no | `` | `` |  | `[{...}]` |
+
+### `spec.items[].source`
+
+| Key | Type | Required | Default | Enum | Description | Example |
+|---|---|---:|---|---|---|---|
+| `spec.items[].source.bundle` | `object` | no | `` | `` |  | `{...}` |
+| `spec.items[].source.path` | `string` | no | `` | `` |  | `example` |
+| `spec.items[].source.sha256` | `string` | no | `` | `` |  | `example` |
+| `spec.items[].source.url` | `string` | no | `` | `` |  | `example` |
+
+### `spec.items[].source.bundle`
+
+| Key | Type | Required | Default | Enum | Description | Example |
+|---|---|---:|---|---|---|---|
+| `spec.items[].source.bundle.path` | `string` | yes | `` | `` |  | `example` |
+| `spec.items[].source.bundle.root` | `string` | yes | `` | `files, images, packages` |  | `files` |
 
 ### `spec.source`
 
