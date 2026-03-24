@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/taedi90/deck/internal/fsutil"
-	"github.com/taedi90/deck/internal/workspacepaths"
+	"github.com/Airgap-Castaways/deck/internal/fsutil"
+	"github.com/Airgap-Castaways/deck/internal/workspacepaths"
 )
 
 type workflowOrigin struct {

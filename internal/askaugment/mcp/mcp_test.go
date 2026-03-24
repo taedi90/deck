@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/taedi90/deck/internal/askconfig"
-	"github.com/taedi90/deck/internal/askintent"
+	"github.com/Airgap-Castaways/deck/internal/askconfig"
+	"github.com/Airgap-Castaways/deck/internal/askintent"
 )
 
 func TestGatherDisabledReturnsNothing(t *testing.T) {

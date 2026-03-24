@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/taedi90/deck/internal/errcode"
-	"github.com/taedi90/deck/internal/executil"
-	"github.com/taedi90/deck/internal/stepspec"
+	"github.com/Airgap-Castaways/deck/internal/errcode"
+	"github.com/Airgap-Castaways/deck/internal/executil"
+	"github.com/Airgap-Castaways/deck/internal/stepspec"
 )
 
 func runWaitDecoded(parent context.Context, kind string, decoded stepspec.Wait, timeout time.Duration) error {

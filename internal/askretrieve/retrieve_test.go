@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/taedi90/deck/internal/askintent"
-	"github.com/taedi90/deck/internal/askstate"
+	"github.com/Airgap-Castaways/deck/internal/askintent"
+	"github.com/Airgap-Castaways/deck/internal/askstate"
 )
 
 func TestWorkspaceFileAllowed(t *testing.T) {

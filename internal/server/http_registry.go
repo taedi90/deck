@@ -17,8 +17,8 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/google/go-containerregistry/pkg/v1/types"
 
-	"github.com/taedi90/deck/internal/deckignore"
-	"github.com/taedi90/deck/internal/fsutil"
+	"github.com/Airgap-Castaways/deck/internal/deckignore"
+	"github.com/Airgap-Castaways/deck/internal/fsutil"
 )
 
 type registryCatalogEntry struct {

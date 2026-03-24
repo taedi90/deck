@@ -12,14 +12,14 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/taedi90/deck/internal/askcontext"
-	"github.com/taedi90/deck/internal/askcontract"
-	"github.com/taedi90/deck/internal/askintent"
-	"github.com/taedi90/deck/internal/askretrieve"
-	"github.com/taedi90/deck/internal/askreview"
-	"github.com/taedi90/deck/internal/fsutil"
-	"github.com/taedi90/deck/internal/validate"
-	"github.com/taedi90/deck/internal/workspacepaths"
+	"github.com/Airgap-Castaways/deck/internal/askcontext"
+	"github.com/Airgap-Castaways/deck/internal/askcontract"
+	"github.com/Airgap-Castaways/deck/internal/askintent"
+	"github.com/Airgap-Castaways/deck/internal/askretrieve"
+	"github.com/Airgap-Castaways/deck/internal/askreview"
+	"github.com/Airgap-Castaways/deck/internal/fsutil"
+	"github.com/Airgap-Castaways/deck/internal/validate"
+	"github.com/Airgap-Castaways/deck/internal/workspacepaths"
 )
 
 const maxPlanSlugLength = 48

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/taedi90/deck/internal/config"
-	"github.com/taedi90/deck/internal/install"
+	"github.com/Airgap-Castaways/deck/internal/config"
+	"github.com/Airgap-Castaways/deck/internal/install"
 )
 
 type RunLogger interface {

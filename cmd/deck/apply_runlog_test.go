@@ -8,7 +8,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/taedi90/deck/internal/install"
+	"github.com/Airgap-Castaways/deck/internal/install"
 )
 
 func TestApplyRunLoggerHandlesConcurrentEvents(t *testing.T) {

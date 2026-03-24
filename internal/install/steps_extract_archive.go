@@ -11,9 +11,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/taedi90/deck/internal/filemode"
-	"github.com/taedi90/deck/internal/stepspec"
-	"github.com/taedi90/deck/internal/workflowexec"
+	"github.com/Airgap-Castaways/deck/internal/filemode"
+	"github.com/Airgap-Castaways/deck/internal/stepspec"
+	"github.com/Airgap-Castaways/deck/internal/workflowexec"
 )
 
 func runExtractArchive(ctx context.Context, bundleRoot string, spec map[string]any) error {

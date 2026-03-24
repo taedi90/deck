@@ -7,10 +7,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/taedi90/deck/internal/askcontext"
-	"github.com/taedi90/deck/internal/askintent"
-	"github.com/taedi90/deck/internal/askstate"
-	"github.com/taedi90/deck/internal/workspacepaths"
+	"github.com/Airgap-Castaways/deck/internal/askcontext"
+	"github.com/Airgap-Castaways/deck/internal/askintent"
+	"github.com/Airgap-Castaways/deck/internal/askstate"
+	"github.com/Airgap-Castaways/deck/internal/workspacepaths"
 )
 
 type WorkspaceSummary struct {

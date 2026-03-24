@@ -1,6 +1,6 @@
 package validate
 
-import "github.com/taedi90/deck/internal/workflowcontract"
+import "github.com/Airgap-Castaways/deck/internal/workflowcontract"
 
 var workflowTopLevelModes = []string{"phases", "steps"}
 

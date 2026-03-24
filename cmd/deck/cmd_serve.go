@@ -15,10 +15,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/taedi90/deck/internal/executil"
-	"github.com/taedi90/deck/internal/fsutil"
-	ctrllogs "github.com/taedi90/deck/internal/logs"
-	"github.com/taedi90/deck/internal/server"
+	"github.com/Airgap-Castaways/deck/internal/executil"
+	"github.com/Airgap-Castaways/deck/internal/fsutil"
+	ctrllogs "github.com/Airgap-Castaways/deck/internal/logs"
+	"github.com/Airgap-Castaways/deck/internal/server"
 )
 
 func executeServe(ctx context.Context, root string, addr string, auditMaxSizeMB int, auditMaxFiles int, tlsCert string, tlsKey string, tlsSelfSigned bool) error {

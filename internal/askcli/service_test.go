@@ -9,11 +9,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/taedi90/deck/internal/askconfig"
-	"github.com/taedi90/deck/internal/askcontract"
-	"github.com/taedi90/deck/internal/askintent"
-	"github.com/taedi90/deck/internal/askprovider"
-	"github.com/taedi90/deck/internal/askretrieve"
+	"github.com/Airgap-Castaways/deck/internal/askconfig"
+	"github.com/Airgap-Castaways/deck/internal/askcontract"
+	"github.com/Airgap-Castaways/deck/internal/askintent"
+	"github.com/Airgap-Castaways/deck/internal/askprovider"
+	"github.com/Airgap-Castaways/deck/internal/askretrieve"
 )
 
 type stubClient struct {

@@ -5,9 +5,9 @@ import (
 
 	jsonschema "github.com/invopop/jsonschema"
 
-	"github.com/taedi90/deck/internal/schemamodel"
-	"github.com/taedi90/deck/internal/workflowcontract"
-	"github.com/taedi90/deck/internal/workflowexec"
+	"github.com/Airgap-Castaways/deck/internal/schemamodel"
+	"github.com/Airgap-Castaways/deck/internal/workflowcontract"
+	"github.com/Airgap-Castaways/deck/internal/workflowexec"
 )
 
 func generateWorkflowSchema() (map[string]any, error) {

@@ -13,14 +13,14 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/taedi90/deck/internal/bundle"
-	"github.com/taedi90/deck/internal/config"
-	"github.com/taedi90/deck/internal/filemode"
-	"github.com/taedi90/deck/internal/fsutil"
-	"github.com/taedi90/deck/internal/install"
-	"github.com/taedi90/deck/internal/userdirs"
-	"github.com/taedi90/deck/internal/validate"
-	"github.com/taedi90/deck/internal/workspacepaths"
+	"github.com/Airgap-Castaways/deck/internal/bundle"
+	"github.com/Airgap-Castaways/deck/internal/config"
+	"github.com/Airgap-Castaways/deck/internal/filemode"
+	"github.com/Airgap-Castaways/deck/internal/fsutil"
+	"github.com/Airgap-Castaways/deck/internal/install"
+	"github.com/Airgap-Castaways/deck/internal/userdirs"
+	"github.com/Airgap-Castaways/deck/internal/validate"
+	"github.com/Airgap-Castaways/deck/internal/workspacepaths"
 )
 
 type ExecutionRequestOptions struct {

@@ -6,11 +6,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/taedi90/deck/internal/askconfig"
-	"github.com/taedi90/deck/internal/askcontract"
-	"github.com/taedi90/deck/internal/askintent"
-	"github.com/taedi90/deck/internal/askretrieve"
-	"github.com/taedi90/deck/internal/askreview"
+	"github.com/Airgap-Castaways/deck/internal/askconfig"
+	"github.com/Airgap-Castaways/deck/internal/askcontract"
+	"github.com/Airgap-Castaways/deck/internal/askintent"
+	"github.com/Airgap-Castaways/deck/internal/askretrieve"
+	"github.com/Airgap-Castaways/deck/internal/askreview"
 )
 
 type Options struct {

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/taedi90/deck/internal/userdirs"
+	"github.com/Airgap-Castaways/deck/internal/userdirs"
 )
 
 // resolveLegacyDeckCacheRoot surfaces the pre-XDG cache root for inspection and

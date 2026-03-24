@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/taedi90/deck/internal/workflowcontract"
-	"github.com/taedi90/deck/internal/workflowexec"
+	"github.com/Airgap-Castaways/deck/internal/workflowcontract"
+	"github.com/Airgap-Castaways/deck/internal/workflowexec"
 )
 
 func TestWorkflowSchemaAvailable(t *testing.T) {

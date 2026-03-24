@@ -3,7 +3,7 @@ package schemadoc
 import (
 	"maps"
 
-	"github.com/taedi90/deck/internal/workflowcontract"
+	"github.com/Airgap-Castaways/deck/internal/workflowcontract"
 )
 
 var _ = workflowcontract.RegisterToolMetadataBuilder(func(def workflowcontract.StepDefinition) workflowcontract.ToolMetadata {

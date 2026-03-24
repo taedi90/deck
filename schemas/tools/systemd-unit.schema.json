@@ -36,7 +36,7 @@
       "type": "integer"
     },
     "spec": {
-      "$id": "https://github.com/taedi90/deck/internal/stepspec/write-systemd-unit",
+      "$id": "https://github.com/Airgap-Castaways/deck/internal/stepspec/write-systemd-unit",
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "oneOf": [

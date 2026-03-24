@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/taedi90/deck/internal/errcode"
-	"github.com/taedi90/deck/internal/filemode"
-	"github.com/taedi90/deck/internal/hostfs"
+	"github.com/Airgap-Castaways/deck/internal/errcode"
+	"github.com/Airgap-Castaways/deck/internal/filemode"
+	"github.com/Airgap-Castaways/deck/internal/hostfs"
 )
 
 type packageRepoPolicy struct {

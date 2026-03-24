@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/taedi90/deck/internal/config"
+	"github.com/Airgap-Castaways/deck/internal/config"
 )
 
 func ApplyRegister(step config.Step, outputs map[string]any, runtimeVars map[string]any, missingErrCode string) error {

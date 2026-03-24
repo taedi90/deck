@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/taedi90/deck/internal/workspacepaths"
+	"github.com/Airgap-Castaways/deck/internal/workspacepaths"
 )
 
 const (

@@ -3,7 +3,7 @@ package workflowexec
 import (
 	"strings"
 
-	"github.com/taedi90/deck/internal/config"
+	"github.com/Airgap-Castaways/deck/internal/config"
 )
 
 type StepBatch struct {

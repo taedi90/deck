@@ -7,8 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/taedi90/deck/internal/config"
-	"github.com/taedi90/deck/internal/fsutil"
+	"github.com/Airgap-Castaways/deck/internal/config"
+	"github.com/Airgap-Castaways/deck/internal/fsutil"
 )
 
 type Finding struct {

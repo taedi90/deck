@@ -10,13 +10,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/taedi90/deck/internal/errcode"
-	"github.com/taedi90/deck/internal/filemode"
-	"github.com/taedi90/deck/internal/fsutil"
-	"github.com/taedi90/deck/internal/hostfs"
-	"github.com/taedi90/deck/internal/stepspec"
-	"github.com/taedi90/deck/internal/structurededit"
-	"github.com/taedi90/deck/internal/workflowexec"
+	"github.com/Airgap-Castaways/deck/internal/errcode"
+	"github.com/Airgap-Castaways/deck/internal/filemode"
+	"github.com/Airgap-Castaways/deck/internal/fsutil"
+	"github.com/Airgap-Castaways/deck/internal/hostfs"
+	"github.com/Airgap-Castaways/deck/internal/stepspec"
+	"github.com/Airgap-Castaways/deck/internal/structurededit"
+	"github.com/Airgap-Castaways/deck/internal/workflowexec"
 )
 
 var (

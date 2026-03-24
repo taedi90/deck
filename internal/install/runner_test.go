@@ -19,11 +19,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/taedi90/deck/internal/config"
-	"github.com/taedi90/deck/internal/errcode"
-	"github.com/taedi90/deck/internal/stepspec"
-	"github.com/taedi90/deck/internal/workflowcontract"
-	"github.com/taedi90/deck/internal/workflowexec"
+	"github.com/Airgap-Castaways/deck/internal/config"
+	"github.com/Airgap-Castaways/deck/internal/errcode"
+	"github.com/Airgap-Castaways/deck/internal/stepspec"
+	"github.com/Airgap-Castaways/deck/internal/workflowcontract"
+	"github.com/Airgap-Castaways/deck/internal/workflowexec"
 )
 
 func useStubInitJoinKubeadm(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/name"
 
-	"github.com/taedi90/deck/internal/stepspec"
+	"github.com/Airgap-Castaways/deck/internal/stepspec"
 )
 
 func TestParseImageRegistryAuth(t *testing.T) {

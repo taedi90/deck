@@ -14,10 +14,10 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 
-	"github.com/taedi90/deck/internal/errcode"
-	"github.com/taedi90/deck/internal/filemode"
-	"github.com/taedi90/deck/internal/stepspec"
-	"github.com/taedi90/deck/internal/workflowexec"
+	"github.com/Airgap-Castaways/deck/internal/errcode"
+	"github.com/Airgap-Castaways/deck/internal/filemode"
+	"github.com/Airgap-Castaways/deck/internal/stepspec"
+	"github.com/Airgap-Castaways/deck/internal/workflowexec"
 )
 
 type imageDownloadOps struct {

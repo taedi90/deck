@@ -1,6 +1,6 @@
 package askhooks
 
-import "github.com/taedi90/deck/internal/askintent"
+import "github.com/Airgap-Castaways/deck/internal/askintent"
 
 type Hooks struct {
 	PreClassify  func(prompt string) string

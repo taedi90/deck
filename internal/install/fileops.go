@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/taedi90/deck/internal/filemode"
-	"github.com/taedi90/deck/internal/hostfs"
+	"github.com/Airgap-Castaways/deck/internal/filemode"
+	"github.com/Airgap-Castaways/deck/internal/hostfs"
 )
 
 func writeFileIfChanged(path string, content []byte, mode os.FileMode) error {

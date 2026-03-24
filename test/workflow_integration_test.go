@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/taedi90/deck/internal/config"
+	"github.com/Airgap-Castaways/deck/internal/config"
 )
 
 func TestWorkflowIntegrationBootstrap(t *testing.T) {

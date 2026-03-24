@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/taedi90/deck/internal/userdirs"
+	"github.com/Airgap-Castaways/deck/internal/userdirs"
 )
 
 func TestLoadLegacyPackCacheState(t *testing.T) {

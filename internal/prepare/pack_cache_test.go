@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/taedi90/deck/internal/config"
-	"github.com/taedi90/deck/internal/filemode"
+	"github.com/Airgap-Castaways/deck/internal/config"
+	"github.com/Airgap-Castaways/deck/internal/filemode"
 )
 
 func TestPackCacheInvalidation(t *testing.T) {

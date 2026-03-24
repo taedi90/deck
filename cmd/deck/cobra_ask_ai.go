@@ -8,11 +8,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/taedi90/deck/internal/askcli"
-	"github.com/taedi90/deck/internal/askconfig"
-	"github.com/taedi90/deck/internal/askcontext"
-	"github.com/taedi90/deck/internal/askprovider"
-	openaiprovider "github.com/taedi90/deck/internal/askprovider/openai"
+	"github.com/Airgap-Castaways/deck/internal/askcli"
+	"github.com/Airgap-Castaways/deck/internal/askconfig"
+	"github.com/Airgap-Castaways/deck/internal/askcontext"
+	"github.com/Airgap-Castaways/deck/internal/askprovider"
+	openaiprovider "github.com/Airgap-Castaways/deck/internal/askprovider/openai"
 )
 
 var newAskBackend = func() askprovider.Client {

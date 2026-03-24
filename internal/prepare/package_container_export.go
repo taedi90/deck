@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/taedi90/deck/internal/errcode"
+	"github.com/Airgap-Castaways/deck/internal/errcode"
 )
 
 var packageContainerCounter uint64

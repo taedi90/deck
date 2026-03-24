@@ -9,8 +9,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/taedi90/deck/internal/filemode"
-	"github.com/taedi90/deck/internal/fsutil"
+	"github.com/Airgap-Castaways/deck/internal/filemode"
+	"github.com/Airgap-Castaways/deck/internal/fsutil"
 )
 
 const (

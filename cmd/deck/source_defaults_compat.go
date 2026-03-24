@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/taedi90/deck/internal/fsutil"
-	"github.com/taedi90/deck/internal/userdirs"
+	"github.com/Airgap-Castaways/deck/internal/fsutil"
+	"github.com/Airgap-Castaways/deck/internal/userdirs"
 )
 
 // legacySourceDefaultsPath returns the pre-XDG config path for server

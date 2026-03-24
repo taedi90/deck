@@ -8,9 +8,9 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/taedi90/deck/internal/askintent"
-	"github.com/taedi90/deck/internal/askretrieve"
-	"github.com/taedi90/deck/internal/askreview"
+	"github.com/Airgap-Castaways/deck/internal/askintent"
+	"github.com/Airgap-Castaways/deck/internal/askretrieve"
+	"github.com/Airgap-Castaways/deck/internal/askreview"
 )
 
 func applyLocalFallback(result *runResult, root string, workspace askretrieve.WorkspaceSummary, prompt string) {

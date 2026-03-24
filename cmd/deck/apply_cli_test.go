@@ -12,9 +12,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/taedi90/deck/internal/applycli"
-	"github.com/taedi90/deck/internal/config"
-	"github.com/taedi90/deck/internal/install"
+	"github.com/Airgap-Castaways/deck/internal/applycli"
+	"github.com/Airgap-Castaways/deck/internal/config"
+	"github.com/Airgap-Castaways/deck/internal/install"
 )
 
 func TestResolveInstallStatePathUsesHomeAndStateKey(t *testing.T) {
