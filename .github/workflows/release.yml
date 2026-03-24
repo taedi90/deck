@@ -10,7 +10,72 @@ permissions:
   contents: write
 
 jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run verification
+        run: |
+          make test
+          make lint
+          make test-ai
+
+      - name: Setup GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          install-only: true
+
+      - name: Validate GoReleaser config
+        run: make release-check
+
+      - name: Build snapshot artifacts
+        run: goreleaser release --snapshot --clean
+
+      - name: Smoke test tarballs
+        run: |
+          mkdir -p .tmp/smoke/linux-amd64 .tmp/smoke/darwin-arm64
+          tar -xzf dist/deck_*_linux_amd64.tar.gz -C .tmp/smoke/linux-amd64
+          ./.tmp/smoke/linux-amd64/deck version
+          ./.tmp/smoke/linux-amd64/deck --help >/dev/null
+          tar -xzf dist/deck_*_darwin_arm64.tar.gz -C .tmp/smoke/darwin-arm64
+          test -f .tmp/smoke/darwin-arm64/deck
+
+      - name: Smoke test deb package
+        run: |
+          docker run --rm -v "$PWD/dist:/dist" ubuntu:24.04 sh -lc '
+            apt-get update && \
+            apt-get install -y /dist/*.deb && \
+            deck version && \
+            deck --help >/dev/null
+          '
+
+      - name: Smoke test rpm package
+        run: |
+          docker run --rm -v "$PWD/dist:/dist" rockylinux:9 sh -lc '
+            dnf install -y /dist/*.rpm && \
+            deck version && \
+            deck --help >/dev/null
+          '
+
+      - name: Verify Homebrew formula output
+        run: |
+          test -f dist/homebrew/Formula/deck.rb
+          grep -q 'class Deck < Formula' dist/homebrew/Formula/deck.rb
+
   release:
+    needs: smoke-test
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
