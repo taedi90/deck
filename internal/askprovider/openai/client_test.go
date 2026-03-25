@@ -101,3 +101,17 @@ func TestShouldUseCodexOAuthOnlyForOpenAIOAuth(t *testing.T) {
 		t.Fatalf("did not expect non-openai provider to use codex endpoint")
 	}
 }
+
+func TestParseCodexSSESupportsMultipleEventShapes(t *testing.T) {
+	raw := []byte("event: response.output_text.delta\ndata: {\"delta\":\"hello \"}\n\nevent: response.output_text.added\ndata: {\"text\":\"world\"}\n\nevent: response.completed\ndata: {\"response\":{\"output_text\":\"ignored because delta already handled\"}}\n\ndata: [DONE]\n")
+	if got := parseCodexSSE(raw); got != "hello world" {
+		t.Fatalf("unexpected parsed SSE content: %q", got)
+	}
+}
+
+func TestParseCodexSSEFallsBackToCompletedEnvelope(t *testing.T) {
+	raw := []byte("event: response.completed\ndata: {\"response\":{\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"final answer\"}]}]}}\n")
+	if got := parseCodexSSE(raw); got != "final answer" {
+		t.Fatalf("unexpected completed-event fallback: %q", got)
+	}
+}

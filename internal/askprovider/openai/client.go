@@ -71,6 +71,11 @@ type codexSSEDelta struct {
 	Text  string `json:"text"`
 }
 
+type codexSSEEvent struct {
+	Name string
+	Data string
+}
+
 type Client struct {
 	httpClient *http.Client
 }
@@ -231,47 +236,73 @@ func parseCodexResponse(raw []byte, contentType string) (string, error) {
 
 func parseCodexSSE(raw []byte) string {
 	b := &strings.Builder{}
-	for _, chunk := range strings.Split(string(raw), "\n\n") {
+	for _, event := range parseSSEEvents(raw) {
+		text := parseCodexSSEEvent(event)
+		if strings.TrimSpace(text) == "" {
+			continue
+		}
+		if b.Len() > 0 && strings.HasSuffix(event.Name, ".completed") {
+			continue
+		}
+		b.WriteString(text)
+	}
+	return b.String()
+}
+
+func parseSSEEvents(raw []byte) []codexSSEEvent {
+	chunks := strings.Split(strings.ReplaceAll(string(raw), "\r\n", "\n"), "\n\n")
+	out := make([]codexSSEEvent, 0, len(chunks))
+	for _, chunk := range chunks {
 		chunk = strings.TrimSpace(chunk)
 		if chunk == "" {
 			continue
 		}
-		var event string
-		var data string
+		var event codexSSEEvent
+		dataLines := make([]string, 0, 2)
 		for _, line := range strings.Split(chunk, "\n") {
 			line = strings.TrimSpace(line)
-			if strings.HasPrefix(line, "event: ") {
-				event = strings.TrimSpace(strings.TrimPrefix(line, "event: "))
+			if line == "" || strings.HasPrefix(line, ":") {
+				continue
 			}
-			if strings.HasPrefix(line, "data: ") {
-				data = strings.TrimSpace(strings.TrimPrefix(line, "data: "))
+			if strings.HasPrefix(line, "event:") {
+				event.Name = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+				continue
+			}
+			if strings.HasPrefix(line, "data:") {
+				dataLines = append(dataLines, strings.TrimSpace(strings.TrimPrefix(line, "data:")))
 			}
 		}
-		if data == "" {
+		event.Data = strings.Join(dataLines, "\n")
+		if strings.TrimSpace(event.Data) == "" {
 			continue
 		}
-		if event == "response.output_text.delta" {
-			var payload codexSSEDelta
-			if err := json.Unmarshal([]byte(data), &payload); err == nil {
-				if payload.Delta != "" {
-					b.WriteString(payload.Delta)
-					continue
-				}
-				if payload.Text != "" {
-					b.WriteString(payload.Text)
-					continue
-				}
+		out = append(out, event)
+	}
+	return out
+}
+
+func parseCodexSSEEvent(event codexSSEEvent) string {
+	data := strings.TrimSpace(event.Data)
+	if data == "" || data == "[DONE]" {
+		return ""
+	}
+	if event.Name == "response.output_text.delta" || event.Name == "response.output_text.added" || event.Name == "response.output_item.added" {
+		var payload codexSSEDelta
+		if err := json.Unmarshal([]byte(data), &payload); err == nil {
+			if payload.Delta != "" {
+				return payload.Delta
 			}
-		}
-		if event == "response.completed" {
-			if text, err := parseCodexResponse([]byte(data), "application/json"); err == nil && strings.TrimSpace(text) != "" {
-				if b.Len() == 0 {
-					b.WriteString(text)
-				}
+			if payload.Text != "" {
+				return payload.Text
 			}
 		}
 	}
-	return b.String()
+	if event.Name == "response.completed" || event.Name == "response.output_item.done" || event.Name == "response.refusal.done" || event.Name == "" {
+		if text, err := parseCodexResponse([]byte(data), "application/json"); err == nil && strings.TrimSpace(text) != "" {
+			return text
+		}
+	}
+	return ""
 }
 
 func codexError(status int, raw []byte) string {
