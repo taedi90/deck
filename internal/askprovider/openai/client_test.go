@@ -29,10 +29,10 @@ func TestDefaultBaseURL(t *testing.T) {
 }
 
 func TestDefaultModel(t *testing.T) {
-	if got := defaultModel("gemini"); got != "gemini-2.5-flash" {
+	if got := askprovider.ProviderDefaultModel("gemini"); got != "gemini-2.5-flash" {
 		t.Fatalf("unexpected gemini default model: %q", got)
 	}
-	if got := defaultModel("openai"); got != "gpt-5.3-codex-spark" {
+	if got := askprovider.ProviderDefaultModel("openai"); got != "gpt-5.3-codex-spark" {
 		t.Fatalf("unexpected openai default model: %q", got)
 	}
 }

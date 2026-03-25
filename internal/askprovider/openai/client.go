@@ -19,6 +19,58 @@ import (
 
 const codexResponsesURL = "https://chatgpt.com/backend-api/codex/responses"
 
+type codexInputText struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+type codexInputMessage struct {
+	Role    string           `json:"role"`
+	Content []codexInputText `json:"content"`
+}
+
+type codexReasoning struct {
+	Effort string `json:"effort"`
+}
+
+type codexText struct {
+	Verbosity string `json:"verbosity"`
+}
+
+type codexRequest struct {
+	Model        string              `json:"model"`
+	Store        bool                `json:"store"`
+	Stream       bool                `json:"stream"`
+	Input        []codexInputMessage `json:"input"`
+	Reasoning    codexReasoning      `json:"reasoning"`
+	Text         codexText           `json:"text"`
+	Instructions string              `json:"instructions,omitempty"`
+}
+
+type codexOutputPart struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+type codexOutputItem struct {
+	Type    string            `json:"type"`
+	Content []codexOutputPart `json:"content"`
+}
+
+type codexResponseEnvelope struct {
+	Output     []codexOutputItem `json:"output"`
+	OutputText string            `json:"output_text"`
+	Response   *struct {
+		Output     []codexOutputItem `json:"output"`
+		OutputText string            `json:"output_text"`
+	} `json:"response"`
+}
+
+type codexSSEDelta struct {
+	Delta string `json:"delta"`
+	Text  string `json:"text"`
+}
+
 type Client struct {
 	httpClient *http.Client
 }
@@ -30,7 +82,7 @@ func New() *Client {
 func (c *Client) Generate(ctx context.Context, req askprovider.Request) (askprovider.Response, error) {
 	provider := strings.ToLower(strings.TrimSpace(req.Provider))
 	if provider == "" {
-		provider = "openai"
+		provider = askprovider.DefaultProvider
 	}
 	if shouldUseCodexOAuth(provider, req) {
 		return c.generateCodex(ctx, req)
@@ -64,7 +116,7 @@ func buildChatRequest(provider string, req askprovider.Request) openai.ChatCompl
 		ResponseFormat: &openai.ChatCompletionResponseFormat{Type: openai.ChatCompletionResponseFormatTypeJSONObject},
 	}
 	if request.Model == "" {
-		request.Model = defaultModel(provider)
+		request.Model = askprovider.ProviderDefaultModel(provider)
 	}
 	return request
 }
@@ -116,27 +168,24 @@ func shouldUseCodexOAuth(provider string, req askprovider.Request) bool {
 	return normalizeProvider(provider) == "openai" && strings.TrimSpace(req.OAuthToken) != ""
 }
 
-func buildCodexRequest(req askprovider.Request) map[string]any {
+func buildCodexRequest(req askprovider.Request) codexRequest {
 	model := strings.TrimSpace(req.Model)
 	if model == "" {
-		model = defaultModel("openai")
+		model = askprovider.ProviderDefaultModel(askprovider.DefaultProvider)
 	}
-	request := map[string]any{
-		"model":  model,
-		"store":  false,
-		"stream": true,
-		"input": []map[string]any{{
-			"role": "user",
-			"content": []map[string]any{{
-				"type": "input_text",
-				"text": strings.TrimSpace(req.Prompt),
-			}},
+	request := codexRequest{
+		Model:  model,
+		Store:  false,
+		Stream: true,
+		Input: []codexInputMessage{{
+			Role:    "user",
+			Content: []codexInputText{{Type: "input_text", Text: strings.TrimSpace(req.Prompt)}},
 		}},
-		"reasoning": map[string]any{"effort": "medium"},
-		"text":      map[string]any{"verbosity": codexVerbosity(model)},
+		Reasoning: codexReasoning{Effort: "medium"},
+		Text:      codexText{Verbosity: codexVerbosity(model)},
 	}
 	if instructions := strings.TrimSpace(req.SystemPrompt); instructions != "" {
-		request["instructions"] = instructions
+		request.Instructions = instructions
 	}
 	return request
 }
@@ -148,23 +197,7 @@ func parseCodexResponse(raw []byte, contentType string) (string, error) {
 			return content, nil
 		}
 	}
-	type outputPart struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
-	}
-	type outputItem struct {
-		Type    string       `json:"type"`
-		Content []outputPart `json:"content"`
-	}
-	type response struct {
-		Output     []outputItem `json:"output"`
-		OutputText string       `json:"output_text"`
-		Response   *struct {
-			Output     []outputItem `json:"output"`
-			OutputText string       `json:"output_text"`
-		} `json:"response"`
-	}
-	var parsed response
+	var parsed codexResponseEnvelope
 	if err := json.Unmarshal(raw, &parsed); err != nil {
 		return "", err
 	}
@@ -218,10 +251,7 @@ func parseCodexSSE(raw []byte) string {
 			continue
 		}
 		if event == "response.output_text.delta" {
-			var payload struct {
-				Delta string `json:"delta"`
-				Text  string `json:"text"`
-			}
+			var payload codexSSEDelta
 			if err := json.Unmarshal([]byte(data), &payload); err == nil {
 				if payload.Delta != "" {
 					b.WriteString(payload.Delta)
@@ -269,20 +299,11 @@ func codexVerbosity(model string) string {
 func defaultBaseURL(provider string, fallback string) string {
 	switch normalizeProvider(provider) {
 	case "openrouter":
-		return "https://openrouter.ai/api/v1"
+		return askprovider.OpenRouterBaseURL
 	case "gemini", "google", "google-openai":
-		return "https://generativelanguage.googleapis.com/v1beta/openai"
+		return strings.TrimRight(askprovider.GeminiOpenAIBaseURL, "/")
 	default:
 		return fallback
-	}
-}
-
-func defaultModel(provider string) string {
-	switch normalizeProvider(provider) {
-	case "gemini", "google", "google-openai":
-		return "gemini-2.5-flash"
-	default:
-		return "gpt-5.3-codex-spark"
 	}
 }
 
@@ -294,5 +315,5 @@ func requestToken(req askprovider.Request) string {
 }
 
 func normalizeProvider(provider string) string {
-	return strings.ToLower(strings.TrimSpace(provider))
+	return askprovider.NormalizeProvider(provider)
 }

@@ -104,7 +104,21 @@ func TestResolveEffectiveUsesSavedOAuthSessionBeforeConfig(t *testing.T) {
 	}
 }
 
-func TestResolveEffectiveRefreshesExpiredOpenAISession(t *testing.T) {
+func TestResolveEffectiveMarksExpiredOpenAISessionWithoutRefreshing(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "config"))
+	if err := askauth.Save(askauth.Session{Provider: "openai", AccessToken: "stale", RefreshToken: "refresh-token", ExpiresAt: time.Now().UTC().Add(-time.Minute)}); err != nil {
+		t.Fatalf("save session: %v", err)
+	}
+	effective, err := ResolveEffective(Settings{})
+	if err != nil {
+		t.Fatalf("resolve effective: %v", err)
+	}
+	if effective.OAuthToken != "" || effective.OAuthTokenSource != "session-expired" || effective.AuthStatus != "expired" {
+		t.Fatalf("unexpected expired session state: %#v", effective)
+	}
+}
+
+func TestResolveRuntimeSessionRefreshesExpiredOpenAISession(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "config"))
 	idToken := "header.eyJlbWFpbCI6InVzZXJAZXhhbXBsZS5jb20ifQ.sig"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -123,12 +137,12 @@ func TestResolveEffectiveRefreshesExpiredOpenAISession(t *testing.T) {
 	if err := askauth.Save(askauth.Session{Provider: "openai", AccessToken: "stale", RefreshToken: "refresh-token", ExpiresAt: time.Now().UTC().Add(-time.Minute)}); err != nil {
 		t.Fatalf("save session: %v", err)
 	}
-	effective, err := ResolveEffective(Settings{})
+	session, source, status, err := ResolveRuntimeSession("openai")
 	if err != nil {
-		t.Fatalf("resolve effective: %v", err)
+		t.Fatalf("resolve runtime session: %v", err)
 	}
-	if effective.OAuthToken != "fresh-token" || effective.OAuthTokenSource != "session" || effective.AuthStatus != "valid" {
-		t.Fatalf("unexpected refreshed session: %#v", effective)
+	if session.AccessToken != "fresh-token" || source != "session" || status != "valid" {
+		t.Fatalf("unexpected refreshed runtime session: %#v %q %q", session, source, status)
 	}
 }
 

@@ -58,6 +58,18 @@ func Execute(ctx context.Context, opts Options, client askprovider.Client) error
 	if err != nil {
 		return err
 	}
+	if effective.OAuthTokenSource == "session" || effective.OAuthTokenSource == "session-expired" {
+		session, source, status, err := askconfig.ResolveRuntimeSession(effective.Provider)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(session.AccessToken) != "" {
+			effective.OAuthToken = session.AccessToken
+			effective.OAuthTokenSource = source
+			effective.AuthStatus = status
+			effective.AccountID = session.AccountID
+		}
+	}
 	logger := newAskLogger(opts.Stderr, effective.LogLevel)
 	logger.logf("basic", "\n[ask][phase:request] routeCandidate=%s write=%t review=%t\n", heuristic.Route, opts.Write, opts.Review)
 	logger.logf("basic", "[ask][config] provider=%s model=%s endpoint=%s apiKeySource=%s oauthTokenSource=%s accountID=%t logLevel=%s\n", effective.Provider, effective.Model, effective.Endpoint, effective.APIKeySource, effective.OAuthTokenSource, strings.TrimSpace(effective.AccountID) != "", effective.LogLevel)

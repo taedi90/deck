@@ -14,11 +14,11 @@ import (
 )
 
 func TestBuildAuthURLIncludesExpectedParameters(t *testing.T) {
-	authURL, err := buildAuthURL(defaultOpenAICodexEndpoints(), "http://localhost:1455/auth/callback", "state-123", pkceCodes{Verifier: "verifier", Challenge: "challenge"})
+	authURL, err := buildAuthURL(DefaultOpenAICodexEndpoints(), "http://localhost:1455/auth/callback", "state-123", pkceCodes{Verifier: "verifier", Challenge: "challenge"})
 	if err != nil {
 		t.Fatalf("build auth url: %v", err)
 	}
-	for _, want := range []string{"client_id=" + openAICodexClientID, "response_type=code", "redirect_uri=http%3A%2F%2Flocalhost%3A1455%2Fauth%2Fcallback", "scope=openid+email+profile+offline_access", "code_challenge=challenge", "state=state-123"} {
+	for _, want := range []string{"client_id=" + OpenAICodexClientID, "response_type=code", "redirect_uri=http%3A%2F%2Flocalhost%3A1455%2Fauth%2Fcallback", "scope=openid+email+profile+offline_access", "code_challenge=challenge", "state=state-123"} {
 		if !strings.Contains(authURL, want) {
 			t.Fatalf("expected %q in auth url, got %q", want, authURL)
 		}
@@ -51,7 +51,7 @@ func TestLoginOpenAICodexDevice(t *testing.T) {
 			if got := r.Form.Get("grant_type"); got != "authorization_code" {
 				t.Fatalf("unexpected grant_type: %q", got)
 			}
-			if got := r.Form.Get("redirect_uri"); got != openAICodexDefaultDeviceCallback {
+			if got := r.Form.Get("redirect_uri"); got != OpenAICodexDefaultDeviceCallback {
 				t.Fatalf("unexpected redirect_uri: %q", got)
 			}
 			_, _ = w.Write([]byte(fmt.Sprintf(`{"access_token":"access-token","refresh_token":"refresh-token","id_token":%q,"expires_in":3600}`, idToken)))
@@ -71,7 +71,7 @@ func TestLoginOpenAICodexDevice(t *testing.T) {
 			DeviceUserCodeURL: server.URL + "/device/usercode",
 			DeviceTokenURL:    server.URL + "/device/token",
 			DeviceVerifyURL:   server.URL + "/verify",
-			DeviceCallbackURI: openAICodexDefaultDeviceCallback,
+			DeviceCallbackURI: OpenAICodexDefaultDeviceCallback,
 		},
 	})
 	if err != nil {

@@ -12,26 +12,12 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-)
-
-const (
-	openAICodexClientID                   = "app_EMoamEEZ73f0CkXaXp7hrann"
-	openAICodexDefaultAuthURL             = "https://auth.openai.com/oauth/authorize"
-	openAICodexDefaultTokenURL            = "https://auth.openai.com/oauth/token"
-	openAICodexDefaultDeviceUserCodeURL   = "https://auth.openai.com/api/accounts/deviceauth/usercode"
-	openAICodexDefaultDeviceTokenURL      = "https://auth.openai.com/api/accounts/deviceauth/token"
-	openAICodexDefaultDeviceVerification  = "https://auth.openai.com/codex/device"
-	openAICodexDefaultDeviceCallback      = "https://auth.openai.com/deviceauth/callback"
-	openAICodexDefaultCallbackPort        = 1455
-	openAICodexDefaultPollIntervalSeconds = 5
-	openAICodexDefaultDeviceTimeout       = 15 * time.Minute
 )
 
 type OpenAICodexEndpoints struct {
@@ -105,7 +91,6 @@ func LoginOpenAICodexBrowser(ctx context.Context, opts OpenAICodexOptions) (Sess
 		return Session{}, err
 	}
 	defer func() {
-		_, _ = io.WriteString(io.Discard, "")
 		_ = server.Stop(context.Background())
 	}()
 	redirectURI := callbackURL(opts.CallbackPort)
@@ -175,7 +160,7 @@ func normalizeOpenAICodexOptions(opts OpenAICodexOptions) OpenAICodexOptions {
 		opts.HTTPClient = &http.Client{Timeout: 30 * time.Second}
 	}
 	if opts.CallbackPort <= 0 {
-		opts.CallbackPort = openAICodexDefaultCallbackPort
+		opts.CallbackPort = OpenAICodexDefaultCallbackPort
 	}
 	if opts.Writer == nil {
 		opts.Writer = io.Discard
@@ -184,25 +169,14 @@ func normalizeOpenAICodexOptions(opts OpenAICodexOptions) OpenAICodexOptions {
 		opts.Now = func() time.Time { return time.Now().UTC() }
 	}
 	if opts.Endpoints.AuthURL == "" {
-		opts.Endpoints = defaultOpenAICodexEndpoints()
+		opts.Endpoints = DefaultOpenAICodexEndpoints()
 	}
 	return opts
 }
 
-func defaultOpenAICodexEndpoints() OpenAICodexEndpoints {
-	return OpenAICodexEndpoints{
-		AuthURL:           getenvDefault("DECK_ASK_OPENAI_AUTH_URL", openAICodexDefaultAuthURL),
-		TokenURL:          getenvDefault("DECK_ASK_OPENAI_TOKEN_URL", openAICodexDefaultTokenURL),
-		DeviceUserCodeURL: getenvDefault("DECK_ASK_OPENAI_DEVICE_USERCODE_URL", openAICodexDefaultDeviceUserCodeURL),
-		DeviceTokenURL:    getenvDefault("DECK_ASK_OPENAI_DEVICE_TOKEN_URL", openAICodexDefaultDeviceTokenURL),
-		DeviceVerifyURL:   getenvDefault("DECK_ASK_OPENAI_DEVICE_VERIFY_URL", openAICodexDefaultDeviceVerification),
-		DeviceCallbackURI: getenvDefault("DECK_ASK_OPENAI_DEVICE_CALLBACK_URI", openAICodexDefaultDeviceCallback),
-	}
-}
-
 func buildAuthURL(endpoints OpenAICodexEndpoints, redirectURI string, state string, pkce pkceCodes) (string, error) {
 	params := url.Values{
-		"client_id":                  {openAICodexClientID},
+		"client_id":                  {OpenAICodexClientID},
 		"response_type":              {"code"},
 		"redirect_uri":               {redirectURI},
 		"scope":                      {"openid email profile offline_access"},
@@ -224,7 +198,7 @@ func buildAuthURL(endpoints OpenAICodexEndpoints, redirectURI string, state stri
 func exchangeOpenAICodexCode(ctx context.Context, opts OpenAICodexOptions, code string, redirectURI string, pkce pkceCodes) (Session, error) {
 	form := url.Values{
 		"grant_type":    {"authorization_code"},
-		"client_id":     {openAICodexClientID},
+		"client_id":     {OpenAICodexClientID},
 		"code":          {code},
 		"redirect_uri":  {redirectURI},
 		"code_verifier": {pkce.Verifier},
@@ -243,7 +217,7 @@ func RefreshOpenAICodex(ctx context.Context, opts OpenAICodexOptions, refreshTok
 	}
 	opts = normalizeOpenAICodexOptions(opts)
 	form := url.Values{
-		"client_id":     {openAICodexClientID},
+		"client_id":     {OpenAICodexClientID},
 		"grant_type":    {"refresh_token"},
 		"refresh_token": {refreshToken},
 		"scope":         {"openid profile email"},
@@ -304,7 +278,7 @@ func buildSessionFromTokenResponse(resp oauthTokenResponse, now func() time.Time
 }
 
 func requestDeviceUserCode(ctx context.Context, opts OpenAICodexOptions) (deviceUserCodeResponse, error) {
-	body, err := json.Marshal(map[string]string{"client_id": openAICodexClientID})
+	body, err := json.Marshal(map[string]string{"client_id": OpenAICodexClientID})
 	if err != nil {
 		return deviceUserCodeResponse{}, fmt.Errorf("encode openai device request: %w", err)
 	}
@@ -335,7 +309,7 @@ func requestDeviceUserCode(ctx context.Context, opts OpenAICodexOptions) (device
 
 func pollDeviceToken(ctx context.Context, opts OpenAICodexOptions, deviceAuthID string, userCode string, interval time.Duration) (deviceTokenResponse, error) {
 	if interval <= 0 {
-		interval = time.Duration(openAICodexDefaultPollIntervalSeconds) * time.Second
+		interval = openAICodexDefaultPollInterval
 	}
 	deadline := opts.Now().Add(openAICodexDefaultDeviceTimeout)
 	for {
@@ -381,7 +355,7 @@ func pollDeviceToken(ctx context.Context, opts OpenAICodexOptions, deviceAuthID 
 }
 
 func parsePollInterval(raw json.RawMessage) time.Duration {
-	defaultInterval := time.Duration(openAICodexDefaultPollIntervalSeconds) * time.Second
+	defaultInterval := openAICodexDefaultPollInterval
 	if len(raw) == 0 {
 		return defaultInterval
 	}
@@ -540,13 +514,6 @@ func openBrowser(target string) error {
 		cmd = exec.Command("xdg-open", target)
 	}
 	return cmd.Start()
-}
-
-func getenvDefault(key string, fallback string) string {
-	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
-		return value
-	}
-	return fallback
 }
 
 func fprintf(w io.Writer, format string, args ...any) {

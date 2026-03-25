@@ -10,13 +10,11 @@ import (
 	"time"
 
 	"github.com/Airgap-Castaways/deck/internal/askauth"
+	"github.com/Airgap-Castaways/deck/internal/askprovider"
 	"github.com/Airgap-Castaways/deck/internal/userdirs"
 )
 
 const (
-	defaultProvider = "openai"
-	defaultModel    = "gpt-5.3-codex-spark"
-
 	//nolint:gosec // Environment variable names are not credentials.
 	envAPIKey     = "DECK_ASK_API_KEY"
 	envOAuthToken = "DECK_ASK_OAUTH_TOKEN"
@@ -146,8 +144,8 @@ func ResolveEffective(cli Settings) (EffectiveSettings, error) {
 	}
 	effective := EffectiveSettings{
 		Settings: Settings{
-			Provider:   defaultProvider,
-			Model:      defaultModel,
+			Provider:   askprovider.DefaultProvider,
+			Model:      askprovider.DefaultModel,
 			APIKey:     "",
 			OAuthToken: "",
 			Endpoint:   "",
@@ -214,13 +212,7 @@ func ResolveEffective(cli Settings) (EffectiveSettings, error) {
 		effective.ModelSource = "flag"
 	}
 	applyProviderDefaults(&effective)
-	if session, ok, err := askauth.Load(effective.Provider); err == nil && ok {
-		session, source, status := resolveSession(session)
-		effective.OAuthToken = session.AccessToken
-		effective.OAuthTokenSource = source
-		effective.AuthStatus = status
-		effective.AccountID = session.AccountID
-	}
+	applyStoredSession(&effective)
 	if value := strings.TrimSpace(cli.APIKey); value != "" {
 		effective.APIKey = value
 		effective.APIKeySource = "flag"
@@ -243,8 +235,8 @@ func applyProviderDefaults(effective *EffectiveSettings) {
 		return
 	}
 	provider := normalizeProvider(effective.Provider)
-	defaultEndpoint := providerDefaultEndpoint(provider)
-	defaultModel := providerDefaultModel(provider)
+	defaultEndpoint := askprovider.ProviderDefaultEndpoint(provider)
+	defaultModel := askprovider.ProviderDefaultModel(provider)
 	if modelLooksMismatched(provider, effective.Model, effective.ModelSource) {
 		effective.Model = defaultModel
 		effective.ModelSource = "provider-default"
@@ -259,7 +251,39 @@ func nowUTC() time.Time {
 	return time.Now().UTC()
 }
 
-func resolveSession(session askauth.Session) (askauth.Session, string, string) {
+func applyStoredSession(effective *EffectiveSettings) {
+	if effective == nil {
+		return
+	}
+	session, ok, err := askauth.Load(effective.Provider)
+	if err != nil || !ok {
+		return
+	}
+	if !session.ExpiresAt.IsZero() && session.ExpiresAt.Before(nowUTC()) {
+		effective.OAuthTokenSource = "session-expired"
+		effective.AuthStatus = "expired"
+		effective.AccountID = session.AccountID
+		return
+	}
+	effective.OAuthToken = session.AccessToken
+	effective.OAuthTokenSource = "session"
+	effective.AccountID = session.AccountID
+	if !session.ExpiresAt.IsZero() && session.ExpiresAt.Sub(nowUTC()) < 15*time.Minute {
+		effective.AuthStatus = "expiring-soon"
+		return
+	}
+	effective.AuthStatus = "valid"
+}
+
+func ResolveRuntimeSession(provider string) (askauth.Session, string, string, error) {
+	session, ok, err := askauth.Load(provider)
+	if err != nil || !ok {
+		return askauth.Session{}, "", "", err
+	}
+	return resolveRuntimeSession(session)
+}
+
+func resolveRuntimeSession(session askauth.Session) (askauth.Session, string, string, error) {
 	now := nowUTC()
 	if !session.ExpiresAt.IsZero() && session.ExpiresAt.Before(now) {
 		if session.Provider == "openai" && strings.TrimSpace(session.RefreshToken) != "" {
@@ -272,16 +296,16 @@ func resolveSession(session askauth.Session) (askauth.Session, string, string) {
 					refreshed.AccountID = session.AccountID
 				}
 				if err := askauth.Save(refreshed); err == nil {
-					return refreshed, "session", "valid"
+					return refreshed, "session", "valid", nil
 				}
 			}
 		}
-		return session, "session-expired", "expired"
+		return session, "session-expired", "expired", nil
 	}
 	if !session.ExpiresAt.IsZero() && session.ExpiresAt.Sub(now) < 15*time.Minute {
-		return session, "session", "expiring-soon"
+		return session, "session", "expiring-soon", nil
 	}
-	return session, "session", "valid"
+	return session, "session", "valid", nil
 }
 
 func MaskAPIKey(value string) string {
@@ -347,27 +371,7 @@ func normalizeLogLevel(level string) string {
 }
 
 func normalizeProvider(provider string) string {
-	return strings.ToLower(strings.TrimSpace(provider))
-}
-
-func providerDefaultModel(provider string) string {
-	switch normalizeProvider(provider) {
-	case "gemini", "google", "google-openai":
-		return "gemini-2.5-flash"
-	default:
-		return defaultModel
-	}
-}
-
-func providerDefaultEndpoint(provider string) string {
-	switch normalizeProvider(provider) {
-	case "gemini", "google", "google-openai":
-		return "https://generativelanguage.googleapis.com/v1beta/openai/"
-	case "openrouter":
-		return "https://openrouter.ai/api/v1"
-	default:
-		return "https://api.openai.com/v1"
-	}
+	return askprovider.NormalizeProvider(provider)
 }
 
 func modelLooksMismatched(provider string, model string, source string) bool {
@@ -381,7 +385,7 @@ func modelLooksMismatched(provider string, model string, source string) bool {
 	case "gemini", "google", "google-openai":
 		return strings.HasPrefix(strings.ToLower(trimmed), "gpt-")
 	default:
-		return source == "default" && trimmed != providerDefaultModel(provider)
+		return source == "default" && trimmed != askprovider.ProviderDefaultModel(provider)
 	}
 }
 
@@ -397,7 +401,7 @@ func endpointLooksMismatched(provider string, endpoint string, source string) bo
 	case "gemini", "google", "google-openai":
 		return strings.Contains(lower, "api.openai.com")
 	default:
-		return source == "default" && trimmed != providerDefaultEndpoint(provider)
+		return source == "default" && trimmed != askprovider.ProviderDefaultEndpoint(provider)
 	}
 }
 
