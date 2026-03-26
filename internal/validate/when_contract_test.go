@@ -30,8 +30,8 @@ steps:
 	}
 }
 
-func TestDocsUserGuideExamplesValidate(t *testing.T) {
-	paths, err := filepath.Glob(filepath.Join("..", "..", "docs", "user-guide", "examples", "*.yaml"))
+func TestDocsGuidesExamplesValidate(t *testing.T) {
+	paths, err := filepath.Glob(filepath.Join("..", "..", "docs", "guides", "examples", "*.yaml"))
 	if err != nil {
 		t.Fatalf("glob examples: %v", err)
 	}
