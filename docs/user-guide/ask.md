@@ -31,9 +31,8 @@ flowchart LR
   G --> H[Generation]
   H --> I[Validate / repair]
   E --> J[Preview]
-  I --> J
-  J --> K[Write]
-```
+  I --> K[Preview]
+  K --> L[Write]
 
 ### Step 1: Normalize the request
 
