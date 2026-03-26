@@ -111,6 +111,7 @@ func Execute(ctx context.Context, opts Options, client askprovider.Client) error
 	externalChunks = append(externalChunks, projectContextChunk(resolvedRoot))
 	retrieval := askretrieve.Retrieve(decision.Route, requestText, decision.Target, workspace, state, externalChunks)
 	requirements := askpolicy.BuildScenarioRequirements(requestText, retrieval, workspace, decision)
+	authoringBrief := askpolicy.BriefFromRequirements(requirements, decision)
 	bundle := askknowledge.Current()
 	result := runResult{
 		Route:         decision.Route,
@@ -218,6 +219,10 @@ func Execute(ctx context.Context, opts Options, client askprovider.Client) error
 		decision.Target = planTarget(plan, decision.Target)
 		retrieval = askretrieve.Retrieve(decision.Route, requestText, decision.Target, workspace, state, secondPassExternal)
 		requirements = askpolicy.MergeRequirementsWithPlan(askpolicy.BuildScenarioRequirements(requestText, retrieval, workspace, decision), plan)
+		authoringBrief = plan.AuthoringBrief
+		if strings.TrimSpace(authoringBrief.RouteIntent) == "" {
+			authoringBrief = askpolicy.BriefFromRequirements(requirements, decision)
+		}
 		result.Chunks = retrieval.Chunks
 		result.DroppedChunks = retrieval.Dropped
 		logger.logf("debug", "[ask][phase:retrieve:second-pass] chunks=%d dropped=%d\n", len(result.Chunks), len(result.DroppedChunks))
@@ -238,13 +243,13 @@ func Execute(ctx context.Context, opts Options, client askprovider.Client) error
 			OAuthToken:   effective.OAuthToken,
 			AccountID:    effective.AccountID,
 			Endpoint:     effective.Endpoint,
-			SystemPrompt: generationSystemPrompt(decision.Route, decision.Target, retrieval, requirements, scaffold),
+			SystemPrompt: generationSystemPrompt(decision.Route, decision.Target, retrieval, requirements, authoringBrief, scaffold),
 			Prompt:       generationUserPrompt(workspace, state, requestText, strings.TrimSpace(opts.FromPath), decision.Route),
 			MaxRetries:   attempts,
 		}
 		result.PromptTraces = append(result.PromptTraces, promptTrace{Label: "generation", SystemPrompt: generationRequest.SystemPrompt, UserPrompt: generationRequest.Prompt})
 		logger.logf("basic", "\n[ask][phase:generation:start] route=%s attempts=%d\n", decision.Route, attempts)
-		gen, lintSummary, critic, retriesUsed, genErr := generateWithValidation(ctx, client, generationRequest, resolvedRoot, attempts, logger, decision, plan)
+		gen, lintSummary, critic, retriesUsed, genErr := generateWithValidation(ctx, client, generationRequest, resolvedRoot, attempts, logger, decision, plan, authoringBrief)
 		if genErr != nil {
 			return genErr
 		}
@@ -457,15 +462,17 @@ func generationAttempts(requested int, decision askintent.Decision, prompt strin
 	return 3
 }
 
-func generateWithValidation(ctx context.Context, client askprovider.Client, req askprovider.Request, root string, attempts int, logger askLogger, decision askintent.Decision, plan askcontract.PlanResponse) (askcontract.GenerationResponse, string, askcontract.CriticResponse, int, error) {
+func generateWithValidation(ctx context.Context, client askprovider.Client, req askprovider.Request, root string, attempts int, logger askLogger, decision askintent.Decision, plan askcontract.PlanResponse, brief askcontract.AuthoringBrief) (askcontract.GenerationResponse, string, askcontract.CriticResponse, int, error) {
 	var lastValidation string
 	var lastCritic askcontract.CriticResponse
+	var lastJudge askcontract.JudgeResponse
 	bundle := askknowledge.Current()
 	for attempt := 1; attempt <= attempts; attempt++ {
 		currentPrompt := req.Prompt
 		if attempt > 1 && lastValidation != "" {
 			diags := askdiagnostic.FromValidationError(lastValidation, bundle)
 			diags = append(diags, askdiagnostic.FromCritic(lastCritic)...)
+			diags = append(diags, askdiagnostic.FromJudge(lastJudge)...)
 			currentPrompt += "\n\nLocal validation failed. Fix the response and return full JSON again."
 			currentPrompt += "\nValidator summary:\n" + summarizeValidationError(lastValidation)
 			currentPrompt += "\nRaw validator error:\n" + strings.TrimSpace(lastValidation)
@@ -502,9 +509,22 @@ func generateWithValidation(ctx context.Context, client askprovider.Client, req 
 			return askcontract.GenerationResponse{}, lastValidation, lastCritic, attempt - 1, fmt.Errorf("ask generation returned invalid JSON: %s", lastValidation)
 		}
 		logger.logf("debug", "[ask][phase:semantic-validate] attempt=%d/%d\n", attempt, attempts)
-		lintSummary, critic, err := validateGeneration(ctx, root, gen, decision, plan)
+		lintSummary, critic, err := validateGeneration(ctx, root, gen, decision, plan, brief)
 		lastCritic = critic
 		if err == nil {
+			judge, judgeErr := maybeJudgeGeneration(ctx, client, req, gen, lintSummary, critic, plan, brief, logger)
+			if judgeErr == nil {
+				lastJudge = judge
+				critic = mergeJudgeIntoCritic(critic, judge, attempt == attempts)
+				if len(judge.Blocking) > 0 && attempt < attempts {
+					lastValidation = "semantic judge requested revision: " + strings.Join(judge.Blocking, "; ")
+					lastCritic = critic
+					logger.logf("debug", "[ask][phase:judge:retry] blocking=%d\n", len(judge.Blocking))
+					continue
+				}
+			} else {
+				logger.logf("debug", "[ask][phase:judge:skip] error=%v\n", judgeErr)
+			}
 			return gen, lintSummary, critic, attempt - 1, nil
 		}
 		lastValidation = err.Error()
@@ -517,6 +537,44 @@ func generateWithValidation(ctx context.Context, client askprovider.Client, req 
 		lastValidation = "generation failed without a parseable response"
 	}
 	return askcontract.GenerationResponse{}, lastValidation, lastCritic, attempts - 1, fmt.Errorf("ask generation did not validate after %d attempts: %s", attempts, lastValidation)
+}
+
+func maybeJudgeGeneration(ctx context.Context, client askprovider.Client, req askprovider.Request, gen askcontract.GenerationResponse, lintSummary string, critic askcontract.CriticResponse, plan askcontract.PlanResponse, brief askcontract.AuthoringBrief, logger askLogger) (askcontract.JudgeResponse, error) {
+	if strings.TrimSpace(brief.RouteIntent) == "" {
+		return askcontract.JudgeResponse{}, fmt.Errorf("judge skipped without authoring brief")
+	}
+	systemPrompt := judgeSystemPrompt(brief, plan)
+	userPrompt := judgeUserPrompt(gen, lintSummary, critic)
+	logger.prompt("judge", systemPrompt, userPrompt)
+	resp, err := client.Generate(ctx, askprovider.Request{
+		Kind:         "judge",
+		Provider:     req.Provider,
+		Model:        req.Model,
+		APIKey:       req.APIKey,
+		OAuthToken:   req.OAuthToken,
+		AccountID:    req.AccountID,
+		Endpoint:     req.Endpoint,
+		SystemPrompt: systemPrompt,
+		Prompt:       userPrompt,
+		MaxRetries:   1,
+	})
+	if err != nil {
+		return askcontract.JudgeResponse{}, err
+	}
+	logger.response("judge", resp.Content)
+	return askcontract.ParseJudge(resp.Content)
+}
+
+func mergeJudgeIntoCritic(critic askcontract.CriticResponse, judge askcontract.JudgeResponse, finalAttempt bool) askcontract.CriticResponse {
+	critic.Advisory = append(critic.Advisory, judge.Advisory...)
+	critic.Advisory = append(critic.Advisory, judge.MissingCapabilities...)
+	if finalAttempt {
+		critic.Advisory = append(critic.Advisory, judge.Blocking...)
+	}
+	critic.RequiredFixes = append(critic.RequiredFixes, judge.SuggestedFixes...)
+	critic.Advisory = dedupe(critic.Advisory)
+	critic.RequiredFixes = dedupe(critic.RequiredFixes)
+	return critic
 }
 
 func repairableValidationError(message string) bool {
@@ -538,7 +596,14 @@ func repairableValidationError(message string) bool {
 	return true
 }
 
-func validateGeneration(ctx context.Context, root string, gen askcontract.GenerationResponse, decision askintent.Decision, plan askcontract.PlanResponse) (string, askcontract.CriticResponse, error) {
+func normalizedAuthoringBrief(plan askcontract.PlanResponse, fallback askcontract.AuthoringBrief) askcontract.AuthoringBrief {
+	if strings.TrimSpace(plan.AuthoringBrief.RouteIntent) != "" {
+		return plan.AuthoringBrief
+	}
+	return fallback
+}
+
+func validateGeneration(ctx context.Context, root string, gen askcontract.GenerationResponse, decision askintent.Decision, plan askcontract.PlanResponse, brief askcontract.AuthoringBrief) (string, askcontract.CriticResponse, error) {
 	if len(gen.Files) == 0 {
 		critic := askcontract.CriticResponse{Blocking: []string{"response did not include any files"}, MissingFiles: filePathsFromPlan(plan), RequiredFixes: []string{"Return the planned workflow files"}}
 		return "", critic, fmt.Errorf("response did not include any files")
@@ -565,7 +630,7 @@ func validateGeneration(ctx context.Context, root string, gen askcontract.Genera
 		validated = append(validated, files...)
 	}
 	validated = dedupe(validated)
-	critic := semanticCritic(gen, decision, plan)
+	critic := semanticCritic(gen, decision, plan, normalizedAuthoringBrief(plan, brief))
 	if len(critic.Blocking) > 0 {
 		return "", critic, fmt.Errorf("semantic validation failed: %s", strings.Join(critic.Blocking, "; "))
 	}

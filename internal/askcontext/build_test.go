@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Airgap-Castaways/deck/internal/askintent"
 	"github.com/Airgap-Castaways/deck/internal/validate"
 	"github.com/Airgap-Castaways/deck/internal/workflowexec"
 	deckschemas "github.com/Airgap-Castaways/deck/schemas"
@@ -190,6 +191,29 @@ func TestRelevantStepKindsMatchesKubeadmAirGapRequest(t *testing.T) {
 	for _, want := range []string{"CheckHost", "LoadImage", "CheckCluster"} {
 		if !contains(joined, want) {
 			t.Fatalf("expected %s in relevant steps, got %v", want, joined)
+		}
+	}
+}
+
+func TestRelevantStepKindsWithOptionsPrefersJoinForMultiNodeCapability(t *testing.T) {
+	relevant := RelevantStepKindsWithOptions("create kubeadm workflow", StepGuidanceOptions{ModeIntent: "prepare+apply", Topology: "multi-node", RequiredCapabilities: []string{"kubeadm-bootstrap", "kubeadm-join", "cluster-verification"}})
+	joined := make([]string, 0, len(relevant))
+	for _, step := range relevant {
+		joined = append(joined, step.Kind)
+	}
+	if !contains(joined, "JoinKubeadm") {
+		t.Fatalf("expected JoinKubeadm in relevant steps, got %v", joined)
+	}
+	if !contains(joined, "CheckCluster") {
+		t.Fatalf("expected CheckCluster in relevant steps, got %v", joined)
+	}
+}
+
+func TestRelevantStepKindsBlockWithOptionsIncludesJoinCapabilityReason(t *testing.T) {
+	block := StepGuidanceBlockWithOptions(askintent.RouteDraft, "create kubeadm workflow", StepGuidanceOptions{ModeIntent: "prepare+apply", Topology: "multi-node", RequiredCapabilities: []string{"kubeadm-join"}})
+	for _, want := range []string{"JoinKubeadm", "supports kubeadm join capability"} {
+		if !strings.Contains(block, want) {
+			t.Fatalf("expected %q in typed step guidance block, got %q", want, block)
 		}
 	}
 }

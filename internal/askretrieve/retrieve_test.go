@@ -74,6 +74,31 @@ func TestRetrieveIncludesStructuredMCPEvidenceChunk(t *testing.T) {
 	}
 }
 
+func TestRetrieveAddsReferenceExamplesForComplexAuthoringPrompt(t *testing.T) {
+	result := Retrieve(askintent.RouteDraft, "create an air-gapped kubeadm prepare and apply workflow with worker join", askintent.Target{}, WorkspaceSummary{}, askstate.Context{}, nil)
+	found := false
+	for _, chunk := range result.Chunks {
+		if chunk.Source == "example" {
+			found = true
+			if !strings.Contains(chunk.Content, "Reference example:") {
+				t.Fatalf("expected example chunk wrapper, got %q", chunk.Content)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected example reference chunks for complex authoring prompt, got %#v", result.Chunks)
+	}
+}
+
+func TestRouteBudgetExpandsForComplexAuthoringPrompt(t *testing.T) {
+	baseBytes, baseChunks := routeBudget(askintent.RouteDraft, "create workflow")
+	complexBytes, complexChunks := routeBudget(askintent.RouteDraft, "create an air-gapped kubeadm prepare and apply workflow with worker join")
+	if complexBytes <= baseBytes || complexChunks <= baseChunks {
+		t.Fatalf("expected complex budget expansion, got base=(%d,%d) complex=(%d,%d)", baseBytes, baseChunks, complexBytes, complexChunks)
+	}
+}
+
 func findChunk(result RetrievalResult, id string) *Chunk {
 	for i := range result.Chunks {
 		if result.Chunks[i].ID == id {

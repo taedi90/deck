@@ -12,6 +12,9 @@ import (
 
 func NormalizePlan(plan askcontract.PlanResponse, prompt string, retrieval askretrieve.RetrievalResult, workspace askretrieve.WorkspaceSummary, decision askintent.Decision) askcontract.PlanResponse {
 	req := BuildScenarioRequirements(prompt, retrieval, workspace, decision)
+	if strings.TrimSpace(plan.AuthoringBrief.RouteIntent) == "" {
+		plan.AuthoringBrief = BriefFromRequirements(req, decision)
+	}
 	if strings.TrimSpace(plan.OfflineAssumption) == "" {
 		plan.OfflineAssumption = req.Connectivity
 	}
@@ -93,6 +96,14 @@ func EvaluatePlanConformance(plan askcontract.PlanResponse, gen askcontract.Gene
 func ValidatePlanStructure(plan askcontract.PlanResponse) error {
 	if plan.NeedsPrepare && !containsPlannedPath(plan.Files, "workflows/prepare.yaml") {
 		return fmt.Errorf("plan response requires prepare but does not include workflows/prepare.yaml")
+	}
+	if strings.TrimSpace(plan.AuthoringBrief.ModeIntent) == "prepare+apply" {
+		if !containsPlannedPath(plan.Files, "workflows/prepare.yaml") {
+			return fmt.Errorf("plan response authoring brief requires prepare+apply but does not include workflows/prepare.yaml")
+		}
+		if entry := strings.TrimSpace(plan.EntryScenario); entry == "" || !containsPlannedPath(plan.Files, entry) {
+			return fmt.Errorf("plan response authoring brief requires prepare+apply with a scenario entrypoint")
+		}
 	}
 	return nil
 }

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/Airgap-Castaways/deck/internal/askcontext"
+	"github.com/Airgap-Castaways/deck/internal/askcontract"
 	"github.com/Airgap-Castaways/deck/internal/askintent"
 	"github.com/Airgap-Castaways/deck/internal/askknowledge"
 	"github.com/Airgap-Castaways/deck/internal/askpolicy"
@@ -43,7 +44,7 @@ func classifierUserPrompt(prompt string, reviewFlag bool, workspace askretrieve.
 	return b.String()
 }
 
-func generationSystemPrompt(route askintent.Route, target askintent.Target, retrieval askretrieve.RetrievalResult, requirements askpolicy.ScenarioRequirements, scaffold askscaffold.Scaffold) string {
+func generationSystemPrompt(route askintent.Route, target askintent.Target, retrieval askretrieve.RetrievalResult, requirements askpolicy.ScenarioRequirements, brief askcontract.AuthoringBrief, scaffold askscaffold.Scaffold) string {
 	bundle := askknowledge.Current()
 	b := &strings.Builder{}
 	b.WriteString("You are deck ask, a workflow authoring assistant.\n")
@@ -67,6 +68,12 @@ func generationSystemPrompt(route askintent.Route, target askintent.Target, retr
 	b.WriteString("\n")
 	b.WriteString(askpolicy.RequirementsPromptBlock(requirements))
 	b.WriteString("\n")
+	b.WriteString(authoringBriefPromptBlock(brief))
+	b.WriteString("\n")
+	if typedSteps := askcontext.StepGuidanceBlockWithOptions(route, retrievalPromptSeed(target, requirements, brief), askcontext.StepGuidanceOptions{ModeIntent: brief.ModeIntent, Topology: brief.Topology, RequiredCapabilities: brief.RequiredCapabilities}); strings.TrimSpace(typedSteps) != "" {
+		b.WriteString(typedSteps)
+		b.WriteString("\n")
+	}
 	b.WriteString(askscaffold.PromptBlock(scaffold))
 	b.WriteString("\n")
 	if constraints := bundle.ConstraintPromptBlock(stepKindsFromRetrieval(retrieval)); strings.TrimSpace(constraints) != "" {
@@ -81,6 +88,101 @@ func generationSystemPrompt(route askintent.Route, target askintent.Target, retr
 	b.WriteString("Retrieved context follows.\n")
 	b.WriteString(askretrieve.BuildChunkTextWithoutTopics(retrieval, askcontext.TopicWorkflowInvariants, askcontext.TopicPolicy))
 	return b.String()
+}
+
+func retrievalPromptSeed(target askintent.Target, requirements askpolicy.ScenarioRequirements, brief askcontract.AuthoringBrief) string {
+	parts := []string{brief.ModeIntent, brief.Topology, brief.Connectivity, strings.Join(brief.RequiredCapabilities, " ")}
+	parts = append(parts, requirements.ScenarioIntent...)
+	parts = append(parts, requirements.ArtifactKinds...)
+	parts = append(parts, target.Kind, target.Name, target.Path)
+	return strings.Join(parts, " ")
+}
+
+func authoringBriefPromptBlock(brief askcontract.AuthoringBrief) string {
+	b := &strings.Builder{}
+	b.WriteString("Normalized authoring brief:\n")
+	appendLine := func(label string, value string) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return
+		}
+		b.WriteString("- ")
+		b.WriteString(label)
+		b.WriteString(": ")
+		b.WriteString(value)
+		b.WriteString("\n")
+	}
+	appendList := func(label string, values []string) {
+		values = dedupe(values)
+		if len(values) == 0 {
+			return
+		}
+		b.WriteString("- ")
+		b.WriteString(label)
+		b.WriteString(": ")
+		b.WriteString(strings.Join(values, ", "))
+		b.WriteString("\n")
+	}
+	appendLine("route intent", brief.RouteIntent)
+	appendLine("target scope", brief.TargetScope)
+	appendLine("mode intent", brief.ModeIntent)
+	appendLine("connectivity", brief.Connectivity)
+	appendLine("completeness target", brief.CompletenessTarget)
+	appendLine("topology", brief.Topology)
+	if brief.NodeCount > 0 {
+		appendLine("node count", fmt.Sprintf("%d", brief.NodeCount))
+	}
+	appendList("target paths", brief.TargetPaths)
+	appendList("required capabilities", brief.RequiredCapabilities)
+	return strings.TrimSpace(b.String())
+}
+
+func judgeSystemPrompt(brief askcontract.AuthoringBrief, plan askcontract.PlanResponse) string {
+	b := &strings.Builder{}
+	b.WriteString("You are deck ask semantic judge. Return strict JSON only.\n")
+	b.WriteString("Judge whether generated workflow files satisfy the requested outcome after local lint/schema validation already passed.\n")
+	b.WriteString("Do not re-litigate syntax or schema unless it causes an obvious intent mismatch.\n")
+	b.WriteString("JSON shape: {\"summary\":string,\"blocking\":[]string,\"advisory\":[]string,\"missingCapabilities\":[]string,\"suggestedFixes\":[]string}.\n")
+	b.WriteString("Use blocking only when the generated workflow clearly misses a required capability or collapses the request scope.\n")
+	b.WriteString(authoringBriefPromptBlock(brief))
+	b.WriteString("\n")
+	if strings.TrimSpace(plan.Request) != "" {
+		b.WriteString("Planned request: ")
+		b.WriteString(strings.TrimSpace(plan.Request))
+		b.WriteString("\n")
+	}
+	if strings.TrimSpace(plan.TargetOutcome) != "" {
+		b.WriteString("Planned target outcome: ")
+		b.WriteString(strings.TrimSpace(plan.TargetOutcome))
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+func judgeUserPrompt(gen askcontract.GenerationResponse, lintSummary string, critic askcontract.CriticResponse) string {
+	b := &strings.Builder{}
+	b.WriteString("Local validation summary: ")
+	b.WriteString(strings.TrimSpace(lintSummary))
+	b.WriteString("\n")
+	if len(critic.Advisory) > 0 {
+		b.WriteString("Local semantic advisory:\n")
+		for _, item := range critic.Advisory {
+			b.WriteString("- ")
+			b.WriteString(strings.TrimSpace(item))
+			b.WriteString("\n")
+		}
+	}
+	b.WriteString("Generated files:\n")
+	for _, file := range gen.Files {
+		b.WriteString("- path: ")
+		b.WriteString(file.Path)
+		b.WriteString("\n")
+		b.WriteString(file.Content)
+		if !strings.HasSuffix(file.Content, "\n") {
+			b.WriteString("\n")
+		}
+	}
+	return strings.TrimSpace(b.String())
 }
 
 func stepKindsFromRetrieval(retrieval askretrieve.RetrievalResult) []string {
@@ -137,7 +239,7 @@ func generationUserPrompt(workspace askretrieve.WorkspaceSummary, state askstate
 	b.WriteString(strings.TrimSpace(prompt))
 	b.WriteString("\n")
 	if !workspace.HasWorkflowTree && route == askintent.RouteDraft {
-		b.WriteString("This is an empty workspace. Return the minimum valid starter workflow files needed to satisfy the request.\n")
+		b.WriteString("This is an empty workspace. Return the minimum valid workflow files needed to satisfy the request.\n")
 		b.WriteString("At minimum, the result should usually include a valid workflows/scenarios/apply.yaml file.\n")
 	}
 	b.WriteString("Return the minimum complete file set needed for this request.\n")

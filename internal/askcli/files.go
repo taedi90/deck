@@ -454,14 +454,14 @@ func filePathsFromPlan(plan askcontract.PlanResponse) []string {
 }
 
 func validateSemanticGeneration(gen askcontract.GenerationResponse, decision askintent.Decision, plan askcontract.PlanResponse) error {
-	critic := semanticCritic(gen, decision, plan)
+	critic := semanticCritic(gen, decision, plan, plan.AuthoringBrief)
 	if len(critic.Blocking) > 0 {
 		return fmt.Errorf("semantic validation failed: %s", strings.Join(critic.Blocking, "; "))
 	}
 	return nil
 }
 
-func semanticCritic(gen askcontract.GenerationResponse, decision askintent.Decision, plan askcontract.PlanResponse) askcontract.CriticResponse {
+func semanticCritic(gen askcontract.GenerationResponse, decision askintent.Decision, plan askcontract.PlanResponse, brief askcontract.AuthoringBrief) askcontract.CriticResponse {
 	critic := askcontract.CriticResponse{}
 	generated := map[string]askcontract.GeneratedFile{}
 	for _, file := range gen.Files {
@@ -511,6 +511,9 @@ func semanticCritic(gen askcontract.GenerationResponse, decision askintent.Decis
 	}
 	if len(plan.ComponentRecommendation) > 0 {
 		requirements.ComponentAdvisories = dedupe(append(requirements.ComponentAdvisories, plan.ComponentRecommendation...))
+	}
+	if strings.TrimSpace(brief.RouteIntent) != "" {
+		plan.AuthoringBrief = brief
 	}
 	evaluation := askpolicy.EvaluateGeneration(requirements, plan, gen)
 	semanticFindings = append(semanticFindings, evaluation.Findings...)

@@ -27,22 +27,35 @@ type PlanFile struct {
 }
 
 type PlanResponse struct {
-	Version                 int        `json:"version"`
-	Request                 string     `json:"request"`
-	Intent                  string     `json:"intent"`
-	Complexity              string     `json:"complexity"`
-	OfflineAssumption       string     `json:"offlineAssumption,omitempty"`
-	NeedsPrepare            bool       `json:"needsPrepare,omitempty"`
-	ArtifactKinds           []string   `json:"artifactKinds,omitempty"`
-	VarsRecommendation      []string   `json:"varsRecommendation,omitempty"`
-	ComponentRecommendation []string   `json:"componentRecommendation,omitempty"`
-	Blockers                []string   `json:"blockers"`
-	TargetOutcome           string     `json:"targetOutcome"`
-	Assumptions             []string   `json:"assumptions"`
-	OpenQuestions           []string   `json:"openQuestions"`
-	EntryScenario           string     `json:"entryScenario"`
-	Files                   []PlanFile `json:"files"`
-	ValidationChecklist     []string   `json:"validationChecklist"`
+	Version                 int            `json:"version"`
+	Request                 string         `json:"request"`
+	Intent                  string         `json:"intent"`
+	Complexity              string         `json:"complexity"`
+	AuthoringBrief          AuthoringBrief `json:"authoringBrief,omitempty"`
+	OfflineAssumption       string         `json:"offlineAssumption,omitempty"`
+	NeedsPrepare            bool           `json:"needsPrepare,omitempty"`
+	ArtifactKinds           []string       `json:"artifactKinds,omitempty"`
+	VarsRecommendation      []string       `json:"varsRecommendation,omitempty"`
+	ComponentRecommendation []string       `json:"componentRecommendation,omitempty"`
+	Blockers                []string       `json:"blockers"`
+	TargetOutcome           string         `json:"targetOutcome"`
+	Assumptions             []string       `json:"assumptions"`
+	OpenQuestions           []string       `json:"openQuestions"`
+	EntryScenario           string         `json:"entryScenario"`
+	Files                   []PlanFile     `json:"files"`
+	ValidationChecklist     []string       `json:"validationChecklist"`
+}
+
+type AuthoringBrief struct {
+	RouteIntent          string   `json:"routeIntent,omitempty"`
+	TargetScope          string   `json:"targetScope,omitempty"`
+	TargetPaths          []string `json:"targetPaths,omitempty"`
+	ModeIntent           string   `json:"modeIntent,omitempty"`
+	Connectivity         string   `json:"connectivity,omitempty"`
+	CompletenessTarget   string   `json:"completenessTarget,omitempty"`
+	Topology             string   `json:"topology,omitempty"`
+	NodeCount            int      `json:"nodeCount,omitempty"`
+	RequiredCapabilities []string `json:"requiredCapabilities,omitempty"`
 }
 
 type CriticResponse struct {
@@ -52,6 +65,14 @@ type CriticResponse struct {
 	InvalidImports []string `json:"invalidImports"`
 	CoverageGaps   []string `json:"coverageGaps"`
 	RequiredFixes  []string `json:"requiredFixes"`
+}
+
+type JudgeResponse struct {
+	Summary             string   `json:"summary"`
+	Blocking            []string `json:"blocking"`
+	Advisory            []string `json:"advisory"`
+	MissingCapabilities []string `json:"missingCapabilities"`
+	SuggestedFixes      []string `json:"suggestedFixes"`
 }
 
 type InfoResponse struct {
@@ -149,9 +170,21 @@ func ParsePlan(raw string) (PlanResponse, error) {
 	resp.Request = strings.TrimSpace(resp.Request)
 	resp.Intent = strings.TrimSpace(resp.Intent)
 	resp.Complexity = strings.TrimSpace(resp.Complexity)
+	resp.AuthoringBrief.RouteIntent = strings.TrimSpace(resp.AuthoringBrief.RouteIntent)
+	resp.AuthoringBrief.TargetScope = strings.TrimSpace(resp.AuthoringBrief.TargetScope)
+	resp.AuthoringBrief.ModeIntent = strings.TrimSpace(resp.AuthoringBrief.ModeIntent)
+	resp.AuthoringBrief.Connectivity = strings.TrimSpace(resp.AuthoringBrief.Connectivity)
+	resp.AuthoringBrief.CompletenessTarget = strings.TrimSpace(resp.AuthoringBrief.CompletenessTarget)
+	resp.AuthoringBrief.Topology = strings.TrimSpace(resp.AuthoringBrief.Topology)
 	resp.OfflineAssumption = strings.TrimSpace(resp.OfflineAssumption)
 	resp.TargetOutcome = strings.TrimSpace(resp.TargetOutcome)
 	resp.EntryScenario = strings.TrimSpace(resp.EntryScenario)
+	for i := range resp.AuthoringBrief.TargetPaths {
+		resp.AuthoringBrief.TargetPaths[i] = strings.TrimSpace(resp.AuthoringBrief.TargetPaths[i])
+	}
+	for i := range resp.AuthoringBrief.RequiredCapabilities {
+		resp.AuthoringBrief.RequiredCapabilities[i] = strings.TrimSpace(resp.AuthoringBrief.RequiredCapabilities[i])
+	}
 	if resp.Request == "" {
 		return PlanResponse{}, fmt.Errorf("plan response is missing request")
 	}
@@ -198,6 +231,31 @@ func ParsePlan(raw string) (PlanResponse, error) {
 		if !matched {
 			return PlanResponse{}, fmt.Errorf("plan response entryScenario must match a planned file: %s", resp.EntryScenario)
 		}
+	}
+	return resp, nil
+}
+
+func ParseJudge(raw string) (JudgeResponse, error) {
+	cleaned := clean(raw)
+	if cleaned == "" {
+		return JudgeResponse{}, fmt.Errorf("judge response is empty")
+	}
+	var resp JudgeResponse
+	if err := json.Unmarshal([]byte(cleaned), &resp); err != nil {
+		return JudgeResponse{}, fmt.Errorf("parse judge response: %w", err)
+	}
+	resp.Summary = strings.TrimSpace(resp.Summary)
+	for i := range resp.Blocking {
+		resp.Blocking[i] = strings.TrimSpace(resp.Blocking[i])
+	}
+	for i := range resp.Advisory {
+		resp.Advisory[i] = strings.TrimSpace(resp.Advisory[i])
+	}
+	for i := range resp.MissingCapabilities {
+		resp.MissingCapabilities[i] = strings.TrimSpace(resp.MissingCapabilities[i])
+	}
+	for i := range resp.SuggestedFixes {
+		resp.SuggestedFixes[i] = strings.TrimSpace(resp.SuggestedFixes[i])
 	}
 	return resp, nil
 }

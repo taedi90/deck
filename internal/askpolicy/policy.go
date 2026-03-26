@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/Airgap-Castaways/deck/internal/askcontext"
@@ -23,6 +24,28 @@ type ScenarioRequirements struct {
 	VarsAdvisories      []string
 	ComponentAdvisories []string
 	ScenarioIntent      []string
+}
+
+func BuildAuthoringBrief(prompt string, retrieval askretrieve.RetrievalResult, workspace askretrieve.WorkspaceSummary, decision askintent.Decision) askcontract.AuthoringBrief {
+	req := BuildScenarioRequirements(prompt, retrieval, workspace, decision)
+	return BriefFromRequirements(req, decision)
+}
+
+func BriefFromRequirements(req ScenarioRequirements, decision askintent.Decision) askcontract.AuthoringBrief {
+	brief := askcontract.AuthoringBrief{
+		RouteIntent:          string(decision.Route),
+		TargetScope:          inferTargetScope(req, decision),
+		TargetPaths:          briefTargetPaths(req),
+		ModeIntent:           inferModeIntent(req),
+		Connectivity:         strings.TrimSpace(req.Connectivity),
+		CompletenessTarget:   strings.TrimSpace(req.AcceptanceLevel),
+		Topology:             inferTopology(req),
+		NodeCount:            inferNodeCount(req),
+		RequiredCapabilities: inferRequiredCapabilities(req),
+	}
+	brief.TargetPaths = dedupeStrings(brief.TargetPaths)
+	brief.RequiredCapabilities = dedupeStrings(brief.RequiredCapabilities)
+	return brief
 }
 
 type EvaluationFinding struct {
@@ -91,6 +114,7 @@ func BuildPlanDefaults(req ScenarioRequirements, prompt string, decision askinte
 		Request:                 strings.TrimSpace(prompt),
 		Intent:                  string(decision.Route),
 		Complexity:              "simple",
+		AuthoringBrief:          BriefFromRequirements(req, decision),
 		OfflineAssumption:       req.Connectivity,
 		NeedsPrepare:            req.NeedsPrepare,
 		ArtifactKinds:           append([]string(nil), req.ArtifactKinds...),
@@ -135,8 +159,25 @@ func MergeRequirementsWithPlan(req ScenarioRequirements, plan askcontract.PlanRe
 
 func EvaluateGeneration(req ScenarioRequirements, plan askcontract.PlanResponse, gen askcontract.GenerationResponse) EvaluationResult {
 	findings := make([]EvaluationFinding, 0)
+	brief := plan.AuthoringBrief
+	if strings.TrimSpace(brief.ModeIntent) == "prepare+apply" {
+		if len(preparePathsFromGeneration(gen.Files)) == 0 {
+			findings = append(findings, EvaluationFinding{Severity: "blocking", Code: "brief_prepare_missing", Message: "request expects both prepare and apply workflows but generated output is missing workflows/prepare.yaml", Fix: "Return both a prepare workflow and at least one apply scenario when the request asks for prepare and apply", Path: "workflows/prepare.yaml"})
+		}
+		if len(scenarioLikePathsWithName(gen.Files, "apply")) == 0 {
+			findings = append(findings, EvaluationFinding{Severity: "blocking", Code: "brief_apply_missing", Message: "request expects both prepare and apply workflows but generated output is missing an apply scenario", Fix: "Return a scenario entrypoint under workflows/scenarios/ for apply execution", Path: "workflows/scenarios/apply.yaml"})
+		}
+	}
+	if strings.TrimSpace(brief.TargetScope) == "workspace" && len(brief.TargetPaths) > 1 {
+		generatedPaths := generatedMap(gen.Files)
+		for _, path := range brief.TargetPaths {
+			if _, ok := generatedPaths[path]; !ok {
+				findings = append(findings, EvaluationFinding{Severity: "blocking", Code: "brief_target_missing", Message: fmt.Sprintf("generated output is missing expected target from authoring brief: %s", path), Fix: "Return the expected workflow files for the full workspace-scoped request", Path: path})
+			}
+		}
+	}
 	if req.TypedPreference && countCommands(gen.Files) > 0 {
-		alternatives := askcontext.StrongTypedAlternatives(plan.Request)
+		alternatives := askcontext.StrongTypedAlternativesWithOptions(plan.Request, askcontext.StepGuidanceOptions{ModeIntent: plan.AuthoringBrief.ModeIntent, Topology: plan.AuthoringBrief.Topology, RequiredCapabilities: plan.AuthoringBrief.RequiredCapabilities})
 		if len(alternatives) > 0 {
 			kinds := make([]string, 0, len(alternatives))
 			for _, step := range alternatives {
@@ -258,6 +299,26 @@ func inferScenarioIntent(prompt string) []string {
 	if strings.Contains(lower, "kubeadm") {
 		intents = append(intents, "kubeadm")
 	}
+	if strings.Contains(lower, "single-node") || strings.Contains(lower, "single node") {
+		intents = append(intents, "single-node", "node-count:1")
+	}
+	if strings.Contains(lower, "multi-node") || strings.Contains(lower, "multi node") {
+		intents = append(intents, "multi-node")
+	}
+	if strings.Contains(lower, "ha") || strings.Contains(lower, "high-availability") || strings.Contains(lower, "high availability") {
+		intents = append(intents, "ha")
+	}
+	if strings.Contains(lower, "worker") || strings.Contains(lower, "workers") || strings.Contains(lower, "join") {
+		intents = append(intents, "join")
+	}
+	for _, token := range strings.FieldsFunc(lower, func(r rune) bool { return r < '0' || r > '9' }) {
+		if token == "" {
+			continue
+		}
+		if n, err := strconv.Atoi(token); err == nil && n > 1 && strings.Contains(lower, token+"-node") {
+			intents = append(intents, "multi-node", fmt.Sprintf("node-count:%d", n))
+		}
+	}
 	if strings.Contains(lower, "registry mirror") || strings.Contains(lower, "mirror") {
 		intents = append(intents, "registry-mirror")
 	}
@@ -275,6 +336,107 @@ func inferAcceptanceLevel(workspace askretrieve.WorkspaceSummary, decision askin
 		return "starter"
 	}
 	return "complete"
+}
+
+func inferModeIntent(req ScenarioRequirements) string {
+	hasPrepare := containsString(req.RequiredFiles, "workflows/prepare.yaml") || req.NeedsPrepare
+	hasApply := containsString(req.RequiredFiles, "workflows/scenarios/apply.yaml") || strings.TrimSpace(req.EntryScenario) != ""
+	switch {
+	case hasPrepare && hasApply:
+		return "prepare+apply"
+	case hasPrepare:
+		return "prepare-only"
+	case hasApply:
+		return "apply-only"
+	default:
+		return "workspace"
+	}
+}
+
+func inferTargetScope(req ScenarioRequirements, decision askintent.Decision) string {
+	if decision.Target.Kind == "scenario" && strings.TrimSpace(decision.Target.Path) != "" && inferModeIntent(req) != "prepare+apply" {
+		return "scenario"
+	}
+	if decision.Target.Kind == "vars" {
+		return "vars"
+	}
+	if decision.Target.Kind == "component" {
+		return "component"
+	}
+	if inferModeIntent(req) == "prepare+apply" || len(req.RequiredFiles) > 1 {
+		return "workspace"
+	}
+	return "workspace"
+}
+
+func briefTargetPaths(req ScenarioRequirements) []string {
+	paths := append([]string(nil), req.RequiredFiles...)
+	if strings.TrimSpace(req.EntryScenario) != "" {
+		paths = append(paths, req.EntryScenario)
+	}
+	return dedupeStrings(paths)
+}
+
+func inferTopology(req ScenarioRequirements) string {
+	intents := map[string]bool{}
+	for _, intent := range req.ScenarioIntent {
+		intents[strings.ToLower(strings.TrimSpace(intent))] = true
+	}
+	if intents["ha"] {
+		return "ha"
+	}
+	if intents["multi-node"] {
+		return "multi-node"
+	}
+	if intents["single-node"] {
+		return "single-node"
+	}
+	return "unspecified"
+}
+
+func inferNodeCount(req ScenarioRequirements) int {
+	for _, intent := range req.ScenarioIntent {
+		lower := strings.ToLower(strings.TrimSpace(intent))
+		if strings.HasPrefix(lower, "node-count:") {
+			value := strings.TrimSpace(strings.TrimPrefix(lower, "node-count:"))
+			if n, err := strconv.Atoi(value); err == nil && n > 0 {
+				return n
+			}
+		}
+	}
+	if inferTopology(req) == "single-node" {
+		return 1
+	}
+	return 0
+}
+
+func inferRequiredCapabilities(req ScenarioRequirements) []string {
+	capabilities := []string{}
+	if req.NeedsPrepare {
+		capabilities = append(capabilities, "prepare-artifacts")
+	}
+	for _, kind := range req.ArtifactKinds {
+		switch strings.ToLower(strings.TrimSpace(kind)) {
+		case "package":
+			capabilities = append(capabilities, "package-staging")
+		case "image":
+			capabilities = append(capabilities, "image-staging")
+		case "repository-mirror":
+			capabilities = append(capabilities, "repository-setup")
+		}
+	}
+	for _, intent := range req.ScenarioIntent {
+		switch strings.ToLower(strings.TrimSpace(intent)) {
+		case "kubeadm":
+			capabilities = append(capabilities, "kubeadm-bootstrap", "cluster-verification")
+		case "join":
+			capabilities = append(capabilities, "kubeadm-join")
+		}
+	}
+	if inferTopology(req) == "multi-node" || inferTopology(req) == "ha" {
+		capabilities = append(capabilities, "kubeadm-join")
+	}
+	return dedupeStrings(capabilities)
 }
 
 func typedPreferenceRequested(prompt string) bool {

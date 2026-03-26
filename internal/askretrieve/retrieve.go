@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -110,7 +111,7 @@ func InspectWorkspace(root string) (WorkspaceSummary, error) {
 }
 
 func Retrieve(route askintent.Route, prompt string, target askintent.Target, workspace WorkspaceSummary, state askstate.Context, external []Chunk) RetrievalResult {
-	budget, maxChunks := routeBudget(route)
+	budget, maxChunks := routeBudget(route, prompt)
 	lowerPrompt := strings.ToLower(strings.TrimSpace(prompt))
 	related := relatedWorkspaceTargets(workspace, target)
 	chunks := make([]Chunk, 0, 32)
@@ -148,6 +149,7 @@ func Retrieve(route askintent.Route, prompt string, target askintent.Target, wor
 			Score:   typedStepsScore(route, lowerPrompt),
 		})
 	}
+	chunks = append(chunks, exampleReferenceChunks(route, lowerPrompt)...)
 	for _, file := range workspace.Files {
 		if !workspaceFileAllowed(file.Path) {
 			continue
@@ -362,15 +364,137 @@ func BuildChunkTextWithoutTopics(retrieval RetrievalResult, excluded ...askconte
 	return b.String()
 }
 
-func routeBudget(route askintent.Route) (maxBytes int, maxChunks int) {
+func routeBudget(route askintent.Route, prompt string) (maxBytes int, maxChunks int) {
+	complex := isComplexAuthoringPrompt(route, prompt)
 	switch route {
 	case askintent.RouteDraft, askintent.RouteRefine:
+		if complex {
+			return 20000, 14
+		}
 		return 12000, 10
 	case askintent.RouteReview, askintent.RouteExplain:
 		return 8000, 8
 	default:
 		return 4000, 6
 	}
+}
+
+func isComplexAuthoringPrompt(route askintent.Route, prompt string) bool {
+	if route != askintent.RouteDraft && route != askintent.RouteRefine {
+		return false
+	}
+	prompt = strings.ToLower(strings.TrimSpace(prompt))
+	tokens := []string{"prepare and apply", "prepare", "apply", "air-gapped", "airgapped", "kubeadm", "cluster", "multi-node", "single-node", "worker", "workers", "join", "control-plane", "control plane"}
+	hits := 0
+	for _, token := range tokens {
+		if strings.Contains(prompt, token) {
+			hits++
+		}
+	}
+	return hits >= 3
+}
+
+func exampleReferenceChunks(route askintent.Route, lowerPrompt string) []Chunk {
+	if route != askintent.RouteDraft && route != askintent.RouteRefine {
+		return nil
+	}
+	root := repoRootFallback()
+	if root == "" {
+		return nil
+	}
+	candidates := []string{
+		filepath.Join(root, "docs", "user-guide", "examples"),
+		filepath.Join(root, "test", "workflows"),
+	}
+	out := make([]Chunk, 0, 8)
+	for _, dir := range candidates {
+		_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return nil
+			}
+			lowerName := strings.ToLower(d.Name())
+			if !strings.HasSuffix(lowerName, ".yaml") && !strings.HasSuffix(lowerName, ".yml") {
+				return nil
+			}
+			content, readErr := os.ReadFile(path) //nolint:gosec // repository-owned examples only.
+			if readErr != nil {
+				return nil
+			}
+			rel, relErr := filepath.Rel(root, path)
+			if relErr != nil {
+				rel = path
+			}
+			cleanRel := filepath.ToSlash(rel)
+			score := exampleChunkScore(lowerPrompt, cleanRel, string(content))
+			if score < 55 {
+				return nil
+			}
+			out = append(out, Chunk{
+				ID:      "example-" + strings.ReplaceAll(cleanRel, "/", "_"),
+				Source:  "example",
+				Label:   cleanRel,
+				Topic:   askcontext.Topic("example:" + cleanRel),
+				Content: exampleChunkContent(cleanRel, string(content)),
+				Score:   score,
+			})
+			return nil
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Score == out[j].Score {
+			return out[i].ID < out[j].ID
+		}
+		return out[i].Score > out[j].Score
+	})
+	if len(out) > 4 {
+		out = out[:4]
+	}
+	return out
+}
+
+func exampleChunkScore(prompt string, path string, content string) int {
+	score := 20
+	text := strings.ToLower(path + "\n" + content)
+	for _, token := range []string{"air-gapped", "airgapped", "offline", "kubeadm", "cluster", "worker", "join", "control-plane", "control plane", "containerd", "repo", "package", "image", "prepare", "apply"} {
+		if strings.Contains(prompt, token) && strings.Contains(text, token) {
+			score += 12
+		}
+	}
+	if strings.Contains(path, "docs/user-guide/examples/") {
+		score += 8
+	}
+	if strings.Contains(path, "test/workflows/") {
+		score += 10
+	}
+	if strings.Contains(text, "kind: initkubeadm") || strings.Contains(text, "kind: joinkubeadm") {
+		score += 8
+	}
+	return score
+}
+
+func exampleChunkContent(path string, content string) string {
+	b := &strings.Builder{}
+	b.WriteString("Reference example:\n")
+	b.WriteString("- path: ")
+	b.WriteString(path)
+	b.WriteString("\n")
+	b.WriteString(content)
+	if !strings.HasSuffix(content, "\n") {
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+func repoRootFallback() string {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		return ""
+	}
+	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
+	if info, err := os.Stat(filepath.Join(root, "go.mod")); err == nil && !info.IsDir() {
+		return root
+	}
+	return ""
 }
 
 func workspaceFileAllowed(path string) bool {

@@ -75,7 +75,7 @@ func planSystemPrompt(decision askintent.Decision, retrieval askretrieve.Retriev
 	bundle := askknowledge.Current()
 	b := &strings.Builder{}
 	b.WriteString("You are deck ask planner. Return strict JSON only.\n")
-	b.WriteString("JSON shape: {\"version\":number,\"request\":string,\"intent\":string,\"complexity\":string,\"offlineAssumption\":string,\"needsPrepare\":boolean,\"artifactKinds\":[]string,\"varsRecommendation\":[]string,\"componentRecommendation\":[]string,\"blockers\":[]string,\"targetOutcome\":string,\"assumptions\":[]string,\"openQuestions\":[]string,\"entryScenario\":string,\"files\":[{\"path\":string,\"kind\":string,\"action\":string,\"purpose\":string}],\"validationChecklist\":[]string}.\n")
+	b.WriteString("JSON shape: {\"version\":number,\"request\":string,\"intent\":string,\"complexity\":string,\"authoringBrief\":{\"routeIntent\":string,\"targetScope\":string,\"targetPaths\":[]string,\"modeIntent\":string,\"connectivity\":string,\"completenessTarget\":string,\"topology\":string,\"nodeCount\":number,\"requiredCapabilities\":[]string},\"offlineAssumption\":string,\"needsPrepare\":boolean,\"artifactKinds\":[]string,\"varsRecommendation\":[]string,\"componentRecommendation\":[]string,\"blockers\":[]string,\"targetOutcome\":string,\"assumptions\":[]string,\"openQuestions\":[]string,\"entryScenario\":string,\"files\":[{\"path\":string,\"kind\":string,\"action\":string,\"purpose\":string}],\"validationChecklist\":[]string}.\n")
 	b.WriteString(bundle.WorkflowPromptBlock())
 	b.WriteString("\n")
 	b.WriteString(bundle.PolicyPromptBlock())
