@@ -14,7 +14,9 @@ import (
 
 	"github.com/Airgap-Castaways/deck/internal/askcontext"
 	"github.com/Airgap-Castaways/deck/internal/askcontract"
+	"github.com/Airgap-Castaways/deck/internal/askdiagnostic"
 	"github.com/Airgap-Castaways/deck/internal/askintent"
+	"github.com/Airgap-Castaways/deck/internal/askpolicy"
 	"github.com/Airgap-Castaways/deck/internal/askretrieve"
 	"github.com/Airgap-Castaways/deck/internal/askreview"
 	"github.com/Airgap-Castaways/deck/internal/fsutil"
@@ -480,57 +482,50 @@ func semanticCritic(gen askcontract.GenerationResponse, decision askintent.Decis
 			}
 		}
 	}
-	if len(plan.Files) > 0 {
-		planned := map[string]string{}
-		for _, file := range plan.Files {
-			planned[filepath.ToSlash(strings.TrimSpace(file.Path))] = strings.ToLower(strings.TrimSpace(file.Action))
-		}
-		for path := range planned {
-			if _, ok := generated[path]; !ok {
-				critic.Blocking = append(critic.Blocking, fmt.Sprintf("planned file missing from generation: %s", path))
-				critic.MissingFiles = append(critic.MissingFiles, path)
-			}
-		}
-		checklistText := strings.ToLower(strings.Join(plan.ValidationChecklist, "\n"))
-		if strings.Contains(checklistText, "vars") {
-			if _, ok := generated["workflows/vars.yaml"]; !ok {
-				critic.Blocking = append(critic.Blocking, "validation checklist requires vars but workflows/vars.yaml was not generated")
-				critic.CoverageGaps = append(critic.CoverageGaps, "validation checklist references vars but workflows/vars.yaml was not generated")
-			}
-		}
-		if decision.Route == askintent.RouteRefine {
-			for _, file := range gen.Files {
-				clean := filepath.ToSlash(strings.TrimSpace(file.Path))
-				action, ok := planned[clean]
-				if !ok {
-					critic.Blocking = append(critic.Blocking, fmt.Sprintf("refine generated unplanned file: %s", clean))
-					critic.RequiredFixes = append(critic.RequiredFixes, "Only update or create files declared in the plan during refine")
-				}
-				if action != "" && action != "update" && action != "create" {
-					critic.Blocking = append(critic.Blocking, fmt.Sprintf("invalid planned action for %s", clean))
-				}
-				if action == "update" && strings.HasPrefix(clean, "workflows/scenarios/") && strings.Contains(strings.ToLower(clean), "apply") {
-					critic.Advisory = append(critic.Advisory, fmt.Sprintf("refine updates existing entry scenario: %s", clean))
-				}
-			}
-		}
-	}
-	if entry := filepath.ToSlash(strings.TrimSpace(plan.EntryScenario)); entry != "" {
-		if _, ok := generated[entry]; !ok {
-			critic.Blocking = append(critic.Blocking, fmt.Sprintf("planned entry scenario missing from generation: %s", entry))
-			critic.MissingFiles = append(critic.MissingFiles, entry)
-		}
-	}
+	planConformance := askpolicy.EvaluatePlanConformance(plan, gen, decision)
 	generatedScenarioRefs := map[string]bool{}
 	for _, file := range gen.Files {
 		for _, importPath := range localImportPaths(file.Content) {
 			generatedScenarioRefs[filepath.ToSlash(filepath.Join("workflows/components", importPath))] = true
 		}
 	}
+	semanticFindings := append([]askpolicy.EvaluationFinding{}, planConformance.Findings...)
 	for _, file := range gen.Files {
 		clean := filepath.ToSlash(strings.TrimSpace(file.Path))
 		if strings.HasPrefix(clean, "workflows/components/") && !generatedScenarioRefs[clean] {
-			critic.Advisory = append(critic.Advisory, fmt.Sprintf("generated component has no scenario import: %s", clean))
+			semanticFindings = append(semanticFindings, askpolicy.EvaluationFinding{Severity: "advisory", Code: "orphan_component", Message: fmt.Sprintf("generated component has no scenario import: %s", clean), Path: clean})
+		}
+	}
+	requirements := askpolicy.BuildScenarioRequirements(plan.Request, askretrieve.RetrievalResult{}, askretrieve.WorkspaceSummary{}, decision)
+	if strings.TrimSpace(plan.OfflineAssumption) != "" {
+		requirements.Connectivity = strings.TrimSpace(plan.OfflineAssumption)
+	}
+	if plan.NeedsPrepare {
+		requirements.NeedsPrepare = true
+	}
+	if len(plan.ArtifactKinds) > 0 {
+		requirements.ArtifactKinds = askpolicy.NormalizeArtifactKinds(dedupe(append(requirements.ArtifactKinds, plan.ArtifactKinds...)))
+	}
+	if len(plan.VarsRecommendation) > 0 {
+		requirements.VarsAdvisories = dedupe(append(requirements.VarsAdvisories, plan.VarsRecommendation...))
+	}
+	if len(plan.ComponentRecommendation) > 0 {
+		requirements.ComponentAdvisories = dedupe(append(requirements.ComponentAdvisories, plan.ComponentRecommendation...))
+	}
+	evaluation := askpolicy.EvaluateGeneration(requirements, plan, gen)
+	semanticFindings = append(semanticFindings, evaluation.Findings...)
+	for _, diag := range askdiagnostic.FromEvaluation(semanticFindings) {
+		switch diag.Severity {
+		case "blocking":
+			critic.Blocking = append(critic.Blocking, diag.Message)
+			if strings.TrimSpace(diag.File) != "" {
+				critic.MissingFiles = append(critic.MissingFiles, diag.File)
+			}
+			if strings.TrimSpace(diag.SuggestedFix) != "" {
+				critic.RequiredFixes = append(critic.RequiredFixes, diag.SuggestedFix)
+			}
+		default:
+			critic.Advisory = append(critic.Advisory, diag.Message)
 		}
 	}
 	critic.Blocking = dedupe(critic.Blocking)
@@ -540,14 +535,6 @@ func semanticCritic(gen askcontract.GenerationResponse, decision askintent.Decis
 	critic.CoverageGaps = dedupe(critic.CoverageGaps)
 	critic.RequiredFixes = dedupe(critic.RequiredFixes)
 	return critic
-}
-
-func criticJSON(critic askcontract.CriticResponse) string {
-	raw, err := json.MarshalIndent(critic, "", "  ")
-	if err != nil {
-		return "{}"
-	}
-	return string(raw)
 }
 
 func dedupe(values []string) []string {

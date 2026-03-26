@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/Airgap-Castaways/deck/internal/askcontext"
 )
 
 type GeneratedFile struct {
@@ -25,17 +27,22 @@ type PlanFile struct {
 }
 
 type PlanResponse struct {
-	Version             int        `json:"version"`
-	Request             string     `json:"request"`
-	Intent              string     `json:"intent"`
-	Complexity          string     `json:"complexity"`
-	Blockers            []string   `json:"blockers"`
-	TargetOutcome       string     `json:"targetOutcome"`
-	Assumptions         []string   `json:"assumptions"`
-	OpenQuestions       []string   `json:"openQuestions"`
-	EntryScenario       string     `json:"entryScenario"`
-	Files               []PlanFile `json:"files"`
-	ValidationChecklist []string   `json:"validationChecklist"`
+	Version                 int        `json:"version"`
+	Request                 string     `json:"request"`
+	Intent                  string     `json:"intent"`
+	Complexity              string     `json:"complexity"`
+	OfflineAssumption       string     `json:"offlineAssumption,omitempty"`
+	NeedsPrepare            bool       `json:"needsPrepare,omitempty"`
+	ArtifactKinds           []string   `json:"artifactKinds,omitempty"`
+	VarsRecommendation      []string   `json:"varsRecommendation,omitempty"`
+	ComponentRecommendation []string   `json:"componentRecommendation,omitempty"`
+	Blockers                []string   `json:"blockers"`
+	TargetOutcome           string     `json:"targetOutcome"`
+	Assumptions             []string   `json:"assumptions"`
+	OpenQuestions           []string   `json:"openQuestions"`
+	EntryScenario           string     `json:"entryScenario"`
+	Files                   []PlanFile `json:"files"`
+	ValidationChecklist     []string   `json:"validationChecklist"`
 }
 
 type CriticResponse struct {
@@ -142,6 +149,7 @@ func ParsePlan(raw string) (PlanResponse, error) {
 	resp.Request = strings.TrimSpace(resp.Request)
 	resp.Intent = strings.TrimSpace(resp.Intent)
 	resp.Complexity = strings.TrimSpace(resp.Complexity)
+	resp.OfflineAssumption = strings.TrimSpace(resp.OfflineAssumption)
 	resp.TargetOutcome = strings.TrimSpace(resp.TargetOutcome)
 	resp.EntryScenario = strings.TrimSpace(resp.EntryScenario)
 	if resp.Request == "" {
@@ -163,6 +171,32 @@ func ParsePlan(raw string) (PlanResponse, error) {
 		}
 		if resp.Files[i].Action == "" {
 			resp.Files[i].Action = "create"
+		}
+		switch resp.Files[i].Action {
+		case "modify", "update", "create-or-modify", "create-or-update":
+			if strings.HasPrefix(resp.Files[i].Path, "workflows/") {
+				resp.Files[i].Action = "update"
+			}
+		case "create":
+			// keep as-is
+		}
+		if !askcontext.AllowedGeneratedPath(resp.Files[i].Path) {
+			return PlanResponse{}, fmt.Errorf("plan response has file outside allowed ask paths: %s", resp.Files[i].Path)
+		}
+	}
+	if resp.EntryScenario != "" {
+		if !askcontext.AllowedGeneratedPath(resp.EntryScenario) || !strings.HasPrefix(resp.EntryScenario, "workflows/scenarios/") {
+			return PlanResponse{}, fmt.Errorf("plan response entryScenario must be a scenario path under workflows/scenarios/: %s", resp.EntryScenario)
+		}
+		matched := false
+		for _, file := range resp.Files {
+			if file.Path == resp.EntryScenario {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return PlanResponse{}, fmt.Errorf("plan response entryScenario must match a planned file: %s", resp.EntryScenario)
 		}
 	}
 	return resp, nil

@@ -32,7 +32,7 @@ func (m *mockAskClient) Generate(_ context.Context, _ askprovider.Request) (askp
 
 func TestAskConfigCommands(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "config"))
-	out, err := runWithCapturedStdout([]string{"ask", "config", "set", "--provider", "openrouter", "--model", "anthropic/claude-3.5-sonnet", "--endpoint", "https://openrouter.ai/api/v1", "--api-key", "secret-token", "--log-level", "debug"})
+	out, err := runWithCapturedStdout([]string{"ask", "config", "set", "--provider", "openrouter", "--model", "anthropic/claude-3.5-sonnet", "--endpoint", "https://openrouter.ai/api/v1", "--api-key", "secret-token", "--oauth-token", "oauth-token", "--log-level", "debug"})
 	if err != nil {
 		t.Fatalf("config set: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestAskConfigCommands(t *testing.T) {
 	if err != nil {
 		t.Fatalf("config show: %v", err)
 	}
-	for _, want := range []string{"provider=openrouter", "model=anthropic/claude-3.5-sonnet", "endpoint=https://openrouter.ai/api/v1", "endpointSource=config", "logLevel=debug", "mcpEnabled=false", "lspEnabled=false", "apiKey=secr****oken", "apiKeySource=config"} {
+	for _, want := range []string{"provider=openrouter", "model=anthropic/claude-3.5-sonnet", "endpoint=https://openrouter.ai/api/v1", "endpointSource=config", "logLevel=debug", "mcpEnabled=false", "lspEnabled=false", "apiKey=secr****oken", "apiKeySource=config", "oauthToken=oaut***oken", "oauthTokenSource=config", "authStatus="} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("expected %q in config show output, got %q", want, out)
 		}
@@ -54,6 +54,49 @@ func TestAskConfigCommands(t *testing.T) {
 	}
 	if !strings.Contains(out, "ask config cleared") {
 		t.Fatalf("unexpected config unset output: %q", out)
+	}
+}
+
+func TestAskLoginStatusLogoutHeadless(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "config"))
+	out, err := runWithCapturedStdout([]string{"ask", "login", "--provider", "openai", "--headless", "--oauth-token", "oauth-token", "--refresh-token", "refresh-token", "--account-email", "user@example.com", "--expires-at", "2030-01-02T03:04:05Z"})
+	if err != nil {
+		t.Fatalf("ask login: %v", err)
+	}
+	if !strings.Contains(out, "ask login saved provider=openai") {
+		t.Fatalf("unexpected login output: %q", out)
+	}
+	out, err = runWithCapturedStdout([]string{"ask", "status", "--provider", "openai"})
+	if err != nil {
+		t.Fatalf("ask status: %v", err)
+	}
+	for _, want := range []string{"provider=openai", "authenticated=true", "status=valid", "accountEmail=user@example.com", "hasRefreshToken=true"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected %q in status output, got %q", want, out)
+		}
+	}
+	out, err = runWithCapturedStdout([]string{"ask", "logout", "--provider", "openai"})
+	if err != nil {
+		t.Fatalf("ask logout: %v", err)
+	}
+	if !strings.Contains(out, "ask logout removed provider=openai") {
+		t.Fatalf("unexpected logout output: %q", out)
+	}
+	out, err = runWithCapturedStdout([]string{"ask", "status", "--provider", "openai"})
+	if err != nil {
+		t.Fatalf("ask status after logout: %v", err)
+	}
+	if !strings.Contains(out, "authenticated=false") {
+		t.Fatalf("expected missing auth after logout, got %q", out)
+	}
+}
+
+func TestAskLoginRejectsNonOpenAIProvider(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "config"))
+	if _, err := runWithCapturedStdout([]string{"ask", "login", "--provider", "gemini", "--headless", "--oauth-token", "token"}); err == nil {
+		t.Fatalf("expected non-openai provider to fail")
+	} else if !strings.Contains(err.Error(), "supports only provider") {
+		t.Fatalf("expected provider guard, got %v", err)
 	}
 }
 
@@ -75,12 +118,13 @@ func TestAskCommandMetadataMatchesAskContext(t *testing.T) {
 func TestAskConfigShowIncludesStoredAugmentSettings(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "config"))
 	if err := askconfig.SaveStored(askconfig.Settings{
-		Provider: "openai",
-		Model:    "gpt-5.4",
-		APIKey:   "secret-token",
-		LogLevel: "trace",
-		MCP:      askconfig.MCP{Enabled: true, Servers: []askconfig.MCPServer{{Name: "context7", RunCommand: "context7-mcp"}}},
-		LSP:      askconfig.LSP{Enabled: true, YAML: askconfig.LSPEntry{RunCommand: "yaml-language-server", Args: []string{"--stdio"}}},
+		Provider:   "openai",
+		Model:      "gpt-5.4",
+		APIKey:     "secret-token",
+		OAuthToken: "oauth-token",
+		LogLevel:   "trace",
+		MCP:        askconfig.MCP{Enabled: true, Servers: []askconfig.MCPServer{{Name: "context7", RunCommand: "context7-mcp"}}},
+		LSP:        askconfig.LSP{Enabled: true, YAML: askconfig.LSPEntry{RunCommand: "yaml-language-server", Args: []string{"--stdio"}}},
 	}); err != nil {
 		t.Fatalf("save stored config: %v", err)
 	}

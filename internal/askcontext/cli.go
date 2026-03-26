@@ -29,7 +29,7 @@ func AskCommandMeta() AskCommandMetadata {
 				{Name: "--plan-dir", Description: "EnsureDirectory for ask plan artifacts."},
 			},
 		},
-		Config: AskConfigCommandMetadata{Short: "Manage global ask config defaults and api key"},
+		Config: AskConfigCommandMetadata{Short: "Manage global ask config defaults and API credentials"},
 		Flags: []CLIFlag{
 			{Name: "--write", Description: "Write generated workflow files into the current workspace."},
 			{Name: "--from", Description: "Load additional request details from a text or markdown file."},

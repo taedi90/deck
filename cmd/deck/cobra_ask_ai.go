@@ -71,6 +71,7 @@ func newAskCommand() *cobra.Command {
 
 	cmd.AddCommand(newAskPlanCommand())
 	cmd.AddCommand(newAskConfigCommand())
+	cmd.AddCommand(newAskLoginCommand(), newAskLogoutCommand(), newAskStatusCommand())
 	return cmd
 }
 
@@ -132,6 +133,7 @@ func newAskConfigCommand() *cobra.Command {
 
 func newAskConfigSetCommand() *cobra.Command {
 	var apiKey string
+	var oauthToken string
 	var provider string
 	var model string
 	var endpoint string
@@ -149,6 +151,9 @@ func newAskConfigSetCommand() *cobra.Command {
 			if value := strings.TrimSpace(apiKey); value != "" {
 				updated.APIKey = value
 			}
+			if value := strings.TrimSpace(oauthToken); value != "" {
+				updated.OAuthToken = value
+			}
 			if value := strings.TrimSpace(provider); value != "" {
 				updated.Provider = value
 			}
@@ -164,10 +169,11 @@ func newAskConfigSetCommand() *cobra.Command {
 			changed := settings.Provider != updated.Provider ||
 				settings.Model != updated.Model ||
 				settings.APIKey != updated.APIKey ||
+				settings.OAuthToken != updated.OAuthToken ||
 				settings.Endpoint != updated.Endpoint ||
 				settings.LogLevel != updated.LogLevel
 			if !changed {
-				return fmt.Errorf("ask config set requires at least one of --api-key, --provider, --model, --endpoint, or --log-level")
+				return fmt.Errorf("ask config set requires at least one of --api-key, --oauth-token, --provider, --model, --endpoint, or --log-level")
 			}
 			if err := askconfig.SaveStored(updated); err != nil {
 				return err
@@ -176,6 +182,7 @@ func newAskConfigSetCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "save the ask api key in XDG config")
+	cmd.Flags().StringVar(&oauthToken, "oauth-token", "", "save the ask oauth bearer token in XDG config")
 	cmd.Flags().StringVar(&provider, "provider", "", "save the default ask provider")
 	cmd.Flags().StringVar(&model, "model", "", "save the default ask model")
 	cmd.Flags().StringVar(&endpoint, "endpoint", "", "save the default ask provider endpoint")
@@ -223,7 +230,16 @@ func newAskConfigShowCommand() *cobra.Command {
 			if err := stdoutPrintf("apiKey=%s\n", askconfig.MaskAPIKey(effective.APIKey)); err != nil {
 				return err
 			}
-			return stdoutPrintf("apiKeySource=%s\n", effective.APIKeySource)
+			if err := stdoutPrintf("apiKeySource=%s\n", effective.APIKeySource); err != nil {
+				return err
+			}
+			if err := stdoutPrintf("oauthToken=%s\n", askconfig.MaskAPIKey(effective.OAuthToken)); err != nil {
+				return err
+			}
+			if err := stdoutPrintf("oauthTokenSource=%s\n", effective.OAuthTokenSource); err != nil {
+				return err
+			}
+			return stdoutPrintf("authStatus=%s\n", effective.AuthStatus)
 		},
 	}
 	return cmd

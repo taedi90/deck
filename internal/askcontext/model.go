@@ -4,6 +4,7 @@ type Manifest struct {
 	CLI        CLIContext
 	Topology   WorkspaceTopology
 	Workflow   WorkflowRules
+	Policy     AuthoringPolicy
 	Modes      []ModeGuidance
 	Components ComponentGuidance
 	Vars       VarsGuidance
@@ -20,6 +21,8 @@ const (
 	TopicComponentsImports    Topic = "components-imports"
 	TopicVarsGuidance         Topic = "vars-guidance"
 	TopicTypedSteps           Topic = "typed-steps"
+	TopicStepRepair           Topic = "step-repair"
+	TopicStepQuality          Topic = "step-quality-rules"
 	TopicCLIHints             Topic = "cli-hints"
 	TopicProjectPhilosophy    Topic = "project-philosophy"
 )
@@ -61,7 +64,20 @@ type WorkflowRules struct {
 	SupportedModes   []string
 	SupportedVersion string
 	ImportRule       string
+	RequiredFields   []string
+	PhaseRules       []string
+	StepRules        []string
+	PhaseExample     string
+	StepsExample     string
 	Notes            []string
+}
+
+type AuthoringPolicy struct {
+	AssumeOfflineByDefault bool
+	PrepareArtifactKinds   []string
+	ForbiddenApplyActions  []string
+	VarsAdvisory           []string
+	ComponentAdvisory      []string
 }
 
 type ModeGuidance struct {
@@ -74,10 +90,13 @@ type ModeGuidance struct {
 }
 
 type ComponentGuidance struct {
-	Summary      string
-	ImportRule   string
-	ReuseRule    string
-	LocationRule string
+	Summary         string
+	ImportRule      string
+	ReuseRule       string
+	LocationRule    string
+	FragmentRule    string
+	ImportExample   string
+	FragmentExample string
 }
 
 type VarsGuidance struct {
@@ -89,19 +108,33 @@ type VarsGuidance struct {
 }
 
 type StepKindContext struct {
-	Kind         string
-	Category     string
-	Summary      string
-	WhenToUse    string
-	SchemaFile   string
-	AllowedRoles []string
-	Actions      []string
-	Outputs      []string
-	MinimalShape string
-	CuratedShape string
-	KeyFields    []StepFieldContext
-	ActionGuides []StepActionContext
-	Notes        []string
+	Kind                     string
+	Category                 string
+	Summary                  string
+	WhenToUse                string
+	SchemaFile               string
+	AllowedRoles             []string
+	Actions                  []string
+	Outputs                  []string
+	MinimalShape             string
+	CuratedShape             string
+	KeyFields                []StepFieldContext
+	ActionGuides             []StepActionContext
+	PromptExamples           []StepExampleContext
+	CommonMistakes           []string
+	RepairHints              []string
+	ValidationHints          []ValidationHint
+	ConstrainedLiteralFields []ConstrainedFieldHint
+	MatchSignals             []string
+	AntiSignals              []string
+	QualityRules             []QualityRule
+	Notes                    []string
+}
+
+type ConstrainedFieldHint struct {
+	Path          string
+	AllowedValues []string
+	Guidance      string
 }
 
 type StepFieldContext struct {
@@ -114,4 +147,25 @@ type StepActionContext struct {
 	Action  string
 	Note    string
 	Example string
+}
+
+type ValidationHint struct {
+	ErrorContains string
+	Fix           string
+}
+
+type StepExampleContext struct {
+	Purpose string
+	YAML    string
+}
+
+type QualityRule struct {
+	Trigger string
+	Message string
+	Level   string
+}
+
+type SelectedStepGuidance struct {
+	Step        StepKindContext
+	WhyRelevant string
 }

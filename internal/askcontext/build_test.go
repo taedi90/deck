@@ -77,6 +77,12 @@ func TestManifestWorkflowRulesMatchValidatorAndSchema(t *testing.T) {
 			t.Fatalf("schema anyOf missing top-level mode %q", mode)
 		}
 	}
+	if !contains(manifest.Workflow.RequiredFields, "version") {
+		t.Fatalf("workflow rules should require version")
+	}
+	if !manifest.Policy.AssumeOfflineByDefault {
+		t.Fatalf("expected offline-first ask policy")
+	}
 }
 
 func TestManifestCLIParity(t *testing.T) {
@@ -119,7 +125,7 @@ func TestPromptBlocksIncludeCoreAuthoringGuidance(t *testing.T) {
 		CLIHintsBlock(),
 	}
 	joined := strings.Join(blocks, "\n")
-	for _, want := range []string{"workflows/components/", "workflows/vars.yaml", "prepare", "apply", "Prefer typed steps over Command"} {
+	for _, want := range []string{"workflows/components/", "workflows/vars.yaml", "prepare", "apply", "Prefer typed steps over Command", "Required workflow fields: version", "Phase objects do not support an id field.", "Each step needs id, kind, and spec.", "Import example:", "- path: check-host.yaml", "Component fragment example:", "must not add workflow-level fields like version or phases"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("expected %q in prompt blocks, got %q", want, joined)
 		}
@@ -157,6 +163,33 @@ func TestRelevantStepKindsBlockIncludesTypedShapeGuidance(t *testing.T) {
 	} {
 		if !strings.Contains(block, want) {
 			t.Fatalf("expected %q in typed step guidance block, got %q", want, block)
+		}
+	}
+}
+
+func TestRelevantStepKindsBlockIncludesCheckHostShapeAndMistakes(t *testing.T) {
+	block := RelevantStepKindsBlock("create an air-gapped rhel9 kubeadm workflow with typed steps where possible")
+	for _, want := range []string{
+		"CheckHost",
+		"spec.checks",
+		"[os, arch, swap]",
+		"spec.os",
+	} {
+		if !strings.Contains(block, want) {
+			t.Fatalf("expected %q in typed step guidance block, got %q", want, block)
+		}
+	}
+}
+
+func TestRelevantStepKindsMatchesKubeadmAirGapRequest(t *testing.T) {
+	relevant := RelevantStepKinds("create an air-gapped rhel9 single-node kubeadm workflow")
+	joined := make([]string, 0, len(relevant))
+	for _, step := range relevant {
+		joined = append(joined, step.Kind)
+	}
+	for _, want := range []string{"CheckHost", "LoadImage", "CheckCluster"} {
+		if !contains(joined, want) {
+			t.Fatalf("expected %s in relevant steps, got %v", want, joined)
 		}
 	}
 }

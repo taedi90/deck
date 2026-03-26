@@ -6,7 +6,10 @@ import (
 
 	"github.com/Airgap-Castaways/deck/internal/askcontext"
 	"github.com/Airgap-Castaways/deck/internal/askintent"
+	"github.com/Airgap-Castaways/deck/internal/askknowledge"
+	"github.com/Airgap-Castaways/deck/internal/askpolicy"
 	"github.com/Airgap-Castaways/deck/internal/askretrieve"
+	"github.com/Airgap-Castaways/deck/internal/askscaffold"
 	"github.com/Airgap-Castaways/deck/internal/askstate"
 )
 
@@ -40,7 +43,8 @@ func classifierUserPrompt(prompt string, reviewFlag bool, workspace askretrieve.
 	return b.String()
 }
 
-func generationSystemPrompt(route askintent.Route, target askintent.Target, retrieval askretrieve.RetrievalResult) string {
+func generationSystemPrompt(route askintent.Route, target askintent.Target, retrieval askretrieve.RetrievalResult, requirements askpolicy.ScenarioRequirements, scaffold askscaffold.Scaffold) string {
+	bundle := askknowledge.Current()
 	b := &strings.Builder{}
 	b.WriteString("You are deck ask, a workflow authoring assistant.\n")
 	b.WriteString("Route: ")
@@ -57,30 +61,42 @@ func generationSystemPrompt(route askintent.Route, target askintent.Target, retr
 	b.WriteString("Rules:\n")
 	b.WriteString("- Produce only strict JSON.\n")
 	b.WriteString("- JSON shape: {\"summary\":string,\"review\":[]string,\"files\":[{\"path\":string,\"content\":string}]}.\n")
-	b.WriteString(askcontext.InvariantPromptBlock().Content)
+	b.WriteString(bundle.WorkflowPromptBlock())
 	b.WriteString("\n")
-	b.WriteString(askcontext.PolicyPromptBlock().Content)
+	b.WriteString(bundle.PolicyPromptBlock())
 	b.WriteString("\n")
+	b.WriteString(askpolicy.RequirementsPromptBlock(requirements))
+	b.WriteString("\n")
+	b.WriteString(askscaffold.PromptBlock(scaffold))
+	b.WriteString("\n")
+	if constraints := bundle.ConstraintPromptBlock(stepKindsFromRetrieval(retrieval)); strings.TrimSpace(constraints) != "" {
+		b.WriteString(constraints)
+		b.WriteString("\n")
+	}
 	b.WriteString("- Never place summary, description, or review fields inside workflow YAML content.\n")
-	b.WriteString("- For a new workspace draft, prefer creating workflows/scenarios/apply.yaml and workflows/vars.yaml only when needed.\n")
-	b.WriteString("- If the request is simply to print text in the terminal, a minimal valid apply scenario with one Command step is acceptable.\n")
-	b.WriteString("- Do not use whole-value template expressions such as `{{ .vars.dockerPackages }}` for typed fields that expect arrays or objects; inline those YAML arrays or objects directly.\n")
-	b.WriteString("- Detailed topology, component/import guidance, vars guidance, and typed-step references are provided through retrieved context.\n")
-	b.WriteString("- Example valid minimal scenario YAML:\n")
-	b.WriteString("  ")
-	b.WriteString("  version: v1alpha1\n")
-	b.WriteString("  steps:\n")
-	b.WriteString("    - id: print-hello\n")
-	b.WriteString("      kind: Command\n")
-	b.WriteString("      spec:\n")
-	b.WriteString("        command:\n")
-	b.WriteString("          - echo\n")
-	b.WriteString("          - hello\n")
+	b.WriteString("- When a scaffold file is present, return that file path and keep its structural shape valid.\n")
+	b.WriteString("- Use retrieved deck knowledge for topology, component/import shape, vars semantics, and typed-step choices.\n")
 	b.WriteString("- Do not use Kubernetes-style fields such as apiVersion, kind, metadata, or spec wrappers at the workflow top level.\n")
 	b.WriteString("- Do not invent unsupported fields.\n")
 	b.WriteString("Retrieved context follows.\n")
 	b.WriteString(askretrieve.BuildChunkTextWithoutTopics(retrieval, askcontext.TopicWorkflowInvariants, askcontext.TopicPolicy))
 	return b.String()
+}
+
+func stepKindsFromRetrieval(retrieval askretrieve.RetrievalResult) []string {
+	kinds := make([]string, 0)
+	for _, chunk := range retrieval.Chunks {
+		for _, line := range strings.Split(chunk.Content, "\n") {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "- ") && strings.Contains(trimmed, ":") {
+				kind := strings.TrimSpace(strings.TrimPrefix(strings.SplitN(trimmed, ":", 2)[0], "- "))
+				if kind != "" && strings.IndexFunc(kind, func(r rune) bool { return r == ' ' || r == '`' }) == -1 {
+					kinds = append(kinds, kind)
+				}
+			}
+		}
+	}
+	return kinds
 }
 
 func infoPrompts(route askintent.Route, target askintent.Target, retrieval askretrieve.RetrievalResult, prompt string) (string, string) {

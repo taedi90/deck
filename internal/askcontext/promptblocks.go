@@ -1,9 +1,6 @@
 package askcontext
 
-import (
-	"sort"
-	"strings"
-)
+import "strings"
 
 func InvariantPromptBlock() PromptBlock {
 	manifest := Current()
@@ -21,10 +18,41 @@ func InvariantPromptBlock() PromptBlock {
 	b.WriteString("- Top-level workflow modes: ")
 	b.WriteString(strings.Join(manifest.Workflow.TopLevelModes, ", "))
 	b.WriteString("\n")
+	if len(manifest.Workflow.RequiredFields) > 0 {
+		b.WriteString("- Required workflow fields: ")
+		b.WriteString(strings.Join(manifest.Workflow.RequiredFields, ", "))
+		b.WriteString("\n")
+	}
 	for _, note := range manifest.Workflow.Notes {
 		b.WriteString("- ")
 		b.WriteString(note)
 		b.WriteString("\n")
+	}
+	for _, rule := range manifest.Workflow.PhaseRules {
+		b.WriteString("- ")
+		b.WriteString(rule)
+		b.WriteString("\n")
+	}
+	for _, rule := range manifest.Workflow.StepRules {
+		b.WriteString("- ")
+		b.WriteString(rule)
+		b.WriteString("\n")
+	}
+	if manifest.Workflow.PhaseExample != "" {
+		b.WriteString("- Minimal phase-based workflow example:\n")
+		for _, line := range strings.Split(manifest.Workflow.PhaseExample, "\n") {
+			b.WriteString("  ")
+			b.WriteString(line)
+			b.WriteString("\n")
+		}
+	}
+	if manifest.Workflow.StepsExample != "" {
+		b.WriteString("- Minimal top-level steps workflow example:\n")
+		for _, line := range strings.Split(manifest.Workflow.StepsExample, "\n") {
+			b.WriteString("  ")
+			b.WriteString(line)
+			b.WriteString("\n")
+		}
 	}
 	return PromptBlock{Topic: TopicWorkflowInvariants, Title: "Workflow invariants", Content: strings.TrimSpace(b.String())}
 }
@@ -112,6 +140,26 @@ func ComponentGuidanceBlock() string {
 	b.WriteString(manifest.Components.ReuseRule)
 	b.WriteString("\n- ")
 	b.WriteString(manifest.Components.LocationRule)
+	if strings.TrimSpace(manifest.Components.FragmentRule) != "" {
+		b.WriteString("\n- ")
+		b.WriteString(manifest.Components.FragmentRule)
+	}
+	if strings.TrimSpace(manifest.Components.ImportExample) != "" {
+		b.WriteString("\n- Import example:\n")
+		for _, line := range strings.Split(manifest.Components.ImportExample, "\n") {
+			b.WriteString("  ")
+			b.WriteString(line)
+			b.WriteString("\n")
+		}
+	}
+	if strings.TrimSpace(manifest.Components.FragmentExample) != "" {
+		b.WriteString("- Component fragment example:\n")
+		for _, line := range strings.Split(manifest.Components.FragmentExample, "\n") {
+			b.WriteString("  ")
+			b.WriteString(line)
+			b.WriteString("\n")
+		}
+	}
 	return strings.TrimSpace(b.String())
 }
 
@@ -163,159 +211,6 @@ func CLIHintsPromptBlock() PromptBlock {
 	return PromptBlock{Topic: TopicCLIHints, Title: "Relevant CLI usage", Content: CLIHintsBlock()}
 }
 
-func RelevantStepKindsBlock(prompt string) string {
-	relevant := RelevantStepKinds(prompt)
-	if len(relevant) == 0 {
-		return ""
-	}
-	b := &strings.Builder{}
-	b.WriteString("Relevant typed steps:\n")
-	for _, step := range relevant {
-		b.WriteString("- ")
-		b.WriteString(step.Kind)
-		b.WriteString(": ")
-		b.WriteString(step.Summary)
-		if step.WhenToUse != "" {
-			b.WriteString(" When to use: ")
-			b.WriteString(step.WhenToUse)
-		}
-		if len(step.AllowedRoles) > 0 {
-			b.WriteString(" Roles: ")
-			b.WriteString(strings.Join(step.AllowedRoles, ", "))
-		}
-		if len(step.Actions) > 0 {
-			b.WriteString(" Actions: ")
-			b.WriteString(strings.Join(step.Actions, ", "))
-		}
-		b.WriteString("\n")
-		for _, field := range step.KeyFields {
-			b.WriteString("  - ")
-			b.WriteString(field.Path)
-			b.WriteString(": ")
-			b.WriteString(field.Description)
-			if field.Example != "" {
-				b.WriteString(" Example: ")
-				b.WriteString(field.Example)
-			}
-			b.WriteString("\n")
-		}
-		if step.Kind == "InstallPackage" || step.Kind == "DownloadPackage" {
-			b.WriteString("  - spec.packages must stay a real YAML array, not a quoted template string.\n")
-			b.WriteString("  - Do not set spec.packages to `{{ .vars.* }}` or any other whole-value template expression; inline the package list as YAML items instead.\n")
-		}
-		if step.Kind == "ConfigureRepository" {
-			b.WriteString("  - spec.repositories must stay a real YAML array of repository objects, not a scalar shortcut.\n")
-			b.WriteString("  - Do not set spec.repositories to `{{ .vars.* }}` or any other whole-value template expression; inline repository objects as YAML list items instead.\n")
-		}
-		for _, action := range step.ActionGuides {
-			if !containsAction(step.Actions, action.Action) {
-				continue
-			}
-			b.WriteString("  - action ")
-			b.WriteString(action.Action)
-			if action.Note != "" {
-				b.WriteString(": ")
-				b.WriteString(action.Note)
-			}
-			b.WriteString("\n")
-			if action.Example != "" {
-				b.WriteString("    example:\n")
-				for _, line := range strings.Split(action.Example, "\n") {
-					line = strings.TrimRight(line, " ")
-					if strings.TrimSpace(line) == "" {
-						continue
-					}
-					b.WriteString("      ")
-					b.WriteString(line)
-					b.WriteString("\n")
-				}
-			}
-		}
-	}
-	return strings.TrimSpace(b.String())
-}
-
 func RelevantStepKindsPromptBlock(prompt string) PromptBlock {
 	return PromptBlock{Topic: TopicTypedSteps, Title: "Relevant typed steps", Content: RelevantStepKindsBlock(prompt)}
-}
-
-func containsAction(actions []string, want string) bool {
-	for _, action := range actions {
-		if action == want {
-			return true
-		}
-	}
-	return false
-}
-
-func RelevantStepKinds(prompt string) []StepKindContext {
-	manifest := Current()
-	lower := strings.ToLower(strings.TrimSpace(prompt))
-	type scored struct {
-		step  StepKindContext
-		score int
-	}
-	scoredKinds := make([]scored, 0, len(manifest.StepKinds))
-	for _, step := range manifest.StepKinds {
-		score := 0
-		if strings.Contains(lower, strings.ToLower(step.Kind)) {
-			score += 100
-		}
-		if strings.Contains(lower, strings.ToLower(step.Category)) {
-			score += 15
-		}
-		if strings.Contains(lower, strings.ToLower(step.Summary)) {
-			score += 10
-		}
-		for _, action := range step.Actions {
-			if strings.Contains(lower, strings.ToLower(action)) {
-				score += 20
-			}
-		}
-		for _, token := range strings.Fields(strings.ToLower(step.WhenToUse)) {
-			if len(token) > 4 && strings.Contains(lower, token) {
-				score += 4
-			}
-		}
-		if strings.Contains(lower, "repo") || strings.Contains(lower, "Repository") {
-			if step.Kind == "ConfigureRepository" || step.Kind == "RefreshRepository" {
-				score += 60
-			}
-		}
-		if strings.Contains(lower, "docker") || strings.Contains(lower, "package") || strings.Contains(lower, "dnf") {
-			if step.Kind == "InstallPackage" || step.Kind == "DownloadPackage" || step.Kind == "ConfigureRepository" || step.Kind == "RefreshRepository" || step.Kind == "ManageService" {
-				score += 30
-			}
-		}
-		if strings.Contains(lower, "file") || strings.Contains(lower, "config") {
-			if strings.HasPrefix(step.Kind, "File") || step.Kind == "EnsureDirectory" {
-				score += 20
-			}
-		}
-		if score > 0 {
-			scoredKinds = append(scoredKinds, scored{step: step, score: score})
-		}
-	}
-	sort.Slice(scoredKinds, func(i, j int) bool {
-		if scoredKinds[i].score == scoredKinds[j].score {
-			return scoredKinds[i].step.Kind < scoredKinds[j].step.Kind
-		}
-		return scoredKinds[i].score > scoredKinds[j].score
-	})
-	limit := 5
-	if len(scoredKinds) < limit {
-		limit = len(scoredKinds)
-	}
-	out := make([]StepKindContext, 0, limit)
-	for i := 0; i < limit; i++ {
-		out = append(out, scoredKinds[i].step)
-	}
-	if len(out) == 0 {
-		for _, kind := range manifest.StepKinds {
-			if kind.Kind == "WriteFile" || kind.Kind == "ConfigureRepository" || kind.Kind == "ManageService" || kind.Kind == "Command" {
-				out = append(out, kind)
-			}
-		}
-	}
-	return out
 }

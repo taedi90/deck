@@ -9,6 +9,7 @@ import (
 
 	"github.com/Airgap-Castaways/deck/internal/askcontext"
 	"github.com/Airgap-Castaways/deck/internal/askintent"
+	"github.com/Airgap-Castaways/deck/internal/askknowledge"
 	"github.com/Airgap-Castaways/deck/internal/askstate"
 	"github.com/Airgap-Castaways/deck/internal/workspacepaths"
 )
@@ -27,12 +28,19 @@ type WorkspaceFile struct {
 }
 
 type Chunk struct {
-	ID      string
-	Source  string
-	Label   string
-	Topic   askcontext.Topic
-	Content string
-	Score   int
+	ID       string
+	Source   string
+	Label    string
+	Topic    askcontext.Topic
+	Content  string
+	Score    int
+	Evidence *EvidenceSummary
+}
+
+type EvidenceSummary struct {
+	ArtifactKinds []string
+	InstallHints  []string
+	OfflineHints  []string
 }
 
 type RetrievalResult struct {
@@ -106,13 +114,13 @@ func Retrieve(route askintent.Route, prompt string, target askintent.Target, wor
 	lowerPrompt := strings.ToLower(strings.TrimSpace(prompt))
 	related := relatedWorkspaceTargets(workspace, target)
 	chunks := make([]Chunk, 0, 32)
-	manifest := askcontext.Current()
+	bundle := askknowledge.Current()
 	chunks = append(chunks, Chunk{
 		ID:      "workflow-meta",
 		Source:  "askcontext",
 		Label:   "workflow-summary",
 		Topic:   askcontext.TopicWorkflowInvariants,
-		Content: manifest.Workflow.Summary + "\n" + strings.Join(manifest.Workflow.Notes, "\n"),
+		Content: bundle.WorkflowPromptBlock(),
 		Score:   50,
 	})
 	chunks = append(chunks, Chunk{
@@ -120,24 +128,24 @@ func Retrieve(route askintent.Route, prompt string, target askintent.Target, wor
 		Source:  "askcontext",
 		Label:   "authoring-rules",
 		Topic:   askcontext.TopicPolicy,
-		Content: askcontext.PolicyPromptBlock().Content,
+		Content: bundle.PolicyPromptBlock(),
 		Score:   45,
 	})
 	chunks = append(chunks,
 		Chunk{ID: "topology", Source: "askcontext", Label: "workspace-topology", Topic: askcontext.TopicWorkspaceTopology, Content: askcontext.WorkspaceTopologyBlock(), Score: 52},
 		Chunk{ID: "role-guidance", Source: "askcontext", Label: "prepare-apply-guidance", Topic: askcontext.TopicPrepareApplyGuidance, Content: askcontext.RoleGuidanceBlock(), Score: roleGuidanceScore(prompt)},
-		Chunk{ID: "component-guidance", Source: "askcontext", Label: "components-imports", Topic: askcontext.TopicComponentsImports, Content: askcontext.ComponentGuidanceBlock(), Score: 52},
-		Chunk{ID: "vars-guidance", Source: "askcontext", Label: "vars-guidance", Topic: askcontext.TopicVarsGuidance, Content: askcontext.VarsGuidanceBlock(), Score: 52},
+		Chunk{ID: "component-guidance", Source: "askcontext", Label: "components-imports", Topic: askcontext.TopicComponentsImports, Content: bundle.ComponentPromptBlock(), Score: 52},
+		Chunk{ID: "vars-guidance", Source: "askcontext", Label: "vars-guidance", Topic: askcontext.TopicVarsGuidance, Content: bundle.VarsPromptBlock(), Score: 52},
 		Chunk{ID: "cli-guidance", Source: "askcontext", Label: "cli-hints", Topic: askcontext.TopicCLIHints, Content: askcontext.CLIHintsBlock(), Score: 25},
 	)
-	if typedSteps := askcontext.RelevantStepKindsBlock(prompt); strings.TrimSpace(typedSteps) != "" {
+	if typedSteps := askcontext.StepGuidanceBlock(route, prompt); strings.TrimSpace(typedSteps) != "" {
 		chunks = append(chunks, Chunk{
-			ID:      "typed-steps",
+			ID:      "typed-steps-" + string(route),
 			Source:  "askcontext",
 			Label:   "typed-steps",
 			Topic:   askcontext.TopicTypedSteps,
 			Content: typedSteps,
-			Score:   typedStepsScore(lowerPrompt),
+			Score:   typedStepsScore(route, lowerPrompt),
 		})
 	}
 	for _, file := range workspace.Files {
@@ -214,6 +222,21 @@ func Retrieve(route askintent.Route, prompt string, target askintent.Target, wor
 	return RetrievalResult{Chunks: selected, Dropped: dropped, MaxBytes: budget}
 }
 
+func RepairChunks(prompt string, validationError string) []Chunk {
+	content := askcontext.RepairGuidanceBlock(prompt, validationError)
+	if strings.TrimSpace(content) == "" {
+		return nil
+	}
+	return []Chunk{{
+		ID:      "step-repair",
+		Source:  "askcontext",
+		Label:   "step-repair",
+		Topic:   askcontext.TopicStepRepair,
+		Content: content,
+		Score:   80,
+	}}
+}
+
 func dedupeChunksByTopic(chunks []Chunk) []Chunk {
 	best := make(map[askcontext.Topic]Chunk, len(chunks))
 	ordered := make([]askcontext.Topic, 0, len(chunks))
@@ -240,9 +263,12 @@ func dedupeChunksByTopic(chunks []Chunk) []Chunk {
 	return out
 }
 
-func typedStepsScore(prompt string) int {
+func typedStepsScore(route askintent.Route, prompt string) int {
 	score := 30
-	if strings.Contains(prompt, "docker") || strings.Contains(prompt, "package") || strings.Contains(prompt, "install") {
+	if route == askintent.RouteDraft || route == askintent.RouteRefine {
+		score += 15
+	}
+	if strings.Contains(prompt, "docker") || strings.Contains(prompt, "package") || strings.Contains(prompt, "install") || strings.Contains(prompt, "kubeadm") || strings.Contains(prompt, "air-gapped") {
 		score += 30
 	}
 	return score

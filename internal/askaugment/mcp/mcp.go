@@ -2,6 +2,7 @@ package mcpaugment
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -85,14 +86,23 @@ func queryServer(parent context.Context, server askconfig.MCPServer, route askin
 	if content == "" {
 		return nil, fmt.Sprintf("mcp:%s call %s returned no text", server.Name, toolName)
 	}
+	return evidenceChunk(server.Name, toolName, content, prompt), fmt.Sprintf("mcp:%s call %s ok", server.Name, toolName)
+}
+
+func evidenceChunk(serverName string, toolName string, content string, prompt string) *askretrieve.Chunk {
+	evidence := summarizeEvidence(content, prompt)
+	if evidence != nil {
+		content = renderEvidence(*evidence) + "\n\nSource excerpt:\n" + content
+	}
 	return &askretrieve.Chunk{
-		ID:      "mcp-" + sanitize(server.Name) + "-" + sanitize(toolName),
-		Source:  "mcp",
-		Label:   server.Name + ":" + toolName,
-		Topic:   askcontext.Topic("mcp:" + sanitize(server.Name) + ":" + sanitize(toolName)),
-		Content: content,
-		Score:   70,
-	}, fmt.Sprintf("mcp:%s call %s ok", server.Name, toolName)
+		ID:       "mcp-" + sanitize(serverName) + "-" + sanitize(toolName),
+		Source:   "mcp",
+		Label:    serverName + ":" + toolName,
+		Topic:    askcontext.Topic("mcp:" + sanitize(serverName) + ":" + sanitize(toolName)),
+		Content:  content,
+		Score:    70,
+		Evidence: evidence,
+	}
 }
 
 func pickToolName(serverName string, route askintent.Route, prompt string, tools *mcp.ListToolsResult) string {
@@ -161,4 +171,51 @@ func sanitize(value string) string {
 	value = strings.ReplaceAll(value, "/", "-")
 	value = strings.ReplaceAll(value, "_", "-")
 	return value
+}
+
+func summarizeEvidence(content string, prompt string) *askretrieve.EvidenceSummary {
+	lower := strings.ToLower(strings.TrimSpace(content + "\n" + prompt))
+	artifactKinds := []string{}
+	addArtifact := func(kind string) {
+		for _, existing := range artifactKinds {
+			if existing == kind {
+				return
+			}
+		}
+		artifactKinds = append(artifactKinds, kind)
+	}
+	for _, token := range []string{"rpm", "package", "packages", "dnf", "apt"} {
+		if strings.Contains(lower, token) {
+			addArtifact("package")
+			break
+		}
+	}
+	for _, token := range []string{"image", "images", "registry", "container image"} {
+		if strings.Contains(lower, token) {
+			addArtifact("image")
+			break
+		}
+	}
+	for _, token := range []string{"binary", "tarball", "archive", "bundle"} {
+		if strings.Contains(lower, token) {
+			addArtifact("binary")
+			break
+		}
+	}
+	hints := []string{}
+	if strings.Contains(lower, "air-gapped") || strings.Contains(lower, "offline") {
+		hints = append(hints, "Treat gathered installation artifacts as offline bundle inputs for prepare before apply.")
+	}
+	if len(artifactKinds) == 0 && len(hints) == 0 {
+		return nil
+	}
+	return &askretrieve.EvidenceSummary{ArtifactKinds: artifactKinds, OfflineHints: hints}
+}
+
+func renderEvidence(evidence askretrieve.EvidenceSummary) string {
+	raw, err := json.MarshalIndent(evidence, "", "  ")
+	if err != nil {
+		return "Typed MCP evidence JSON:\n{}"
+	}
+	return "Typed MCP evidence JSON:\n" + string(raw)
 }
