@@ -2,12 +2,11 @@ version: v1alpha1
 vars:
   serverURL: 192.168.56.1:8080
   release: ubuntu2204
-  osFamily: debian
 phases:
   - name: install
     steps:
       - id: write-apt-offline-config
-        when: vars.osFamily == "debian"
+        when: runtime.host.os.family == "debian"
         apiVersion: deck/v1alpha1
         kind: WriteFile
         spec:
@@ -18,7 +17,7 @@ phases:
             Acquire::AllowInsecureRepositories "true";
             Acquire::AllowDowngradeToInsecureRepositories "true";
       - id: apply-offline-repo-config-deb
-        when: vars.osFamily == "debian"
+        when: runtime.host.os.family == "debian"
         apiVersion: deck/v1alpha1
         kind: ConfigureRepository
         spec:
@@ -29,7 +28,7 @@ phases:
               baseurl: http://{{ .vars.serverURL }}/packages/deb/{{ .vars.release }}
               trusted: true
       - id: refresh-offline-repo-cache-deb
-        when: vars.osFamily == "debian"
+        when: runtime.host.os.family == "debian"
         apiVersion: deck/v1alpha1
         kind: RefreshRepository
         spec:
@@ -39,7 +38,7 @@ phases:
           restrictToRepos:
             - /etc/apt/sources.list.d/deck-offline.list
       - id: apply-offline-repo-config-rpm
-        when: vars.osFamily == "rhel"
+        when: runtime.host.os.family == "rhel"
         apiVersion: deck/v1alpha1
         kind: ConfigureRepository
         spec:
@@ -54,7 +53,7 @@ phases:
               extra:
                 module_hotfixes: true
       - id: refresh-offline-repo-cache-rpm
-        when: vars.osFamily == "rhel"
+        when: runtime.host.os.family == "rhel"
         apiVersion: deck/v1alpha1
         kind: RefreshRepository
         spec:

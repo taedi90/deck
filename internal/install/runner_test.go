@@ -1883,6 +1883,68 @@ func TestRun_WhenAndRegisterSemantics(t *testing.T) {
 	}
 }
 
+func TestRun_CheckHostAndRuntimeHost(t *testing.T) {
+	t.Run("runtime host available without checkhost", func(t *testing.T) {
+		dir := t.TempDir()
+		statePath := filepath.Join(dir, "state", "state.json")
+		outputPath := filepath.Join(dir, "runtime-host.txt")
+		origDetect := detectHostFacts
+		t.Cleanup(func() { detectHostFacts = origDetect })
+		detectHostFacts = func() map[string]any {
+			return map[string]any{"os": map[string]any{"family": "rhel"}, "arch": "amd64"}
+		}
+
+		wf := &config.Workflow{
+			Version: "v1",
+			Phases: []config.Phase{{
+				Name: "install",
+				Steps: []config.Step{{
+					ID:   "runtime-branch",
+					Kind: "WriteFile",
+					When: "runtime.host.os.family == \"rhel\" && runtime.host.arch == \"amd64\"",
+					Spec: map[string]any{"path": outputPath, "content": "ok"},
+				}},
+			}},
+		}
+
+		if err := Run(context.Background(), wf, RunOptions{StatePath: statePath, Fresh: true}); err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if raw, err := os.ReadFile(outputPath); err != nil || strings.TrimSpace(string(raw)) != "ok" {
+			t.Fatalf("expected runtime.host gated write, got err=%v content=%q", err, string(raw))
+		}
+	})
+
+	t.Run("checkhost allowed in apply", func(t *testing.T) {
+		dir := t.TempDir()
+		statePath := filepath.Join(dir, "state", "state.json")
+		outputPath := filepath.Join(dir, "checked.txt")
+		origDetect := detectHostFacts
+		t.Cleanup(func() { detectHostFacts = origDetect })
+		detectHostFacts = func() map[string]any {
+			return map[string]any{"os": map[string]any{"family": "rhel"}, "arch": "amd64"}
+		}
+
+		wf := &config.Workflow{
+			Version: "v1",
+			Phases: []config.Phase{{
+				Name: "install",
+				Steps: []config.Step{
+					{ID: "check-host", Kind: "CheckHost", Register: map[string]string{"hostPassed": "passed"}, Spec: map[string]any{"checks": []any{"os", "arch"}}},
+					{ID: "write", Kind: "WriteFile", When: "runtime.hostPassed == true && runtime.host.os.family == \"rhel\"", Spec: map[string]any{"path": outputPath, "content": "checked"}},
+				},
+			}},
+		}
+
+		if err := Run(context.Background(), wf, RunOptions{StatePath: statePath, Fresh: true}); err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if raw, err := os.ReadFile(outputPath); err != nil || strings.TrimSpace(string(raw)) != "checked" {
+			t.Fatalf("expected apply CheckHost gated write, got err=%v content=%q", err, string(raw))
+		}
+	})
+}
+
 func TestRun_ParallelGroupRunsConcurrentlyAndRegistersAfterBatch(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state", "state.json")
@@ -2298,7 +2360,7 @@ func TestCommandOutputWithContext_RejectsNilContext(t *testing.T) {
 }
 
 func TestExecuteStep_CopyFileDecodeError(t *testing.T) {
-	err := executeWorkflowStep(context.Background(), config.Step{Kind: "CopyFile", Spec: map[string]any{"source": 42, "path": "/tmp/out"}}, map[string]any{"source": 42, "path": "/tmp/out"}, workflowexec.StepTypeKey{APIVersion: workflowcontract.BuiltInStepAPIVersion, Kind: "CopyFile"}, ExecutionContext{})
+	_, err := executeWorkflowStep(context.Background(), config.Step{Kind: "CopyFile", Spec: map[string]any{"source": 42, "path": "/tmp/out"}}, map[string]any{"source": 42, "path": "/tmp/out"}, workflowexec.StepTypeKey{APIVersion: workflowcontract.BuiltInStepAPIVersion, Kind: "CopyFile"}, ExecutionContext{})
 	if err == nil {
 		t.Fatalf("expected decode error")
 	}

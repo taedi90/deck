@@ -103,6 +103,7 @@ func BuildPlanReport(request ExecutionRequest) (PlanReport, error) {
 	for key, value := range state.RuntimeVars {
 		runtimeVars[key] = value
 	}
+	runtimeVars["host"] = install.CurrentHostFacts()
 	steps := make([]PlanStep, 0)
 	summary := PlanSummary{PhaseCount: len(request.ExecutionWorkflow.Phases), CompletedPhases: len(state.CompletedPhases), RuntimeVarCount: len(runtimeVars)}
 	for _, phase := range request.ExecutionWorkflow.Phases {

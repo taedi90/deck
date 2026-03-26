@@ -14,14 +14,14 @@ Shared step envelope fields such as `id`, `apiVersion`, `kind`, `when`, `retry`,
 
 ## `CheckHost`
 
-Run host checks before prepare execution.
+Validate host suitability checks on the current node.
 
 - schema: `../../../schemas/tools/host-check.schema.json`
 - outputs: `failedChecks`, `passed`
 
 ### When To Use
 
-Use this at the start of prepare workflows to fail early on unsupported hosts.
+Use this near the start of apply workflows, or optional prepare preflight, to fail early when host prerequisites are not met. Host facts remain available through runtime.host without register.
 
 ### Example
 

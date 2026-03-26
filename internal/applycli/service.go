@@ -98,6 +98,7 @@ func writeApplyDryRun(stdoutPrintf func(format string, args ...any) error, reque
 	for key, value := range state.RuntimeVars {
 		runtimeVars[key] = value
 	}
+	runtimeVars["host"] = install.CurrentHostFacts()
 
 	completed := make(map[string]bool, len(state.CompletedPhases))
 	for _, phaseName := range state.CompletedPhases {

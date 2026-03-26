@@ -36,8 +36,8 @@ func newAskCommand() *cobra.Command {
 		Short: meta.Short,
 		Example: strings.Join([]string{
 			`  deck ask "explain what workflows/scenarios/apply.yaml does"`,
-			`  deck ask --write "create an air-gapped rhel9 kubeadm cluster workflow"`,
-			`  deck ask plan "create an air-gapped rhel9 kubeadm cluster workflow"`,
+			`  deck ask --write "create an air-gapped rhel9 single-node kubeadm workflow"`,
+			`  deck ask plan "create an air-gapped rhel9 single-node kubeadm workflow"`,
 		}, "\n"),
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -88,7 +88,7 @@ func newAskPlanCommand() *cobra.Command {
 		Short: meta.Plan.Short,
 		Long:  meta.Plan.Long,
 		Example: strings.Join([]string{
-			`  deck ask plan "create an air-gapped rhel9 kubeadm cluster workflow"`,
+			`  deck ask plan "create an air-gapped rhel9 single-node kubeadm workflow"`,
 			`  deck ask plan --plan-name kubeadm-ha "create a 3-node kubeadm workflow"`,
 		}, "\n"),
 		Args: cobra.ArbitraryArgs,

@@ -1878,6 +1878,44 @@ phases:
 		}
 	})
 
+	t.Run("checkhost allowed in apply scenario", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "workflows", "scenarios", "apply.yaml")
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("mkdir workflows: %v", err)
+		}
+		content := []byte(`version: v1alpha1
+phases:
+  - name: preflight
+    steps:
+      - id: check-host
+        apiVersion: deck/v1alpha1
+        kind: CheckHost
+        register:
+          hostOk: passed
+        spec:
+          checks: [os, arch]
+  - name: install
+    steps:
+      - id: install-rhel-packages
+        apiVersion: deck/v1alpha1
+        kind: InstallPackage
+        when: runtime.hostOk == true && runtime.host.os.family == "rhel"
+        spec:
+          packages: [kubeadm]
+          source:
+            type: local-repo
+            path: /tmp/deck/offline/packages
+`)
+		if err := os.WriteFile(path, content, 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+
+		if err := File(path); err != nil {
+			t.Fatalf("expected valid apply CheckHost workflow, got %v", err)
+		}
+	})
+
 	t.Run("register output key valid for symlink", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "workflow.yaml")
@@ -2013,7 +2051,7 @@ phases:
   - name: install
     imports:
       - path: ./fragments/install-common.yaml
-        when: vars.osFamily == "rhel"
+        when: runtime.host.os.family == "rhel"
 `)
 	if err := os.WriteFile(path, content, 0o644); err != nil {
 		t.Fatalf("write file: %v", err)
@@ -2056,7 +2094,7 @@ func TestSchema_RejectsComponentFragmentVars(t *testing.T) {
 	}
 	path := filepath.Join(componentsDir, "prereq.yaml")
 	content := []byte(`vars:
-  osFamily: debian
+  clusterName: demo
 steps:
   - id: prep-disable-swap
     kind: Swap

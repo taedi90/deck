@@ -44,7 +44,7 @@ func localClarify(prompt string) string {
 
 func clarificationSuggestions() []string {
 	return []string{
-		"Try: deck ask \"rhel9 single-node kubeadm cluster scenario\"",
+		"Try: deck ask \"create an air-gapped rhel9 single-node kubeadm workflow\"",
 		"Try: deck ask --review",
 		"Try: deck ask \"explain what workflows/scenarios/apply.yaml does\"",
 	}

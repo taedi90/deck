@@ -480,7 +480,7 @@ phases:
   - name: install
     imports:
       - path: phase-install.yaml
-        when: vars.osFamily == "rhel"
+        when: runtime.host.os.family == "rhel"
     steps:
       - id: root-step
         kind: Command
@@ -491,7 +491,7 @@ phases:
 		t.Fatalf("write root workflow: %v", err)
 	}
 
-	wf, err := LoadWithOptions(context.Background(), rootPath, LoadOptions{VarOverrides: map[string]any{"osFamily": "rhel", "enableCommon": true}})
+	wf, err := LoadWithOptions(context.Background(), rootPath, LoadOptions{VarOverrides: map[string]any{"enableCommon": true}})
 	if err != nil {
 		t.Fatalf("LoadWithOptions failed: %v", err)
 	}
@@ -505,10 +505,10 @@ phases:
 	if steps[0].ID != "imported-a" || steps[1].ID != "imported-b" || steps[2].ID != "root-step" {
 		t.Fatalf("unexpected step order: %s, %s, %s", steps[0].ID, steps[1].ID, steps[2].ID)
 	}
-	if steps[0].When != "(vars.osFamily == \"rhel\") && (vars.enableCommon == true)" {
+	if steps[0].When != "(runtime.host.os.family == \"rhel\") && (vars.enableCommon == true)" {
 		t.Fatalf("unexpected combined when for imported-a: %s", steps[0].When)
 	}
-	if steps[1].When != "vars.osFamily == \"rhel\"" {
+	if steps[1].When != "runtime.host.os.family == \"rhel\"" {
 		t.Fatalf("unexpected when for imported-b: %s", steps[1].When)
 	}
 }

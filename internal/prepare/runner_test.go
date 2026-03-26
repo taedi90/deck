@@ -1075,6 +1075,48 @@ func TestDownloadURLToFile_RejectsNilContext(t *testing.T) {
 }
 
 func TestRun_CheckHostStep(t *testing.T) {
+	t.Run("runtime host available without checkhost", func(t *testing.T) {
+		bundle := t.TempDir()
+		wf := &config.Workflow{
+			Version: "v1",
+			Phases: []config.Phase{{
+				Name: "prepare",
+				Steps: []config.Step{{
+					ID:   "runtime-branch",
+					Kind: "DownloadPackage",
+					When: "runtime.host.os.family == \"debian\" && runtime.host.arch == \"arm64\"",
+					Spec: map[string]any{
+						"packages": []any{"containerd"},
+						"backend": map[string]any{
+							"mode":    "container",
+							"runtime": "docker",
+							"image":   "ubuntu:22.04",
+						},
+					},
+				}},
+			}},
+		}
+
+		checkRuntime := checksRuntime{
+			readHostFile: func(path string) ([]byte, error) {
+				switch path {
+				case "/etc/os-release":
+					return []byte("ID=ubuntu\nID_LIKE=debian\nVERSION=\"24.04 LTS\"\nVERSION_ID=\"24.04\"\n"), nil
+				case "/proc/sys/kernel/osrelease":
+					return []byte("6.8.0-test\n"), nil
+				default:
+					return os.ReadFile(path)
+				}
+			},
+			currentGOOS:   func() string { return "linux" },
+			currentGOARCH: func() string { return "arm64" },
+		}
+
+		if err := Run(context.Background(), wf, RunOptions{BundleRoot: bundle, CommandRunner: &fakeRunner{}, checksRuntime: checkRuntime}); err != nil {
+			t.Fatalf("expected runtime.host without CheckHost, got %v", err)
+		}
+	})
+
 	t.Run("pass and register", func(t *testing.T) {
 		bundle := t.TempDir()
 		wf := &config.Workflow{

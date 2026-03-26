@@ -1,12 +1,11 @@
 package install
 
-import (
-	"os"
-	"runtime"
+import "github.com/Airgap-Castaways/deck/internal/hostcheck"
 
-	"github.com/Airgap-Castaways/deck/internal/workflowexec"
-)
+var detectHostFacts = func() map[string]any {
+	return hostcheck.DetectHostFacts(hostcheck.DefaultRuntime())
+}
 
-func detectHostFacts() map[string]any {
-	return workflowexec.DetectHostFacts(runtime.GOOS, runtime.GOARCH, os.ReadFile)
+func CurrentHostFacts() map[string]any {
+	return detectHostFacts()
 }

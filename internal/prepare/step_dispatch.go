@@ -6,6 +6,7 @@ import (
 
 	"github.com/Airgap-Castaways/deck/internal/config"
 	"github.com/Airgap-Castaways/deck/internal/errcode"
+	"github.com/Airgap-Castaways/deck/internal/hostcheck"
 	"github.com/Airgap-Castaways/deck/internal/stepspec"
 	"github.com/Airgap-Castaways/deck/internal/workflowexec"
 )
@@ -44,7 +45,12 @@ func runPrepareRenderedStepWithKey(ctx context.Context, runner CommandRunner, bu
 		if err != nil {
 			return nil, nil, fmt.Errorf("decode checks spec: %w", err)
 		}
-		outputs, err := runCheckHostDecoded(runner, decoded, resolveCheckHostRuntime(opts))
+		deps := resolveCheckHostRuntime(opts)
+		outputs, err := hostcheck.Run(decoded, runner, hostcheck.Runtime{
+			ReadHostFile:  deps.readHostFile,
+			CurrentGOOS:   deps.currentGOOS,
+			CurrentGOARCH: deps.currentGOARCH,
+		}, errCodePrepareCheckHostFailed)
 		if err != nil {
 			return nil, nil, err
 		}

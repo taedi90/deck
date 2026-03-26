@@ -4,6 +4,8 @@
 
 `ask` is only available in AI-ready builds. Non-AI builds omit the command entirely.
 
+For kubeadm authoring, the most reliable starter prompt today is explicit about topology, for example `single-node`. Generic `cluster` wording is more likely to trigger plan-time ambiguity checks.
+
 ## What `deck ask` does
 
 `deck ask` uses the current workspace as context and routes each request based on intent:

@@ -36,8 +36,8 @@ func buildManifest() Manifest {
 			ImportantFlags:      append([]CLIFlag(nil), cli.Flags...),
 			Examples: []string{
 				`deck ask "explain what workflows/scenarios/apply.yaml does"`,
-				`deck ask --write "create an air-gapped rhel9 kubeadm cluster workflow"`,
-				`deck ask plan "create an air-gapped rhel9 kubeadm cluster workflow"`,
+				`deck ask --write "create an air-gapped rhel9 single-node kubeadm workflow"`,
+				`deck ask plan "create an air-gapped rhel9 single-node kubeadm workflow"`,
 			},
 		},
 		Topology: WorkspaceTopology{
@@ -96,6 +96,7 @@ steps:
 			VarsAdvisory: []string{
 				"Repeated package lists, image lists, paths, versions, or environment-specific values should move to workflows/vars.yaml.",
 				"Missing vars should not block generation on its own.",
+				"Detected local host facts belong under runtime.host in when expressions, not in workflows/vars.yaml.",
 				"workflows/vars.yaml must remain plain YAML data. Do not place template expressions in vars values, keys, or unquoted scalar positions.",
 			},
 			ComponentAdvisory: []string{
@@ -115,8 +116,8 @@ steps:
 			{
 				Mode:        "apply",
 				Summary:     "Apply changes the local node using prepared inputs and typed host actions.",
-				WhenToUse:   "Use apply for package installation, file writes, service changes, runtime config, and host convergence steps.",
-				Prefer:      []string{"typed steps such as File, ConfigureRepository, RefreshRepository, ManageService, WriteContainerdConfig, and Package", "named phases for multi-step installs", "components for reusable imported logic"},
+				WhenToUse:   "Use apply for package installation, file writes, service changes, runtime config, host convergence steps, and host suitability validation.",
+				Prefer:      []string{"typed steps such as File, ConfigureRepository, RefreshRepository, ManageService, WriteContainerdConfig, Package, and CheckHost", "runtime.host.* for detected local host branching", "named phases for multi-step installs", "components for reusable imported logic"},
 				Avoid:       []string{"online collection logic that should happen during prepare", "large repeated literals that belong in vars.yaml"},
 				OutputFiles: []string{pathJoin(workspacepaths.WorkflowRootDir, workspacepaths.CanonicalApplyWorkflowRel), pathJoin(workspacepaths.WorkflowRootDir, workspacepaths.WorkflowVarsRel)},
 			},
@@ -142,7 +143,7 @@ steps:
 			Path:        pathJoin(workspacepaths.WorkflowRootDir, workspacepaths.WorkflowVarsRel),
 			Summary:     "Prefer workflows/vars.yaml for configurable values that would otherwise be repeated inline across steps or files.",
 			PreferFor:   []string{"package lists", "repository URLs", "service names", "paths and ports that may vary by environment"},
-			AvoidFor:    []string{"runtime-only outputs registered from previous steps", "tiny one-off literals with no reuse value", "typed step fields whose schema expects a native YAML array or object but the template engine would turn into a string", "typed enum fields or constrained scalar fields that must stay literal to satisfy schema validation"},
+			AvoidFor:    []string{"runtime-only outputs registered from previous steps", "detected local host facts such as osFamily or arch that already exist under runtime.host", "tiny one-off literals with no reuse value", "typed step fields whose schema expects a native YAML array or object but the template engine would turn into a string", "typed enum fields or constrained scalar fields that must stay literal to satisfy schema validation"},
 			ExampleKeys: []string{"dockerRepoURL", "dockerPackages", "containerRuntimeConfigPath"},
 		},
 		StepKinds: buildStepKinds(),
@@ -250,6 +251,7 @@ func defaultCommonMistakes(kind string) []string {
 		return []string{
 			"Use spec.checks as a YAML string array such as [os, arch, swap].",
 			"Do not invent nested objects like spec.os or object items under spec.checks.",
+			"Use CheckHost for suitability validation; use runtime.host.* for detected host branching.",
 		}
 	case "LoadImage":
 		return []string{
@@ -288,6 +290,7 @@ func defaultRepairHints(kind string) []string {
 		return []string{
 			"For CheckHost, use spec.checks as a string array like [os, arch, swap].",
 			"If binary presence matters, keep names under spec.binaries and include binaries in spec.checks.",
+			"Do not add vars like osFamily for local host branching; use runtime.host.os.family instead.",
 		}
 	case "LoadImage":
 		return []string{"Return a schema-valid LoadImage spec using the documented image archive shape from ask metadata."}

@@ -8,13 +8,13 @@ phases:
     imports:
       - path: k8s/prereq.yaml
       - path: repo/offline-repo-debian.yaml
-        when: vars.osFamily == "debian"
+        when: runtime.host.os.family == "debian"
       - path: repo/offline-repo-rhel.yaml
-        when: vars.osFamily == "rhel"
+        when: runtime.host.os.family == "rhel"
       - path: k8s/runtime-deps-debian.yaml
-        when: vars.osFamily == "debian"
+        when: runtime.host.os.family == "debian"
       - path: k8s/runtime-deps-rhel.yaml
-        when: vars.osFamily == "rhel"
+        when: runtime.host.os.family == "rhel"
   - name: runtime
     imports:
       - path: k8s/k8s-binaries.yaml

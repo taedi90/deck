@@ -91,7 +91,8 @@ func Run(ctx context.Context, wf *config.Workflow, opts RunOptions) error {
 	if err != nil {
 		return err
 	}
-	runtimeVars := map[string]any{}
+	resolvedChecksRuntime := resolveCheckHostRuntime(opts)
+	runtimeVars := map[string]any{"host": detectHostFactsForRuntime(resolvedChecksRuntime)}
 	entries := make([]manifestEntry, 0)
 	packCacheEnabled := true
 	packCacheStatePath := ""
@@ -214,9 +215,6 @@ func executePrepareBatch(ctx context.Context, runner CommandRunner, bundleRoot s
 	files := make([]string, 0)
 	for i, step := range batch.Steps {
 		result := results[i]
-		if host, ok := result.outputs["host"]; ok {
-			runtimeVars["host"] = host
-		}
 		if err := applyRegister(step, result.outputs, runtimeVars); err != nil {
 			return nil, fmt.Errorf("step %s (%s): %w", step.ID, step.Kind, err)
 		}

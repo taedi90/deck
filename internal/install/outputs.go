@@ -93,6 +93,10 @@ func mapItems(v any) []map[string]any {
 	return out
 }
 
-func applyRegister(step config.Step, rendered map[string]any, runtimeVars map[string]any) error {
-	return workflowexec.ApplyRegister(step, stepOutputs(step.Kind, rendered), runtimeVars, errCodeRegisterOutputMissing)
+func applyRegister(step config.Step, rendered map[string]any, outputs map[string]any, runtimeVars map[string]any) error {
+	merged := stepOutputs(step.Kind, rendered)
+	for key, value := range outputs {
+		merged[key] = value
+	}
+	return workflowexec.ApplyRegister(step, merged, runtimeVars, errCodeRegisterOutputMissing)
 }

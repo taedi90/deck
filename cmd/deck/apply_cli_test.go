@@ -443,7 +443,7 @@ func TestPlanJSONAndVerboseDiagnostics(t *testing.T) {
 	if res.err != nil {
 		t.Fatalf("expected success, got %v", res.err)
 	}
-	for _, want := range []string{"deck: plan workflowVars=run runtimeVars=- completedPhases=0", "deck: plan stepEval step=guarded whenEvaluated=true registerKeys=-"} {
+	for _, want := range []string{"deck: plan workflowVars=run runtimeVars=host completedPhases=0", "deck: plan stepEval step=guarded whenEvaluated=true registerKeys=-"} {
 		if !strings.Contains(res.stderr, want) {
 			t.Fatalf("expected %q in stderr, got %q", want, res.stderr)
 		}

@@ -67,6 +67,7 @@ const (
 	errCodeInstallJoinCmdInvalid         = "E_INSTALL_KUBEADM_JOIN_COMMAND_INVALID"
 	errCodeInstallJoinCmdMissing         = "E_INSTALL_KUBEADM_JOIN_COMMAND_MISSING"
 	errCodeInstallClusterCheckFailed     = "E_INSTALL_CLUSTER_CHECK_FAILED"
+	errCodeInstallCheckHostFailed        = "E_INSTALL_CHECKHOST_FAILED"
 	errCodeInstallWaitTimeout            = "E_INSTALL_WAIT_TIMEOUT"
 	errCodeInstallWaitPathRequired       = "E_INSTALL_WAITPATH_PATH_REQUIRED"
 	errCodeInstallWaitPathState          = "E_INSTALL_WAITPATH_STATE_INVALID"
@@ -176,6 +177,7 @@ func verifyBundleManifest(bundleRoot string) error {
 
 type installBatchResult struct {
 	rendered map[string]any
+	outputs  map[string]any
 	skipped  bool
 }
 
@@ -218,7 +220,7 @@ func executeInstallBatch(ctx context.Context, wf *config.Workflow, runtimeVars m
 		if results[i].skipped {
 			continue
 		}
-		if err := applyRegister(step, results[i].rendered, runtimeVars); err != nil {
+		if err := applyRegister(step, results[i].rendered, results[i].outputs, runtimeVars); err != nil {
 			return fmt.Errorf("step %s (%s): %w", step.ID, step.Kind, err)
 		}
 	}
@@ -256,14 +258,17 @@ func executeInstallStep(ctx context.Context, wf *config.Workflow, runtimeSnapsho
 		if keyErr != nil {
 			execErr = keyErr
 		} else {
-			execErr = executeWorkflowStep(ctx, step, rendered, key, execCtx)
+			var outputs map[string]any
+			outputs, execErr = executeWorkflowStep(ctx, step, rendered, key, execCtx)
+			if execErr == nil {
+				endedAt := time.Now().UTC().Format(time.RFC3339Nano)
+				emitStepEvent(sink, StepEvent{StepID: step.ID, Kind: step.Kind, Phase: phaseName, Status: "succeeded", Attempt: i + 1, StartedAt: startedAt, EndedAt: endedAt})
+				return installBatchResult{rendered: rendered, outputs: outputs}, nil
+			}
 		}
 		endedAt := time.Now().UTC().Format(time.RFC3339Nano)
 		if execErr != nil {
 			emitStepEvent(sink, StepEvent{StepID: step.ID, Kind: step.Kind, Phase: phaseName, Status: "failed", Attempt: i + 1, StartedAt: startedAt, EndedAt: endedAt, Error: execErr.Error()})
-		} else {
-			emitStepEvent(sink, StepEvent{StepID: step.ID, Kind: step.Kind, Phase: phaseName, Status: "succeeded", Attempt: i + 1, StartedAt: startedAt, EndedAt: endedAt})
-			return installBatchResult{rendered: rendered}, nil
 		}
 		if ctx.Err() != nil {
 			break

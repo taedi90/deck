@@ -151,7 +151,7 @@ deck cache list -o json --v=1
 deck plan --scenario apply --source server
 
 deck ask config set --provider openai --model gpt-5.4 --endpoint https://api.openai.com/v1 --api-key "$DECK_ASK_API_KEY"
-deck ask "rhel9 single-node kubeadm cluster scenario"
+deck ask "create an air-gapped rhel9 single-node kubeadm workflow"
 deck ask plan "air-gapped rhel9 kubeadm cluster with prepare/apply split"
 deck ask "explain what workflows/scenarios/apply.yaml does"
 deck ask --review

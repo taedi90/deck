@@ -2,7 +2,6 @@ version: v1alpha1
 vars:
   serverURL: 192.168.56.1:8080
   release: ubuntu2204
-  osFamily: debian
   registryHost: 192.168.56.1:5000
   kubernetesVersion: v1.30.1
 phases:
@@ -15,7 +14,7 @@ phases:
           disable: true
           persist: false
       - id: configure-offline-repo-deb
-        when: vars.osFamily == "debian"
+        when: runtime.host.os.family == "debian"
         apiVersion: deck/v1alpha1
         kind: ConfigureRepository
         spec:
@@ -29,7 +28,7 @@ phases:
               baseurl: http://{{ .vars.serverURL }}/packages/deb-k8s/{{ .vars.release }}
               trusted: true
       - id: refresh-offline-repo-deb
-        when: vars.osFamily == "debian"
+        when: runtime.host.os.family == "debian"
         apiVersion: deck/v1alpha1
         kind: RefreshRepository
         spec:
@@ -37,7 +36,7 @@ phases:
           clean: true
           update: true
       - id: configure-offline-repo-rpm
-        when: vars.osFamily == "rhel"
+        when: runtime.host.os.family == "rhel"
         apiVersion: deck/v1alpha1
         kind: ConfigureRepository
         spec:
@@ -55,7 +54,7 @@ phases:
               enabled: true
               gpgcheck: false
       - id: refresh-offline-repo-rpm
-        when: vars.osFamily == "rhel"
+        when: runtime.host.os.family == "rhel"
         apiVersion: deck/v1alpha1
         kind: RefreshRepository
         spec:

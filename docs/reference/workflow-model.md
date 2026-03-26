@@ -32,7 +32,6 @@ Runtime values flow separately through `register` outputs and built-in runtime f
 **`workflows/vars.yaml`** — define shared defaults once:
 
 ```yaml
-osFamily: debian
 clusterName: prod-k8s
 ```
 
@@ -61,8 +60,10 @@ vars:
   kind: InstallPackage
   spec:
     packages: [kubeadm, kubelet, kubectl]
-  when: vars.osFamily == "rhel"
+  when: runtime.host.os.family == "rhel"
 ```
+
+`runtime.host` is a built-in reserved runtime namespace in both prepare and apply. Use it for detected host facts such as OS family, distro ID, version, architecture, and kernel release. Do not model detected local host facts as static `vars` values.
 
 ## Minimal workflow
 
@@ -114,7 +115,7 @@ Optional execution controls:
 
 ### `when` — conditional execution
 
-`when` takes a CEL expression. Use `vars.` to reference input variables defined in `vars:` or `vars.yaml`, and `runtime.` to reference step outputs registered earlier in the run.
+`when` takes a CEL expression. Use `vars.` to reference input variables defined in `vars:` or `vars.yaml`, and `runtime.` to reference step outputs registered earlier in the run plus built-in host facts under `runtime.host`.
 
 ```yaml
 steps:
@@ -126,7 +127,7 @@ steps:
         - id: offline-base
           baseurl: file:///srv/offline-repo
           trusted: true
-    when: vars.osFamily == "debian"
+    when: runtime.host.os.family == "debian"
 
   - id: add-rhel-repo
     kind: ConfigureRepository
@@ -138,8 +139,10 @@ steps:
           baseurl: file:///srv/offline-repo
           enabled: true
           gpgcheck: false
-    when: vars.osFamily == "rhel"
+    when: runtime.host.os.family == "rhel"
 ```
+
+Use `CheckHost` when the workflow should fail fast on host suitability checks such as `swap`, `kernelModules`, or required binaries. `CheckHost` validates those conditions, but `runtime.host` exists even when the workflow does not include a `CheckHost` step.
 
 ### `register` — capture step output
 

@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Airgap-Castaways/deck/internal/config"
 	"github.com/Airgap-Castaways/deck/internal/filemode"
 	"github.com/Airgap-Castaways/deck/internal/workflowcontract"
 	"github.com/Airgap-Castaways/deck/internal/workflowexec"
@@ -40,13 +41,21 @@ func TestStepOutputsCoverApplyContracts(t *testing.T) {
 		{name: "kernel module name", kind: "KernelModule", spec: map[string]any{"name": "overlay"}, output: []string{"name"}},
 		{name: "kernel module names", kind: "KernelModule", spec: map[string]any{"names": []any{"overlay", "br_netfilter"}}, output: []string{"names"}},
 		{name: "kubeadm join file", kind: "InitKubeadm", spec: map[string]any{"outputJoinFile": joinPath}, output: []string{"joinFile"}},
+		{name: "check host outputs", kind: "CheckHost", spec: map[string]any{"checks": []any{"os", "arch"}}, output: []string{"passed", "failedChecks"}},
 	}
 	covered := map[string]bool{}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			outputs := stepOutputs(tc.kind, tc.spec)
 			stepKey := workflowexec.StepTypeKey{APIVersion: workflowcontract.BuiltInStepAPIVersion, Kind: tc.kind}
+			outputs := stepOutputs(tc.kind, tc.spec)
+			if tc.kind == "CheckHost" {
+				var err error
+				outputs, err = executeWorkflowStep(t.Context(), config.Step{Kind: tc.kind, Spec: tc.spec}, tc.spec, stepKey, ExecutionContext{})
+				if err != nil {
+					t.Fatalf("execute CheckHost: %v", err)
+				}
+			}
 			for _, outputKey := range tc.output {
 				covered[coverageKey(tc.kind, outputKey)] = true
 				if _, ok := outputs[outputKey]; !ok {

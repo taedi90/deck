@@ -8,7 +8,6 @@ backendRuntime: auto
 serverURL: 127.0.0.1:18080
 registryHost: 127.0.0.1:18080
 release: ubuntu2204
-osFamily: debian
 sharedFlavor: k8s-shared
 enableJoin: "true"
 allowDestructive: "false"
