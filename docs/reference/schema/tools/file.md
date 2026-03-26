@@ -40,10 +40,7 @@ Use this during prepare to stage files into the bundle.
 kind: DownloadFile
 spec:
   source:
-    bundle:
-      root: files
-      path: upstream/runc
-  outputPath: files/bin/runc
+    url: https://mirror.example.com/runc
   mode: "0755"
 ```
 
@@ -54,7 +51,7 @@ spec:
 | `spec.fetch` | `object` | no | `` | `` | Optional download transport settings applied to `DownloadFile` fetches. | `{offlineOnly:true}` |
 | `spec.items` | `array<object>` | no | `` | `` |  | `[{...}]` |
 | `spec.mode` | `string` | no | `` | `` | File permissions in octal notation applied after `write`, `copy`, `edit`, or `extractArchive` completes. | `0644` |
-| `spec.outputPath` | `string` | no | `` | `` | Prepare-side output path for a downloaded file written into bundle storage. Defaults to `files/<basename>` when omitted. | `files/bin/runc` |
+| `spec.outputPath` | `string` | no | `` | `` | Optional prepare-side output path for a downloaded file written into bundle storage. Omit this to use `files/<basename>` based on the source file name, or set it when later steps need a stable custom path. | `files/bin/runc` |
 | `spec.source` | `object` | no | `` | `` | Structured source descriptor for download, copy, or archive extraction. `path`, `bundle`, or `url` may be used depending on the step. | `{url:https://example.invalid/file.tar.gz}` |
 
 ### Nested Objects
@@ -109,6 +106,7 @@ spec:
 ### Notes
 
 - `DownloadFile` writes into prepared bundle storage through `outputPath`, while `WriteFile`, `CopyFile`, `EditFile`, and `ExtractArchive` operate on node paths through `path`.
+- Omit `outputPath` unless you need a specific bundle location; deck defaults to `files/<basename>` for single-file downloads.
 - Use `source.path` when the input is a simple local path and `source.bundle` or `source.url` when the source is structured or external.
 - Use `template` instead of `content` when the body includes variable substitution.
 
@@ -153,6 +151,7 @@ Environment=ROLE={{ .vars.role }}` |
 ### Notes
 
 - `DownloadFile` writes into prepared bundle storage through `outputPath`, while `WriteFile`, `CopyFile`, `EditFile`, and `ExtractArchive` operate on node paths through `path`.
+- Omit `outputPath` unless you need a specific bundle location; deck defaults to `files/<basename>` for single-file downloads.
 - Use `source.path` when the input is a simple local path and `source.bundle` or `source.url` when the source is structured or external.
 - Use `template` instead of `content` when the body includes variable substitution.
 
@@ -216,6 +215,7 @@ spec:
 ### Notes
 
 - `DownloadFile` writes into prepared bundle storage through `outputPath`, while `WriteFile`, `CopyFile`, `EditFile`, and `ExtractArchive` operate on node paths through `path`.
+- Omit `outputPath` unless you need a specific bundle location; deck defaults to `files/<basename>` for single-file downloads.
 - Use `source.path` when the input is a simple local path and `source.bundle` or `source.url` when the source is structured or external.
 - Use `template` instead of `content` when the body includes variable substitution.
 
@@ -253,6 +253,7 @@ spec:
 ### Notes
 
 - `DownloadFile` writes into prepared bundle storage through `outputPath`, while `WriteFile`, `CopyFile`, `EditFile`, and `ExtractArchive` operate on node paths through `path`.
+- Omit `outputPath` unless you need a specific bundle location; deck defaults to `files/<basename>` for single-file downloads.
 - Use `source.path` when the input is a simple local path and `source.bundle` or `source.url` when the source is structured or external.
 - Use `template` instead of `content` when the body includes variable substitution.
 
@@ -426,6 +427,7 @@ spec:
 ### Notes
 
 - `DownloadFile` writes into prepared bundle storage through `outputPath`, while `WriteFile`, `CopyFile`, `EditFile`, and `ExtractArchive` operate on node paths through `path`.
+- Omit `outputPath` unless you need a specific bundle location; deck defaults to `files/<basename>` for single-file downloads.
 - Use `source.path` when the input is a simple local path and `source.bundle` or `source.url` when the source is structured or external.
 - Use `template` instead of `content` when the body includes variable substitution.
 

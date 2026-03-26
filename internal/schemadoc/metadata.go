@@ -158,7 +158,7 @@ var toolMetadata = map[string]ToolMetadata{
 
 	"File": {
 		ActionExamples: map[string]string{
-			"download":       "kind: File\nspec:\n  action: download\n  source:\n    bundle:\n      root: files\n      path: upstream/runc\n  outputPath: files/bin/runc\n  mode: \"0755\"\n",
+			"download":       "kind: File\nspec:\n  action: download\n  source:\n    url: https://mirror.example.com/runc\n  mode: \"0755\"\n",
 			"write":          "kind: File\nspec:\n  action: write\n  path: /etc/containerd/config.toml\n  template: |\n    [plugins.\"io.containerd.grpc.v1.cri\".containerd.runtimes.runc.options]\n      SystemdCgroup = {{ .vars.systemdCgroup }}\n  mode: \"0644\"\n",
 			"copy":           "kind: File\nspec:\n  action: copy\n  source:\n    path: /etc/kubernetes/admin.conf\n  path: /home/vagrant/.kube/config\n  mode: \"0644\"\n",
 			"edit":           "kind: File\nspec:\n  action: edit\n  path: /etc/containerd/config.toml\n  edits:\n    - match: SystemdCgroup = false\n      replaceWith: SystemdCgroup = true\n",
@@ -177,7 +177,7 @@ var toolMetadata = map[string]ToolMetadata{
 			"spec.source.bundle":       {Description: "Reference to a file already inside the bundle. Used to stage a bundle-resident file into a new output location.", Example: "{root:files,path:bin/linux/amd64/runc}"},
 			"spec.source.bundle.root":  {Description: "Bundle root category to read from (`files`, `images`, or `packages`).", Example: "files"},
 			"spec.source.bundle.path":  {Description: "Relative path within the bundle root to the source file.", Example: "bin/linux/amd64/runc"},
-			"spec.outputPath":          {Description: "Prepare-side output path for a downloaded file written into bundle storage. Defaults to `files/<basename>` when omitted.", Example: "files/bin/runc"},
+			"spec.outputPath":          {Description: "Optional prepare-side output path for a downloaded file written into bundle storage. Omit this to use `files/<basename>` based on the source file name, or set it when later steps need a stable custom path.", Example: "files/bin/runc"},
 			"spec.include":             {Description: "Optional archive members to extract when using `ExtractArchive`. Extract all members when omitted.", Example: "[bridge,loopback]"},
 			"spec.edits":               {Description: "Ordered list of match/replace rules applied sequentially to the file. Required for `edit`.", Example: "[{match:SystemdCgroup = false,replaceWith:SystemdCgroup = true}]"},
 			"spec.edits[].match":       {Description: "Literal string or pattern to search for in the file.", Example: "SystemdCgroup = false"},
@@ -187,6 +187,7 @@ var toolMetadata = map[string]ToolMetadata{
 		},
 		Notes: []string{
 			"`DownloadFile` writes into prepared bundle storage through `outputPath`, while `WriteFile`, `CopyFile`, `EditFile`, and `ExtractArchive` operate on node paths through `path`.",
+			"Omit `outputPath` unless you need a specific bundle location; deck defaults to `files/<basename>` for single-file downloads.",
 			"Use `source.path` when the input is a simple local path and `source.bundle` or `source.url` when the source is structured or external.",
 			"Use `template` instead of `content` when the body includes variable substitution.",
 		},
@@ -194,7 +195,7 @@ var toolMetadata = map[string]ToolMetadata{
 
 	"Image": {
 		ActionExamples: map[string]string{
-			"download": "kind: Image\nspec:\n  action: download\n  images:\n    - registry.k8s.io/kube-apiserver:v1.30.1\n    - registry.example.com/platform/pause:3.9\n  auth:\n    - registry: registry.example.com\n      basic:\n        username: \"{{ .vars.registryUser }}\"\n        password: \"{{ .vars.registryPassword }}\"\n  outputDir: images/control-plane\n",
+			"download": "kind: Image\nspec:\n  action: download\n  images:\n    - registry.k8s.io/kube-apiserver:v1.30.1\n    - registry.example.com/platform/pause:3.9\n  auth:\n    - registry: registry.example.com\n      basic:\n        username: \"{{ .vars.registryUser }}\"\n        password: \"{{ .vars.registryPassword }}\"\n",
 			"load":     "kind: Image\nspec:\n  action: load\n  sourceDir: images/control-plane\n  runtime: ctr\n  images:\n    - registry.k8s.io/kube-apiserver:v1.30.1\n",
 			"verify":   "kind: Image\nspec:\n  action: verify\n  command: [ctr, -n, k8s.io, images, list, -q]\n  images:\n    - registry.k8s.io/kube-apiserver:v1.30.1\n",
 		},
@@ -205,7 +206,7 @@ var toolMetadata = map[string]ToolMetadata{
 			"spec.auth[].basic":          {Description: "Explicit basic-auth credentials used when downloading from the matched registry.", Example: "{username:robot,password:${REGISTRY_PASSWORD}}"},
 			"spec.auth[].basic.username": {Description: "Registry username used for basic authentication.", Example: "robot"},
 			"spec.auth[].basic.password": {Description: "Registry password or access token paired with `basic.username`.", Example: "${REGISTRY_PASSWORD}"},
-			"spec.outputDir":             {Description: "Bundle-relative directory where per-image tar archives are written during `DownloadImage`. Defaults to `images` when omitted.", Example: "images/control-plane"},
+			"spec.outputDir":             {Description: "Optional bundle-relative directory where per-image tar archives are written during `DownloadImage`. Omit this to write under the default `images` root, or set it when you want a dedicated image subdirectory such as `images/control-plane`.", Example: "images/control-plane"},
 			"spec.sourceDir":             {Description: "Directory containing prepared image archives to load into the runtime. Defaults to `images` when omitted.", Example: "images/control-plane"},
 			"spec.runtime":               {Description: "Runtime loader used by `LoadImage`. `auto` picks the default runtime integration; explicit values include `ctr`, `docker`, and `podman`.", Example: "ctr"},
 			"spec.command":               {Description: "Optional runtime command override. For `VerifyImage`, this is the image-listing command. For `LoadImage`, this command may include `{archive}` placeholders that deck substitutes per image archive.", Example: "[ctr,-n,k8s.io,images,list,-q]"},
@@ -214,6 +215,7 @@ var toolMetadata = map[string]ToolMetadata{
 		},
 		Notes: []string{
 			"Use `DownloadImage` during prepare, `LoadImage` during apply when archives must be imported, and `VerifyImage` when the runtime should already contain the required images.",
+			"Omit `outputDir` unless you need a custom bundle subdirectory; deck writes to `images/` by default.",
 			"Use explicit image tags or digests to keep prepared bundles reproducible.",
 			"`spec.auth` is optional and only applies to `DownloadImage`; when omitted, deck falls back to the environment's default registry keychain.",
 		},
@@ -332,7 +334,7 @@ var toolMetadata = map[string]ToolMetadata{
 
 	"Package": {
 		ActionExamples: map[string]string{
-			"download": "kind: Package\nspec:\n  packages: [podman]\n  distro:\n    family: rhel\n    release: rocky9\n  repo:\n    type: rpm\n    modules:\n      - name: container-tools\n        stream: \"4.0\"\n  backend:\n    mode: container\n    runtime: docker\n    image: rockylinux:9\n  outputDir: packages/rpm/rocky9\n",
+			"download": "kind: Package\nspec:\n  packages: [podman]\n  distro:\n    family: rhel\n    release: rocky9\n  repo:\n    type: rpm\n    modules:\n      - name: container-tools\n        stream: \"4.0\"\n  backend:\n    mode: container\n    runtime: docker\n    image: rockylinux:9\n",
 			"install":  "kind: Package\nspec:\n  packages: [kubelet, kubeadm, kubectl]\n  source:\n    type: local-repo\n    path: /opt/deck/repos/kubernetes\n",
 		},
 		FieldDocs: map[string]FieldDoc{
@@ -354,10 +356,11 @@ var toolMetadata = map[string]ToolMetadata{
 			"spec.backend.mode":          {Description: "Download backend mode. Currently only `container` is supported.", Example: "container"},
 			"spec.backend.runtime":       {Description: "Preferred container runtime for the download helper container. Supported values are `docker`, `podman`, or `auto`.", Example: "docker"},
 			"spec.backend.image":         {Description: "Container image used for package resolution in `download` mode. Required when `backend` is set.", Example: "rockylinux:9"},
-			"spec.outputDir":             {Description: "Bundle-relative directory used by `DownloadPackage` for downloaded package artifacts. Defaults to `packages` or a repo-derived path when omitted.", Example: "packages/kubernetes"},
+			"spec.outputDir":             {Description: "Optional bundle-relative directory used by `DownloadPackage` for downloaded package artifacts. Omit this to use `packages/` by default. When `repo.type` is set, deck instead writes to a repo layout under `packages/deb/<release>` or `packages/rpm/<release>`. Set `outputDir` only when apply workflows need a stable custom path outside those defaults.", Example: "packages/kubernetes"},
 		},
 		Notes: []string{
 			"Use `DownloadPackage` and `InstallPackage` with `ConfigureRepository` and `RefreshRepository` for a complete typed package-management flow.",
+			"Omit `outputDir` unless you need a custom package location; deck uses `packages/` by default, or `packages/deb/<release>` and `packages/rpm/<release>` when `repo.type` is set.",
 			"Keeping the same package list across `download` and `install` helps maintain offline parity.",
 			"Use `restrictToRepos` on the `InstallPackage` step to prevent the node's default online repos from being consulted during an offline apply.",
 			"When `repo` is set for `DownloadPackage`, deck expects `repo.type` and `distro.release` so it can build a `deb-flat` or `rpm` repository layout.",

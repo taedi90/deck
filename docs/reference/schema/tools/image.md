@@ -42,7 +42,6 @@ spec:
       basic:
         username: "{{ .vars.registryUser }}"
         password: "{{ .vars.registryPassword }}"
-  outputDir: images/control-plane
 ```
 
 ### Spec Fields
@@ -52,7 +51,7 @@ spec:
 | `spec.auth` | `array<object>` | no | `` | `` | Optional registry authentication entries for `download`. Match each private registry with credentials while leaving public registries to the default keychain. | `[{registry:registry.example.com,basic:{username:robot,password:${REGISTRY_PASSWORD}}}]` |
 | `spec.backend` | `object` | no | `` | `` | Backend-specific download settings such as image transfer engine configuration. Applies to `DownloadImage` only. | `{engine:go-containerregistry}` |
 | `spec.images` | `array<string>` | yes | `` | `` | Fully qualified image references to download, load, or verify. | `[registry.k8s.io/pause:3.9]` |
-| `spec.outputDir` | `string` | no | `` | `` | Bundle-relative directory where per-image tar archives are written during `DownloadImage`. Defaults to `images` when omitted. | `images/control-plane` |
+| `spec.outputDir` | `string` | no | `` | `` | Optional bundle-relative directory where per-image tar archives are written during `DownloadImage`. Omit this to write under the default `images` root, or set it when you want a dedicated image subdirectory such as `images/control-plane`. | `images/control-plane` |
 
 ### Nested Objects
 
@@ -73,6 +72,7 @@ spec:
 ### Notes
 
 - Use `DownloadImage` during prepare, `LoadImage` during apply when archives must be imported, and `VerifyImage` when the runtime should already contain the required images.
+- Omit `outputDir` unless you need a custom bundle subdirectory; deck writes to `images/` by default.
 - Use explicit image tags or digests to keep prepared bundles reproducible.
 - `spec.auth` is optional and only applies to `DownloadImage`; when omitted, deck falls back to the environment's default registry keychain.
 
@@ -109,6 +109,7 @@ spec:
 ### Notes
 
 - Use `DownloadImage` during prepare, `LoadImage` during apply when archives must be imported, and `VerifyImage` when the runtime should already contain the required images.
+- Omit `outputDir` unless you need a custom bundle subdirectory; deck writes to `images/` by default.
 - Use explicit image tags or digests to keep prepared bundles reproducible.
 - `spec.auth` is optional and only applies to `DownloadImage`; when omitted, deck falls back to the environment's default registry keychain.
 
@@ -142,6 +143,7 @@ spec:
 ### Notes
 
 - Use `DownloadImage` during prepare, `LoadImage` during apply when archives must be imported, and `VerifyImage` when the runtime should already contain the required images.
+- Omit `outputDir` unless you need a custom bundle subdirectory; deck writes to `images/` by default.
 - Use explicit image tags or digests to keep prepared bundles reproducible.
 - `spec.auth` is optional and only applies to `DownloadImage`; when omitted, deck falls back to the environment's default registry keychain.
 

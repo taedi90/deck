@@ -46,7 +46,6 @@ spec:
     mode: container
     runtime: docker
     image: rockylinux:9
-  outputDir: packages/rpm/rocky9
 ```
 
 ### Spec Fields
@@ -55,7 +54,7 @@ spec:
 |---|---|---:|---|---|---|---|
 | `spec.backend` | `object` | no | `` | `` | Container-based download backend for `DownloadPackage`. When provided, `backend.mode=container` and `backend.image` are required. | `{mode:container,runtime:docker,image:rockylinux:9}` |
 | `spec.distro` | `object` | no | `` | `` | Target distribution hint used by `DownloadPackage` to select the correct package manager and resolver backend. | `{family:rhel,release:rocky9}` |
-| `spec.outputDir` | `string` | no | `` | `` | Bundle-relative directory used by `DownloadPackage` for downloaded package artifacts. Defaults to `packages` or a repo-derived path when omitted. | `packages/kubernetes` |
+| `spec.outputDir` | `string` | no | `` | `` | Optional bundle-relative directory used by `DownloadPackage` for downloaded package artifacts. Omit this to use `packages/` by default. When `repo.type` is set, deck instead writes to a repo layout under `packages/deb/<release>` or `packages/rpm/<release>`. Set `outputDir` only when apply workflows need a stable custom path outside those defaults. | `packages/kubernetes` |
 | `spec.packages` | `array<string>` | yes | `` | `` | Package names to download or install. Use the same list in both `download` and `install` steps to keep offline parity. | `[kubelet,kubeadm,kubectl]` |
 | `spec.repo` | `object` | no | `` | `` | Package repository settings applied before `DownloadPackage`, including repo layout generation and RPM module streams. | `{type:rpm,modules:[...]}` |
 
@@ -89,6 +88,7 @@ spec:
 ### Notes
 
 - Use `DownloadPackage` and `InstallPackage` with `ConfigureRepository` and `RefreshRepository` for a complete typed package-management flow.
+- Omit `outputDir` unless you need a custom package location; deck uses `packages/` by default, or `packages/deb/<release>` and `packages/rpm/<release>` when `repo.type` is set.
 - Keeping the same package list across `download` and `install` helps maintain offline parity.
 - Use `restrictToRepos` on the `InstallPackage` step to prevent the node's default online repos from being consulted during an offline apply.
 - When `repo` is set for `DownloadPackage`, deck expects `repo.type` and `distro.release` so it can build a `deb-flat` or `rpm` repository layout.
@@ -139,6 +139,7 @@ spec:
 ### Notes
 
 - Use `DownloadPackage` and `InstallPackage` with `ConfigureRepository` and `RefreshRepository` for a complete typed package-management flow.
+- Omit `outputDir` unless you need a custom package location; deck uses `packages/` by default, or `packages/deb/<release>` and `packages/rpm/<release>` when `repo.type` is set.
 - Keeping the same package list across `download` and `install` helps maintain offline parity.
 - Use `restrictToRepos` on the `InstallPackage` step to prevent the node's default online repos from being consulted during an offline apply.
 - When `repo` is set for `DownloadPackage`, deck expects `repo.type` and `distro.release` so it can build a `deb-flat` or `rpm` repository layout.

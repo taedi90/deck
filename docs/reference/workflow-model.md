@@ -86,9 +86,14 @@ steps:
     spec:
       source:
         url: https://example.local/kubeadm
-      outputPath: files/bin/kubeadm
       mode: "0755"
 ```
+
+When a prepare download step does not set an explicit output location, deck uses the step kind's default prepared path:
+
+- `DownloadFile`: `files/<basename>`
+- `DownloadImage`: `images/`
+- `DownloadPackage`: `packages/`, or `packages/deb/<release>` and `packages/rpm/<release>` when `repo.type` is set
 
 ## Step shape
 
@@ -264,6 +269,7 @@ Supported kinds:
 - `DownloadFile` is prepare-only and writes bundle-relative outputs under the canonical `files/` root
 - `DownloadImage` is prepare-only and writes prepared image archives under `images/` or an `images/...` subdirectory
 - `DownloadPackage` is prepare-only and writes prepared package content under `packages/` or a `packages/...` subdirectory
+- omit `outputPath` or `outputDir` unless you need a stable custom location for later apply steps
 - container-backed `DownloadPackage` reuses a host-owned exported artifact cache after successful exports instead of bind-mounting apt/dnf package-manager cache directories
 - `workflows/prepare.yaml` is the fixed entrypoint for prepare workflows
 

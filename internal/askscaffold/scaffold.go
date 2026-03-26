@@ -110,9 +110,11 @@ func offlineBundleScaffold(req askpolicy.ScenarioRequirements, bundle askknowled
 		Constraints: []string{
 			"Use prepare for downloads or artifact collection only.",
 			"Keep apply offline and local-node focused.",
+			"Omit outputDir or outputPath unless later apply steps need a stable custom prepared location.",
 		},
 		Slots: []string{
 			"Choose typed prepare steps that match artifact kinds.",
+			"Prefer default prepared roots for files, images, and packages when no override is required.",
 			"Wire apply steps to prepared paths, repos, or image directories.",
 		},
 	}
