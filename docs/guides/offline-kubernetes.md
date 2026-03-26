@@ -10,15 +10,7 @@ Build a portable bundle in the connected environment, move it into the air gap, 
 
 ## 1. Start from the shipped examples
 
-The repository includes examples you can read and adapt:
-
-- `examples/offline-k8s-control-plane.yaml`
-- `examples/offline-k8s-worker.yaml`
-- `examples/offline-repo-preinstall.yaml`
-- `examples/offline-containerd-mirror.yaml`
-- `examples/offline-verify-images.yaml`
-
-Read them before adapting. They show how typed steps express intent more clearly than equivalent shell.
+Start from the bundled workflow tree and adapt it to your site. When you need exact workflow and step contracts, cross-check with the reference docs before transport.
 
 ## 2. Keep the two jobs separate
 
@@ -28,7 +20,7 @@ The mental model is straightforward:
 prepare artifacts -> build bundle -> transfer bundle -> run locally on each node
 ```
 
-`prepare` gathers what the site needs before transport. `apply` executes the procedure locally on the node. This separation means the operator on the far side of the air gap only needs the bundle: a root `deck` launcher plus the matching runtime binaries under `outputs/bin/` — no external dependencies at run time.
+`prepare` gathers what the site needs before transport. `apply` executes the procedure locally on the node. This separation means the operator on the far side of the air gap only needs the bundle: a root `deck` launcher plus the matching runtime binaries under `outputs/bin/` - no external dependencies at run time.
 
 ## 3. Model the procedure clearly
 
@@ -55,7 +47,7 @@ The bundle includes the canonical workspace inputs: `outputs/packages/`, `output
 
 ## 5. Move the bundle into the offline site
 
-Transfer `bundle.tar` through the approved path for your environment — removable media, controlled gateway, or another site-approved handoff. `deck` does not require a remote control service for this step.
+Transfer `bundle.tar` through the approved path for your environment - removable media, controlled gateway, or another site-approved handoff. `deck` does not require a remote control service for this step.
 
 ## 6. Run workflows locally on the target nodes
 
@@ -65,7 +57,7 @@ At the offline site, execute on the target machine itself:
 deck apply
 ```
 
-Use the control-plane and worker examples as starting points for kubeadm-based bootstrap and follow-on maintenance.
+Use the control-plane and worker workflows in your workspace as starting points for kubeadm-based bootstrap and follow-on maintenance.
 
 ## 7. Add site assistance only when it solves a real problem
 
@@ -82,6 +74,7 @@ deck lint --file ./workflows/scenarios/apply.yaml
 
 For planning and diagnostics, also review:
 
-- `../reference/workflow-model.md`
+- [Workflow model](../reference/workflow-model.md)
 - [Schema & Tools](../reference/schema/README.md)
-- `../reference/server-audit-log.md`
+- [Server audit log](../reference/server-audit-log.md)
+- [CLI Reference](../reference/cli.md)

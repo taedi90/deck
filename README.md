@@ -37,7 +37,7 @@ deck bundle build --out ./bundle.tar
 deck apply
 ```
 
-For a detailed walkthrough, start with the [Quick Start Guide](docs/getting-started/quick-start.md).
+For a detailed walkthrough, start with the [Quick Start Guide](docs/guides/quick-start.md).
 
 ## Core Features
 
@@ -85,9 +85,8 @@ To make it persistent, add the relevant command to your shell's startup file (e.
 
 ## Documentation
 
-- [Getting Started](docs/getting-started/README.md)
+- [Guides](docs/guides/README.md)
 - [Core Concepts](docs/core-concepts/README.md)
-- [User Guide](docs/user-guide/README.md)
 - [Reference](docs/reference/README.md)
 - [Contributing](docs/contributing/README.md)
 

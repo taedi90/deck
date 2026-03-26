@@ -37,7 +37,7 @@ deck bundle build --out ./bundle.tar
 deck apply
 ```
 
-상세한 사용법은 [빠른 시작 가이드](docs/getting-started/quick-start.md)에서 확인하실 수 있습니다.
+상세한 사용법은 [빠른 시작 가이드](docs/guides/quick-start.md)에서 확인하실 수 있습니다.
 
 ## 핵심 기능
 
@@ -84,9 +84,8 @@ deck completion fish | source  # fish 사용 시
 
 ## 상세 문서
 
-- [시작하기](docs/getting-started/README.md)
+- [가이드](docs/guides/README.md)
 - [핵심 개념](docs/core-concepts/README.md)
-- [사용자 가이드](docs/user-guide/README.md)
 - [레퍼런스](docs/reference/README.md)
 - [기여하기](docs/contributing/README.md)
 

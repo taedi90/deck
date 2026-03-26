@@ -16,6 +16,8 @@
 
 By default, `deck ask` previews changes. It only writes workflow files when `--write` is present.
 
+For command-level syntax and subcommands, see [CLI Reference](../reference/cli.md).
+
 ## How it works
 
 `deck ask` follows a routed pipeline instead of treating every request like workflow generation.
@@ -33,6 +35,7 @@ flowchart LR
   E --> J[Preview]
   I --> K[Preview]
   K --> L[Write]
+```
 
 ### Step 1: Normalize the request
 

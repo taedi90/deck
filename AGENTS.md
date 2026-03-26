@@ -27,7 +27,7 @@
 | Any Go change | `make test && make lint` |
 | AI build tag (`//go:build ai`) | `make test-ai` |
 | Schema gen (`cmd/schema-gen/`, `internal/schemadoc/`) | `make generate && git diff --exit-code` |
-| Step kind logic or workflow YAML | `make build` then `deck lint` against files in `test/workflows/scenarios/` and `docs/user-guide/examples/` |
+| Step kind logic or workflow YAML | `make build` then `deck lint` against files in `test/workflows/scenarios/` and `docs/guides/examples/` |
 | CLI surface (`cmd/deck/`) | `make build && ./bin/deck --help && ./bin/deck version` |
 | Full CI parity (Linux, Vagrant required) | `make build lint test test-ai` then Vagrant E2E under `test/e2e/vagrant/` |
 

@@ -84,3 +84,4 @@ That path extends the local workflow. It does not replace it.
 - [Why deck?](../core-concepts/why-deck.md)
 - [Workflow model](../reference/workflow-model.md)
 - [Bundle layout](../reference/bundle-layout.md)
+- [Using deck ask](ask.md)
