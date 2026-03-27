@@ -145,48 +145,8 @@ func dropGeneratedFiles(gen askcontract.GenerationResponse, paths []string) askc
 }
 
 func normalizeGeneratedContent(path string, content string) string {
-	trimmed := strings.TrimSpace(content)
-	if trimmed == "" {
-		return content
-	}
-	if !isVarsPath(path) || !looksLikeFlattenedYAML(trimmed) {
-		return content
-	}
-	return normalizeVarsYAML(trimmed)
-}
-
-func looksLikeFlattenedYAML(content string) bool {
-	return strings.Contains(content, "\n - name:") || strings.Contains(content, "\n - id:") || strings.Contains(content, "\n steps:\n - id:") || strings.Contains(content, "\n spec:\n ")
-}
-
-func normalizeVarsYAML(content string) string {
-	lines := strings.Split(content, "\n")
-	topLevel := map[string]bool{
-		"role": true, "rolevalues": true, "topology": true, "serverurl": true, "clustername": true,
-		"offlinepath": true, "offlinerepopath": true, "offlineimagepath": true, "joinlocalpath": true,
-		"joinartifactdir": true, "joinartifactpath": true, "artifactpackagerepopath": true, "artifactimagedir": true,
-		"handoff": true, "k8s": true, "paths": true,
-	}
-	out := make([]string, 0, len(lines))
-	indentNested := false
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			continue
-		}
-		if strings.HasPrefix(trimmed, "- ") {
-			out = append(out, "  "+trimmed)
-			continue
-		}
-		key := strings.ToLower(strings.TrimSpace(strings.TrimSuffix(strings.SplitN(trimmed, ":", 2)[0], ":")))
-		indent := ""
-		if !topLevel[key] && indentNested {
-			indent = "  "
-		}
-		out = append(out, indent+trimmed)
-		indentNested = strings.HasSuffix(trimmed, ":")
-	}
-	return strings.Join(out, "\n") + "\n"
+	_ = path
+	return content
 }
 
 func stageWorkspace(root string, files []askcontract.GeneratedFile) (string, error) {

@@ -24,6 +24,7 @@ import (
 	"github.com/Airgap-Castaways/deck/internal/askscaffold"
 	"github.com/Airgap-Castaways/deck/internal/askstate"
 	"github.com/Airgap-Castaways/deck/internal/validate"
+	"github.com/Airgap-Castaways/deck/internal/workflowissues"
 )
 
 func Execute(ctx context.Context, opts Options, client askprovider.Client) error {
@@ -417,19 +418,29 @@ func appendPlanCriticRetryPrompt(base string, critic askcontract.PlanCriticRespo
 	b := &strings.Builder{}
 	b.WriteString(strings.TrimSpace(base))
 	b.WriteString("\n\nPlan critic requested a stronger plan before generation. Address these issues in the next plan JSON:\n")
-	for _, item := range critic.Blocking {
-		if strings.TrimSpace(item) != "" {
-			b.WriteString("- blocking: ")
-			b.WriteString(strings.TrimSpace(item))
-			b.WriteString("\n")
+	for _, finding := range critic.Findings {
+		message := strings.TrimSpace(finding.Message)
+		if message == "" {
+			continue
 		}
-	}
-	for _, item := range critic.MissingContracts {
-		if strings.TrimSpace(item) != "" {
-			b.WriteString("- missing contract: ")
-			b.WriteString(strings.TrimSpace(item))
-			b.WriteString("\n")
+		label := strings.TrimSpace(string(finding.Severity))
+		if label == "" {
+			label = string(workflowissues.SeverityAdvisory)
 		}
+		b.WriteString("- ")
+		b.WriteString(label)
+		if code := strings.TrimSpace(string(finding.Code)); code != "" {
+			b.WriteString(" [")
+			b.WriteString(code)
+			b.WriteString("]")
+		}
+		if path := strings.TrimSpace(finding.Path); path != "" {
+			b.WriteString(" @ ")
+			b.WriteString(path)
+		}
+		b.WriteString(": ")
+		b.WriteString(message)
+		b.WriteString("\n")
 	}
 	for _, item := range critic.SuggestedFixes {
 		if strings.TrimSpace(item) != "" {
@@ -447,31 +458,25 @@ func appendPlanCriticRetryPrompt(base string, critic askcontract.PlanCriticRespo
 }
 
 func normalizePlanCritic(plan askcontract.PlanResponse, critic askcontract.PlanCriticResponse) askcontract.PlanCriticResponse {
-	blocking := make([]string, 0, len(critic.Blocking))
-	advisory := append([]string(nil), critic.Advisory...)
-	missing := make([]string, 0, len(critic.MissingContracts))
-	for _, item := range critic.Blocking {
-		text := strings.TrimSpace(item)
+	findings := normalizedPlanCriticFindings(plan, critic)
+	blocking := make([]string, 0, len(findings))
+	advisory := make([]string, 0, len(findings))
+	missing := make([]string, 0, len(findings))
+	for _, finding := range findings {
+		text := strings.TrimSpace(finding.Message)
 		if text == "" {
 			continue
 		}
-		if !isFatalPlanCriticIssue(plan, text) || isRecoverablePlanCriticIssue(plan, text) {
+		switch {
+		case planCriticFindingIsFatal(finding):
+			blocking = append(blocking, text)
+		case finding.Severity == workflowissues.SeverityMissingContract && !planCriticFindingIsRecoverable(finding):
+			missing = append(missing, text)
+		default:
 			advisory = append(advisory, text)
-			continue
 		}
-		blocking = append(blocking, text)
 	}
-	for _, item := range critic.MissingContracts {
-		text := strings.TrimSpace(item)
-		if text == "" {
-			continue
-		}
-		if isRecoverablePlanCriticIssue(plan, text) {
-			advisory = append(advisory, text)
-			continue
-		}
-		advisory = append(advisory, text)
-	}
+	critic.Findings = findings
 	critic.Blocking = dedupe(blocking)
 	critic.MissingContracts = dedupe(missing)
 	critic.Advisory = dedupe(advisory)
@@ -484,9 +489,11 @@ func hasFatalPlanReviewIssues(plan askcontract.PlanResponse, critic askcontract.
 
 func fatalPlanReviewReasons(plan askcontract.PlanResponse, critic askcontract.PlanCriticResponse) []string {
 	reasons := []string{}
-	for _, item := range critic.Blocking {
-		text := strings.TrimSpace(item)
-		if text != "" {
+	for _, finding := range normalizedPlanCriticFindings(plan, critic) {
+		if !planCriticFindingIsFatal(finding) {
+			continue
+		}
+		if text := strings.TrimSpace(finding.Message); text != "" {
 			reasons = append(reasons, text)
 		}
 	}
@@ -514,45 +521,8 @@ func fatalPlanReviewReasons(plan askcontract.PlanResponse, critic askcontract.Pl
 }
 
 func fatalPlanBlockers(plan askcontract.PlanResponse) []string {
-	fatal := []string{}
-	for _, item := range append(append([]string{}, plan.Blockers...), plan.OpenQuestions...) {
-		text := strings.TrimSpace(item)
-		if text == "" {
-			continue
-		}
-		if isFatalPlanBlockerText(text) {
-			fatal = append(fatal, text)
-		}
-	}
-	return dedupe(fatal)
-}
-
-func isFatalPlanBlockerText(text string) bool {
-	lower := strings.ToLower(strings.TrimSpace(text))
-	if lower == "" {
-		return false
-	}
-	fatalTokens := []string{
-		"no viable entry scenario",
-		"cannot determine entry scenario",
-		"missing entry scenario",
-		"required prepare/apply structure is absent",
-		"cannot default prepare",
-		"cannot default apply",
-		"no artifact consumer",
-		"no viable consumer",
-		"no role selector",
-		"no viable role selector",
-		"no branching model",
-		"structurally unusable",
-		"cannot safely continue",
-	}
-	for _, token := range fatalTokens {
-		if strings.Contains(lower, token) {
-			return true
-		}
-	}
-	return strings.HasPrefix(lower, "blocking:") && (strings.Contains(lower, "entry scenario") || strings.Contains(lower, "artifact consumer") || strings.Contains(lower, "role selector") || strings.Contains(lower, "structurally unusable"))
+	_ = plan
+	return nil
 }
 
 func hasPlannedPath(files []askcontract.PlanFile, want string) bool {
@@ -601,98 +571,87 @@ func planHasArtifactConsumerPath(plan askcontract.PlanResponse) bool {
 	return false
 }
 
-func isRecoverablePlanCriticIssue(plan askcontract.PlanResponse, text string) bool {
-	lower := strings.ToLower(text)
-	recoverableTokens := []string{
-		"join handoff",
-		"join artifact",
-		"join publication",
-		"join-file",
-		"shared-state",
-		"worker completion",
-		"synchronization contract",
-		"final checkcluster",
-		"can race worker joins",
-		"verification staging",
-		"role cardinality",
-		"topology fidelity",
-		"per-node identity mapping",
-		"artifact contract",
-		"offline package artifact contract",
-		"offline image artifact contract",
-		"repodata",
-		"bundle layout",
-		"loadimage consumes",
-		"producer/consumer",
-		"published file contains",
-		"workspace-to-node artifact distribution",
-		"node-local",
+func normalizedPlanCriticFindings(plan askcontract.PlanResponse, critic askcontract.PlanCriticResponse) []askcontract.PlanCriticFinding {
+	findings := make([]askcontract.PlanCriticFinding, 0, len(critic.Findings)+len(critic.Blocking)+len(critic.Advisory)+len(critic.MissingContracts))
+	findings = append(findings, critic.Findings...)
+	seen := map[string]bool{}
+	for _, finding := range critic.Findings {
+		seen[planCriticFindingKey(finding)] = true
 	}
-	for _, token := range recoverableTokens {
-		if strings.Contains(lower, token) {
-			return true
+	appendLegacy := func(items []string, severity workflowissues.Severity) {
+		for _, item := range items {
+			text := strings.TrimSpace(item)
+			if text == "" {
+				continue
+			}
+			finding := legacyPlanCriticFinding(text, severity)
+			key := planCriticFindingKey(finding)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			findings = append(findings, finding)
 		}
 	}
-	if strings.Contains(lower, "role cardinality") || strings.Contains(lower, "worker-ready") || strings.Contains(lower, "readyworkers") {
-		return true
-	}
-	if strings.Contains(lower, "checksum") {
-		return true
-	}
-	if strings.Contains(lower, "single source path") || strings.Contains(lower, "single, canonical") || strings.Contains(lower, "join handoff location") {
-		return true
-	}
-	if strings.Contains(lower, "artifact contract") && len(plan.ExecutionModel.ArtifactContracts) > 0 {
-		return true
-	}
-	if strings.Contains(lower, "join-file") && len(plan.ExecutionModel.SharedStateContracts) > 0 {
-		return true
-	}
-	if strings.Contains(lower, "checkcluster") && strings.TrimSpace(plan.ExecutionModel.RoleExecution.RoleSelector) != "" {
-		return true
-	}
-	return false
+	appendLegacy(critic.Blocking, workflowissues.SeverityBlocking)
+	appendLegacy(critic.Advisory, workflowissues.SeverityAdvisory)
+	appendLegacy(critic.MissingContracts, workflowissues.SeverityMissingContract)
+	return dedupePlanCriticFindings(findings)
 }
 
-func isFatalPlanCriticIssue(plan askcontract.PlanResponse, text string) bool {
-	lower := strings.ToLower(strings.TrimSpace(text))
-	if lower == "" {
+func dedupePlanCriticFindings(findings []askcontract.PlanCriticFinding) []askcontract.PlanCriticFinding {
+	seen := map[string]bool{}
+	out := make([]askcontract.PlanCriticFinding, 0, len(findings))
+	for _, finding := range findings {
+		finding.Code = workflowissues.Code(strings.TrimSpace(string(finding.Code)))
+		finding.Severity = workflowissues.Severity(strings.TrimSpace(string(finding.Severity)))
+		finding.Message = strings.TrimSpace(finding.Message)
+		finding.Path = strings.TrimSpace(finding.Path)
+		if finding.Message == "" {
+			continue
+		}
+		if finding.Severity == "" {
+			finding.Severity = workflowissues.SeverityAdvisory
+		}
+		key := planCriticFindingKey(finding)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, finding)
+	}
+	return out
+}
+
+func planCriticFindingKey(finding askcontract.PlanCriticFinding) string {
+	return strings.Join([]string{strings.TrimSpace(string(finding.Code)), strings.TrimSpace(string(finding.Severity)), strings.TrimSpace(finding.Path), strings.TrimSpace(finding.Message)}, "|")
+}
+
+func planCriticFindingIsFatal(finding askcontract.PlanCriticFinding) bool {
+	if spec, ok := workflowissues.SpecFor(finding.Code); ok {
+		return spec.DefaultSeverity == workflowissues.SeverityBlocking && !spec.DefaultRecoverable
+	}
+	if finding.Recoverable {
 		return false
 	}
-	fatalTokens := []string{
-		"no viable entry scenario",
-		"cannot determine entry scenario",
-		"missing entry scenario",
-		"required prepare/apply structure is absent",
-		"cannot default prepare",
-		"cannot default apply",
-		"no artifact consumer",
-		"no viable consumer",
-		"no role selector",
-		"no viable role selector",
-		"no branching model",
-		"structurally unusable",
-		"cannot safely continue",
+	return finding.Severity == workflowissues.SeverityBlocking
+}
+
+func planCriticFindingIsRecoverable(finding askcontract.PlanCriticFinding) bool {
+	if spec, ok := workflowissues.SpecFor(finding.Code); ok {
+		return spec.DefaultRecoverable
 	}
-	for _, token := range fatalTokens {
-		if strings.Contains(lower, token) {
-			return true
-		}
+	return finding.Recoverable
+}
+
+func legacyPlanCriticFinding(text string, severity workflowissues.Severity) askcontract.PlanCriticFinding {
+	recoverable := severity != workflowissues.SeverityBlocking
+	return askcontract.PlanCriticFinding{
+		Code:        workflowissues.CodeAskUnclassifiedCriticFinding,
+		Severity:    severity,
+		Message:     text,
+		Recoverable: recoverable,
 	}
-	if strings.Contains(lower, "entry scenario") && strings.Contains(lower, "cannot") {
-		return true
-	}
-	if strings.Contains(lower, "artifact consumer") && (strings.Contains(lower, "no ") || strings.Contains(lower, "missing")) {
-		return true
-	}
-	if strings.Contains(lower, "role selector") && (strings.Contains(lower, "no ") || strings.Contains(lower, "missing") || strings.Contains(lower, "cannot")) {
-		return true
-	}
-	if strings.Contains(lower, "branching model") && (strings.Contains(lower, "no ") || strings.Contains(lower, "missing")) {
-		return true
-	}
-	_ = plan
-	return false
 }
 
 type postProcessSummary struct {
@@ -1305,9 +1264,14 @@ func targetedRepairPromptBlock(prev askcontract.GenerationResponse, diags []askd
 	b.WriteString("- Preserve unchanged files when they are already valid.\n")
 	b.WriteString("- For files marked preserve-if-valid, keep content byte-for-byte unless a diagnostic explicitly requires a change.\n")
 	b.WriteString("- Prefer editing only the files implicated by diagnostics or execution/design review findings.\n")
-	if hasDiagnosticCode(diags, "duplicate_step_id") {
+	if hasDiagnosticCode(diags, string(workflowissues.CodeDuplicateStepID)) {
 		b.WriteString("- Duplicate step id repair: rename only the conflicting ids; do not duplicate or rewrite unaffected steps.\n")
-		b.WriteString("- Use role- or phase-specific step ids when similar logic appears in multiple phases, for example `control-plane-preflight-host` and `worker-preflight-host`.\n")
+		spec := workflowissues.MustSpec(workflowissues.CodeDuplicateStepID)
+		if strings.TrimSpace(spec.PromptHint) != "" {
+			b.WriteString("- ")
+			b.WriteString(strings.TrimSpace(spec.PromptHint))
+			b.WriteString(" For example `control-plane-preflight-host` and `worker-preflight-host`.\n")
+		}
 	}
 	b.WriteString("- When revising YAML, keep `version: v1alpha1` and top-level keys at column 1, indent mapping children by two spaces, and indent list items under their parent key.\n")
 	b.WriteString("- Do not collapse YAML indentation, remove required list markers, or rewrite every file from scratch when only one file is broken.\n")

@@ -14,6 +14,7 @@ import (
 	"github.com/Airgap-Castaways/deck/internal/askretrieve"
 	"github.com/Airgap-Castaways/deck/internal/askscaffold"
 	"github.com/Airgap-Castaways/deck/internal/askstate"
+	"github.com/Airgap-Castaways/deck/internal/workflowissues"
 )
 
 func classifierSystemPrompt() string {
@@ -68,7 +69,11 @@ func generationSystemPrompt(route askintent.Route, target askintent.Target, requ
 	b.WriteString("- Keep existing repo-native workflow structure and YAML indentation patterns whenever possible.\n")
 	b.WriteString("- Every returned YAML file must be valid standalone YAML: top-level keys at column 1, list items indented under their parent key, and nested mapping fields indented by two spaces per level.\n")
 	b.WriteString("- Do not emit flattened one-space indentation like `phases:\n - name` or `steps:\n - id`; keep canonical YAML indentation.\n")
-	b.WriteString("- Every step id must be unique across the workflow. When similar logic appears in multiple phases or roles, rename ids with role- or phase-specific prefixes instead of reusing the same id.\n")
+	b.WriteString("- ")
+	b.WriteString(workflowissues.MustSpec(workflowissues.CodeDuplicateStepID).Details)
+	b.WriteString(" ")
+	b.WriteString(workflowissues.MustSpec(workflowissues.CodeDuplicateStepID).PromptHint)
+	b.WriteString("\n")
 	b.WriteString("Primary repository context follows. Prefer workspace snippets first, then the closest repository examples.\n")
 	b.WriteString(generationRetrievalPromptBlock(retrieval))
 	b.WriteString("\n")
@@ -518,7 +523,12 @@ func planCriticSystemPrompt(brief askcontract.AuthoringBrief, plan askcontract.P
 	b.WriteString("Review whether the workflow plan is viable enough to proceed into generation-first workflow authoring.\n")
 	b.WriteString("Focus on artifact producer/consumer contracts, shared-state contracts such as join files, role-aware execution, role cardinality, topology fidelity, join publication/consumption, artifact contract naming, and verification staging realism.\n")
 	b.WriteString("Do not restate schema rules unless the plan violates them in a way that affects execution design.\n")
-	b.WriteString("JSON shape: {\"summary\":string,\"blocking\":[]string,\"advisory\":[]string,\"missingContracts\":[]string,\"suggestedFixes\":[]string}.\n")
+	b.WriteString("JSON shape: {\"summary\":string,\"blocking\":[]string,\"advisory\":[]string,\"missingContracts\":[]string,\"suggestedFixes\":[]string,\"findings\":[{\"code\":string,\"severity\":string,\"message\":string,\"path\":string,\"recoverable\":boolean}]}.\n")
+	b.WriteString("Finding severity must be one of blocking, advisory, or missing_contract.\n")
+	b.WriteString("Supported finding codes: ")
+	b.WriteString(strings.Join(workflowissues.SupportedCriticCodeStrings(), ", "))
+	b.WriteString(".\n")
+	b.WriteString("Every blocking/advisory/missingContracts item should have a matching structured finding with the same meaning.\n")
 	b.WriteString("Use blocking only for true pre-generation non-viability: no viable entry scenario, no viable role selector/branching model, no viable artifact consumer path, or structurally unusable planning.\n")
 	b.WriteString("Treat ambiguous join contracts, artifact detail gaps, role cardinality detail, worker synchronization detail, and verification staging weakness as advisory or missingContracts unless generation would be impossible.\n")
 	b.WriteString("When possible, mention the affected file or execution-model section directly in each finding.\n")

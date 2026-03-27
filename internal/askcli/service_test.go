@@ -22,6 +22,7 @@ import (
 	"github.com/Airgap-Castaways/deck/internal/askstate"
 	"github.com/Airgap-Castaways/deck/internal/schemadoc"
 	"github.com/Airgap-Castaways/deck/internal/workflowcontract"
+	"github.com/Airgap-Castaways/deck/internal/workflowissues"
 	"github.com/Airgap-Castaways/deck/schemas"
 )
 
@@ -118,7 +119,7 @@ func TestApplyWriteOverrideFallsBackToHeuristicForNonGenerationRoute(t *testing.
 func TestBuildPlanWithReviewRetriesOnPlanCriticBlocking(t *testing.T) {
 	client := &stubClient{responses: []string{
 		`{"version":1,"request":"create 3-node kubeadm workflow","intent":"draft","complexity":"complex","authoringBrief":{"routeIntent":"draft","targetScope":"workspace","targetPaths":["workflows/prepare.yaml","workflows/scenarios/apply.yaml"],"modeIntent":"prepare+apply","connectivity":"offline","completenessTarget":"complete","topology":"multi-node","nodeCount":3,"requiredCapabilities":["prepare-artifacts","kubeadm-bootstrap","kubeadm-join"]},"executionModel":{"artifactContracts":[{"kind":"package","producerPath":"workflows/prepare.yaml","consumerPath":"workflows/scenarios/apply.yaml","description":"offline package flow"}],"roleExecution":{"roleSelector":"vars.role","controlPlaneFlow":"bootstrap","workerFlow":"join","perNodeInvocation":true},"verification":{"bootstrapPhase":"bootstrap-control-plane","finalPhase":"verify-cluster","expectedNodeCount":3,"expectedControlPlaneReady":1},"applyAssumptions":["apply consumes local artifacts"]},"offlineAssumption":"offline","needsPrepare":true,"artifactKinds":["package"],"blockers":[],"targetOutcome":"generate files","assumptions":[],"openQuestions":[],"entryScenario":"workflows/scenarios/apply.yaml","files":[{"path":"workflows/prepare.yaml","kind":"workflow","action":"create","purpose":"prepare"},{"path":"workflows/scenarios/apply.yaml","kind":"scenario","action":"create","purpose":"apply"}],"validationChecklist":["lint"]}`,
-		`{"summary":"plan is not viable yet","blocking":["multi-role request has no viable role selector or branching model"],"advisory":[],"missingContracts":[],"suggestedFixes":["Add executionModel.roleExecution.roleSelector for control-plane and worker branching"]}`,
+		`{"summary":"plan is not viable yet","blocking":["multi-role request has no viable role selector or branching model"],"advisory":[],"missingContracts":[],"suggestedFixes":["Add executionModel.roleExecution.roleSelector for control-plane and worker branching"],"findings":[{"code":"missing_role_selector","severity":"blocking","message":"multi-role request has no viable role selector or branching model","path":"executionModel.roleExecution.roleSelector"}]}`,
 		`{"version":1,"request":"create 3-node kubeadm workflow","intent":"draft","complexity":"complex","authoringBrief":{"routeIntent":"draft","targetScope":"workspace","targetPaths":["workflows/prepare.yaml","workflows/scenarios/apply.yaml"],"modeIntent":"prepare+apply","connectivity":"offline","completenessTarget":"complete","topology":"multi-node","nodeCount":3,"requiredCapabilities":["prepare-artifacts","kubeadm-bootstrap","kubeadm-join"]},"executionModel":{"artifactContracts":[{"kind":"package","producerPath":"workflows/prepare.yaml","consumerPath":"workflows/scenarios/apply.yaml","description":"offline package flow"}],"sharedStateContracts":[{"name":"join-file","producerPath":"/tmp/deck/join.txt","consumerPaths":["/tmp/deck/join.txt"],"availabilityModel":"published-for-worker-consumption","description":"publish join file for workers"}],"roleExecution":{"roleSelector":"vars.role","controlPlaneFlow":"bootstrap","workerFlow":"join","perNodeInvocation":true},"verification":{"bootstrapPhase":"bootstrap-control-plane","finalPhase":"verify-cluster","expectedNodeCount":3,"expectedControlPlaneReady":1},"applyAssumptions":["apply consumes local artifacts"]},"offlineAssumption":"offline","needsPrepare":true,"artifactKinds":["package"],"blockers":[],"targetOutcome":"generate files","assumptions":[],"openQuestions":[],"entryScenario":"workflows/scenarios/apply.yaml","files":[{"path":"workflows/prepare.yaml","kind":"workflow","action":"create","purpose":"prepare"},{"path":"workflows/scenarios/apply.yaml","kind":"scenario","action":"create","purpose":"apply"}],"validationChecklist":["lint"]}`,
 		`{"summary":"plan is ready","blocking":[],"advisory":["role-aware execution is explicit"],"missingContracts":[],"suggestedFixes":[]}`,
 	}}
@@ -165,6 +166,25 @@ func TestNormalizePlanCriticDowngradesRecoverableIssues(t *testing.T) {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("expected %q in advisory, got %#v", want, critic)
 		}
+	}
+}
+
+func TestNormalizePlanCriticPrefersStructuredFindingCodes(t *testing.T) {
+	plan := askcontract.PlanResponse{}
+	critic := normalizePlanCritic(plan, askcontract.PlanCriticResponse{
+		Findings: []askcontract.PlanCriticFinding{
+			{Code: workflowissues.CodeMissingRoleSelector, Severity: workflowissues.SeverityBlocking, Message: "role selector missing"},
+			{Code: workflowissues.CodeAmbiguousJoinContract, Severity: workflowissues.SeverityMissingContract, Message: "join publication path should be explicit", Recoverable: true},
+		},
+	})
+	if len(critic.Blocking) != 1 || critic.Blocking[0] != "role selector missing" {
+		t.Fatalf("expected fatal finding to remain blocking, got %#v", critic)
+	}
+	if len(critic.MissingContracts) != 0 {
+		t.Fatalf("expected recoverable missing contract to downgrade, got %#v", critic)
+	}
+	if len(critic.Advisory) != 1 || critic.Advisory[0] != "join publication path should be explicit" {
+		t.Fatalf("expected recoverable finding to become advisory, got %#v", critic)
 	}
 }
 
@@ -265,7 +285,7 @@ func TestHasFatalPlanReviewIssuesIgnoresRecoverablePlannerBlockers(t *testing.T)
 	}
 }
 
-func TestHasFatalPlanReviewIssuesStopsOnFatalPlannerBlocker(t *testing.T) {
+func TestHasFatalPlanReviewIssuesDoesNotGateOnPlannerProseAlone(t *testing.T) {
 	plan := askcontract.PlanResponse{
 		AuthoringBrief: askcontract.AuthoringBrief{ModeIntent: "prepare+apply", Topology: "multi-node"},
 		EntryScenario:  "workflows/scenarios/apply.yaml",
@@ -274,8 +294,8 @@ func TestHasFatalPlanReviewIssuesStopsOnFatalPlannerBlocker(t *testing.T) {
 		NeedsPrepare:   true,
 		Blockers:       []string{"no viable role selector is available for the worker/control-plane branching model"},
 	}
-	if !hasFatalPlanReviewIssues(plan, askcontract.PlanCriticResponse{}) {
-		t.Fatalf("expected fatal planner blocker to stop generation")
+	if hasFatalPlanReviewIssues(plan, askcontract.PlanCriticResponse{}) {
+		t.Fatalf("expected planner prose alone not to stop generation")
 	}
 }
 
@@ -420,7 +440,7 @@ func TestGenerateWithValidationRetryPromptIncludesDuplicateStepIDRepairGuidance(
 		t.Fatalf("expected two generate calls, got %d", len(client.prompts))
 	}
 	retryPrompt := client.prompts[1].Prompt
-	for _, want := range []string{"duplicate_step_id", "Duplicate step id repair", "control-plane-preflight-host", "worker-preflight-host", "Return the full JSON response with all files"} {
+	for _, want := range []string{string(workflowissues.CodeDuplicateStepID), "Duplicate step id repair", "control-plane-preflight-host", "worker-preflight-host", "Return the full JSON response with all files"} {
 		if !strings.Contains(retryPrompt, want) {
 			t.Fatalf("expected %q in duplicate-id retry prompt, got %q", want, retryPrompt)
 		}
@@ -815,7 +835,7 @@ func TestGenerationSystemPromptCarriesWorkflowStepIDUniquenessRule(t *testing.T)
 	req := askpolicy.ScenarioRequirements{Connectivity: "offline", RequiredFiles: []string{"workflows/prepare.yaml", "workflows/scenarios/apply.yaml"}, NeedsPrepare: true}
 	scaffold := askscaffold.Build(req, askretrieve.WorkspaceSummary{}, askintent.Decision{Route: askintent.RouteDraft}, askcontract.PlanResponse{}, askknowledge.Current())
 	prompt := generationSystemPrompt(askintent.RouteDraft, askintent.Target{Kind: "workspace"}, "create a 3-node workflow", askretrieve.RetrievalResult{}, req, askcontract.AuthoringBrief{ModeIntent: "prepare+apply", CompletenessTarget: "complete"}, askcontract.ExecutionModel{}, scaffold)
-	for _, want := range []string{"Every step id must be unique across the workflow.", "Every step id must be unique across the workflow, including steps nested under different phases."} {
+	for _, want := range []string{"Every step id must be unique across top-level steps and steps nested under phases.", "Rename duplicate step ids with role- or phase-specific prefixes instead of reusing the same id."} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("expected %q in generation prompt, got %q", want, prompt)
 		}

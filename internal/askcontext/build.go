@@ -11,6 +11,7 @@ import (
 	"github.com/Airgap-Castaways/deck/internal/schemafacts"
 	"github.com/Airgap-Castaways/deck/internal/validate"
 	"github.com/Airgap-Castaways/deck/internal/workflowexec"
+	"github.com/Airgap-Castaways/deck/internal/workflowissues"
 	"github.com/Airgap-Castaways/deck/internal/workspacepaths"
 	deckschemas "github.com/Airgap-Castaways/deck/schemas"
 )
@@ -68,7 +69,7 @@ func buildManifest() Manifest {
 			StepRules: []string{
 				"Each step needs id, kind, and spec.",
 				"Step ids belong on steps, not phases.",
-				"Step ids must be unique across all phases and top-level steps in the workflow.",
+				workflowissues.MustSpec(workflowissues.CodeDuplicateStepID).Details,
 			},
 			PhaseExample: strings.TrimSpace(`version: v1alpha1
 phases:

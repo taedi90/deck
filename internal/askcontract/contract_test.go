@@ -1,6 +1,11 @@
 package askcontract
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"github.com/Airgap-Castaways/deck/internal/workflowissues"
+)
 
 func TestParseInfoFallback(t *testing.T) {
 	resp := ParseInfo("plain text answer")
@@ -98,5 +103,25 @@ func TestParsePostProcess(t *testing.T) {
 	}
 	if resp.Summary == "" || len(resp.RequiredEdits) != 1 || len(resp.VerificationExpectations) != 1 {
 		t.Fatalf("unexpected post-process response: %#v", resp)
+	}
+}
+
+func TestParsePlanCriticWithStructuredFindings(t *testing.T) {
+	resp, err := ParsePlanCritic(`{"summary":"critic summary","blocking":["role selector missing"],"advisory":[],"missingContracts":[],"suggestedFixes":["add vars.role selector"],"findings":[{"code":"missing_role_selector","severity":"blocking","message":"role selector missing","path":"executionModel.roleExecution.roleSelector"},{"code":"ambiguous_join_contract","severity":"advisory","message":"join handoff should be explicit","recoverable":true}]}`)
+	if err != nil {
+		t.Fatalf("parse plan critic: %v", err)
+	}
+	if len(resp.Findings) != 2 {
+		t.Fatalf("expected findings to parse, got %#v", resp)
+	}
+	if resp.Findings[0].Code != workflowissues.CodeMissingRoleSelector || resp.Findings[1].Severity != workflowissues.SeverityAdvisory {
+		t.Fatalf("unexpected findings: %#v", resp.Findings)
+	}
+}
+
+func TestParsePlanCriticRejectsInvalidFindingSeverity(t *testing.T) {
+	_, err := ParsePlanCritic(`{"summary":"critic summary","blocking":[],"advisory":[],"missingContracts":[],"suggestedFixes":[],"findings":[{"code":"missing_role_selector","severity":"warn","message":"role selector missing"}]}`)
+	if err == nil || !strings.Contains(err.Error(), "invalid severity") {
+		t.Fatalf("expected invalid severity error, got %v", err)
 	}
 }

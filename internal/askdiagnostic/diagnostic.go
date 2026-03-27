@@ -8,6 +8,7 @@ import (
 	"github.com/Airgap-Castaways/deck/internal/askcontract"
 	"github.com/Airgap-Castaways/deck/internal/askknowledge"
 	"github.com/Airgap-Castaways/deck/internal/askpolicy"
+	"github.com/Airgap-Castaways/deck/internal/workflowissues"
 )
 
 type Diagnostic struct {
@@ -57,15 +58,16 @@ func FromValidationError(message string, bundle askknowledge.Bundle) []Diagnosti
 		appendDiag(Diagnostic{Code: "role_support", Severity: "blocking", Message: "step kind is not supported for prepare", Expected: "prepare-supported typed step", Actual: "unsupported step kind for prepare", SourceRef: "workflow step role declarations", SuggestedFix: "Use a typed prepare step such as DownloadImage or DownloadPackage for artifact collection."})
 	}
 	if stepID, ok := extractDuplicateStepID(message); ok {
+		spec := workflowissues.MustSpec(workflowissues.CodeDuplicateStepID)
 		appendDiag(Diagnostic{
-			Code:         "duplicate_step_id",
+			Code:         string(workflowissues.CodeDuplicateStepID),
 			Severity:     "blocking",
 			File:         diagnosticMessageFile(message),
 			Path:         "steps[].id",
 			Message:      fmt.Sprintf("workflow reuses step id %q", stepID),
-			Expected:     "globally unique step ids across the workflow",
+			Expected:     strings.TrimSpace(spec.Details),
 			Actual:       stepID,
-			SourceRef:    "workflow semantic rules",
+			SourceRef:    "workflowissues." + string(workflowissues.CodeDuplicateStepID),
 			SuggestedFix: fmt.Sprintf("Rename duplicated step id %q so every step id is unique across the workflow. Prefer role- or phase-specific ids such as control-plane-%s or worker-%s.", stepID, stepID, stepID),
 		})
 	}

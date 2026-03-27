@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Airgap-Castaways/deck/internal/askknowledge"
+	"github.com/Airgap-Castaways/deck/internal/workflowissues"
 )
 
 func TestFromValidationErrorDetectsComponentFragmentShape(t *testing.T) {
@@ -47,7 +48,7 @@ func TestFromValidationErrorSuggestsRequiredInitKubeadmField(t *testing.T) {
 func TestFromValidationErrorSuggestsUniqueDuplicateStepIDs(t *testing.T) {
 	diags := FromValidationError("workflows/scenarios/apply.yaml: E_DUPLICATE_STEP_ID: preflight-host", askknowledge.Current())
 	joined := JSON(diags)
-	for _, want := range []string{"duplicate_step_id", "globally unique step ids", "control-plane-preflight-host", "workflows/scenarios/apply.yaml"} {
+	for _, want := range []string{string(workflowissues.CodeDuplicateStepID), "Every step id must be unique across top-level steps and steps nested under phases.", "control-plane-preflight-host", "workflows/scenarios/apply.yaml"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("expected %q in diagnostics, got %s", want, joined)
 		}

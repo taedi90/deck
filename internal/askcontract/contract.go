@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/Airgap-Castaways/deck/internal/askcontext"
+	"github.com/Airgap-Castaways/deck/internal/workflowissues"
 )
 
 type GeneratedFile struct {
@@ -115,11 +116,20 @@ type JudgeResponse struct {
 }
 
 type PlanCriticResponse struct {
-	Summary          string   `json:"summary"`
-	Blocking         []string `json:"blocking"`
-	Advisory         []string `json:"advisory"`
-	MissingContracts []string `json:"missingContracts"`
-	SuggestedFixes   []string `json:"suggestedFixes"`
+	Summary          string              `json:"summary"`
+	Blocking         []string            `json:"blocking"`
+	Advisory         []string            `json:"advisory"`
+	MissingContracts []string            `json:"missingContracts"`
+	SuggestedFixes   []string            `json:"suggestedFixes"`
+	Findings         []PlanCriticFinding `json:"findings,omitempty"`
+}
+
+type PlanCriticFinding struct {
+	Code        workflowissues.Code     `json:"code"`
+	Severity    workflowissues.Severity `json:"severity"`
+	Message     string                  `json:"message"`
+	Path        string                  `json:"path,omitempty"`
+	Recoverable bool                    `json:"recoverable,omitempty"`
 }
 
 type PostProcessResponse struct {
@@ -367,6 +377,29 @@ func ParsePlanCritic(raw string) (PlanCriticResponse, error) {
 	}
 	for i := range resp.SuggestedFixes {
 		resp.SuggestedFixes[i] = strings.TrimSpace(resp.SuggestedFixes[i])
+	}
+	for i := range resp.Findings {
+		resp.Findings[i].Code = workflowissues.Code(strings.TrimSpace(string(resp.Findings[i].Code)))
+		resp.Findings[i].Severity = workflowissues.Severity(strings.TrimSpace(string(resp.Findings[i].Severity)))
+		resp.Findings[i].Message = strings.TrimSpace(resp.Findings[i].Message)
+		resp.Findings[i].Path = strings.TrimSpace(resp.Findings[i].Path)
+		if resp.Findings[i].Code == "" {
+			return PlanCriticResponse{}, fmt.Errorf("plan critic finding is missing code")
+		}
+		if !workflowissues.IsSupportedCriticCode(resp.Findings[i].Code) {
+			return PlanCriticResponse{}, fmt.Errorf("plan critic finding %q uses unsupported code", resp.Findings[i].Code)
+		}
+		if resp.Findings[i].Message == "" {
+			return PlanCriticResponse{}, fmt.Errorf("plan critic finding %q is missing message", resp.Findings[i].Code)
+		}
+		switch resp.Findings[i].Severity {
+		case workflowissues.SeverityBlocking, workflowissues.SeverityAdvisory, workflowissues.SeverityMissingContract:
+			// ok
+		case "":
+			resp.Findings[i].Severity = workflowissues.SeverityAdvisory
+		default:
+			return PlanCriticResponse{}, fmt.Errorf("plan critic finding %q has invalid severity %q", resp.Findings[i].Code, resp.Findings[i].Severity)
+		}
 	}
 	return resp, nil
 }
