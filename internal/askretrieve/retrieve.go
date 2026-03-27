@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/Airgap-Castaways/deck/internal/askcontext"
 	"github.com/Airgap-Castaways/deck/internal/askintent"
@@ -110,7 +112,8 @@ func InspectWorkspace(root string) (WorkspaceSummary, error) {
 }
 
 func Retrieve(route askintent.Route, prompt string, target askintent.Target, workspace WorkspaceSummary, state askstate.Context, external []Chunk) RetrievalResult {
-	budget, maxChunks := routeBudget(route)
+	budget, maxChunks := routeBudget(route, prompt)
+	complex := isComplexAuthoringPrompt(route, prompt)
 	lowerPrompt := strings.ToLower(strings.TrimSpace(prompt))
 	related := relatedWorkspaceTargets(workspace, target)
 	chunks := make([]Chunk, 0, 32)
@@ -148,6 +151,17 @@ func Retrieve(route askintent.Route, prompt string, target askintent.Target, wor
 			Score:   typedStepsScore(route, lowerPrompt),
 		})
 	}
+	if composition := askcontext.StepCompositionGuidanceBlock(prompt, askcontext.StepGuidanceOptions{}); strings.TrimSpace(composition) != "" {
+		chunks = append(chunks, Chunk{
+			ID:      "step-composition-" + string(route),
+			Source:  "askcontext",
+			Label:   "step-composition",
+			Topic:   askcontext.TopicStepComposition,
+			Content: composition,
+			Score:   typedStepsScore(route, lowerPrompt) + 8,
+		})
+	}
+	chunks = append(chunks, exampleReferenceChunks(route, lowerPrompt)...)
 	for _, file := range workspace.Files {
 		if !workspaceFileAllowed(file.Path) {
 			continue
@@ -173,7 +187,7 @@ func Retrieve(route askintent.Route, prompt string, target askintent.Target, wor
 			Source:  "workspace",
 			Label:   file.Path,
 			Topic:   askcontext.Topic("workspace:" + filepath.ToSlash(file.Path)),
-			Content: file.Content,
+			Content: compressChunkContent(lowerPrompt, file.Path, file.Content, 3200),
 			Score:   score,
 		})
 	}
@@ -205,21 +219,80 @@ func Retrieve(route askintent.Route, prompt string, target askintent.Target, wor
 	selected := make([]Chunk, 0, maxChunks)
 	dropped := make([]string, 0)
 	remaining := budget
+	reservedIDs := map[string]bool{}
+	if complex {
+		selected, remaining, reservedIDs, dropped = reserveComplexAuthoringChunks(chunks, selected, remaining, maxChunks, dropped)
+	}
 	for _, chunk := range chunks {
+		if reservedIDs[chunk.ID] {
+			continue
+		}
 		if len(selected) >= maxChunks {
 			dropped = append(dropped, chunk.ID)
 			continue
 		}
+		content := chunk.Content
+		size := len(content)
+		if size > remaining && shouldCompressChunk(chunk.Label, chunk.Content) {
+			content = compressChunkContent(lowerPrompt, chunk.Label, chunk.Content, remaining)
+			size = len(content)
+		}
+		if size > remaining {
+			dropped = append(dropped, chunk.ID)
+			continue
+		}
+		chunk.Content = content
+		selected = append(selected, chunk)
+		remaining -= size
+	}
+
+	return RetrievalResult{Chunks: selected, Dropped: dropped, MaxBytes: budget}
+}
+
+func reserveComplexAuthoringChunks(chunks []Chunk, selected []Chunk, remaining int, maxChunks int, dropped []string) ([]Chunk, int, map[string]bool, []string) {
+	reserved := map[string]bool{}
+	keptExamples := 0
+	keptTyped := false
+	keptComposition := false
+	for _, chunk := range chunks {
+		if len(selected) >= maxChunks {
+			break
+		}
+		want := false
+		switch {
+		case chunk.Source == "example" && keptExamples < 2:
+			want = true
+		case chunk.Source == "askcontext" && chunk.Label == "typed-steps" && !keptTyped:
+			want = true
+		case chunk.Source == "askcontext" && chunk.Label == "step-composition" && !keptComposition:
+			want = true
+		}
+		if !want {
+			continue
+		}
 		size := len(chunk.Content)
+		if size > remaining && shouldCompressChunk(chunk.Label, chunk.Content) {
+			chunk.Content = compressChunkContent("", chunk.Label, chunk.Content, remaining)
+			size = len(chunk.Content)
+		}
 		if size > remaining {
 			dropped = append(dropped, chunk.ID)
 			continue
 		}
 		selected = append(selected, chunk)
 		remaining -= size
+		reserved[chunk.ID] = true
+		if chunk.Source == "example" {
+			keptExamples++
+		}
+		if chunk.Source == "askcontext" && chunk.Label == "typed-steps" {
+			keptTyped = true
+		}
+		if chunk.Source == "askcontext" && chunk.Label == "step-composition" {
+			keptComposition = true
+		}
 	}
-
-	return RetrievalResult{Chunks: selected, Dropped: dropped, MaxBytes: budget}
+	return selected, remaining, reserved, dropped
 }
 
 func RepairChunks(prompt string, validationError string) []Chunk {
@@ -362,15 +435,344 @@ func BuildChunkTextWithoutTopics(retrieval RetrievalResult, excluded ...askconte
 	return b.String()
 }
 
-func routeBudget(route askintent.Route) (maxBytes int, maxChunks int) {
+func routeBudget(route askintent.Route, prompt string) (maxBytes int, maxChunks int) {
+	complex := isComplexAuthoringPrompt(route, prompt)
 	switch route {
 	case askintent.RouteDraft, askintent.RouteRefine:
+		if complex {
+			return 20000, 14
+		}
 		return 12000, 10
 	case askintent.RouteReview, askintent.RouteExplain:
 		return 8000, 8
 	default:
 		return 4000, 6
 	}
+}
+
+func isComplexAuthoringPrompt(route askintent.Route, prompt string) bool {
+	if route != askintent.RouteDraft && route != askintent.RouteRefine {
+		return false
+	}
+	prompt = strings.ToLower(strings.TrimSpace(prompt))
+	tokens := []string{"prepare and apply", "prepare", "apply", "air-gapped", "airgapped", "kubeadm", "cluster", "multi-node", "single-node", "worker", "workers", "join", "control-plane", "control plane"}
+	hits := 0
+	for _, token := range tokens {
+		if strings.Contains(prompt, token) {
+			hits++
+		}
+	}
+	return hits >= 3
+}
+
+func exampleReferenceChunks(route askintent.Route, lowerPrompt string) []Chunk {
+	if route != askintent.RouteDraft && route != askintent.RouteRefine {
+		return nil
+	}
+	root := repoRootFallback()
+	if root == "" {
+		return nil
+	}
+	candidates := []string{
+		filepath.Join(root, "docs", "user-guide", "examples"),
+		filepath.Join(root, "test", "workflows"),
+	}
+	out := make([]Chunk, 0, 8)
+	for _, dir := range candidates {
+		_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				return nil
+			}
+			lowerName := strings.ToLower(d.Name())
+			if !strings.HasSuffix(lowerName, ".yaml") && !strings.HasSuffix(lowerName, ".yml") {
+				return nil
+			}
+			content, readErr := os.ReadFile(path) //nolint:gosec // repository-owned examples only.
+			if readErr != nil {
+				return readErr
+			}
+			rel, relErr := filepath.Rel(root, path)
+			if relErr != nil {
+				rel = path
+			}
+			cleanRel := filepath.ToSlash(rel)
+			if !exampleChunkAllowed(cleanRel, string(content)) {
+				return nil
+			}
+			score := exampleChunkScore(lowerPrompt, cleanRel, string(content))
+			if score < 55 {
+				return nil
+			}
+			out = append(out, Chunk{
+				ID:      "example-" + strings.ReplaceAll(cleanRel, "/", "_"),
+				Source:  "example",
+				Label:   cleanRel,
+				Topic:   askcontext.Topic("example:" + cleanRel),
+				Content: exampleChunkContent(cleanRel, compressChunkContent(lowerPrompt, cleanRel, string(content), 3600)),
+				Score:   score,
+			})
+			return nil
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Score == out[j].Score {
+			return out[i].ID < out[j].ID
+		}
+		return out[i].Score > out[j].Score
+	})
+	if len(out) > 4 {
+		out = out[:4]
+	}
+	return out
+}
+
+func exampleChunkScore(prompt string, path string, content string) int {
+	score := 20
+	text := strings.ToLower(path + "\n" + content)
+	for _, token := range []string{"air-gapped", "airgapped", "offline", "kubeadm", "cluster", "worker", "join", "control-plane", "control plane", "containerd", "repo", "package", "image", "prepare", "apply", "artifact", "handoff", "publish", "kubeconfig"} {
+		if strings.Contains(prompt, token) && strings.Contains(text, token) {
+			score += 12
+		}
+	}
+	if strings.Contains(path, "docs/user-guide/examples/") {
+		score += 4
+	}
+	if strings.Contains(path, "test/workflows/") {
+		score += 18
+	}
+	if strings.Contains(path, "scenarios/") {
+		score += 8
+	}
+	if strings.Contains(path, "upgrade") && !strings.Contains(prompt, "upgrade") {
+		score -= 20
+	}
+	if strings.Contains(path, "worker-join") && (strings.Contains(prompt, "worker") || strings.Contains(prompt, "join")) {
+		score += 12
+	}
+	if strings.Contains(path, "bootstrap") && (strings.Contains(prompt, "control-plane") || strings.Contains(prompt, "bootstrap") || strings.Contains(prompt, "kubeadm")) {
+		score += 10
+	}
+	if strings.Contains(path, "kubeadm") && strings.Contains(prompt, "kubeadm") {
+		score += 10
+	}
+	if strings.Contains(text, "apiVersion: deck/") {
+		score -= 18
+	}
+	if strings.Contains(text, "kind: swap") || strings.Contains(text, "kind: sysctl") {
+		score -= 6
+	}
+	if strings.Contains(text, "version: v1alpha1") {
+		score += 6
+	}
+	if strings.Contains(text, "kind: initkubeadm") || strings.Contains(text, "kind: joinkubeadm") {
+		score += 8
+	}
+	if strings.Contains(text, "outputjoinfile") || strings.Contains(text, "joinfile") {
+		score += 8
+	}
+	return score
+}
+
+func exampleChunkAllowed(path string, content string) bool {
+	text := strings.ToLower(path + "\n" + content)
+	if strings.Contains(path, "docs/user-guide/examples/") && strings.Contains(text, "apiversion: deck/") {
+		return false
+	}
+	return true
+}
+
+func exampleChunkContent(path string, content string) string {
+	b := &strings.Builder{}
+	b.WriteString("Reference example:\n")
+	b.WriteString("- path: ")
+	b.WriteString(path)
+	b.WriteString("\n")
+	b.WriteString(content)
+	if !strings.HasSuffix(content, "\n") {
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+func compressChunkContent(prompt string, label string, content string, maxBytes int) string {
+	content = strings.TrimSpace(content)
+	if content == "" || maxBytes <= 0 {
+		return content
+	}
+	if !shouldCompressChunk(label, content) {
+		return content
+	}
+	if len(content) <= maxBytes {
+		return content
+	}
+	lines := strings.Split(content, "\n")
+	keywords := requestKeywords(prompt, label)
+	selected := selectRelevantLineWindows(lines, keywords, 2)
+	compressed := renderSelectedLines(lines, selected)
+	compressed = strings.TrimSpace(compressed)
+	if compressed == "" {
+		compressed = strings.Join(lines[:min(80, len(lines))], "\n")
+	}
+	if len(compressed) <= maxBytes {
+		return compressed
+	}
+	if maxBytes > 64 {
+		trimmed := compressed[:maxBytes-16]
+		trimmed = strings.TrimRightFunc(trimmed, unicode.IsSpace)
+		return trimmed + "\n...\n"
+	}
+	return compressed[:maxBytes]
+}
+
+func shouldCompressChunk(label string, content string) bool {
+	lowerLabel := strings.ToLower(strings.TrimSpace(label))
+	if strings.HasSuffix(lowerLabel, ".yaml") || strings.HasSuffix(lowerLabel, ".yml") {
+		return false
+	}
+	trimmed := strings.TrimSpace(content)
+	if trimmed == "" {
+		return true
+	}
+	if looksLikeStructuredYAML(trimmed) {
+		return false
+	}
+	return true
+}
+
+func looksLikeStructuredYAML(content string) bool {
+	if strings.Contains(content, "version: v1alpha1") {
+		return true
+	}
+	for _, token := range []string{"\nphases:\n", "\nsteps:\n", "\nvars:\n", "\nimports:\n", "\n  - name:", "\n  - id:", "\nkind: ", "\nspec:\n"} {
+		if strings.Contains(content, token) {
+			return true
+		}
+	}
+	return false
+}
+
+func requestKeywords(prompt string, label string) []string {
+	parts := strings.Fields(strings.ToLower(prompt + " " + label))
+	keywords := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.Trim(part, "`\"'.,:;()[]{}")
+		if len(part) < 4 {
+			continue
+		}
+		switch part {
+		case "with", "from", "that", "this", "workflow", "create", "using", "where", "possible", "offline", "cluster":
+			continue
+		}
+		keywords = append(keywords, part)
+	}
+	for _, item := range []string{"kubeadm", "join", "worker", "control-plane", "prepare", "apply", "artifact", "image", "package", "handoff", "checkcluster", "initkubeadm", "joinkubeadm"} {
+		if strings.Contains(strings.ToLower(prompt), item) || strings.Contains(strings.ToLower(label), item) {
+			keywords = append(keywords, item)
+		}
+	}
+	return dedupeStrings(keywords)
+}
+
+func selectRelevantLineWindows(lines []string, keywords []string, radius int) []int {
+	selected := make([]int, 0, len(lines))
+	seen := map[int]bool{}
+	matchCount := 0
+	for i, line := range lines {
+		lower := strings.ToLower(line)
+		matched := false
+		for _, keyword := range keywords {
+			if strings.Contains(lower, keyword) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			continue
+		}
+		matchCount++
+		start := max(0, i-radius)
+		end := min(len(lines)-1, i+radius)
+		for idx := start; idx <= end; idx++ {
+			if !seen[idx] {
+				seen[idx] = true
+				selected = append(selected, idx)
+			}
+		}
+		if matchCount >= 24 {
+			break
+		}
+	}
+	if len(selected) == 0 {
+		limit := min(80, len(lines))
+		for i := 0; i < limit; i++ {
+			selected = append(selected, i)
+		}
+	}
+	sort.Ints(selected)
+	return selected
+}
+
+func renderSelectedLines(lines []string, selected []int) string {
+	if len(selected) == 0 {
+		return ""
+	}
+	b := &strings.Builder{}
+	prev := -2
+	for _, idx := range selected {
+		if idx < 0 || idx >= len(lines) {
+			continue
+		}
+		if prev >= 0 && idx > prev+1 {
+			b.WriteString("...\n")
+		}
+		b.WriteString(lines[idx])
+		b.WriteString("\n")
+		prev = idx
+	}
+	return b.String()
+}
+
+func min(a int, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func max(a int, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func dedupeStrings(items []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" || seen[item] {
+			continue
+		}
+		seen[item] = true
+		out = append(out, item)
+	}
+	return out
+}
+
+func repoRootFallback() string {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		return ""
+	}
+	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
+	if info, err := os.Stat(filepath.Join(root, "go.mod")); err == nil && !info.IsDir() {
+		return root
+	}
+	return ""
 }
 
 func workspaceFileAllowed(path string) bool {

@@ -103,6 +103,10 @@ spec:
 | `spec.source.bundle.root` | `string` | yes | `` | `files, images, packages` | Bundle root category to read from (`files`, `images`, or `packages`). | `files` |
 
 
+### Validation Rules
+
+- At least one of `spec.source` or `spec.items` must be set.
+
 ### Notes
 
 - `DownloadFile` writes into prepared bundle storage through `outputPath`, while `WriteFile`, `CopyFile`, `EditFile`, and `ExtractArchive` operate on node paths through `path`.

@@ -1,6 +1,9 @@
 package askprovider
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type Request struct {
 	Kind         string
@@ -13,6 +16,7 @@ type Request struct {
 	SystemPrompt string
 	Prompt       string
 	MaxRetries   int
+	Timeout      time.Duration
 }
 
 type Response struct {

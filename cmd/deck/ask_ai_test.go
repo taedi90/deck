@@ -154,7 +154,7 @@ func TestAskPreviewAndWrite(t *testing.T) {
 
 	originalFactory := newAskBackend
 	newAskBackend = func() askprovider.Client {
-		return &mockAskClient{responses: []string{validClassificationDraft(), validAskJSON()}}
+		return &mockAskClient{responses: []string{validAskJSON()}}
 	}
 	defer func() { newAskBackend = originalFactory }()
 
@@ -230,7 +230,7 @@ func TestAskRepairLoop(t *testing.T) {
 
 	originalFactory := newAskBackend
 	newAskBackend = func() askprovider.Client {
-		return &mockAskClient{responses: []string{validClassificationDraft(), `{"summary":"bad","files":[{"path":"workflows/scenarios/apply.yaml","content":"version: v1alpha1\nsteps: ["}]}`, validAskJSON()}}
+		return &mockAskClient{responses: []string{`{"summary":"bad","files":[{"path":"workflows/scenarios/apply.yaml","content":"version: v1alpha1\nsteps: ["}]}`, validAskJSON()}}
 	}
 	defer func() { newAskBackend = originalFactory }()
 
@@ -295,7 +295,7 @@ func TestAskPlanWritesArtifact(t *testing.T) {
 
 	originalFactory := newAskBackend
 	newAskBackend = func() askprovider.Client {
-		return &mockAskClient{responses: []string{validClassificationDraft(), validPlanJSON()}}
+		return &mockAskClient{responses: []string{validPlanJSON()}}
 	}
 	defer func() { newAskBackend = originalFactory }()
 
@@ -367,7 +367,7 @@ func TestAskFromPlanPrefersJSONArtifact(t *testing.T) {
 
 	originalFactory := newAskBackend
 	newAskBackend = func() askprovider.Client {
-		return &mockAskClient{responses: []string{validClassificationDraft(), validAskJSON()}}
+		return &mockAskClient{responses: []string{validAskJSON()}}
 	}
 	defer func() { newAskBackend = originalFactory }()
 
@@ -380,7 +380,7 @@ func TestAskFromPlanPrefersJSONArtifact(t *testing.T) {
 	}
 }
 
-func TestAskOneShotFallsBackToPlanOnlyWhenPlannerBlocks(t *testing.T) {
+func TestAskPlanShowsBlockers(t *testing.T) {
 	t.Setenv("DECK_ASK_API_KEY", "env-key")
 	root := t.TempDir()
 	oldWD, err := os.Getwd()
@@ -394,17 +394,49 @@ func TestAskOneShotFallsBackToPlanOnlyWhenPlannerBlocks(t *testing.T) {
 
 	originalFactory := newAskBackend
 	newAskBackend = func() askprovider.Client {
-		return &mockAskClient{responses: []string{validClassificationDraft(), `{"version":1,"request":"create cluster workflow","intent":"draft","complexity":"complex","blockers":["missing os image details"],"targetOutcome":"Generate workflows","assumptions":[],"openQuestions":["blocking: choose base image"],"entryScenario":"workflows/scenarios/apply.yaml","files":[{"path":"workflows/scenarios/apply.yaml","kind":"scenario","action":"create","purpose":"entry scenario"}],"validationChecklist":["lint"]}`}}
+		return &mockAskClient{responses: []string{`{"version":1,"request":"create cluster workflow","intent":"draft","complexity":"complex","blockers":["missing os image details"],"targetOutcome":"Generate workflows","assumptions":[],"openQuestions":["blocking: choose base image"],"entryScenario":"workflows/scenarios/apply.yaml","files":[{"path":"workflows/scenarios/apply.yaml","kind":"scenario","action":"create","purpose":"entry scenario"}],"validationChecklist":["lint"]}`}}
 	}
 	defer func() { newAskBackend = originalFactory }()
 
-	out, err := runWithCapturedStdout([]string{"ask", "create air-gapped cluster workflow"})
+	out, err := runWithCapturedStdout([]string{"ask", "plan", "create air-gapped cluster workflow"})
 	if err != nil {
-		t.Fatalf("ask fallback: %v", err)
+		t.Fatalf("ask plan: %v", err)
 	}
-	for _, want := range []string{"plan:", "note: generation stopped because plan has blockers", "blocker: missing os image details"} {
+	for _, want := range []string{"plan:", "blocker: missing os image details", "next:", "deck ask --from"} {
 		if !strings.Contains(out, want) {
-			t.Fatalf("expected %q in fallback output, got %q", want, out)
+			t.Fatalf("expected %q in plan output, got %q", want, out)
+		}
+	}
+}
+
+func TestAskComplexPromptShowsJudgeFindingsAndRepairsLoosePlanJSON(t *testing.T) {
+	t.Setenv("DECK_ASK_API_KEY", "env-key")
+	root := t.TempDir()
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(oldWD) }()
+
+	originalFactory := newAskBackend
+	newAskBackend = func() askprovider.Client {
+		return &mockAskClient{responses: []string{
+			`{"version":1,"request":"create an air-gapped rhel9 3-node kubeadm workflow","intent":"draft","complexity":"complex","authoringBrief":{"routeIntent":"draft","targetScope":"workspace","targetPaths":["workflows/prepare.yaml","workflows/scenarios/apply.yaml",],"modeIntent":"prepare+apply","connectivity":"offline","completenessTarget":"complete","topology":"multi-node","nodeCount":3,"requiredCapabilities":["prepare-artifacts","kubeadm-bootstrap","kubeadm-join",]},"blockers":[],"targetOutcome":"Generate workflows","assumptions":[],"openQuestions":[],"entryScenario":"workflows/scenarios/apply.yaml","files":[{"path":"workflows/prepare.yaml","kind":"workflow","action":"create","purpose":"prepare"},{"path":"workflows/scenarios/apply.yaml","kind":"scenario","action":"create","purpose":"apply"},],"validationChecklist":["lint",]}`,
+			`{"summary":"generated multi-node draft","review":[],"files":[{"path":"workflows/prepare.yaml","content":"version: v1alpha1\nphases:\n  - name: collect\n    steps:\n      - id: collect-packages\n        kind: DownloadPackage\n        spec:\n          packages: [kubeadm]\n          distro:\n            family: rhel\n            release: rocky9\n          repo:\n            type: rpm\n"},{"path":"workflows/scenarios/apply.yaml","content":"version: v1alpha1\nphases:\n  - name: runtime\n    steps:\n      - id: install\n        kind: InstallPackage\n        spec:\n          packages: [kubeadm]\n          source:\n            type: local-repo\n            path: /tmp/packages\n  - name: bootstrap\n    steps:\n      - id: init\n        kind: InitKubeadm\n        spec:\n          outputJoinFile: /tmp/join.sh\n      - id: join\n        kind: JoinKubeadm\n        spec:\n          joinFile: /tmp/join.sh\n      - id: verify\n        kind: CheckCluster\n        spec:\n          interval: 5s\n          nodes:\n            total: 3\n            ready: 3\n            controlPlaneReady: 1\n"}]}`,
+		}}
+	}
+	defer func() { newAskBackend = originalFactory }()
+
+	out, err := runWithCapturedStdout([]string{"ask", "create an air-gapped rhel9 3-node kubeadm cluster workflow with prepare and apply workflows for offline package and image staging"})
+	if err != nil {
+		t.Fatalf("ask complex prompt: %v", err)
+	}
+	for _, want := range []string{"preview:", "workflows/prepare.yaml", "workflows/scenarios/apply.yaml"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected %q in output, got %q", want, out)
 		}
 	}
 }

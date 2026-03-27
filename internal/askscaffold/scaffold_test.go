@@ -42,3 +42,22 @@ func TestBuildSelectsRefineScaffoldForRefineRoute(t *testing.T) {
 		t.Fatalf("expected refine scaffold to preserve planned file, got %q", PromptBlock(scaffold))
 	}
 }
+
+func TestBuildSelectsMultiNodeKubeadmScaffold(t *testing.T) {
+	scaffold := Build(
+		askpolicy.ScenarioRequirements{ScenarioIntent: []string{"kubeadm", "multi-node", "join"}, NeedsPrepare: true, ArtifactKinds: []string{"package", "image"}},
+		askretrieve.WorkspaceSummary{},
+		askintent.Decision{Route: askintent.RouteDraft},
+		askcontract.PlanResponse{Request: "create 3-node kubeadm workflow", AuthoringBrief: askcontract.AuthoringBrief{Topology: "multi-node", NodeCount: 3}},
+		askknowledge.Current(),
+	)
+	if scaffold.Family != FamilyKubeadmMulti {
+		t.Fatalf("expected multi-node kubeadm scaffold, got %#v", scaffold)
+	}
+	prompt := PromptBlock(scaffold)
+	for _, want := range []string{"JoinKubeadm", "verify-cluster", "total: 3"} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("expected %q in scaffold prompt, got %q", want, prompt)
+		}
+	}
+}

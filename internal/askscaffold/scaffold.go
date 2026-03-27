@@ -17,6 +17,7 @@ const (
 	FamilyApplyOnly     = "apply-only-local-change"
 	FamilyOfflineBundle = "offline-artifact-prepare-apply"
 	FamilyKubeadm       = "kubeadm-single-node-starter"
+	FamilyKubeadmMulti  = "kubeadm-multi-node-prepare-apply"
 	FamilyRefine        = "refine-scaffold-preservation"
 )
 
@@ -43,6 +44,8 @@ func Build(req askpolicy.ScenarioRequirements, workspace askretrieve.WorkspaceSu
 	switch family {
 	case FamilyRefine:
 		scaffold = refineScaffold(workspace, plan)
+	case FamilyKubeadmMulti:
+		scaffold = kubeadmMultiNodeScaffold(req, plan, bundle)
 	case FamilyKubeadm:
 		scaffold = kubeadmScaffold(req, bundle)
 	case FamilyOfflineBundle:
@@ -64,8 +67,12 @@ func selectFamily(req askpolicy.ScenarioRequirements, workspace askretrieve.Work
 	if decision.Route == askintent.RouteRefine || req.AcceptanceLevel == "refine" {
 		return FamilyRefine
 	}
+	brief := plan.AuthoringBrief
 	text := strings.ToLower(strings.Join([]string{strings.Join(req.ScenarioIntent, " "), plan.Request, plan.TargetOutcome}, " "))
 	if strings.Contains(text, "kubeadm") {
+		if strings.EqualFold(brief.Topology, "multi-node") || strings.EqualFold(brief.Topology, "ha") || brief.NodeCount > 1 || strings.Contains(text, "join") {
+			return FamilyKubeadmMulti
+		}
 		return FamilyKubeadm
 	}
 	if req.NeedsPrepare || len(req.ArtifactKinds) > 0 || workspace.HasPrepare {
@@ -133,6 +140,38 @@ func kubeadmScaffold(req askpolicy.ScenarioRequirements, bundle askknowledge.Bun
 		}
 	}
 	s.Constraints = append(s.Constraints, "Prefer inline starter steps over components for the first working kubeadm draft unless reuse is explicit")
+	return s
+}
+
+func kubeadmMultiNodeScaffold(req askpolicy.ScenarioRequirements, plan askcontract.PlanResponse, bundle askknowledge.Bundle) Scaffold {
+	s := offlineBundleScaffold(req, bundle)
+	s.Family = FamilyKubeadmMulti
+	s.Summary = "Multi-node kubeadm scaffold with offline prepare/apply split and explicit join/verify phases."
+	nodeCount := 3
+	controlPlaneReady := 1
+	if plan.AuthoringBrief.NodeCount > 1 {
+		nodeCount = plan.AuthoringBrief.NodeCount
+	}
+	if strings.EqualFold(plan.AuthoringBrief.Topology, "ha") && nodeCount >= 3 {
+		controlPlaneReady = 3
+	}
+	for i := range s.Files {
+		switch s.Files[i].Path {
+		case bundle.Topology.CanonicalPrepare:
+			s.Files[i].Template = "version: v1alpha1\nphases:\n  - name: collect-packages\n    steps:\n      - id: collect-packages\n        kind: DownloadPackage\n        spec: {}\n  - name: collect-images\n    steps:\n      - id: collect-images\n        kind: DownloadImage\n        spec: {}\n"
+		case bundle.Topology.CanonicalApply:
+			s.Files[i].Template = fmt.Sprintf("version: v1alpha1\nphases:\n  - name: preflight\n    steps:\n      - id: check-host\n        kind: CheckHost\n        spec:\n          checks: [os, arch, swap]\n  - name: runtime\n    steps:\n      - id: install-packages\n        kind: InstallPackage\n        spec:\n          packages: []\n          source:\n            type: local-repo\n            path: TODO_LOCAL_REPO_PATH\n      - id: load-images\n        kind: LoadImage\n        spec:\n          sourceDir: TODO_LOCAL_IMAGE_DIR\n          runtime: ctr\n          images: []\n  - name: bootstrap-control-plane\n    steps:\n      - id: init-cluster\n        kind: InitKubeadm\n        spec:\n          outputJoinFile: TODO_JOIN_FILE_PATH\n      - id: verify-control-plane\n        kind: CheckCluster\n        spec:\n          interval: 5s\n          nodes:\n            total: 1\n            ready: 1\n            controlPlaneReady: 1\n  - name: join-workers\n    steps:\n      - id: join-worker\n        kind: JoinKubeadm\n        spec:\n          joinFile: TODO_JOIN_FILE_PATH\n          asControlPlane: false\n  - name: verify-cluster\n    steps:\n      - id: verify-cluster-health\n        kind: CheckCluster\n        spec:\n          interval: 5s\n          nodes:\n            total: %d\n            ready: %d\n            controlPlaneReady: %d\n", nodeCount, nodeCount, controlPlaneReady)
+		}
+	}
+	s.Constraints = append(s.Constraints,
+		"Preserve explicit multi-node topology in the first draft.",
+		"Include separate bootstrap, join, and cluster verification phases when the request requires multi-node kubeadm.",
+		"Keep apply offline while modeling role-aware cluster bring-up in a single workspace-scoped draft.",
+	)
+	s.Slots = append(s.Slots,
+		"Represent worker join behavior explicitly with JoinKubeadm when the request requires multi-node kubeadm.",
+		"Set CheckCluster node expectations to the requested topology rather than defaulting to single-node verification.",
+	)
 	return s
 }
 

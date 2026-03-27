@@ -54,7 +54,7 @@ func validateGeneratedFile(root string, file askcontract.GeneratedFile) error {
 			return nil
 		}
 		if err := validate.Bytes(target, []byte(file.Content)); err != nil {
-			return err
+			return fmt.Errorf("%s: %w", file.Path, err)
 		}
 	}
 	return nil
@@ -80,6 +80,73 @@ func writeFiles(root string, files []askcontract.GeneratedFile) error {
 		}
 	}
 	return nil
+}
+
+func normalizeGeneratedFiles(gen askcontract.GenerationResponse) askcontract.GenerationResponse {
+	gen.Files = append([]askcontract.GeneratedFile(nil), gen.Files...)
+	for i := range gen.Files {
+		gen.Files[i].Content = normalizeGeneratedContent(gen.Files[i].Path, gen.Files[i].Content)
+	}
+	return gen
+}
+
+func mergeGeneratedFiles(base askcontract.GenerationResponse, patch askcontract.GenerationResponse) askcontract.GenerationResponse {
+	if len(base.Files) == 0 {
+		return patch
+	}
+	merged := askcontract.GenerationResponse{
+		Summary: strings.TrimSpace(patch.Summary),
+		Review:  append([]string(nil), patch.Review...),
+		Files:   append([]askcontract.GeneratedFile(nil), base.Files...),
+	}
+	if merged.Summary == "" {
+		merged.Summary = base.Summary
+	}
+	if len(merged.Review) == 0 {
+		merged.Review = append([]string(nil), base.Review...)
+	}
+	index := map[string]int{}
+	for i, file := range merged.Files {
+		index[strings.TrimSpace(file.Path)] = i
+	}
+	for _, file := range patch.Files {
+		path := strings.TrimSpace(file.Path)
+		if idx, ok := index[path]; ok {
+			merged.Files[idx] = file
+			continue
+		}
+		merged.Files = append(merged.Files, file)
+	}
+	return merged
+}
+
+func dropGeneratedFiles(gen askcontract.GenerationResponse, paths []string) askcontract.GenerationResponse {
+	if len(paths) == 0 || len(gen.Files) == 0 {
+		return gen
+	}
+	drop := map[string]bool{}
+	for _, path := range paths {
+		path = strings.TrimSpace(path)
+		if path != "" {
+			drop[path] = true
+		}
+	}
+	filtered := askcontract.GenerationResponse{
+		Summary: gen.Summary,
+		Review:  append([]string(nil), gen.Review...),
+		Files:   make([]askcontract.GeneratedFile, 0, len(gen.Files)),
+	}
+	for _, file := range gen.Files {
+		if !drop[strings.TrimSpace(file.Path)] {
+			filtered.Files = append(filtered.Files, file)
+		}
+	}
+	return filtered
+}
+
+func normalizeGeneratedContent(path string, content string) string {
+	_ = path
+	return content
 }
 
 func stageWorkspace(root string, files []askcontract.GeneratedFile) (string, error) {
@@ -454,14 +521,14 @@ func filePathsFromPlan(plan askcontract.PlanResponse) []string {
 }
 
 func validateSemanticGeneration(gen askcontract.GenerationResponse, decision askintent.Decision, plan askcontract.PlanResponse) error {
-	critic := semanticCritic(gen, decision, plan)
+	critic := semanticCritic(gen, decision, plan, plan.AuthoringBrief, askretrieve.RetrievalResult{})
 	if len(critic.Blocking) > 0 {
 		return fmt.Errorf("semantic validation failed: %s", strings.Join(critic.Blocking, "; "))
 	}
 	return nil
 }
 
-func semanticCritic(gen askcontract.GenerationResponse, decision askintent.Decision, plan askcontract.PlanResponse) askcontract.CriticResponse {
+func semanticCritic(gen askcontract.GenerationResponse, decision askintent.Decision, plan askcontract.PlanResponse, brief askcontract.AuthoringBrief, retrieval askretrieve.RetrievalResult) askcontract.CriticResponse {
 	critic := askcontract.CriticResponse{}
 	generated := map[string]askcontract.GeneratedFile{}
 	for _, file := range gen.Files {
@@ -496,7 +563,7 @@ func semanticCritic(gen askcontract.GenerationResponse, decision askintent.Decis
 			semanticFindings = append(semanticFindings, askpolicy.EvaluationFinding{Severity: "advisory", Code: "orphan_component", Message: fmt.Sprintf("generated component has no scenario import: %s", clean), Path: clean})
 		}
 	}
-	requirements := askpolicy.BuildScenarioRequirements(plan.Request, askretrieve.RetrievalResult{}, askretrieve.WorkspaceSummary{}, decision)
+	requirements := askpolicy.BuildScenarioRequirements(plan.Request, retrieval, askretrieve.WorkspaceSummary{}, decision)
 	if strings.TrimSpace(plan.OfflineAssumption) != "" {
 		requirements.Connectivity = strings.TrimSpace(plan.OfflineAssumption)
 	}
@@ -511,6 +578,9 @@ func semanticCritic(gen askcontract.GenerationResponse, decision askintent.Decis
 	}
 	if len(plan.ComponentRecommendation) > 0 {
 		requirements.ComponentAdvisories = dedupe(append(requirements.ComponentAdvisories, plan.ComponentRecommendation...))
+	}
+	if strings.TrimSpace(brief.RouteIntent) != "" {
+		plan.AuthoringBrief = brief
 	}
 	evaluation := askpolicy.EvaluateGeneration(requirements, plan, gen)
 	semanticFindings = append(semanticFindings, evaluation.Findings...)

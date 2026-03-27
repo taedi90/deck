@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Airgap-Castaways/deck/internal/askintent"
 	"github.com/Airgap-Castaways/deck/internal/validate"
 	"github.com/Airgap-Castaways/deck/internal/workflowexec"
 	deckschemas "github.com/Airgap-Castaways/deck/schemas"
@@ -152,6 +153,7 @@ func TestRelevantStepKindsMatchesDockerRequest(t *testing.T) {
 func TestRelevantStepKindsBlockIncludesTypedShapeGuidance(t *testing.T) {
 	block := RelevantStepKindsBlock("install docker packages on rocky9 using repository")
 	for _, want := range []string{
+		"`required` fields must always be present",
 		"spec.packages",
 		"real YAML array",
 		"{{ .vars.* }}",
@@ -164,6 +166,50 @@ func TestRelevantStepKindsBlockIncludesTypedShapeGuidance(t *testing.T) {
 		if !strings.Contains(block, want) {
 			t.Fatalf("expected %q in typed step guidance block, got %q", want, block)
 		}
+	}
+}
+
+func TestDownloadFileKeyFieldsPreserveRequiredOptionalDistinction(t *testing.T) {
+	manifest := Current()
+	var download StepKindContext
+	found := false
+	for _, step := range manifest.StepKinds {
+		if step.Kind == "DownloadFile" {
+			download = step
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("expected DownloadFile step guidance")
+	}
+	fields := map[string]StepFieldContext{}
+	for _, field := range download.KeyFields {
+		fields[field.Path] = field
+	}
+	if fields["spec.source"].Requirement != "conditional" {
+		t.Fatalf("expected spec.source to stay conditional, got %#v", fields["spec.source"])
+	}
+	for _, path := range []string{"spec.fetch", "spec.mode"} {
+		if fields[path].Requirement != "optional" {
+			t.Fatalf("expected %s to stay optional, got %#v", path, fields[path])
+		}
+	}
+	block := StepGuidanceBlockWithOptions(askintent.RouteDraft, "prepare should download a file into bundle storage", StepGuidanceOptions{})
+	for _, want := range []string{"spec.source [conditional]", "spec.fetch [optional]", "spec.mode [optional]"} {
+		if !strings.Contains(block, want) {
+			t.Fatalf("expected %q in typed step guidance block, got %q", want, block)
+		}
+	}
+	foundRule := false
+	for _, rule := range download.SchemaRuleSummaries {
+		if strings.Contains(rule, "At least one of `spec.source` or `spec.items`") {
+			foundRule = true
+			break
+		}
+	}
+	if !foundRule {
+		t.Fatalf("expected schema-derived download rule summary, got %#v", download.SchemaRuleSummaries)
 	}
 }
 
@@ -190,6 +236,38 @@ func TestRelevantStepKindsMatchesKubeadmAirGapRequest(t *testing.T) {
 	for _, want := range []string{"CheckHost", "LoadImage", "CheckCluster"} {
 		if !contains(joined, want) {
 			t.Fatalf("expected %s in relevant steps, got %v", want, joined)
+		}
+	}
+}
+
+func TestRelevantStepKindsWithOptionsPrefersJoinForMultiNodeCapability(t *testing.T) {
+	relevant := RelevantStepKindsWithOptions("create kubeadm workflow", StepGuidanceOptions{ModeIntent: "prepare+apply", Topology: "multi-node", RequiredCapabilities: []string{"kubeadm-bootstrap", "kubeadm-join", "cluster-verification"}})
+	joined := make([]string, 0, len(relevant))
+	for _, step := range relevant {
+		joined = append(joined, step.Kind)
+	}
+	if !contains(joined, "JoinKubeadm") {
+		t.Fatalf("expected JoinKubeadm in relevant steps, got %v", joined)
+	}
+	if !contains(joined, "CheckCluster") {
+		t.Fatalf("expected CheckCluster in relevant steps, got %v", joined)
+	}
+}
+
+func TestRelevantStepKindsBlockWithOptionsIncludesJoinCapabilityReason(t *testing.T) {
+	block := StepGuidanceBlockWithOptions(askintent.RouteDraft, "create kubeadm workflow", StepGuidanceOptions{ModeIntent: "prepare+apply", Topology: "multi-node", RequiredCapabilities: []string{"kubeadm-join"}})
+	for _, want := range []string{"JoinKubeadm", "supports kubeadm join capability"} {
+		if !strings.Contains(block, want) {
+			t.Fatalf("expected %q in typed step guidance block, got %q", want, block)
+		}
+	}
+}
+
+func TestStepCompositionGuidanceBlockIncludesOfflineAndJoinFlows(t *testing.T) {
+	block := StepCompositionGuidanceBlock("create an air-gapped 3-node kubeadm prepare and apply workflow", StepGuidanceOptions{ModeIntent: "prepare+apply", Topology: "multi-node", RequiredCapabilities: []string{"prepare-artifacts", "package-staging", "image-staging", "kubeadm-bootstrap", "kubeadm-join", "cluster-verification"}})
+	for _, want := range []string{"Offline package flow", "Offline image flow", "Kubeadm bootstrap flow", "Multi-node kubeadm flow", "Prepare/apply split"} {
+		if !strings.Contains(block, want) {
+			t.Fatalf("expected %q in composition guidance, got %q", want, block)
 		}
 	}
 }

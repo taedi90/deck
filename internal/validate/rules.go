@@ -1,6 +1,9 @@
 package validate
 
-import "github.com/Airgap-Castaways/deck/internal/workflowcontract"
+import (
+	"github.com/Airgap-Castaways/deck/internal/workflowcontract"
+	"github.com/Airgap-Castaways/deck/internal/workflowissues"
+)
 
 var workflowTopLevelModes = []string{"phases", "steps"}
 
@@ -31,6 +34,7 @@ func WorkflowInvariantNotes() []string {
 	return []string{
 		"A workflow must define at least one of phases or steps.",
 		"A workflow cannot define both top-level phases and top-level steps at the same time.",
+		workflowissues.MustSpec(workflowissues.CodeDuplicateStepID).Details,
 		workflowImportRule,
 		"Workflow mode is determined by command context or file location, not by an in-file role field.",
 		"Each step still validates against its own kind-specific schema after the top-level workflow schema passes.",

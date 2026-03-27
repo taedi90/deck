@@ -75,7 +75,9 @@ func planSystemPrompt(decision askintent.Decision, retrieval askretrieve.Retriev
 	bundle := askknowledge.Current()
 	b := &strings.Builder{}
 	b.WriteString("You are deck ask planner. Return strict JSON only.\n")
-	b.WriteString("JSON shape: {\"version\":number,\"request\":string,\"intent\":string,\"complexity\":string,\"offlineAssumption\":string,\"needsPrepare\":boolean,\"artifactKinds\":[]string,\"varsRecommendation\":[]string,\"componentRecommendation\":[]string,\"blockers\":[]string,\"targetOutcome\":string,\"assumptions\":[]string,\"openQuestions\":[]string,\"entryScenario\":string,\"files\":[{\"path\":string,\"kind\":string,\"action\":string,\"purpose\":string}],\"validationChecklist\":[]string}.\n")
+	b.WriteString("JSON shape: {\"version\":number,\"request\":string,\"intent\":string,\"complexity\":string,\"authoringBrief\":{\"routeIntent\":string,\"targetScope\":string,\"targetPaths\":[],\"modeIntent\":string,\"connectivity\":string,\"completenessTarget\":string,\"topology\":string,\"nodeCount\":number,\"requiredCapabilities\":[]},\"executionModel\":{\"artifactContracts\":[{\"kind\":string,\"producerPath\":string,\"consumerPath\":string,\"description\":string}],\"sharedStateContracts\":[{\"name\":string,\"producerPath\":string,\"consumerPaths\":[],\"availabilityModel\":string,\"description\":string}],\"roleExecution\":{\"roleSelector\":string,\"controlPlaneFlow\":string,\"workerFlow\":string,\"perNodeInvocation\":boolean},\"verification\":{\"bootstrapPhase\":string,\"finalPhase\":string,\"expectedNodeCount\":number,\"expectedControlPlaneReady\":number},\"applyAssumptions\":[]},\"offlineAssumption\":string,\"needsPrepare\":boolean,\"artifactKinds\":[],\"varsRecommendation\":[],\"componentRecommendation\":[],\"blockers\":[],\"targetOutcome\":string,\"assumptions\":[],\"openQuestions\":[],\"entryScenario\":string,\"files\":[{\"path\":string,\"kind\":string,\"action\":string,\"purpose\":string}],\"validationChecklist\":[]}.\n")
+	b.WriteString("Canonical authoringBrief values: targetScope=(workspace|scenario|vars|component), modeIntent=(prepare+apply|prepare-only|apply-only|workspace), completenessTarget=(starter|complete|refine), topology=(single-node|multi-node|ha|unspecified), requiredCapabilities should be short kebab-case strings.\n")
+	b.WriteString("Canonical executionModel values: artifactContracts.kind=(package|image|repository-setup), sharedStateContracts.availabilityModel=(published-for-worker-consumption|local-only), roleExecution.roleSelector should be a short selector like vars.role.\n")
 	b.WriteString(bundle.WorkflowPromptBlock())
 	b.WriteString("\n")
 	b.WriteString(bundle.PolicyPromptBlock())
@@ -126,7 +128,8 @@ func planWithLLM(ctx context.Context, client askprovider.Client, cfg askconfigSe
 		Endpoint:     cfg.endpoint,
 		SystemPrompt: systemPrompt,
 		Prompt:       userPrompt,
-		MaxRetries:   1,
+		MaxRetries:   providerRetryCount("plan"),
+		Timeout:      askRequestTimeout("plan", 1, systemPrompt, userPrompt),
 	})
 	if err != nil {
 		return askcontract.PlanResponse{}, err
@@ -143,6 +146,30 @@ func planWithLLM(ctx context.Context, client askprovider.Client, cfg askconfigSe
 	return planned, nil
 }
 
+func critiquePlanWithLLM(ctx context.Context, client askprovider.Client, cfg askconfigSettings, plan askcontract.PlanResponse, logger askLogger) (askcontract.PlanCriticResponse, error) {
+	systemPrompt := planCriticSystemPrompt(plan.AuthoringBrief, plan)
+	userPrompt := planCriticUserPrompt(plan)
+	logger.prompt("plan-critic", systemPrompt, userPrompt)
+	resp, err := client.Generate(ctx, askprovider.Request{
+		Kind:         "plan-critic",
+		Provider:     cfg.provider,
+		Model:        cfg.model,
+		APIKey:       cfg.apiKey,
+		OAuthToken:   cfg.oauthToken,
+		AccountID:    cfg.accountID,
+		Endpoint:     cfg.endpoint,
+		SystemPrompt: systemPrompt,
+		Prompt:       userPrompt,
+		MaxRetries:   providerRetryCount("plan-critic"),
+		Timeout:      askRequestTimeout("plan-critic", 1, systemPrompt, userPrompt),
+	})
+	if err != nil {
+		return askcontract.PlanCriticResponse{}, err
+	}
+	logger.response("plan-critic", resp.Content)
+	return askcontract.ParsePlanCritic(resp.Content)
+}
+
 type askconfigSettings struct {
 	provider   string
 	model      string
@@ -150,21 +177,6 @@ type askconfigSettings struct {
 	oauthToken string
 	accountID  string
 	endpoint   string
-}
-
-func hasBlockingPlanItems(plan askcontract.PlanResponse) bool {
-	for _, blocker := range plan.Blockers {
-		if strings.TrimSpace(blocker) != "" {
-			return true
-		}
-	}
-	for _, q := range plan.OpenQuestions {
-		lower := strings.ToLower(strings.TrimSpace(q))
-		if strings.HasPrefix(lower, "blocking:") {
-			return true
-		}
-	}
-	return false
 }
 
 func renderPlanMarkdown(plan askcontract.PlanResponse, mdPath string) string {
@@ -221,6 +233,61 @@ func renderPlanMarkdown(plan askcontract.PlanResponse, mdPath string) string {
 		}
 		b.WriteString("\n")
 	}
+	b.WriteString("\n## Execution model\n")
+	if isExecutionModelEmpty(plan.ExecutionModel) {
+		b.WriteString("- None\n")
+	} else {
+		for _, item := range plan.ExecutionModel.ArtifactContracts {
+			b.WriteString("- artifact ")
+			b.WriteString(strings.TrimSpace(item.Kind))
+			b.WriteString(": ")
+			b.WriteString(strings.TrimSpace(item.ProducerPath))
+			b.WriteString(" -> ")
+			b.WriteString(strings.TrimSpace(item.ConsumerPath))
+			if strings.TrimSpace(item.Description) != "" {
+				b.WriteString(" (")
+				b.WriteString(strings.TrimSpace(item.Description))
+				b.WriteString(")")
+			}
+			b.WriteString("\n")
+		}
+		for _, item := range plan.ExecutionModel.SharedStateContracts {
+			b.WriteString("- shared state ")
+			b.WriteString(strings.TrimSpace(item.Name))
+			b.WriteString(": ")
+			b.WriteString(strings.TrimSpace(item.ProducerPath))
+			if len(item.ConsumerPaths) > 0 {
+				b.WriteString(" -> ")
+				b.WriteString(strings.Join(item.ConsumerPaths, ", "))
+			}
+			if strings.TrimSpace(item.AvailabilityModel) != "" {
+				b.WriteString(" [")
+				b.WriteString(strings.TrimSpace(item.AvailabilityModel))
+				b.WriteString("]")
+			}
+			b.WriteString("\n")
+		}
+		if selector := strings.TrimSpace(plan.ExecutionModel.RoleExecution.RoleSelector); selector != "" {
+			b.WriteString("- role selector: ")
+			b.WriteString(selector)
+			b.WriteString("\n")
+		}
+		if strings.TrimSpace(plan.ExecutionModel.RoleExecution.ControlPlaneFlow) != "" {
+			b.WriteString("- control-plane flow: ")
+			b.WriteString(strings.TrimSpace(plan.ExecutionModel.RoleExecution.ControlPlaneFlow))
+			b.WriteString("\n")
+		}
+		if strings.TrimSpace(plan.ExecutionModel.RoleExecution.WorkerFlow) != "" {
+			b.WriteString("- worker flow: ")
+			b.WriteString(strings.TrimSpace(plan.ExecutionModel.RoleExecution.WorkerFlow))
+			b.WriteString("\n")
+		}
+		for _, line := range plan.ExecutionModel.ApplyAssumptions {
+			b.WriteString("- apply assumption: ")
+			b.WriteString(strings.TrimSpace(line))
+			b.WriteString("\n")
+		}
+	}
 	b.WriteString("\n## Validation checklist\n")
 	for _, line := range plan.ValidationChecklist {
 		b.WriteString("- ")
@@ -235,6 +302,13 @@ func renderPlanMarkdown(plan askcontract.PlanResponse, mdPath string) string {
 	b.WriteString(mdPath)
 	b.WriteString(" \"implement this plan\"\n")
 	return b.String()
+}
+
+func isExecutionModelEmpty(model askcontract.ExecutionModel) bool {
+	return len(model.ArtifactContracts) == 0 &&
+		len(model.SharedStateContracts) == 0 &&
+		strings.TrimSpace(model.RoleExecution.RoleSelector) == "" &&
+		len(model.ApplyAssumptions) == 0
 }
 
 func planChunk(plan askcontract.PlanResponse) askretrieve.Chunk {
@@ -252,6 +326,23 @@ func planChunk(plan askcontract.PlanResponse) askretrieve.Chunk {
 		b.WriteString(" (")
 		b.WriteString(file.Action)
 		b.WriteString(")\n")
+	}
+	if selector := strings.TrimSpace(plan.ExecutionModel.RoleExecution.RoleSelector); selector != "" {
+		b.WriteString("Role selector: ")
+		b.WriteString(selector)
+		b.WriteString("\n")
+	}
+	if len(plan.ExecutionModel.ArtifactContracts) > 0 {
+		b.WriteString("Artifact contracts:\n")
+		for _, item := range plan.ExecutionModel.ArtifactContracts {
+			b.WriteString("- ")
+			b.WriteString(item.Kind)
+			b.WriteString(": ")
+			b.WriteString(item.ProducerPath)
+			b.WriteString(" -> ")
+			b.WriteString(item.ConsumerPath)
+			b.WriteString("\n")
+		}
 	}
 	return askretrieve.Chunk{ID: "plan-artifact", Source: "plan", Label: "plan", Topic: askcontext.Topic("plan-artifact"), Content: b.String(), Score: 90}
 }
@@ -327,6 +418,29 @@ func renderPlanNotes(plan askcontract.PlanResponse) []string {
 	for _, question := range plan.OpenQuestions {
 		if strings.TrimSpace(question) != "" {
 			lines = append(lines, "open question: "+strings.TrimSpace(question))
+		}
+	}
+	return lines
+}
+
+func renderPlanCriticNotes(critic askcontract.PlanCriticResponse) []string {
+	lines := make([]string, 0, len(critic.Blocking)+len(critic.Advisory)+len(critic.MissingContracts)+1)
+	if strings.TrimSpace(critic.Summary) != "" {
+		lines = append(lines, "plan review: "+strings.TrimSpace(critic.Summary))
+	}
+	for _, item := range critic.Blocking {
+		if strings.TrimSpace(item) != "" {
+			lines = append(lines, "plan blocking: "+strings.TrimSpace(item))
+		}
+	}
+	for _, item := range critic.MissingContracts {
+		if strings.TrimSpace(item) != "" {
+			lines = append(lines, "missing contract: "+strings.TrimSpace(item))
+		}
+	}
+	for _, item := range critic.Advisory {
+		if strings.TrimSpace(item) != "" {
+			lines = append(lines, "plan advisory: "+strings.TrimSpace(item))
 		}
 	}
 	return lines

@@ -1,15 +1,19 @@
 package askcontext
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 
 	"github.com/Airgap-Castaways/deck/internal/schemadoc"
+	"github.com/Airgap-Castaways/deck/internal/schemafacts"
 	"github.com/Airgap-Castaways/deck/internal/validate"
 	"github.com/Airgap-Castaways/deck/internal/workflowexec"
+	"github.com/Airgap-Castaways/deck/internal/workflowissues"
 	"github.com/Airgap-Castaways/deck/internal/workspacepaths"
+	deckschemas "github.com/Airgap-Castaways/deck/schemas"
 )
 
 var (
@@ -56,7 +60,7 @@ func buildManifest() Manifest {
 			SupportedModes:   validate.SupportedWorkflowRoles(),
 			SupportedVersion: validate.SupportedWorkflowVersion(),
 			ImportRule:       validate.WorkflowImportRule(),
-			RequiredFields:   []string{"version"},
+			RequiredFields:   workflowRequiredFields(),
 			PhaseRules: []string{
 				"Each phase needs a non-empty name.",
 				"Each phase must define steps or imports.",
@@ -65,6 +69,7 @@ func buildManifest() Manifest {
 			StepRules: []string{
 				"Each step needs id, kind, and spec.",
 				"Step ids belong on steps, not phases.",
+				workflowissues.MustSpec(workflowissues.CodeDuplicateStepID).Details,
 			},
 			PhaseExample: strings.TrimSpace(`version: v1alpha1
 phases:
@@ -151,6 +156,30 @@ steps:
 	return manifest
 }
 
+func workflowRequiredFields() []string {
+	raw, err := deckschemas.WorkflowSchema()
+	if err != nil {
+		return []string{"version"}
+	}
+	var schema map[string]any
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		return []string{"version"}
+	}
+	facts := schemafacts.Analyze(schema)
+	fields := schemafacts.FilterDirectChildFields(facts.Fields, "")
+	out := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if field.Requirement == schemafacts.RequirementRequired {
+			out = append(out, field.Path)
+		}
+	}
+	sort.Strings(out)
+	if len(out) == 0 {
+		return []string{"version"}
+	}
+	return out
+}
+
 func AllowedGeneratedPathPatterns() []string {
 	return []string{"workflows/prepare.yaml", "workflows/scenarios/*.yaml", "workflows/components/*.yaml", "workflows/vars.yaml"}
 }
@@ -168,18 +197,20 @@ func buildStepKinds() []StepKindContext {
 	out := make([]StepKindContext, 0, len(defs))
 	for _, def := range defs {
 		meta := def.Docs
+		facts := schemaFactsForKind(def.Step.Kind)
 		ctx := StepKindContext{
-			Kind:         def.Step.Kind,
-			Category:     def.Step.Category,
-			Summary:      meta.Summary,
-			WhenToUse:    meta.WhenToUse,
-			SchemaFile:   def.Step.SchemaFile,
-			AllowedRoles: append([]string(nil), def.Step.Roles...),
-			Outputs:      append([]string(nil), def.Step.Outputs...),
-			MinimalShape: strings.TrimSpace(meta.Example),
-			CuratedShape: strings.TrimSpace(meta.Example),
-			KeyFields:    buildStepKeyFields(def.Step.Kind, meta),
-			Notes:        append([]string(nil), meta.Notes...),
+			Kind:                def.Step.Kind,
+			Category:            def.Step.Category,
+			Summary:             meta.Summary,
+			WhenToUse:           meta.WhenToUse,
+			SchemaFile:          def.Step.SchemaFile,
+			AllowedRoles:        append([]string(nil), def.Step.Roles...),
+			Outputs:             append([]string(nil), def.Step.Outputs...),
+			MinimalShape:        strings.TrimSpace(meta.Example),
+			CuratedShape:        strings.TrimSpace(meta.Example),
+			KeyFields:           buildStepKeyFields(def.Step.Kind, meta, facts),
+			SchemaRuleSummaries: append([]string(nil), facts.RuleSummaries...),
+			Notes:               append([]string(nil), meta.Notes...),
 		}
 		applyCuratedStepMetadata(&ctx)
 		ctx.Outputs = dedupe(ctx.Outputs)
@@ -369,7 +400,13 @@ func defaultConstrainedLiteralFields(kind string) []ConstrainedFieldHint {
 	}
 }
 
-func buildStepKeyFields(kind string, meta workflowexec.ToolMetadata) []StepFieldContext {
+func buildStepKeyFields(kind string, meta workflowexec.ToolMetadata, facts schemafacts.DocumentFacts) []StepFieldContext {
+	fieldRequirements := map[string]string{}
+	for _, field := range facts.Fields {
+		if strings.HasPrefix(field.Path, "spec") {
+			fieldRequirements[field.Path] = string(field.Requirement)
+		}
+	}
 	preferred := map[string][]string{
 		"InitKubeadm":         {"spec.outputJoinFile", "spec.configFile", "spec.kubernetesVersion", "spec.advertiseAddress", "spec.podNetworkCIDR"},
 		"JoinKubeadm":         {"spec.joinFile", "spec.configFile", "spec.asControlPlane", "spec.extraArgs"},
@@ -394,9 +431,41 @@ func buildStepKeyFields(kind string, meta workflowexec.ToolMetadata) []StepField
 		if !ok {
 			continue
 		}
-		out = append(out, StepFieldContext{Path: key, Description: field.Description, Example: field.Example})
+		requirement := fieldRequirements[key]
+		if requirement == "" {
+			requirement = "optional"
+		}
+		out = append(out, StepFieldContext{Path: key, Description: field.Description, Example: field.Example, Requirement: requirement})
 	}
 	return out
+}
+
+func schemaFactsForKind(kind string) schemafacts.DocumentFacts {
+	var schemaFile string
+	for _, def := range workflowexec.StepDefinitions() {
+		if def.Kind == strings.TrimSpace(kind) {
+			schemaFile = strings.TrimSpace(def.SchemaFile)
+			break
+		}
+	}
+	if schemaFile == "" {
+		return schemafacts.DocumentFacts{}
+	}
+	raw, err := deckschemas.ToolSchema(schemaFile)
+	if err != nil {
+		return schemafacts.DocumentFacts{}
+	}
+	var schema map[string]any
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		return schemafacts.DocumentFacts{}
+	}
+	facts := schemafacts.Analyze(schema)
+	if props, _ := schema["properties"].(map[string]any); len(props) > 0 {
+		if spec, _ := props["spec"].(map[string]any); len(spec) > 0 {
+			facts.RuleSummaries = schemafacts.ExtractRules(spec, "spec")
+		}
+	}
+	return facts
 }
 
 func dedupe(values []string) []string {

@@ -89,6 +89,10 @@ spec:
 | `spec.extraArgs` | `array<string>` | no | `` | `` | Additional flags passed directly to the kubeadm subcommand as `--key=value` pairs. | `[--skip-phases=addon/kube-proxy]` |
 | `spec.joinFile` | `string` | no | `` | `` | Path to the join command file produced by a prior `InitKubeadm` run. For `JoinKubeadm`, provide this or `configFile`. | `/tmp/deck/join.txt` |
 
+### Validation Rules
+
+- Exactly one of `spec.joinFile` or `spec.configFile` must be set.
+
 ### Notes
 
 - `InitKubeadm` requires `outputJoinFile`, `JoinKubeadm` requires exactly one of `joinFile` or `configFile`, `ResetKubeadm` focuses on cleanup fields, and `UpgradeKubeadm` performs local control-plane upgrades.

@@ -74,6 +74,111 @@ func TestRetrieveIncludesStructuredMCPEvidenceChunk(t *testing.T) {
 	}
 }
 
+func TestRetrieveAddsReferenceExamplesForComplexAuthoringPrompt(t *testing.T) {
+	result := Retrieve(askintent.RouteDraft, "create an air-gapped kubeadm prepare and apply workflow with worker join", askintent.Target{}, WorkspaceSummary{}, askstate.Context{}, nil)
+	found := false
+	for _, chunk := range result.Chunks {
+		if chunk.Source == "example" {
+			found = true
+			if !strings.Contains(chunk.Content, "Reference example:") {
+				t.Fatalf("expected example chunk wrapper, got %q", chunk.Content)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected example reference chunks for complex authoring prompt, got %#v", result.Chunks)
+	}
+}
+
+func TestRouteBudgetExpandsForComplexAuthoringPrompt(t *testing.T) {
+	baseBytes, baseChunks := routeBudget(askintent.RouteDraft, "create workflow")
+	complexBytes, complexChunks := routeBudget(askintent.RouteDraft, "create an air-gapped kubeadm prepare and apply workflow with worker join")
+	if complexBytes <= baseBytes || complexChunks <= baseChunks {
+		t.Fatalf("expected complex budget expansion, got base=(%d,%d) complex=(%d,%d)", baseBytes, baseChunks, complexBytes, complexChunks)
+	}
+}
+
+func TestRetrieveReservesExamplesAndTypedStepsForComplexAuthoringPrompt(t *testing.T) {
+	result := Retrieve(askintent.RouteDraft, "create an air-gapped rhel9 3-node kubeadm prepare and apply workflow with worker join", askintent.Target{}, WorkspaceSummary{}, askstate.Context{}, nil)
+	exampleCount := 0
+	hasTyped := false
+	hasComposition := false
+	for _, chunk := range result.Chunks {
+		if chunk.Source == "example" {
+			exampleCount++
+		}
+		if chunk.Source == "askcontext" && chunk.Label == "typed-steps" {
+			hasTyped = true
+		}
+		if chunk.Source == "askcontext" && chunk.Label == "step-composition" {
+			hasComposition = true
+		}
+	}
+	if exampleCount == 0 || !hasTyped || !hasComposition {
+		t.Fatalf("expected reserved examples, typed steps, and composition guidance, got %#v", result.Chunks)
+	}
+}
+
+func TestCompressChunkContentDoesNotTrimYAML(t *testing.T) {
+	content := strings.Join([]string{
+		"version: v1alpha1",
+		"phases:",
+		"  - name: preflight",
+		"    steps:",
+		"      - id: check-host",
+		"        kind: CheckHost",
+		"  - name: bootstrap",
+		"    steps:",
+		"      - id: init-cluster",
+		"        kind: InitKubeadm",
+		"      - id: publish-join",
+		"        kind: CopyFile",
+		"  - name: workers",
+		"    steps:",
+		"      - id: join-worker",
+		"        kind: JoinKubeadm",
+		"  - name: verify",
+		"    steps:",
+		"      - id: check-cluster",
+		"        kind: CheckCluster",
+	}, "\n")
+	compressed := compressChunkContent("multi-node kubeadm worker join handoff", "workflows/scenarios/apply.yaml", content, 80)
+	if compressed != content {
+		t.Fatalf("expected yaml content to remain uncompressed, got %q", compressed)
+	}
+	if shouldCompressChunk("workflows/scenarios/apply.yaml", content) {
+		t.Fatalf("expected yaml chunk to skip compression")
+	}
+}
+
+func TestExampleChunkScorePrefersRepoNativeCurrentExamples(t *testing.T) {
+	prompt := "create an air-gapped kubeadm prepare and apply workflow with worker join"
+	legacy := exampleChunkScore(prompt, "docs/user-guide/examples/offline-k8s-control-plane.yaml", "version: v1alpha1\napiVersion: deck/v1alpha1\nkind: InitKubeadm")
+	repoNative := exampleChunkScore(prompt, "test/workflows/scenarios/kubeadm-join.yaml", "version: v1alpha1\nkind: InitKubeadm\nkind: JoinKubeadm")
+	if repoNative <= legacy {
+		t.Fatalf("expected repo-native example to outrank legacy docs example, got repo=%d legacy=%d", repoNative, legacy)
+	}
+}
+
+func TestExampleChunkAllowedRejectsLegacyDocsWrappers(t *testing.T) {
+	if exampleChunkAllowed("docs/user-guide/examples/offline-k8s-worker.yaml", "version: v1alpha1\napiVersion: deck/v1alpha1\nkind: JoinKubeadm") {
+		t.Fatalf("expected legacy docs example with apiVersion wrapper to be filtered out")
+	}
+	if !exampleChunkAllowed("test/workflows/scenarios/worker-join.yaml", "version: v1alpha1\nkind: JoinKubeadm") {
+		t.Fatalf("expected repo-native example to remain eligible")
+	}
+}
+
+func TestExampleChunkScorePenalizesIrrelevantUpgradeExamples(t *testing.T) {
+	prompt := "create an air-gapped kubeadm prepare and apply workflow with worker join"
+	upgrade := exampleChunkScore(prompt, "test/workflows/scenarios/upgrade.yaml", "version: v1alpha1\nkind: UpgradeKubeadm")
+	join := exampleChunkScore(prompt, "test/workflows/scenarios/worker-join.yaml", "version: v1alpha1\nkind: JoinKubeadm")
+	if join <= upgrade {
+		t.Fatalf("expected join-focused example to outrank upgrade example, got join=%d upgrade=%d", join, upgrade)
+	}
+}
+
 func findChunk(result RetrievalResult, id string) *Chunk {
 	for i := range result.Chunks {
 		if result.Chunks[i].ID == id {

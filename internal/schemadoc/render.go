@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/Airgap-Castaways/deck/internal/schemafacts"
 )
 
 type PageInput struct {
@@ -31,21 +33,13 @@ type VariantInput struct {
 	DocsOrder   int
 }
 
-type Field struct {
-	Path        string
-	Type        string
-	Required    bool
-	Default     string
-	Enum        string
-	Description string
-	Example     string
-}
-
 type PageOverrides struct {
 	FieldDocs map[string]FieldDoc
 	Example   string
 	Notes     []string
 }
+
+type Field = schemafacts.FieldFact
 
 func RenderToolPage(in PageInput) []byte {
 	var buf bytes.Buffer
@@ -68,9 +62,10 @@ func RenderToolPage(in PageInput) []byte {
 		}
 	}
 	for _, variant := range sortedVariants(in.Variants) {
-		fields := CollectFields(variant.Schema)
+		facts := schemafacts.Analyze(variant.Schema)
+		fields := append([]schemafacts.FieldFact(nil), facts.Fields...)
 		applyFieldDocs(fields, variant.Meta.FieldDocs)
-		rules := ExtractRules(variant.Spec, "spec")
+		rules := schemafacts.ExtractRules(variant.Spec, "spec")
 		buf.WriteString("\n## `" + variant.Kind + "`\n\n")
 		buf.WriteString(firstNonEmpty(variant.Meta.Summary, variant.Description) + "\n\n")
 		buf.WriteString("- schema: `../../../" + variant.SchemaPath + "`\n")
@@ -155,16 +150,17 @@ func RenderWorkflowPage(schemaPath string, schema map[string]any, meta PageMetad
 	buf.WriteString(firstNonEmpty(meta.Summary, "Top-level workflow authoring reference for deck workflows.") + "\n\n")
 	buf.WriteString("- schema: `../../../" + schemaPath + "`\n\n")
 	buf.WriteString("## Example\n\n```yaml\n" + firstNonEmpty(meta.Example, "version: v1alpha1\nsteps:\n  - id: example-step\n    kind: WriteFile\n    spec:\n      path: /tmp/example\n      content: hello\n") + "```\n")
-	fields := CollectFields(schema)
+	facts := schemafacts.Analyze(schema)
+	fields := append([]schemafacts.FieldFact(nil), facts.Fields...)
 	applyFieldDocs(fields, meta.FieldDocs)
 	buf.WriteString("\n## Fields\n\n")
-	buf.WriteString(renderFieldTable(directChildFields(fields, "")))
+	buf.WriteString(renderFieldTable(schemafacts.FilterDirectChildFields(fields, "")))
 	if nested := renderNestedSections(fields, ""); nested != "" {
 		buf.WriteString("\n## Nested Objects\n\n")
 		buf.WriteString(nested)
 	}
 	buf.WriteString("\n## Validation Rules\n\n")
-	for _, rule := range ExtractRules(schema, "") {
+	for _, rule := range facts.RuleSummaries {
 		buf.WriteString("- " + rule + "\n")
 	}
 	if len(meta.Notes) > 0 {
@@ -183,16 +179,17 @@ func RenderToolDefinitionPage(schemaPath string, schema map[string]any, meta Pag
 	buf.WriteString(firstNonEmpty(meta.Summary, "Reference for tool definition manifests.") + "\n\n")
 	buf.WriteString("- schema: `../../../" + schemaPath + "`\n\n")
 	buf.WriteString("## Example\n\n```yaml\n" + firstNonEmpty(meta.Example, "apiVersion: deck/v1\nkind: ToolDefinition\nmetadata:\n  name: Example\nspec:\n  version: v1\n  summary: Example tool\n  category: shared\n  inputSchema: {}\n") + "```\n")
-	fields := CollectFields(schema)
+	facts := schemafacts.Analyze(schema)
+	fields := append([]schemafacts.FieldFact(nil), facts.Fields...)
 	applyFieldDocs(fields, meta.FieldDocs)
 	buf.WriteString("## Fields\n\n")
-	buf.WriteString(renderFieldTable(directChildFields(fields, "")))
+	buf.WriteString(renderFieldTable(schemafacts.FilterDirectChildFields(fields, "")))
 	if nested := renderNestedSections(fields, ""); nested != "" {
 		buf.WriteString("\n## Nested Objects\n\n")
 		buf.WriteString(nested)
 	}
 	buf.WriteString("\n## Validation Rules\n\n")
-	for _, rule := range ExtractRules(schema, "") {
+	for _, rule := range facts.RuleSummaries {
 		buf.WriteString("- " + rule + "\n")
 	}
 	if len(meta.Notes) > 0 {
@@ -211,10 +208,11 @@ func RenderComponentFragmentPage(schemaPath string, schema map[string]any, meta 
 	buf.WriteString(firstNonEmpty(meta.Summary, "Reference for reusable workflow component fragments.") + "\n\n")
 	buf.WriteString("- schema: `../../../" + schemaPath + "`\n\n")
 	buf.WriteString("## Example\n\n```yaml\n" + firstNonEmpty(meta.Example, "steps:\n  - id: example-step\n    kind: Command\n    spec:\n      command: [echo, hello]\n") + "```\n")
-	fields := CollectFields(schema)
+	facts := schemafacts.Analyze(schema)
+	fields := append([]schemafacts.FieldFact(nil), facts.Fields...)
 	applyFieldDocs(fields, meta.FieldDocs)
 	buf.WriteString("\n## Fields\n\n")
-	buf.WriteString(renderFieldTable(directChildFields(fields, "")))
+	buf.WriteString(renderFieldTable(schemafacts.FilterDirectChildFields(fields, "")))
 	if nested := renderNestedSections(fields, ""); nested != "" {
 		buf.WriteString("\n## Nested Objects\n\n")
 		buf.WriteString(nested)
@@ -226,145 +224,6 @@ func RenderComponentFragmentPage(schemaPath string, schema map[string]any, meta 
 		}
 	}
 	return buf.Bytes()
-}
-
-func CollectFields(schema map[string]any) []Field {
-	var fields []Field
-	collectFields(schema, schema, "", &fields)
-	return dedupeFields(fields)
-}
-
-func collectFields(root, node map[string]any, prefix string, fields *[]Field) {
-	node = resolveSchemaNode(root, node)
-	props, _ := node["properties"].(map[string]any)
-	if len(props) == 0 {
-		return
-	}
-	req := requiredSet(node["required"])
-	keys := make([]string, 0, len(props))
-	for key := range props {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	for _, key := range keys {
-		child, ok := props[key].(map[string]any)
-		if !ok {
-			continue
-		}
-		child = resolveSchemaNode(root, child)
-		path := joinPath(prefix, key)
-		field := Field{
-			Path:        path,
-			Type:        fieldType(root, child),
-			Required:    req[key],
-			Default:     valueString(child["default"]),
-			Enum:        enumString(child["enum"]),
-			Description: stringValue(child["description"]),
-			Example:     inferExample(root, child),
-		}
-		*fields = append(*fields, field)
-		if field.Type == "object" {
-			collectFields(root, child, path, fields)
-		}
-		items, _ := resolveSchemaNode(root, child)["items"].(map[string]any)
-		items = resolveSchemaNode(root, items)
-		if field.Type == "array<object>" && len(items) > 0 {
-			collectFields(root, items, path+"[]", fields)
-		}
-	}
-}
-
-func ExtractRules(node map[string]any, prefix string) []string {
-	var rules []string
-	if anyOf, ok := node["anyOf"].([]any); ok {
-		var requiredGroups []string
-		for _, raw := range anyOf {
-			entry, _ := raw.(map[string]any)
-			req := toStrings(entry["required"])
-			if len(req) > 0 {
-				requiredGroups = append(requiredGroups, strings.Join(req, ", "))
-			}
-		}
-		if len(requiredGroups) > 0 && prefix == "" {
-			groups := make([]string, 0, len(requiredGroups))
-			for _, group := range requiredGroups {
-				groups = append(groups, "`"+group+"`")
-			}
-			rules = append(rules, "At least one of the top-level groups "+joinWithFinalConjunction(groups, "or")+" must be present.")
-		}
-		for _, raw := range anyOf {
-			entry, _ := raw.(map[string]any)
-			if strings.Contains(fmt.Sprint(entry), "const") {
-				rules = append(rules, "At least one of the listed branches must match.")
-				break
-			}
-		}
-	}
-	if oneOf, ok := node["oneOf"].([]any); ok && len(oneOf) > 0 {
-		for _, raw := range oneOf {
-			entry, _ := raw.(map[string]any)
-			req := toStrings(entry["required"])
-			notReq := toStrings(mapValue(entry, "not", "required"))
-			if len(req) == 1 && len(notReq) == 1 {
-				rules = append(rules, fmt.Sprintf("Exactly one of %s or %s must be set.", prefixPath(prefix, req[0]), prefixPath(prefix, notReq[0])))
-				break
-			}
-		}
-	}
-	if allOf, ok := node["allOf"].([]any); ok {
-		for _, raw := range allOf {
-			entry, _ := raw.(map[string]any)
-			ifNode, _ := entry["if"].(map[string]any)
-			thenNode, _ := entry["then"].(map[string]any)
-			action := stringValue(mapValue(ifNode, "properties", "action", "const"))
-			if action == "" {
-				enumAction := toStrings(mapValue(ifNode, "properties", "action", "enum"))
-				if len(enumAction) > 0 {
-					required := toStrings(thenNode["required"])
-					if len(required) > 0 {
-						rules = append(rules, fmt.Sprintf("When `%s.action` is one of `%s`, %s are required.", prefix, strings.Join(enumAction, "`, `"), prefixDotJoin(prefix, required)))
-					}
-				}
-				continue
-			}
-			required := toStrings(thenNode["required"])
-			if len(required) > 0 {
-				rules = append(rules, fmt.Sprintf("When `%s.action=%s`, %s are required.", prefix, action, prefixDotJoin(prefix, required)))
-			}
-			if anyOf, ok := thenNode["anyOf"].([]any); ok && len(anyOf) > 0 {
-				var choices []string
-				for _, choiceRaw := range anyOf {
-					choice, _ := choiceRaw.(map[string]any)
-					choiceReq := toStrings(choice["required"])
-					for _, item := range choiceReq {
-						choices = append(choices, fmt.Sprintf("`%s.%s`", prefix, item))
-					}
-				}
-				if len(choices) > 0 {
-					rules = append(rules, fmt.Sprintf("When `%s.action=%s`, at least one of %s must be set.", prefix, action, strings.Join(choices, " or ")))
-				}
-			}
-		}
-	}
-	if notNode, ok := node["not"].(map[string]any); ok {
-		if allOf, ok := notNode["allOf"].([]any); ok && len(allOf) > 0 && prefix == "" {
-			rules = append(rules, "Top-level `phases` and top-level `steps` cannot both be set in the same workflow.")
-		}
-	}
-	return dedupeStrings(rules)
-}
-
-func joinWithFinalConjunction(values []string, conjunction string) string {
-	if len(values) == 0 {
-		return ""
-	}
-	if len(values) == 1 {
-		return values[0]
-	}
-	if len(values) == 2 {
-		return values[0] + " " + conjunction + " " + values[1]
-	}
-	return strings.Join(values[:len(values)-1], ", ") + ", " + conjunction + " " + values[len(values)-1]
 }
 
 func pageKinds(variants []VariantInput) []string {
@@ -525,7 +384,7 @@ func renderFieldTable(fields []Field) string {
 		} else {
 			buf.WriteString("no")
 		}
-		buf.WriteString(" | `" + escapePipe(field.Default) + "` | `" + escapePipe(field.Enum) + "` | " + escapeMarkdownTableCell(field.Description) + " | `" + escapeMarkdownTableCell(field.Example) + "` |\n")
+		buf.WriteString(" | `" + escapePipe(field.Default) + "` | `" + escapePipe(strings.Join(field.Enum, ", ")) + "` | " + escapeMarkdownTableCell(field.Description) + " | `" + escapeMarkdownTableCell(field.Example) + "` |\n")
 	}
 	return buf.String()
 }
@@ -536,19 +395,6 @@ func filterFields(fields []Field, keep func(Field) bool) []Field {
 		if keep(field) {
 			out = append(out, field)
 		}
-	}
-	return out
-}
-
-func dedupeFields(fields []Field) []Field {
-	seen := map[string]bool{}
-	var out []Field
-	for _, field := range fields {
-		if seen[field.Path] {
-			continue
-		}
-		seen[field.Path] = true
-		out = append(out, field)
 	}
 	return out
 }
@@ -583,35 +429,6 @@ func fieldType(root, node map[string]any) string {
 		return "object"
 	}
 	return "unknown"
-}
-
-func inferExample(root, node map[string]any) string {
-	node = resolveSchemaNode(root, node)
-	if value := node["const"]; value != nil {
-		return valueString(value)
-	}
-	if value := node["default"]; value != nil {
-		return valueString(value)
-	}
-	if values := toStrings(node["enum"]); len(values) > 0 {
-		return values[0]
-	}
-	switch fieldType(root, node) {
-	case "string":
-		return "example"
-	case "integer", "number":
-		return "1"
-	case "boolean":
-		return "true"
-	case "array<string>":
-		return "[example]"
-	case "array<object>":
-		return "[{...}]"
-	case "object":
-		return "{...}"
-	default:
-		return ""
-	}
 }
 
 func renderNestedSections(fields []Field, prefix string) string {
@@ -694,15 +511,6 @@ func resolveSchemaNode(root, node map[string]any) map[string]any {
 	return resolved
 }
 
-func enumString(raw any) string { return strings.Join(toStrings(raw), ", ") }
-
-func valueString(v any) string {
-	if v == nil {
-		return ""
-	}
-	return strings.TrimSpace(fmt.Sprint(v))
-}
-
 func stringValue(v any) string {
 	s, _ := v.(string)
 	return s
@@ -741,28 +549,6 @@ func mapValue(root any, path ...string) any {
 	return current
 }
 
-func joinPath(prefix, key string) string {
-	if prefix == "" {
-		return key
-	}
-	return prefix + "." + key
-}
-
-func prefixDotJoin(prefix string, items []string) string {
-	out := make([]string, 0, len(items))
-	for _, item := range items {
-		out = append(out, prefixPath(prefix, item))
-	}
-	return strings.Join(out, ", ")
-}
-
-func prefixPath(prefix, item string) string {
-	if prefix == "" {
-		return fmt.Sprintf("`%s`", item)
-	}
-	return fmt.Sprintf("`%s.%s`", prefix, item)
-}
-
 func firstNonEmpty(values ...string) string {
 	for _, v := range values {
 		if strings.TrimSpace(v) != "" {
@@ -777,19 +563,6 @@ func familyTitleFallback(family string) string {
 		return ""
 	}
 	return strings.ToUpper(family[:1]) + family[1:]
-}
-
-func dedupeStrings(items []string) []string {
-	seen := map[string]bool{}
-	var out []string
-	for _, item := range items {
-		if item == "" || seen[item] {
-			continue
-		}
-		seen[item] = true
-		out = append(out, item)
-	}
-	return out
 }
 
 func toAnySliceFromUnknown(v any) []any { items, _ := v.([]any); return items }

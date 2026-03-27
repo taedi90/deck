@@ -68,6 +68,12 @@ func Classify(input Input) Decision {
 	if len(words) <= 2 && len(prompt) <= 12 {
 		return clarify("low-information prompt")
 	}
+	if stronglyAuthoringPrompt(prompt) {
+		if input.HasWorkflowTree && !explicitCreateIntent(prompt) {
+			return Decision{Route: RouteRefine, Confidence: 0.84, Reason: "strong authoring intent", Target: inferTarget(prompt), AllowGeneration: true, AllowRetry: true, RequiresLint: true, LLMPolicy: LLMRequired}
+		}
+		return Decision{Route: RouteDraft, Confidence: 0.9, Reason: "strong authoring intent", Target: inferTarget(prompt), AllowGeneration: true, AllowRetry: true, RequiresLint: true, LLMPolicy: LLMRequired}
+	}
 	if hasAny(prompt, reviewTokens) {
 		return Decision{Route: RouteReview, Confidence: 0.9, Reason: "review intent tokens", Target: inferTarget(prompt), AllowGeneration: false, AllowRetry: false, RequiresLint: false, LLMPolicy: LLMOptional}
 	}
@@ -84,7 +90,7 @@ func Classify(input Input) Decision {
 		return Decision{Route: RouteDraft, Confidence: 0.72, Reason: "refinement tokens without existing workflow", Target: inferTarget(prompt), AllowGeneration: true, AllowRetry: true, RequiresLint: true, LLMPolicy: LLMRequired}
 	}
 	if hasAny(prompt, draftTokens) {
-		if input.HasWorkflowTree {
+		if input.HasWorkflowTree && !explicitCreateIntent(prompt) {
 			return Decision{Route: RouteRefine, Confidence: 0.7, Reason: "authoring tokens with existing workflow", Target: inferTarget(prompt), AllowGeneration: true, AllowRetry: true, RequiresLint: true, LLMPolicy: LLMRequired}
 		}
 		return Decision{Route: RouteDraft, Confidence: 0.86, Reason: "authoring tokens", Target: inferTarget(prompt), AllowGeneration: true, AllowRetry: true, RequiresLint: true, LLMPolicy: LLMRequired}
@@ -125,6 +131,9 @@ func ParseRoute(value string) Route {
 }
 
 func inferTarget(prompt string) Target {
+	if strings.Contains(prompt, "prepare and apply") || (strings.Contains(prompt, "prepare") && strings.Contains(prompt, "apply")) {
+		return Target{Kind: "workspace"}
+	}
 	if strings.Contains(prompt, "apply") {
 		return Target{Kind: "scenario", Name: "apply", Path: "workflows/scenarios/apply.yaml"}
 	}
@@ -138,6 +147,23 @@ func inferTarget(prompt string) Target {
 		return Target{Kind: "vars", Path: "workflows/vars.yaml"}
 	}
 	return Target{Kind: "workspace"}
+}
+
+func stronglyAuthoringPrompt(prompt string) bool {
+	if !hasAny(prompt, draftTokens) {
+		return false
+	}
+	authoringNouns := []string{"workflow", "workflows", "scenario", "scenarios", "prepare", "apply", "component", "components", "vars"}
+	for _, noun := range authoringNouns {
+		if strings.Contains(prompt, noun) {
+			return true
+		}
+	}
+	return false
+}
+
+func explicitCreateIntent(prompt string) bool {
+	return hasAny(prompt, []string{"create", "generate", "write", "new workflow", "new scenario", "작성", "생성"})
 }
 
 func hasAny(prompt string, tokens []string) bool {

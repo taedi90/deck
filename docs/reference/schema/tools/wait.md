@@ -167,6 +167,10 @@ spec:
 | `spec.timeout` | `string` | no | `` | `` | Maximum total duration to wait before failing the step. | `5m` |
 | `spec.type` | `string` | no | `` | `any, file, dir` | Restricts the path check to a specific filesystem entry type. `file` matches regular files only, `dir` matches directories, `any` matches either. Defaults to `any`. | `file` |
 
+### Validation Rules
+
+- Exactly one of `spec.path`, `spec.paths`, or `spec.glob` must be set.
+
 ### Notes
 
 - `Wait` bridges convergence gaps between steps. It should not replace the configuration action itself.

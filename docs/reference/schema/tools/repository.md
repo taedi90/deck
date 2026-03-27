@@ -92,6 +92,7 @@ spec:
 
 ### Validation Rules
 
+- At least one of `spec.clean` or `spec.update` must be set.
 - At least one of the listed branches must match.
 
 ## Related

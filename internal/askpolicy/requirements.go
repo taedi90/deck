@@ -10,10 +10,13 @@ import (
 
 func InferOfflineAssumption(request string) string {
 	lower := strings.ToLower(strings.TrimSpace(request))
+	if strings.Contains(lower, "air-gapped") || strings.Contains(lower, "airgapped") || strings.Contains(lower, "offline") || strings.Contains(lower, "disconnected") {
+		return "offline"
+	}
 	if strings.Contains(lower, "online") || strings.Contains(lower, "internet-connected") || strings.Contains(lower, "connected environment") {
 		return "online"
 	}
-	return "offline"
+	return "unspecified"
 }
 
 func InferArtifactKinds(request string, existing []string) []string {
@@ -30,8 +33,8 @@ func InferArtifactKinds(request string, existing []string) []string {
 	}
 	lower := strings.ToLower(strings.TrimSpace(request))
 	tokens := map[string][]string{
-		"package":           {"package", "packages", "rpm", "dnf", "apt", "install"},
-		"image":             {"image", "images", "container image", "load image", "registry"},
+		"package":           {"package", "packages", "rpm", "dnf", "apt", "repo package"},
+		"image":             {"image", "images", "container image", "load image", "image bundle"},
 		"binary":            {"binary", "binaries", "executable"},
 		"archive":           {"archive", "tarball", "bundle", "artifact bundle"},
 		"repository-mirror": {"repository mirror", "repo mirror", "mirror repository"},

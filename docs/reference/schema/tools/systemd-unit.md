@@ -48,6 +48,10 @@ spec:
 | `spec.path` | `string` | yes | `` | `` | Destination path for the unit file on the node. | `/etc/systemd/system/kubelet.service` |
 | `spec.template` | `string` | no | `` | `` | Inline multi-line unit content rendered with the current vars before writing. Prefer this for parameterized unit files. | `[Service]<br>Environment=NODE_IP={{ .vars.nodeIP }}` |
 
+### Validation Rules
+
+- Exactly one of `spec.content` or `spec.template` must be set.
+
 ### Notes
 
 - `WriteSystemdUnit` only writes the unit file and optionally performs `daemonReload`.

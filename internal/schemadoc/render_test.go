@@ -76,6 +76,14 @@ func TestRenderToolPageEscapesMultilineTableExamples(t *testing.T) {
 	}
 }
 
+func TestRenderToolPageIncludesSchemaDerivedBranchRuleSummary(t *testing.T) {
+	page := testFamilyPageInput(t, "file")
+	rendered := string(RenderToolPage(page))
+	if !strings.Contains(rendered, "At least one of `spec.source` or `spec.items` must be set.") {
+		t.Fatalf("expected schema-derived branch rule in file docs:\n%s", rendered)
+	}
+}
+
 func testFamilyPageInput(t *testing.T, family string) PageInput {
 	t.Helper()
 	defs := workflowcontract.StepDefinitions()

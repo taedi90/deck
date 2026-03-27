@@ -21,6 +21,7 @@ const (
 	TopicComponentsImports    Topic = "components-imports"
 	TopicVarsGuidance         Topic = "vars-guidance"
 	TopicTypedSteps           Topic = "typed-steps"
+	TopicStepComposition      Topic = "step-composition"
 	TopicStepRepair           Topic = "step-repair"
 	TopicStepQuality          Topic = "step-quality-rules"
 	TopicCLIHints             Topic = "cli-hints"
@@ -119,6 +120,7 @@ type StepKindContext struct {
 	MinimalShape             string
 	CuratedShape             string
 	KeyFields                []StepFieldContext
+	SchemaRuleSummaries      []string
 	ActionGuides             []StepActionContext
 	PromptExamples           []StepExampleContext
 	CommonMistakes           []string
@@ -141,6 +143,7 @@ type StepFieldContext struct {
 	Path        string
 	Description string
 	Example     string
+	Requirement string
 }
 
 type StepActionContext struct {

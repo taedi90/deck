@@ -8,6 +8,12 @@ import (
 	"github.com/Airgap-Castaways/deck/internal/askintent"
 )
 
+type StepGuidanceOptions struct {
+	ModeIntent           string
+	Topology             string
+	RequiredCapabilities []string
+}
+
 func StepKind(kind string) (StepKindContext, bool) {
 	for _, step := range Current().StepKinds {
 		if step.Kind == strings.TrimSpace(kind) {
@@ -91,9 +97,34 @@ func StrongTypedAlternatives(prompt string) []StepKindContext {
 	return out
 }
 
+func StrongTypedAlternativesWithOptions(prompt string, options StepGuidanceOptions) []StepKindContext {
+	selected := SelectStepGuidanceWithOptions(prompt, options)
+	out := make([]StepKindContext, 0, len(selected))
+	for _, item := range selected {
+		if item.Step.Kind == "Command" {
+			continue
+		}
+		out = append(out, item.Step)
+	}
+	return out
+}
+
 func SelectStepGuidance(prompt string) []SelectedStepGuidance {
+	return SelectStepGuidanceWithOptions(prompt, StepGuidanceOptions{})
+}
+
+func SelectStepGuidanceWithOptions(prompt string, options StepGuidanceOptions) []SelectedStepGuidance {
 	manifest := Current()
 	lower := strings.ToLower(strings.TrimSpace(prompt))
+	capabilities := map[string]bool{}
+	for _, capability := range options.RequiredCapabilities {
+		capability = strings.ToLower(strings.TrimSpace(capability))
+		if capability != "" {
+			capabilities[capability] = true
+		}
+	}
+	modeIntent := strings.ToLower(strings.TrimSpace(options.ModeIntent))
+	topology := strings.ToLower(strings.TrimSpace(options.Topology))
 	type scored struct {
 		step  StepKindContext
 		score int
@@ -172,10 +203,11 @@ func SelectStepGuidance(prompt string) []SelectedStepGuidance {
 		}
 		if strings.Contains(lower, "kubeadm") || strings.Contains(lower, "kubernetes") {
 			switch step.Kind {
-			case "CheckCluster", "LoadImage", "CheckHost", "InitKubeadm", "UpgradeKubeadm":
+			case "CheckCluster", "LoadImage", "CheckHost", "InitKubeadm", "UpgradeKubeadm", "JoinKubeadm":
 				score += 20
 			}
 		}
+		applyCapabilityScore(&score, &why, step, capabilities, modeIntent, topology)
 		if score > 0 {
 			scoredKinds = append(scoredKinds, scored{step: step, score: score, why: why})
 		}
@@ -248,8 +280,21 @@ func RelevantStepKinds(prompt string) []StepKindContext {
 	return out
 }
 
+func RelevantStepKindsWithOptions(prompt string, options StepGuidanceOptions) []StepKindContext {
+	selected := SelectStepGuidanceWithOptions(prompt, options)
+	out := make([]StepKindContext, 0, len(selected))
+	for _, item := range selected {
+		out = append(out, item.Step)
+	}
+	return out
+}
+
 func StepGuidanceBlock(route askintent.Route, prompt string) string {
-	selected := SelectStepGuidance(prompt)
+	return StepGuidanceBlockWithOptions(route, prompt, StepGuidanceOptions{})
+}
+
+func StepGuidanceBlockWithOptions(route askintent.Route, prompt string, options StepGuidanceOptions) string {
+	selected := SelectStepGuidanceWithOptions(prompt, options)
 	if len(selected) == 0 {
 		return ""
 	}
@@ -282,6 +327,7 @@ func StepGuidanceBlock(route askintent.Route, prompt string) string {
 		}
 	default:
 		b.WriteString("Relevant typed steps:\n")
+		b.WriteString("- Key fields below are high-signal schema fields. `required` fields must always be present, `optional` fields can be omitted, and `conditional` fields are only needed when that branch of the schema is used.\n")
 		for _, item := range selected {
 			b.WriteString("- ")
 			b.WriteString(item.Step.Kind)
@@ -299,12 +345,27 @@ func StepGuidanceBlock(route askintent.Route, prompt string) string {
 			for _, field := range item.Step.KeyFields {
 				b.WriteString("  - ")
 				b.WriteString(field.Path)
+				requirement := strings.TrimSpace(field.Requirement)
+				if requirement == "" {
+					requirement = "optional"
+				}
+				b.WriteString(" [")
+				b.WriteString(requirement)
+				b.WriteString("]")
 				b.WriteString(": ")
 				b.WriteString(field.Description)
 				if field.Example != "" {
 					b.WriteString(" Example: ")
 					b.WriteString(field.Example)
 				}
+				b.WriteString("\n")
+			}
+			for _, rule := range item.Step.SchemaRuleSummaries {
+				if strings.TrimSpace(rule) == "" {
+					continue
+				}
+				b.WriteString("  - rule: ")
+				b.WriteString(strings.TrimSpace(rule))
 				b.WriteString("\n")
 			}
 			for _, example := range item.Step.PromptExamples {
@@ -351,6 +412,64 @@ func StepGuidanceBlock(route askintent.Route, prompt string) string {
 
 func RelevantStepKindsBlock(prompt string) string {
 	return StepGuidanceBlock(askintent.RouteDraft, prompt)
+}
+
+func applyCapabilityScore(score *int, why *[]string, step StepKindContext, capabilities map[string]bool, modeIntent string, topology string) {
+	boost := func(points int, reason string) {
+		*score += points
+		*why = append(*why, reason)
+	}
+	if capabilities["package-staging"] {
+		switch step.Kind {
+		case "DownloadPackage", "InstallPackage":
+			boost(35, "supports package staging capability")
+		}
+	}
+	if capabilities["image-staging"] {
+		switch step.Kind {
+		case "DownloadImage", "LoadImage":
+			boost(35, "supports image staging capability")
+		}
+	}
+	if capabilities["repository-setup"] {
+		switch step.Kind {
+		case "ConfigureRepository", "RefreshRepository":
+			boost(30, "supports repository setup capability")
+		}
+	}
+	if capabilities["prepare-artifacts"] && modeIntent == "prepare+apply" {
+		switch step.Kind {
+		case "DownloadPackage", "DownloadImage":
+			boost(20, "fits prepare stage in prepare+apply workflow")
+		case "Command":
+			*score -= 10
+		}
+	}
+	if capabilities["kubeadm-bootstrap"] {
+		switch step.Kind {
+		case "CheckHost", "InitKubeadm", "CheckCluster", "LoadImage", "InstallPackage":
+			boost(28, "supports kubeadm bootstrap capability")
+		}
+	}
+	if capabilities["kubeadm-join"] {
+		switch step.Kind {
+		case "JoinKubeadm":
+			boost(40, "supports kubeadm join capability")
+		case "InitKubeadm", "CheckCluster":
+			boost(15, "supports multi-node kubeadm flow")
+		}
+	}
+	if capabilities["cluster-verification"] && step.Kind == "CheckCluster" {
+		boost(30, "supports cluster verification capability")
+	}
+	if topology == "multi-node" || topology == "ha" {
+		switch step.Kind {
+		case "JoinKubeadm":
+			boost(35, "topology requires node join flow")
+		case "CheckCluster":
+			boost(18, "topology benefits from cluster verification")
+		}
+	}
 }
 
 func dedupeStrings(values []string) []string {

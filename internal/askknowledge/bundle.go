@@ -74,6 +74,7 @@ type StepKnowledge struct {
 	Outputs                  []string
 	Example                  string
 	KeyFields                []askcontext.StepFieldContext
+	SchemaRuleSummaries      []string
 	ConstrainedLiteralFields []askcontext.ConstrainedFieldHint
 }
 
@@ -156,6 +157,7 @@ func buildBundle() Bundle {
 			Outputs:                  append([]string(nil), step.Outputs...),
 			Example:                  strings.TrimSpace(step.MinimalShape),
 			KeyFields:                append([]askcontext.StepFieldContext(nil), step.KeyFields...),
+			SchemaRuleSummaries:      append([]string(nil), step.SchemaRuleSummaries...),
 			ConstrainedLiteralFields: append([]askcontext.ConstrainedFieldHint(nil), step.ConstrainedLiteralFields...),
 		})
 		for _, field := range step.ConstrainedLiteralFields {

@@ -24,6 +24,16 @@ func resultToMarkdown(result runResult) string {
 		b.WriteString(result.Target.Path)
 		b.WriteString("\n")
 	}
+	if result.Judge != nil && strings.TrimSpace(result.Judge.Summary) != "" {
+		b.WriteString("- judge: ")
+		b.WriteString(strings.TrimSpace(result.Judge.Summary))
+		b.WriteString("\n")
+	}
+	if result.PlanCritic != nil && strings.TrimSpace(result.PlanCritic.Summary) != "" {
+		b.WriteString("- plan-review: ")
+		b.WriteString(strings.TrimSpace(result.PlanCritic.Summary))
+		b.WriteString("\n")
+	}
 	b.WriteString("\n")
 	b.WriteString(result.Answer)
 	b.WriteString("\n")
@@ -68,6 +78,11 @@ func render(stdout io.Writer, stderr io.Writer, result runResult) error {
 			return err
 		}
 	}
+	if result.PlanCritic != nil && strings.TrimSpace(result.PlanCritic.Summary) != "" {
+		if _, err := fmt.Fprintf(stdout, "plan-review: %s\n", result.PlanCritic.Summary); err != nil {
+			return err
+		}
+	}
 	if result.PlanMarkdown != "" {
 		if _, err := io.WriteString(stdout, "next:\n"); err != nil {
 			return err
@@ -82,6 +97,33 @@ func render(stdout io.Writer, stderr io.Writer, result runResult) error {
 	if result.LintSummary != "" {
 		if _, err := fmt.Fprintf(stdout, "lint: %s\n", result.LintSummary); err != nil {
 			return err
+		}
+	}
+	if result.Judge != nil {
+		if result.Judge.Summary != "" {
+			if _, err := fmt.Fprintf(stdout, "judge: %s\n", result.Judge.Summary); err != nil {
+				return err
+			}
+		}
+		if len(result.Judge.MissingCapabilities) > 0 {
+			if _, err := io.WriteString(stdout, "judge-missing-capabilities:\n"); err != nil {
+				return err
+			}
+			for _, item := range result.Judge.MissingCapabilities {
+				if _, err := fmt.Fprintf(stdout, "- %s\n", item); err != nil {
+					return err
+				}
+			}
+		}
+		if len(result.Judge.Blocking) > 0 {
+			if _, err := io.WriteString(stdout, "judge-blocking:\n"); err != nil {
+				return err
+			}
+			for _, item := range result.Judge.Blocking {
+				if _, err := fmt.Fprintf(stdout, "- %s\n", item); err != nil {
+					return err
+				}
+			}
 		}
 	}
 	if len(result.ReviewLines) > 0 {

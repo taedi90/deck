@@ -8,6 +8,7 @@ import (
 	"github.com/Airgap-Castaways/deck/internal/askcontract"
 	"github.com/Airgap-Castaways/deck/internal/askknowledge"
 	"github.com/Airgap-Castaways/deck/internal/askpolicy"
+	"github.com/Airgap-Castaways/deck/internal/workflowissues"
 )
 
 type Diagnostic struct {
@@ -56,18 +57,36 @@ func FromValidationError(message string, bundle askknowledge.Bundle) []Diagnosti
 	if strings.Contains(lower, "is not supported for role prepare") {
 		appendDiag(Diagnostic{Code: "role_support", Severity: "blocking", Message: "step kind is not supported for prepare", Expected: "prepare-supported typed step", Actual: "unsupported step kind for prepare", SourceRef: "workflow step role declarations", SuggestedFix: "Use a typed prepare step such as DownloadImage or DownloadPackage for artifact collection."})
 	}
+	if stepID, ok := extractDuplicateStepID(message); ok {
+		spec := workflowissues.MustSpec(workflowissues.CodeDuplicateStepID)
+		appendDiag(Diagnostic{
+			Code:         string(workflowissues.CodeDuplicateStepID),
+			Severity:     "blocking",
+			File:         diagnosticMessageFile(message),
+			Path:         "steps[].id",
+			Message:      fmt.Sprintf("workflow reuses step id %q", stepID),
+			Expected:     strings.TrimSpace(spec.Details),
+			Actual:       stepID,
+			SourceRef:    "workflowissues." + string(workflowissues.CodeDuplicateStepID),
+			SuggestedFix: fmt.Sprintf("Rename duplicated step id %q so every step id is unique across the workflow. Prefer role- or phase-specific ids such as control-plane-%s or worker-%s.", stepID, stepID, stepID),
+		})
+	}
 	if stepKind, specMessage, ok := extractStepSpecFailure(message); ok {
 		if step, found := findStep(bundle, stepKind); found {
 			if prop, ok := extractAdditionalProperty(specMessage); ok {
+				expected := renderKeyFieldList(step)
+				if rules := renderRuleSummaryList(step); rules != "" {
+					expected += "; rules: " + rules
+				}
 				appendDiag(Diagnostic{
 					Code:         "unknown_step_field",
 					Severity:     "blocking",
 					Path:         fmt.Sprintf("%s.spec.%s", stepKind, prop),
 					Message:      fmt.Sprintf("%s does not support spec.%s", stepKind, prop),
-					Expected:     renderKeyFieldList(step),
+					Expected:     expected,
 					Actual:       "spec." + prop,
 					SourceRef:    step.SchemaFile,
-					SuggestedFix: fmt.Sprintf("Use documented %s fields such as %s.", stepKind, renderKeyFieldList(step)),
+					SuggestedFix: fmt.Sprintf("Use documented %s fields such as %s.", stepKind, expected),
 				})
 			}
 			if field, ok := extractRequiredField(specMessage); ok {
@@ -77,6 +96,9 @@ func FromValidationError(message string, bundle askknowledge.Bundle) []Diagnosti
 						suggested = fmt.Sprintf("Add required field spec.%s to %s. %s", field, stepKind, strings.TrimSpace(key.Description))
 						break
 					}
+				}
+				if rules := renderRuleSummaryList(step); rules != "" {
+					suggested += " Rules: " + rules
 				}
 				appendDiag(Diagnostic{
 					Code:         "missing_step_field",
@@ -99,6 +121,35 @@ func FromValidationError(message string, bundle askknowledge.Bundle) []Diagnosti
 		}
 	}
 	return dedupe(diags)
+}
+
+func extractDuplicateStepID(message string) (string, bool) {
+	const prefix = "E_DUPLICATE_STEP_ID:"
+	idx := strings.Index(strings.TrimSpace(message), prefix)
+	if idx < 0 {
+		return "", false
+	}
+	stepID := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(message[idx:]), prefix))
+	if stepID == "" {
+		return "", false
+	}
+	return stepID, true
+}
+
+func diagnosticMessageFile(message string) string {
+	message = strings.TrimSpace(message)
+	if !strings.HasPrefix(message, "workflows/") {
+		return ""
+	}
+	idx := strings.Index(message, ":")
+	if idx <= 0 {
+		return ""
+	}
+	path := strings.TrimSpace(message[:idx])
+	if !strings.HasPrefix(path, "workflows/") {
+		return ""
+	}
+	return path
 }
 
 func extractStepSpecFailure(message string) (string, string, bool) {
@@ -150,13 +201,36 @@ func renderKeyFieldList(step askknowledge.StepKnowledge) string {
 	paths := make([]string, 0, len(step.KeyFields))
 	for _, field := range step.KeyFields {
 		if strings.TrimSpace(field.Path) != "" {
-			paths = append(paths, strings.TrimSpace(field.Path))
+			label := strings.TrimSpace(field.Path)
+			requirement := strings.TrimSpace(field.Requirement)
+			if requirement == "" {
+				requirement = "optional"
+			}
+			label += " (" + requirement + ")"
+			paths = append(paths, label)
 		}
 	}
 	if len(paths) == 0 {
 		return "documented step fields"
 	}
 	return strings.Join(paths, ", ")
+}
+
+func renderRuleSummaryList(step askknowledge.StepKnowledge) string {
+	rules := make([]string, 0, len(step.SchemaRuleSummaries))
+	for _, rule := range step.SchemaRuleSummaries {
+		rule = strings.TrimSpace(rule)
+		if rule != "" {
+			rules = append(rules, rule)
+		}
+	}
+	if len(rules) == 0 {
+		return ""
+	}
+	if len(rules) > 2 {
+		rules = rules[:2]
+	}
+	return strings.Join(rules, " ")
 }
 
 func FromEvaluation(findings []askpolicy.EvaluationFinding) []Diagnostic {
@@ -184,6 +258,57 @@ func FromCritic(critic askcontract.CriticResponse) []Diagnostic {
 	}
 	for _, item := range critic.RequiredFixes {
 		diags = append(diags, Diagnostic{Code: "required_fix", Severity: "blocking", Message: item, SuggestedFix: item})
+	}
+	return dedupe(diags)
+}
+
+func FromJudge(judge askcontract.JudgeResponse) []Diagnostic {
+	diags := []Diagnostic{}
+	for _, item := range judge.Blocking {
+		diags = append(diags, Diagnostic{Code: "judge_blocking", Severity: "blocking", Message: item})
+	}
+	for _, item := range judge.Advisory {
+		diags = append(diags, Diagnostic{Code: "judge_advisory", Severity: "advisory", Message: item})
+	}
+	for _, item := range judge.MissingCapabilities {
+		diags = append(diags, Diagnostic{Code: "judge_missing_capability", Severity: "blocking", Message: item, SuggestedFix: item})
+	}
+	for _, item := range judge.SuggestedFixes {
+		diags = append(diags, Diagnostic{Code: "judge_suggested_fix", Severity: "blocking", Message: item, SuggestedFix: item})
+	}
+	return dedupe(diags)
+}
+
+func FromPlanCritic(critic askcontract.PlanCriticResponse) []Diagnostic {
+	diags := []Diagnostic{}
+	for _, item := range critic.Blocking {
+		diags = append(diags, Diagnostic{Code: "plan_critic_blocking", Severity: "blocking", Message: item})
+	}
+	for _, item := range critic.Advisory {
+		diags = append(diags, Diagnostic{Code: "plan_critic_advisory", Severity: "advisory", Message: item})
+	}
+	for _, item := range critic.MissingContracts {
+		diags = append(diags, Diagnostic{Code: "plan_critic_missing_contract", Severity: "advisory", Message: item, SuggestedFix: item})
+	}
+	for _, item := range critic.SuggestedFixes {
+		diags = append(diags, Diagnostic{Code: "plan_critic_suggested_fix", Severity: "advisory", Message: item, SuggestedFix: item})
+	}
+	return dedupe(diags)
+}
+
+func FromPostProcess(resp askcontract.PostProcessResponse) []Diagnostic {
+	diags := []Diagnostic{}
+	for _, item := range resp.Blocking {
+		diags = append(diags, Diagnostic{Code: "postprocess_blocking", Severity: "blocking", Message: item})
+	}
+	for _, item := range resp.Advisory {
+		diags = append(diags, Diagnostic{Code: "postprocess_advisory", Severity: "advisory", Message: item})
+	}
+	for _, item := range resp.SuggestedFixes {
+		diags = append(diags, Diagnostic{Code: "postprocess_suggested_fix", Severity: "blocking", Message: item, SuggestedFix: item})
+	}
+	for _, item := range resp.RequiredEdits {
+		diags = append(diags, Diagnostic{Code: "postprocess_required_edit", Severity: "blocking", Message: item, SuggestedFix: item})
 	}
 	return dedupe(diags)
 }

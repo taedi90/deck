@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/Airgap-Castaways/deck/internal/askprovider"
 )
@@ -113,5 +114,40 @@ func TestParseCodexSSEFallsBackToCompletedEnvelope(t *testing.T) {
 	raw := []byte("event: response.completed\ndata: {\"response\":{\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"final answer\"}]}]}}\n")
 	if got := parseCodexSSE(raw); got != "final answer" {
 		t.Fatalf("unexpected completed-event fallback: %q", got)
+	}
+}
+
+func TestGenerateCodexHonorsPerRequestTimeout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(100 * time.Millisecond)
+		_, _ = w.Write([]byte(`{"output":[{"type":"message","content":[{"type":"output_text","text":"late"}]}]}`))
+	}))
+	defer server.Close()
+	client := &Client{httpClient: server.Client()}
+	_, err := client.Generate(context.Background(), askprovider.Request{Provider: "openai", Model: "gpt-5.3-codex", OAuthToken: "oauth-token", Endpoint: server.URL, Prompt: "hello", Timeout: 20 * time.Millisecond})
+	if err == nil {
+		t.Fatalf("expected timeout error")
+	}
+}
+
+func TestGenerateCodexRetriesTransient503(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls < 3 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"error":{"message":"temporary upstream timeout"}}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"output":[{"type":"message","content":[{"type":"output_text","text":"ok"}]}]}`))
+	}))
+	defer server.Close()
+	client := &Client{httpClient: server.Client()}
+	resp, err := client.Generate(context.Background(), askprovider.Request{Provider: "openai", Model: "gpt-5.3-codex", OAuthToken: "oauth-token", Endpoint: server.URL, Prompt: "hello", MaxRetries: 3, Timeout: 5 * time.Second})
+	if err != nil {
+		t.Fatalf("expected retry success, got %v", err)
+	}
+	if resp.Content != "ok" || calls != 3 {
+		t.Fatalf("expected success after retries, got content=%q calls=%d", resp.Content, calls)
 	}
 }
