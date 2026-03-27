@@ -26,23 +26,24 @@ Use this when tools or runtimes expect a stable path alias.
 ### Example
 
 ```yaml
+apiVersion: deck/v1alpha1
+id: example-createsymlink
 kind: CreateSymlink
 spec:
-  path: /usr/bin/runc
-  target: /usr/local/sbin/runc
-  force: true
+    path: example
+    target: example
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.createParent` | `boolean` | no | `false` | `` | Create parent directories for `path` if they do not exist. Defaults to `false`. | `true` |
-| `spec.force` | `boolean` | no | `false` | `` | Remove an existing file or link at `path` before creating the new link. Defaults to `false`. | `true` |
-| `spec.ignoreMissingTarget` | `boolean` | no | `false` | `` | Treat a missing target as a no-op instead of an error. Useful when a compatibility symlink should only be created if the target path exists. | `true` |
-| `spec.path` | `string` | yes | `` | `` | Path where the symbolic link will be created. | `/usr/bin/runc` |
-| `spec.requireTarget` | `boolean` | no | `false` | `` | Fail the step if `target` does not exist at the time the link is created. Defaults to `false`. | `true` |
-| `spec.target` | `string` | yes | `` | `` | Path that the symbolic link points to. | `/usr/local/sbin/runc` |
+| `spec.createParent` | `boolean` | no | `false` | `` |  | `false` |
+| `spec.force` | `boolean` | no | `false` | `` |  | `false` |
+| `spec.ignoreMissingTarget` | `boolean` | no | `false` | `` |  | `false` |
+| `spec.path` | `string` | yes | `` | `` |  | `example` |
+| `spec.requireTarget` | `boolean` | no | `false` | `` |  | `false` |
+| `spec.target` | `string` | yes | `` | `` |  | `example` |
 
 ## Related
 

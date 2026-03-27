@@ -25,21 +25,21 @@ Use this for kernel tunables that must survive reboot and may need immediate app
 ### Example
 
 ```yaml
+apiVersion: deck/v1alpha1
+id: example-sysctl
 kind: Sysctl
 spec:
-  writeFile: /etc/sysctl.d/99-kubernetes-cri.conf
-  apply: true
-  values:
-    net.ipv4.ip_forward: 1
+    values: {}
+    writeFile: example
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.apply` | `boolean` | no | `false` | `` | Run `sysctl -p <writeFile>` after writing the file to apply the values immediately without a reboot. Defaults to `false`. | `true` |
-| `spec.values` | `object` | yes | `` | `` | Map of sysctl key-value pairs to write and optionally apply. | `{net.ipv4.ip_forward:1,net.bridge.bridge-nf-call-iptables:1}` |
-| `spec.writeFile` | `string` | yes | `` | `` | Path to the sysctl file written with the given values. A drop-in under `/etc/sysctl.d/` is the common choice. | `/etc/sysctl.d/99-k8s.conf` |
+| `spec.apply` | `boolean` | no | `false` | `` |  | `false` |
+| `spec.values` | `object` | yes | `` | `` |  | `{...}` |
+| `spec.writeFile` | `string` | yes | `` | `` |  | `example` |
 
 ## Related
 

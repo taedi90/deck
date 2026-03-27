@@ -26,19 +26,21 @@ Use this near the start of apply workflows, or optional prepare preflight, to fa
 ### Example
 
 ```yaml
+apiVersion: deck/v1alpha1
+id: example-checkhost
 kind: CheckHost
 spec:
-  checks: [os, arch, swap]
-  failFast: true
+    checks:
+        - example
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.binaries` | `array<string>` | no | `` | `` | Binary names to verify are present in `PATH`. Used when `host-check` includes `binaries`. | `[kubeadm,kubelet,kubectl]` |
-| `spec.checks` | `array<string>` | yes | `` | `` | Named checks to run. Supported values include `os`, `arch`, `swap`, `kernelModules`, and `binaries`. | `[os,arch,swap]` |
-| `spec.failFast` | `boolean` | no | `true` | `` | Stop on the first failing check rather than running all checks. Defaults to `true`. | `true` |
+| `spec.binaries` | `array<string>` | no | `` | `` |  | `[example]` |
+| `spec.checks` | `array<string>` | yes | `` | `` |  | `[example]` |
+| `spec.failFast` | `boolean` | no | `true` | `` |  | `true` |
 
 ## Related
 

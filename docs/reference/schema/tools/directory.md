@@ -26,18 +26,19 @@ Use this before writing files or placing extracted content.
 ### Example
 
 ```yaml
+apiVersion: deck/v1alpha1
+id: example-ensuredirectory
 kind: EnsureDirectory
 spec:
-  path: /home/vagrant/.kube
-  mode: "0755"
+    path: example
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.mode` | `string` | no | `` | `` | EnsureDirectory permissions in octal notation. Applied after ensuring the directory exists, including on existing directories. | `0755` |
-| `spec.path` | `string` | yes | `` | `` | EnsureDirectory path to create if it does not already exist. Parent directories are created as needed. | `/var/lib/deck` |
+| `spec.mode` | `string` | no | `` | `` |  | `example` |
+| `spec.path` | `string` | yes | `` | `` |  | `example` |
 
 ## Related
 

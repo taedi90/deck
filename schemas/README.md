@@ -14,7 +14,7 @@ This directory contains the raw JSON Schema files shipped with `deck`.
 1. Validate the workflow file structure.
 2. Validate each step against the schema for its `kind`.
 
-For the human-facing reference, read `../docs/reference/schema/index.md`.
+For the human-facing reference, read `../docs/reference/schema/README.md`.
 
 ## Current tool schemas
 

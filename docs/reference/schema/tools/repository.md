@@ -31,32 +31,26 @@ Use this before refreshing caches or installing packages from a local mirror.
 ### Example
 
 ```yaml
+apiVersion: deck/v1alpha1
+id: example-configurerepository
 kind: ConfigureRepository
 spec:
-  format: deb
-  path: /etc/apt/sources.list.d/offline.list
-  repositories:
-    - baseurl: http://repo.local/debian
-      trusted: true
+    repositories:
+        - {}
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.backupPaths` | `array<string>` | no | `` | `` | Paths to back up before modifying. Backed-up files are saved with a `.bak` suffix. | `[/etc/apt/sources.list]` |
-| `spec.cleanupPaths` | `array<string>` | no | `` | `` | Paths to remove before writing the new repository definition. | `[/etc/apt/sources.list.d/ubuntu.list]` |
-| `spec.disableExisting` | `boolean` | no | `` | `` | Disable all existing repository definitions before writing the new one. Prevents conflicts from online repos during offline installs. | `true` |
-| `spec.format` | `string` | no | `` | `auto, deb, rpm` | Repository file format to write. `auto` detects from the host family, `deb` produces a sources.list style entry, and `rpm` produces a `.repo` file. | `deb` |
-| `spec.mode` | `string` | no | `` | `` | File permissions applied to the generated repository file in octal notation. | `0644` |
-| `spec.path` | `string` | no | `` | `` | Explicit output path for the generated repository file. Defaults to `/etc/apt/sources.list.d/deck-offline.list` for deb-family systems or `/etc/yum.repos.d/deck-offline.repo` for rpm-family systems when omitted. | `/etc/apt/sources.list.d/offline.list` |
-| `spec.replaceExisting` | `boolean` | no | `` | `` | Replace an existing repository file at the target path before writing the new definition. | `true` |
-| `spec.repositories` | `array<object>` | yes | `` | `` | Repository entries to write. deb entries use fields like `baseurl`, `suite`, `component`, and optional `trusted`; rpm entries use fields like `id`, `name`, `baseurl`, and optional `extra` for additional repo keys. | `[{baseurl:http://repo.local/debian,trusted:true}]` |
-
-### Notes
-
-- `ConfigureRepository` only writes repository definition files. Use `RefreshRepository` when the package manager needs an explicit metadata refresh.
-- Keep repository definitions mirror-specific rather than mutating the host's default online sources.
+| `spec.backupPaths` | `array<string>` | no | `` | `` |  | `[example]` |
+| `spec.cleanupPaths` | `array<string>` | no | `` | `` |  | `[example]` |
+| `spec.disableExisting` | `boolean` | no | `` | `` |  | `true` |
+| `spec.format` | `string` | no | `` | `auto, deb, rpm` |  | `auto` |
+| `spec.mode` | `string` | no | `` | `` |  | `example` |
+| `spec.path` | `string` | no | `` | `` |  | `example` |
+| `spec.replaceExisting` | `boolean` | no | `` | `` |  | `true` |
+| `spec.repositories` | `array<object>` | yes | `` | `` |  | `[{...}]` |
 
 ## `RefreshRepository`
 
@@ -71,24 +65,22 @@ Use this after writing repo definitions and before package install steps that de
 ### Example
 
 ```yaml
+apiVersion: deck/v1alpha1
+id: example-refreshrepository
 kind: RefreshRepository
 spec:
-  manager: apt
-  clean: true
-  update: true
-  restrictToRepos:
-    - /etc/apt/sources.list.d/offline.list
+    clean: true
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.clean` | `boolean` | no | `` | `` | Run a cache clean before updating metadata (`apt clean` / `dnf clean all`). | `true` |
-| `spec.excludeRepos` | `array<string>` | no | `` | `` | Repository selectors to skip during metadata update. For apt, selectors match repo file paths; for dnf, they match repo IDs. | `[updates]` |
-| `spec.manager` | `string` | no | `` | `auto, apt, dnf` | Package manager to use. `auto` detects from the host OS. Supports `apt` and `dnf`. | `apt` |
-| `spec.restrictToRepos` | `array<string>` | no | `` | `` | Limit the metadata update to these repository selectors. For apt, use repo file paths or globs; for dnf, use repo IDs. Prevents fetching from online repos during an offline install. | `[/etc/apt/sources.list.d/offline.list]` |
-| `spec.update` | `boolean` | no | `` | `` | Fetch fresh package metadata from the configured repositories (`apt update` / `dnf makecache`). | `true` |
+| `spec.clean` | `boolean` | no | `` | `` |  | `true` |
+| `spec.excludeRepos` | `array<string>` | no | `` | `` |  | `[example]` |
+| `spec.manager` | `string` | no | `` | `auto, apt, dnf` |  | `auto` |
+| `spec.restrictToRepos` | `array<string>` | no | `` | `` |  | `[example]` |
+| `spec.update` | `boolean` | no | `` | `` |  | `true` |
 
 ### Validation Rules
 

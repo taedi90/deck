@@ -196,7 +196,7 @@ func buildStepKinds() []StepKindContext {
 	defs := workflowexec.BuiltInTypeDefinitions()
 	out := make([]StepKindContext, 0, len(defs))
 	for _, def := range defs {
-		meta := def.Docs
+		meta := schemadoc.ToolMetaForDefinition(def.Step)
 		facts := schemaFactsForKind(def.Step.Kind)
 		ctx := StepKindContext{
 			Kind:                def.Step.Kind,
@@ -400,7 +400,7 @@ func defaultConstrainedLiteralFields(kind string) []ConstrainedFieldHint {
 	}
 }
 
-func buildStepKeyFields(kind string, meta workflowexec.ToolMetadata, facts schemafacts.DocumentFacts) []StepFieldContext {
+func buildStepKeyFields(kind string, meta schemadoc.ToolMetadata, facts schemafacts.DocumentFacts) []StepFieldContext {
 	fieldRequirements := map[string]string{}
 	for _, field := range facts.Fields {
 		if strings.HasPrefix(field.Path, "spec") {

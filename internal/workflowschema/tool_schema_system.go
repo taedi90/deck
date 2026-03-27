@@ -1,4 +1,4 @@
-package main
+package workflowschema
 
 import "github.com/Airgap-Castaways/deck/internal/stepspec"
 

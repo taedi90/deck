@@ -25,30 +25,25 @@ Use this for typed bootstrap and upgrade verification instead of ad-hoc kubectl 
 ### Example
 
 ```yaml
+apiVersion: deck/v1alpha1
+id: example-checkcluster
 kind: CheckCluster
-spec:
-  interval: 5s
-  nodes:
-    total: 1
-    ready: 1
-    controlPlaneReady: 1
-  reports:
-    nodesPath: /tmp/deck/reports/bootstrap-nodes.txt
+spec: {}
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.fileAssertions` | `array<object>` | no | `` | `` | Optional file-content assertions evaluated on every poll attempt. | `[{path:/etc/containerd/config.toml,contains:[registry.k8s.io/pause:3.10]}]` |
-| `spec.initialDelay` | `string` | no | `` | `` | Optional delay before the first poll attempt. | `10s` |
-| `spec.interval` | `string` | no | `` | `` | Duration between poll attempts while waiting for cluster state to converge. | `5s` |
-| `spec.kubeSystem` | `object` | no | `` | `` | Optional checks for `kube-system` pod readiness and optional pod state reports. | `{readyNames:[etcd-control-plane]}` |
-| `spec.kubeconfig` | `string` | no | `` | `` | Kubeconfig path used for kubectl-based checks. Defaults to `/etc/kubernetes/admin.conf`. | `/etc/kubernetes/admin.conf` |
-| `spec.nodes` | `object` | no | `` | `` | Optional checks for cluster node count and readiness. | `{total:1,ready:1,controlPlaneReady:1}` |
-| `spec.reports` | `object` | no | `` | `` | Optional paths for writing node and cluster state reports during verification. | `{nodesPath:/tmp/deck/reports/bootstrap-nodes.txt}` |
-| `spec.timeout` | `string` | no | `` | `` | Maximum total duration to keep polling before the step fails. | `10m` |
-| `spec.versions` | `object` | no | `` | `` | Optional checks for Kubernetes component versions and an optional version report. | `{server:v1.31.0,kubelet:v1.31.0}` |
+| `spec.fileAssertions` | `array<object>` | no | `` | `` |  | `[{...}]` |
+| `spec.initialDelay` | `string` | no | `` | `` |  | `example` |
+| `spec.interval` | `string` | no | `` | `` |  | `example` |
+| `spec.kubeSystem` | `object` | no | `` | `` |  | `{...}` |
+| `spec.kubeconfig` | `string` | no | `` | `` |  | `example` |
+| `spec.nodes` | `object` | no | `` | `` |  | `{...}` |
+| `spec.reports` | `object` | no | `` | `` |  | `{...}` |
+| `spec.timeout` | `string` | no | `` | `` |  | `example` |
+| `spec.versions` | `object` | no | `` | `` |  | `{...}` |
 
 ### Nested Objects
 
@@ -56,37 +51,37 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.kubeSystem.jsonReportPath` | `string` | no | `` | `` | Optional JSON report path for `kubectl get pods -n kube-system -o json`. | `/tmp/deck/reports/kube-system-pods.json` |
-| `spec.kubeSystem.readyNames` | `array<string>` | no | `` | `` | Exact kube-system pod names that must be present and fully Ready. | `[etcd-control-plane,kube-apiserver-control-plane]` |
-| `spec.kubeSystem.readyPrefixMinimums` | `array<object>` | no | `` | `` | Prefix-based readiness requirements with minimum Ready pod counts. | `[{prefix:coredns-,minReady:2}]` |
-| `spec.kubeSystem.readyPrefixes` | `array<string>` | no | `` | `` | Pod-name prefixes for which at least one matching Ready pod must exist. | `[kube-proxy-]` |
-| `spec.kubeSystem.reportPath` | `string` | no | `` | `` | Optional text report path for `kubectl get pods -n kube-system`. | `/tmp/deck/reports/kube-system-pods.txt` |
+| `spec.kubeSystem.jsonReportPath` | `string` | no | `` | `` |  | `example` |
+| `spec.kubeSystem.readyNames` | `array<string>` | no | `` | `` |  | `[example]` |
+| `spec.kubeSystem.readyPrefixMinimums` | `array<object>` | no | `` | `` |  | `[{...}]` |
+| `spec.kubeSystem.readyPrefixes` | `array<string>` | no | `` | `` |  | `[example]` |
+| `spec.kubeSystem.reportPath` | `string` | no | `` | `` |  | `example` |
 
 ### `spec.nodes`
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.nodes.controlPlaneReady` | `integer` | no | `` | `` | Expected count of Ready control-plane nodes. | `1` |
-| `spec.nodes.ready` | `integer` | no | `` | `` | Expected count of Ready nodes. | `1` |
-| `spec.nodes.total` | `integer` | no | `` | `` | Expected total node count returned by `kubectl get nodes`. | `1` |
+| `spec.nodes.controlPlaneReady` | `integer` | no | `` | `` |  | `1` |
+| `spec.nodes.ready` | `integer` | no | `` | `` |  | `1` |
+| `spec.nodes.total` | `integer` | no | `` | `` |  | `1` |
 
 ### `spec.reports`
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.reports.clusterNodesPath` | `string` | no | `` | `` | Optional second node report path when the workflow wants both scenario-specific and shared cluster node reports. | `/tmp/deck/reports/cluster-nodes.txt` |
-| `spec.reports.nodesPath` | `string` | no | `` | `` | Optional report file path for `kubectl get nodes` output. | `/tmp/deck/reports/bootstrap-nodes.txt` |
+| `spec.reports.clusterNodesPath` | `string` | no | `` | `` |  | `example` |
+| `spec.reports.nodesPath` | `string` | no | `` | `` |  | `example` |
 
 ### `spec.versions`
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.versions.kubeadm` | `string` | no | `` | `` | Expected local kubeadm version from `kubeadm version -o short`. | `v1.31.0` |
-| `spec.versions.kubelet` | `string` | no | `` | `` | Expected kubelet version for the selected node. | `v1.31.0` |
-| `spec.versions.nodeName` | `string` | no | `` | `` | Node name used when reading kubelet version. Defaults to `control-plane`. | `control-plane` |
-| `spec.versions.reportPath` | `string` | no | `` | `` | Optional report file that records target, server, kubelet, and kubeadm versions. | `/tmp/deck/reports/upgrade-version.txt` |
-| `spec.versions.server` | `string` | no | `` | `` | Expected API server version from `kubectl version -o json`. | `v1.31.0` |
-| `spec.versions.targetVersion` | `string` | no | `` | `` | Target Kubernetes version written into the optional version report file. | `v1.31.0` |
+| `spec.versions.kubeadm` | `string` | no | `` | `` |  | `example` |
+| `spec.versions.kubelet` | `string` | no | `` | `` |  | `example` |
+| `spec.versions.nodeName` | `string` | no | `` | `` |  | `example` |
+| `spec.versions.reportPath` | `string` | no | `` | `` |  | `example` |
+| `spec.versions.server` | `string` | no | `` | `` |  | `example` |
+| `spec.versions.targetVersion` | `string` | no | `` | `` |  | `example` |
 
 
 ## Related

@@ -31,32 +31,23 @@ Use this during prepare to collect package-manager content for offline installat
 ### Example
 
 ```yaml
+apiVersion: deck/v1alpha1
+id: example-downloadpackage
 kind: DownloadPackage
 spec:
-  packages: [podman]
-  distro:
-    family: rhel
-    release: rocky9
-  repo:
-    type: rpm
-    modules:
-      - name: container-tools
-        stream: "4.0"
-  backend:
-    mode: container
-    runtime: docker
-    image: rockylinux:9
+    packages:
+        - example
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.backend` | `object` | no | `` | `` | Container-based download backend for `DownloadPackage`. When provided, `backend.mode=container` and `backend.image` are required. | `{mode:container,runtime:docker,image:rockylinux:9}` |
-| `spec.distro` | `object` | no | `` | `` | Target distribution hint used by `DownloadPackage` to select the correct package manager and resolver backend. | `{family:rhel,release:rocky9}` |
-| `spec.outputDir` | `string` | no | `` | `` | Optional bundle-relative directory used by `DownloadPackage` for downloaded package artifacts. Omit this to use `packages/` by default. When `repo.type` is set, deck instead writes to a repo layout under `packages/deb/<release>` or `packages/rpm/<release>`. Set `outputDir` only when apply workflows need a stable custom path outside those defaults. | `packages/kubernetes` |
-| `spec.packages` | `array<string>` | yes | `` | `` | Package names to download or install. Use the same list in both `download` and `install` steps to keep offline parity. | `[kubelet,kubeadm,kubectl]` |
-| `spec.repo` | `object` | no | `` | `` | Package repository settings applied before `DownloadPackage`, including repo layout generation and RPM module streams. | `{type:rpm,modules:[...]}` |
+| `spec.backend` | `object` | no | `` | `` |  | `{...}` |
+| `spec.distro` | `object` | no | `` | `` |  | `{...}` |
+| `spec.outputDir` | `string` | no | `` | `` |  | `example` |
+| `spec.packages` | `array<string>` | yes | `` | `` |  | `[example]` |
+| `spec.repo` | `object` | no | `` | `` |  | `{...}` |
 
 ### Nested Objects
 
@@ -64,9 +55,9 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.backend.image` | `string` | yes | `` | `` | Container image used for package resolution in `download` mode. Required when `backend` is set. | `rockylinux:9` |
-| `spec.backend.mode` | `string` | yes | `` | `container` | Download backend mode. Currently only `container` is supported. | `container` |
-| `spec.backend.runtime` | `string` | no | `` | `auto, docker, podman` | Preferred container runtime for the download helper container. Supported values are `docker`, `podman`, or `auto`. | `docker` |
+| `spec.backend.image` | `string` | yes | `` | `` |  | `example` |
+| `spec.backend.mode` | `string` | yes | `` | `container` |  | `container` |
+| `spec.backend.runtime` | `string` | no | `` | `auto, docker, podman` |  | `auto` |
 
 ### `spec.distro`
 
@@ -79,22 +70,11 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.repo.generate` | `boolean` | no | `` | `` | When `true`, generate repository metadata after the package payload is collected. Used with `repo.type` in download repo mode. | `true` |
-| `spec.repo.modules` | `array<object>` | no | `` | `` | RPM module streams to enable before resolving downloads on RHEL-family systems. | `[{name:container-tools,stream:4.0}]` |
-| `spec.repo.pkgsDir` | `string` | no | `` | `` | Subdirectory under the generated repo root where package payloads are written. Defaults to `pkgs`. | `pkgs` |
-| `spec.repo.type` | `string` | no | `` | `deb-flat, rpm` | Repository output type for `DownloadPackage` repo mode. Supported values are `deb-flat` and `rpm`. | `rpm` |
+| `spec.repo.generate` | `boolean` | no | `` | `` |  | `true` |
+| `spec.repo.modules` | `array<object>` | no | `` | `` |  | `[{...}]` |
+| `spec.repo.pkgsDir` | `string` | no | `` | `` |  | `example` |
+| `spec.repo.type` | `string` | no | `` | `deb-flat, rpm` |  | `deb-flat` |
 
-
-### Notes
-
-- Use `DownloadPackage` and `InstallPackage` with `ConfigureRepository` and `RefreshRepository` for a complete typed package-management flow.
-- Omit `outputDir` unless you need a custom package location; deck uses `packages/` by default, or `packages/deb/<release>` and `packages/rpm/<release>` when `repo.type` is set.
-- Keeping the same package list across `download` and `install` helps maintain offline parity.
-- Use `restrictToRepos` on the `InstallPackage` step to prevent the node's default online repos from being consulted during an offline apply.
-- When `repo` is set for `DownloadPackage`, deck expects `repo.type` and `distro.release` so it can build a `deb-flat` or `rpm` repository layout.
-- Container-backed `DownloadPackage` exports completed artifacts into a host-owned cache and does not bind-mount deb/rpm package-manager cache directories.
-- Older releases may have left root-owned content under legacy package cache paths; clean those directories manually after upgrading if needed.
-- Without a container download backend, `download` currently writes placeholder package markers instead of resolving real packages.
 
 ## `InstallPackage`
 
@@ -109,22 +89,22 @@ Use this during apply to install packages from configured local or mirrored repo
 ### Example
 
 ```yaml
+apiVersion: deck/v1alpha1
+id: example-installpackage
 kind: InstallPackage
 spec:
-  packages: [kubelet, kubeadm, kubectl]
-  source:
-    type: local-repo
-    path: /opt/deck/repos/kubernetes
+    packages:
+        - example
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.excludeRepos` | `array<string>` | no | `` | `` | For `InstallPackage`, repository selectors to exclude from package resolution. For deb-family systems, selectors match repo file paths; for rpm-family systems, they match repo IDs. | `[updates]` |
-| `spec.packages` | `array<string>` | yes | `` | `` | Package names to download or install. Use the same list in both `download` and `install` steps to keep offline parity. | `[kubelet,kubeadm,kubectl]` |
-| `spec.restrictToRepos` | `array<string>` | no | `` | `` | For `InstallPackage`, limit package manager visibility to these repository selectors. For deb-family systems, use repo file paths or globs; for rpm-family systems, use repo IDs. | `[offline-kubernetes]` |
-| `spec.source` | `object` | no | `` | `` | Local repository source for `InstallPackage`. Points to a pre-prepared on-disk package repo instead of relying on configured package manager sources. | `{type:local-repo,path:/opt/deck/repos/kubernetes}` |
+| `spec.excludeRepos` | `array<string>` | no | `` | `` |  | `[example]` |
+| `spec.packages` | `array<string>` | yes | `` | `` |  | `[example]` |
+| `spec.restrictToRepos` | `array<string>` | no | `` | `` |  | `[example]` |
+| `spec.source` | `object` | no | `` | `` |  | `{...}` |
 
 ### Nested Objects
 
@@ -132,20 +112,9 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.source.path` | `string` | yes | `` | `` | Filesystem path to the pre-prepared local package repository. | `/opt/deck/repos/kubernetes` |
-| `spec.source.type` | `string` | yes | `` | `` | Source type. Currently `local-repo` is the only supported value. | `local-repo` |
+| `spec.source.path` | `string` | yes | `` | `` |  | `example` |
+| `spec.source.type` | `string` | yes | `` | `` |  | `local-repo` |
 
-
-### Notes
-
-- Use `DownloadPackage` and `InstallPackage` with `ConfigureRepository` and `RefreshRepository` for a complete typed package-management flow.
-- Omit `outputDir` unless you need a custom package location; deck uses `packages/` by default, or `packages/deb/<release>` and `packages/rpm/<release>` when `repo.type` is set.
-- Keeping the same package list across `download` and `install` helps maintain offline parity.
-- Use `restrictToRepos` on the `InstallPackage` step to prevent the node's default online repos from being consulted during an offline apply.
-- When `repo` is set for `DownloadPackage`, deck expects `repo.type` and `distro.release` so it can build a `deb-flat` or `rpm` repository layout.
-- Container-backed `DownloadPackage` exports completed artifacts into a host-owned cache and does not bind-mount deb/rpm package-manager cache directories.
-- Older releases may have left root-owned content under legacy package cache paths; clean those directories manually after upgrading if needed.
-- Without a container download backend, `download` currently writes placeholder package markers instead of resolving real packages.
 
 ## Related
 
