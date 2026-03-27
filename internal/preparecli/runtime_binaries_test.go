@@ -58,7 +58,7 @@ func TestRunStagesLocalRuntimeBinariesFromDirectory(t *testing.T) {
 func TestRunStagesReleaseRuntimeBinariesWithDefaultTargets(t *testing.T) {
 	root := prepareWorkspaceForRuntimeTests(t)
 	var got []string
-	fetcher := func(version string, target runtimeBinaryTarget) ([]byte, error) {
+	fetcher := func(_ context.Context, version string, target runtimeBinaryTarget) ([]byte, error) {
 		got = append(got, version+":"+target.OS+"/"+target.Arch)
 		return []byte(target.OS + "-" + target.Arch), nil
 	}
@@ -128,7 +128,7 @@ func TestDownloadArchiveDeckBinaryReadsDeckEntry(t *testing.T) {
 		_, _ = w.Write(archive)
 	}))
 	defer srv.Close()
-	raw, err := downloadArchiveDeckBinary(srv.URL)
+	raw, err := downloadArchiveDeckBinary(context.Background(), srv.URL)
 	if err != nil {
 		t.Fatalf("download archive deck binary: %v", err)
 	}
@@ -143,7 +143,7 @@ func TestDownloadArchiveDeckBinaryRejectsMissingDeckEntry(t *testing.T) {
 		_, _ = w.Write(archive)
 	}))
 	defer srv.Close()
-	_, err := downloadArchiveDeckBinary(srv.URL)
+	_, err := downloadArchiveDeckBinary(context.Background(), srv.URL)
 	if err == nil || !strings.Contains(err.Error(), "does not contain deck") {
 		t.Fatalf("expected missing deck error, got %v", err)
 	}

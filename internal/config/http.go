@@ -6,40 +6,24 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/Airgap-Castaways/deck/internal/httpfetch"
 )
 
-var workflowHTTPClient = &http.Client{Timeout: 10 * time.Second}
+var workflowHTTPClient = httpfetch.Client(10 * time.Second)
 
 func getRequiredHTTP(ctx context.Context, rawURL string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	raw, err := httpfetch.GetBytes(ctx, workflowHTTPClient, rawURL, "get workflow url", http.StatusOK)
 	if err != nil {
-		return nil, fmt.Errorf("get workflow url: %w", err)
+		return nil, err
 	}
-	resp, err := workflowHTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("get workflow url: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("get workflow url: unexpected status %d", resp.StatusCode)
-	}
-
-	b, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read workflow url: %w", err)
-	}
-	return b, nil
+	return raw, nil
 }
 
 func getOptionalHTTP(ctx context.Context, rawURL string) ([]byte, bool, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	resp, err := httpfetch.Do(ctx, workflowHTTPClient, http.MethodGet, rawURL, nil, "get vars url")
 	if err != nil {
-		return nil, false, fmt.Errorf("get vars url: %w", err)
-	}
-	resp, err := workflowHTTPClient.Do(req)
-	if err != nil {
-		return nil, false, fmt.Errorf("get vars url: %w", err)
+		return nil, false, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 

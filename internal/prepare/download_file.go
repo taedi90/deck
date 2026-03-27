@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -17,6 +16,7 @@ import (
 	"github.com/Airgap-Castaways/deck/internal/fetch"
 	"github.com/Airgap-Castaways/deck/internal/filemode"
 	"github.com/Airgap-Castaways/deck/internal/fsutil"
+	"github.com/Airgap-Castaways/deck/internal/httpfetch"
 	"github.com/Airgap-Castaways/deck/internal/workflowexec"
 )
 
@@ -183,13 +183,9 @@ func downloadURLToFile(ctx context.Context, target *os.File, url string) error {
 	if ctx == nil {
 		return fmt.Errorf("context is nil")
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	resp, err := httpfetch.Do(ctx, nil, "GET", url, nil, "download "+url)
 	if err != nil {
-		return fmt.Errorf("download %s: %w", url, err)
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("download %s: %w", url, err)
+		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {

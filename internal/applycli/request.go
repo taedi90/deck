@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -17,6 +16,7 @@ import (
 	"github.com/Airgap-Castaways/deck/internal/config"
 	"github.com/Airgap-Castaways/deck/internal/filemode"
 	"github.com/Airgap-Castaways/deck/internal/fsutil"
+	"github.com/Airgap-Castaways/deck/internal/httpfetch"
 	"github.com/Airgap-Castaways/deck/internal/install"
 	"github.com/Airgap-Castaways/deck/internal/userdirs"
 	"github.com/Airgap-Castaways/deck/internal/validate"
@@ -164,23 +164,7 @@ func FetchWorkflowForValidation(ctx context.Context, rawURL string) ([]byte, err
 	if ctx == nil {
 		return nil, fmt.Errorf("context is nil")
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("get workflow url: %w", err)
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("get workflow url: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("get workflow url: unexpected status %d", resp.StatusCode)
-	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read workflow url: %w", err)
-	}
-	return body, nil
+	return httpfetch.GetBytes(ctx, nil, rawURL, "get workflow url")
 }
 
 func ResolveBundleRoot(positionalBundle string) (string, error) {

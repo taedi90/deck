@@ -263,7 +263,7 @@ func (c *Client) generateCodex(ctx context.Context, req askprovider.Request) (as
 		return askprovider.Response{}, fmt.Errorf("read codex response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return askprovider.Response{}, fmt.Errorf("ask provider request failed: %s", codexError(resp.StatusCode, raw))
+		return askprovider.Response{}, &codexResponseError{StatusCode: resp.StatusCode, Body: append([]byte(nil), raw...)}
 	}
 	content, err := parseCodexResponse(raw, resp.Header.Get("Content-Type"))
 	if err != nil {
@@ -411,7 +411,19 @@ func parseCodexSSEEvent(event codexSSEEvent) string {
 	return ""
 }
 
-func codexError(status int, raw []byte) string {
+type codexResponseError struct {
+	StatusCode int
+	Body       []byte
+}
+
+func (e *codexResponseError) Error() string {
+	if e == nil {
+		return ""
+	}
+	return codexErrorMessage(e.StatusCode, e.Body)
+}
+
+func codexErrorMessage(status int, raw []byte) string {
 	trimmed := strings.TrimSpace(string(raw))
 	var payload struct {
 		Error struct {

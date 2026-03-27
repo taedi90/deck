@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/Airgap-Castaways/deck/internal/httpfetch"
 )
 
 const (
@@ -279,19 +280,15 @@ func fetchScenarioIndexFromServer(ctx context.Context, server string) ([]string,
 	}
 	trimmed := strings.TrimRight(server, "/")
 	indexURL := trimmed + "/workflows/index.json"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, indexURL, nil)
+	resp, err := httpfetch.Do(ctx, nil, "GET", indexURL, nil, "scenario list request")
 	if err != nil {
-		return nil, fmt.Errorf("scenario list: build request: %w", err)
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("scenario list: request failed: %w", err)
+		return nil, err
 	}
 	defer closeSilently(resp.Body)
-	if resp.StatusCode == http.StatusNotFound {
+	if resp.StatusCode == 404 {
 		return []string{}, nil
 	}
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("scenario list: unexpected status %d", resp.StatusCode)
 	}
 

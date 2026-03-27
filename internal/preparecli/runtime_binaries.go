@@ -3,6 +3,7 @@ package preparecli
 import (
 	"archive/tar"
 	"compress/gzip"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/Airgap-Castaways/deck/internal/buildinfo"
 	"github.com/Airgap-Castaways/deck/internal/fsutil"
+	"github.com/Airgap-Castaways/deck/internal/httpfetch"
 	"github.com/Airgap-Castaways/deck/internal/workspacepaths"
 )
 
@@ -33,7 +35,7 @@ type runtimeBinaryDeps struct {
 	currentGOARCH func() string
 	readFile      func(string) ([]byte, error)
 	osExecutable  func() (string, error)
-	fetchRelease  func(version string, target runtimeBinaryTarget) ([]byte, error)
+	fetchRelease  func(ctx context.Context, version string, target runtimeBinaryTarget) ([]byte, error)
 }
 
 func defaultRuntimeBinaryDeps() runtimeBinaryDeps {
@@ -46,7 +48,10 @@ func defaultRuntimeBinaryDeps() runtimeBinaryDeps {
 	}
 }
 
-func stageRuntimeBinaries(preparedRootAbs string, opts Options) error {
+func stageRuntimeBinariesWithContext(ctx context.Context, preparedRootAbs string, opts Options) error {
+	if ctx == nil {
+		return fmt.Errorf("context is nil")
+	}
 	deps := opts.runtimeBinaryDeps
 	if deps.currentGOOS == nil || deps.currentGOARCH == nil || deps.readFile == nil || deps.osExecutable == nil || deps.fetchRelease == nil {
 		deps = defaultRuntimeBinaryDeps()
@@ -60,7 +65,7 @@ func stageRuntimeBinaries(preparedRootAbs string, opts Options) error {
 		return err
 	}
 	for _, target := range targets {
-		raw, err := loadRuntimeBinary(opts, deps, source, target)
+		raw, err := loadRuntimeBinary(ctx, opts, deps, source, target)
 		if err != nil {
 			return err
 		}
@@ -150,7 +155,7 @@ func parseRuntimeBinaryTarget(raw string) (runtimeBinaryTarget, error) {
 	return runtimeBinaryTarget{OS: osVal, Arch: archVal}, nil
 }
 
-func loadRuntimeBinary(opts Options, deps runtimeBinaryDeps, source string, target runtimeBinaryTarget) ([]byte, error) {
+func loadRuntimeBinary(ctx context.Context, opts Options, deps runtimeBinaryDeps, source string, target runtimeBinaryTarget) ([]byte, error) {
 	switch source {
 	case binarySourceLocal:
 		return loadLocalRuntimeBinary(opts, deps, target)
@@ -162,7 +167,7 @@ func loadRuntimeBinary(opts Options, deps runtimeBinaryDeps, source string, targ
 		if version == "" || version == "dev" {
 			return nil, fmt.Errorf("--bundle-binary-source=release requires a release build or --bundle-binary-version")
 		}
-		return deps.fetchRelease(version, target)
+		return deps.fetchRelease(ctx, version, target)
 	default:
 		return nil, fmt.Errorf("unsupported binary source %s", source)
 	}
@@ -203,7 +208,7 @@ func resolveLocalRuntimeBinaryPath(dir string, target runtimeBinaryTarget) (stri
 	return "", fmt.Errorf("local runtime binary not found for %s/%s under %s", target.OS, target.Arch, base)
 }
 
-func fetchReleaseRuntimeBinary(version string, target runtimeBinaryTarget) ([]byte, error) {
+func fetchReleaseRuntimeBinary(ctx context.Context, version string, target runtimeBinaryTarget) ([]byte, error) {
 	version = strings.TrimSpace(version)
 	if version == "" {
 		return nil, fmt.Errorf("release version is required")
@@ -218,7 +223,7 @@ func fetchReleaseRuntimeBinary(version string, target runtimeBinaryTarget) ([]by
 	var lastErr error
 	for _, archiveVersion := range versions {
 		url := fmt.Sprintf("https://github.com/Airgap-Castaways/deck/releases/download/%s/deck_%s_%s_%s.tar.gz", version, archiveVersion, target.OS, target.Arch)
-		raw, err := downloadArchiveDeckBinary(url)
+		raw, err := downloadArchiveDeckBinary(ctx, url)
 		if err == nil {
 			return raw, nil
 		}
@@ -230,18 +235,17 @@ func fetchReleaseRuntimeBinary(version string, target runtimeBinaryTarget) ([]by
 	return nil, lastErr
 }
 
-func downloadArchiveDeckBinary(url string) ([]byte, error) {
+func downloadArchiveDeckBinary(ctx context.Context, url string) ([]byte, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("context is nil")
+	}
 	parsed, err := urlpkgParseHTTPS(url)
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequest(http.MethodGet, parsed.String(), nil)
+	resp, err := httpfetch.Do(ctx, nil, http.MethodGet, parsed.String(), nil, "download release archive "+parsed.String())
 	if err != nil {
-		return nil, fmt.Errorf("download release archive %s: %w", parsed.String(), err)
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("download release archive %s: %w", parsed.String(), err)
+		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
