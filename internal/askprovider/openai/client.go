@@ -6,10 +6,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	openai "github.com/sashabaranov/go-openai"
 
@@ -89,6 +92,25 @@ func (c *Client) Generate(ctx context.Context, req askprovider.Request) (askprov
 		ctx, cancel = context.WithTimeout(ctx, req.Timeout)
 		defer cancel()
 	}
+	attempts := maxAttempts(req.MaxRetries)
+	var lastErr error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		resp, err := c.generateOnce(ctx, req)
+		if err == nil {
+			return resp, nil
+		}
+		lastErr = err
+		if attempt == attempts || !retryableProviderError(err) || ctx.Err() != nil {
+			break
+		}
+		if !sleepWithContext(ctx, retryBackoff(attempt)) {
+			break
+		}
+	}
+	return askprovider.Response{}, lastErr
+}
+
+func (c *Client) generateOnce(ctx context.Context, req askprovider.Request) (askprovider.Response, error) {
 	provider := strings.ToLower(strings.TrimSpace(req.Provider))
 	if provider == "" {
 		provider = askprovider.DefaultProvider
@@ -96,6 +118,10 @@ func (c *Client) Generate(ctx context.Context, req askprovider.Request) (askprov
 	if shouldUseCodexOAuth(provider, req) {
 		return c.generateCodex(ctx, req)
 	}
+	return c.generateChat(ctx, provider, req)
+}
+
+func (c *Client) generateChat(ctx context.Context, provider string, req askprovider.Request) (askprovider.Response, error) {
 	authToken := requestToken(req)
 	config := openai.DefaultConfig(authToken)
 	if endpoint := strings.TrimSpace(req.Endpoint); endpoint != "" {
@@ -128,6 +154,76 @@ func buildChatRequest(provider string, req askprovider.Request) openai.ChatCompl
 		request.Model = askprovider.ProviderDefaultModel(provider)
 	}
 	return request
+}
+
+func maxAttempts(retries int) int {
+	if retries <= 1 {
+		return 1
+	}
+	if retries > 4 {
+		return 4
+	}
+	return retries
+}
+
+func retryableProviderError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return false
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return netErr.Timeout() || netErr.Temporary()
+	}
+	var apiErr *openai.APIError
+	if errors.As(err, &apiErr) {
+		return retryableStatus(apiErr.HTTPStatusCode)
+	}
+	message := strings.ToLower(strings.TrimSpace(err.Error()))
+	if strings.Contains(message, "status code:") {
+		for _, code := range []string{"408", "409", "425", "429", "500", "502", "503", "504"} {
+			if strings.Contains(message, "status code: "+code) {
+				return true
+			}
+		}
+	}
+	return strings.Contains(message, "connection timeout") || strings.Contains(message, "timeout") || strings.Contains(message, "temporarily unavailable") || strings.Contains(message, "connection reset")
+}
+
+func retryableStatus(status int) bool {
+	switch status {
+	case http.StatusRequestTimeout, http.StatusConflict, http.StatusTooEarly, http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return true
+	default:
+		return false
+	}
+}
+
+func retryBackoff(attempt int) time.Duration {
+	switch attempt {
+	case 1:
+		return 500 * time.Millisecond
+	case 2:
+		return 1500 * time.Millisecond
+	default:
+		return 3 * time.Second
+	}
+}
+
+func sleepWithContext(ctx context.Context, d time.Duration) bool {
+	if d <= 0 {
+		return true
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return true
+	}
 }
 
 func (c *Client) generateCodex(ctx context.Context, req askprovider.Request) (askprovider.Response, error) {

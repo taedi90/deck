@@ -128,7 +128,7 @@ func planWithLLM(ctx context.Context, client askprovider.Client, cfg askconfigSe
 		Endpoint:     cfg.endpoint,
 		SystemPrompt: systemPrompt,
 		Prompt:       userPrompt,
-		MaxRetries:   1,
+		MaxRetries:   providerRetryCount("plan"),
 		Timeout:      askRequestTimeout("plan", 1, systemPrompt, userPrompt),
 	})
 	if err != nil {
@@ -160,7 +160,7 @@ func critiquePlanWithLLM(ctx context.Context, client askprovider.Client, cfg ask
 		Endpoint:     cfg.endpoint,
 		SystemPrompt: systemPrompt,
 		Prompt:       userPrompt,
-		MaxRetries:   1,
+		MaxRetries:   providerRetryCount("plan-critic"),
 		Timeout:      askRequestTimeout("plan-critic", 1, systemPrompt, userPrompt),
 	})
 	if err != nil {

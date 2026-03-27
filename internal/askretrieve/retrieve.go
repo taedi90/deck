@@ -621,7 +621,7 @@ func compressChunkContent(prompt string, label string, content string, maxBytes 
 	}
 	if maxBytes > 64 {
 		trimmed := compressed[:maxBytes-16]
-		trimmed = strings.TrimRightFunc(trimmed, func(r rune) bool { return unicode.IsSpace(r) })
+		trimmed = strings.TrimRightFunc(trimmed, unicode.IsSpace)
 		return trimmed + "\n...\n"
 	}
 	return compressed[:maxBytes]

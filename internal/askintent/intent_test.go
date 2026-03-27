@@ -23,6 +23,13 @@ func TestClassifyDraftAndRefine(t *testing.T) {
 	}
 }
 
+func TestClassifyCreatePromptStaysDraftEvenWithWorkflowTree(t *testing.T) {
+	decision := Classify(Input{Prompt: "create an air-gapped rhel9 3-node kubeadm cluster workflow with prepare and apply workflows", HasWorkflowTree: true, HasPrepare: true, HasApply: true})
+	if decision.Route != RouteDraft {
+		t.Fatalf("expected create-oriented prompt to stay draft, got %#v", decision)
+	}
+}
+
 func TestClassifyPrefersAuthoringOverGenericReviewTokens(t *testing.T) {
 	decision := Classify(Input{Prompt: "check and create prepare and apply workflows for an air-gapped kubeadm cluster"})
 	if decision.Route != RouteDraft {
