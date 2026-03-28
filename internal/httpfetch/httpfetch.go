@@ -8,7 +8,9 @@ import (
 	"time"
 )
 
-var defaultClient = &http.Client{}
+const DefaultTimeout = 30 * time.Second
+
+var defaultClient = &http.Client{Timeout: DefaultTimeout}
 
 func Client(timeout time.Duration) *http.Client {
 	if timeout < 0 {

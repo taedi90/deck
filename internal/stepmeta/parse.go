@@ -5,7 +5,8 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"os"
+	"io/fs"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -114,18 +115,27 @@ func cloneSeen(in map[string]bool) map[string]bool {
 
 func parseStepspecDocs() (map[string]Docs, error) {
 	fset := token.NewFileSet()
-	dir := stepspecDir()
-	entries, err := os.ReadDir(dir)
+	mu.RLock()
+	sourceFS := stepspecFS
+	mu.RUnlock()
+	if sourceFS == nil {
+		return nil, fmt.Errorf("stepmeta: stepspec source fs is not registered")
+	}
+	entries, err := fs.ReadDir(sourceFS, ".")
 	if err != nil {
-		return nil, fmt.Errorf("stepmeta: read stepspec package: %w", err)
+		return nil, fmt.Errorf("stepmeta: read embedded stepspec package: %w", err)
 	}
 	files := make(map[string]*ast.File, len(entries))
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
 			continue
 		}
-		fullPath := dir + "/" + entry.Name()
-		file, err := parser.ParseFile(fset, fullPath, nil, parser.ParseComments)
+		raw, err := fs.ReadFile(sourceFS, entry.Name())
+		if err != nil {
+			return nil, fmt.Errorf("stepmeta: read embedded %s: %w", entry.Name(), err)
+		}
+		fullPath := filepath.Join("internal", "stepspec", entry.Name())
+		file, err := parser.ParseFile(fset, fullPath, raw, parser.ParseComments)
 		if err != nil {
 			return nil, fmt.Errorf("stepmeta: parse %s: %w", entry.Name(), err)
 		}

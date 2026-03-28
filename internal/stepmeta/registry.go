@@ -2,7 +2,7 @@ package stepmeta
 
 import (
 	"fmt"
-	"path/filepath"
+	"io/fs"
 	"reflect"
 	"runtime"
 	"sort"
@@ -95,6 +95,7 @@ var (
 	mu           sync.RWMutex
 	entries      = map[string]registeredDef{}
 	schemaByKind = map[string]registeredSchema{}
+	stepspecFS   fs.FS
 )
 
 type registeredDef struct {
@@ -253,12 +254,14 @@ func mergeDefinitionDocs(def Definition, docs Docs) Docs {
 	return merged
 }
 
-func stepspecDir() string {
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		panic("stepmeta: unable to determine caller path")
+func RegisterSourceFS(source fs.FS) struct{} {
+	if source == nil {
+		panic("stepmeta: source fs is nil")
 	}
-	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", "stepspec"))
+	mu.Lock()
+	defer mu.Unlock()
+	stepspecFS = source
+	return struct{}{}
 }
 
 func callerSource() (string, int) {
