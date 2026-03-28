@@ -84,6 +84,54 @@ func TestRenderToolPageIncludesSchemaDerivedBranchRuleSummary(t *testing.T) {
 	}
 }
 
+func TestRenderToolPageAvoidsGenericPlaceholderExamplesForRestoredFamilies(t *testing.T) {
+	for _, family := range []string{"file", "wait", "package", "image"} {
+		rendered := string(RenderToolPage(testFamilyPageInput(t, family)))
+		for _, bad := range []string{"`example`", "`{...}`", "`[{...}]`"} {
+			if strings.Contains(rendered, bad) {
+				t.Fatalf("family %s still contains generic placeholder %s:\n%s", family, bad, rendered)
+			}
+		}
+	}
+}
+
+func TestRenderToolPageUsesKindScopedNotesForImageAndPackageFamilies(t *testing.T) {
+	imagePage := string(RenderToolPage(testFamilyPageInput(t, "image")))
+	loadSection := sectionForKind(imagePage, "LoadImage")
+	if strings.Contains(loadSection, "spec.auth") || strings.Contains(loadSection, "outputDir") {
+		t.Fatalf("expected LoadImage notes to exclude DownloadImage-only guidance:\n%s", loadSection)
+	}
+	packagePage := string(RenderToolPage(testFamilyPageInput(t, "package")))
+	installSection := sectionForKind(packagePage, "InstallPackage")
+	if strings.Contains(installSection, "outputDir") || strings.Contains(installSection, "Container-backed `DownloadPackage`") {
+		t.Fatalf("expected InstallPackage notes to exclude DownloadPackage-only guidance:\n%s", installSection)
+	}
+}
+
+func TestWaitForCommandUsesConcreteExample(t *testing.T) {
+	rendered := string(RenderToolPage(testFamilyPageInput(t, "wait")))
+	section := sectionForKind(rendered, "WaitForCommand")
+	if !strings.Contains(section, "command: [test, -f, /etc/kubernetes/admin.conf]") {
+		t.Fatalf("expected WaitForCommand concrete example:\n%s", section)
+	}
+	if strings.Contains(section, "apiVersion: deck/v1alpha1") || strings.Contains(section, "example-waitforcommand") {
+		t.Fatalf("expected WaitForCommand to avoid generic fallback example:\n%s", section)
+	}
+}
+
+func sectionForKind(page string, kind string) string {
+	marker := "## `" + kind + "`"
+	idx := strings.Index(page, marker)
+	if idx == -1 {
+		return ""
+	}
+	rest := page[idx:]
+	if next := strings.Index(rest[len(marker):], "\n## `"); next >= 0 {
+		return rest[:len(marker)+next]
+	}
+	return rest
+}
+
 func testFamilyPageInput(t *testing.T, family string) PageInput {
 	t.Helper()
 	defs := workflowcontract.StepDefinitions()

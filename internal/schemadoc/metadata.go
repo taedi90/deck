@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/Airgap-Castaways/deck/internal/stepmeta"
-	_ "github.com/Airgap-Castaways/deck/internal/stepspec"
+	"github.com/Airgap-Castaways/deck/internal/stepspec"
 	"github.com/Airgap-Castaways/deck/internal/workflowcontract"
 )
 
@@ -49,10 +49,30 @@ var commonFieldDocs = map[string]FieldDoc{
 }
 
 func ToolMetaForDefinition(def workflowcontract.StepDefinition) ToolMetadata {
+	if meta, ok := stepspec.LookupToolDoc(def.Kind); ok {
+		return toolMetaFromStepspec(def, meta)
+	}
 	if entry, ok, err := stepmeta.LookupCatalogEntry(def.Kind); err == nil && ok {
 		return toolMetaFromStepMeta(def, entry)
 	}
 	return ToolMetadata{Kind: def.Kind, Category: def.Category, Summary: def.Summary, WhenToUse: def.WhenToUse, FieldDocs: maps.Clone(commonFieldDocs)}
+}
+
+func toolMetaFromStepspec(def workflowcontract.StepDefinition, meta stepspec.ToolDocMetadata) ToolMetadata {
+	tool := ToolMetadata{
+		Kind:      def.Kind,
+		Category:  def.Category,
+		Summary:   def.Summary,
+		WhenToUse: def.WhenToUse,
+		Example:   normalizedGeneratedExample(strings.TrimSpace(meta.Example)),
+		Notes:     append([]string(nil), meta.Notes...),
+		FieldDocs: make(map[string]FieldDoc, len(commonFieldDocs)+len(meta.FieldDocs)),
+	}
+	maps.Copy(tool.FieldDocs, commonFieldDocs)
+	for path, field := range meta.FieldDocs {
+		tool.FieldDocs[path] = FieldDoc{Description: field.Description, Example: field.Example}
+	}
+	return tool
 }
 
 func toolMetaFromStepMeta(def workflowcontract.StepDefinition, entry stepmeta.Entry) ToolMetadata {
