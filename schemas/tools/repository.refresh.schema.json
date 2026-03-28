@@ -63,9 +63,17 @@
       ],
       "properties": {
         "clean": {
+          "description": "Run a cache clean before updating metadata.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         },
         "excludeRepos": {
+          "description": "Repository selectors to skip during metadata update.",
+          "examples": [
+            "[updates]"
+          ],
           "items": {
             "minLength": 1,
             "type": "string"
@@ -73,14 +81,22 @@
           "type": "array"
         },
         "manager": {
+          "description": "Package manager to use.",
           "enum": [
             "auto",
             "apt",
             "dnf"
           ],
+          "examples": [
+            "apt"
+          ],
           "type": "string"
         },
         "restrictToRepos": {
+          "description": "Limit the metadata update to these repository selectors.",
+          "examples": [
+            "[/etc/apt/sources.list.d/offline.list]"
+          ],
           "items": {
             "minLength": 1,
             "type": "string"
@@ -88,6 +104,10 @@
           "type": "array"
         },
         "update": {
+          "description": "Fetch fresh package metadata from the configured repositories.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         }
       },

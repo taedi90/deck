@@ -53,20 +53,40 @@
       ],
       "properties": {
         "content": {
+          "description": "Inline unit file content written verbatim to `path`.",
+          "examples": [
+            "[Unit]\nDescription=kubelet"
+          ],
           "type": "string"
         },
         "daemonReload": {
+          "description": "Run `systemctl daemon-reload` after writing the unit file.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         },
         "mode": {
+          "description": "File permissions applied to the unit file in octal notation.",
+          "examples": [
+            "0644"
+          ],
           "pattern": "^[0-7]{4}$",
           "type": "string"
         },
         "path": {
+          "description": "Destination path for the unit file on the node.",
+          "examples": [
+            "/etc/systemd/system/kubelet.service"
+          ],
           "minLength": 1,
           "type": "string"
         },
         "template": {
+          "description": "Inline multi-line unit content rendered with the current vars before writing.",
+          "examples": [
+            "[Service]\nEnvironment=NODE_IP={{ .vars.nodeIP }}"
+          ],
           "type": "string"
         }
       },

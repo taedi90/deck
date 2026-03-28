@@ -25,19 +25,20 @@ Use this for Kubernetes-oriented host prep where swap policy matters.
 ### Example
 
 ```yaml
-apiVersion: deck/v1alpha1
-id: example-swap
 kind: Swap
-spec: {}
+spec:
+
+	disable: true
+	persist: true
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.disable` | `boolean` | no | `true` | `` |  | `true` |
-| `spec.fstabPath` | `string` | no | `` | `` |  | `example` |
-| `spec.persist` | `boolean` | no | `true` | `` |  | `true` |
+| `spec.disable` | `boolean` | no | `true` | `` | Disable all active swap devices with `swapoff -a`. | `true` |
+| `spec.fstabPath` | `string` | no | `` | `` | Path to the fstab file. | `/etc/fstab` |
+| `spec.persist` | `boolean` | no | `true` | `` | Comment out swap entries in fstab so swap stays off after reboot. | `true` |
 
 ## Related
 

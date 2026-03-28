@@ -31,20 +31,31 @@ Use this when the node runtime needs a managed containerd config.toml.
 ### Example
 
 ```yaml
-apiVersion: deck/v1alpha1
-id: example-writecontainerdconfig
 kind: WriteContainerdConfig
-spec: {}
+spec:
+
+	path: /etc/containerd/config.toml
+	createDefault: true
+	versionPolicy: preserve
+	rawSettings:
+	  - op: set
+	    rawPath: plugins."io.containerd.grpc.v1.cri".registry.config_path
+	    value: /etc/containerd/certs.d
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.createDefault` | `boolean` | no | `true` | `` |  | `true` |
-| `spec.path` | `string` | no | `` | `` |  | `example` |
-| `spec.rawSettings` | `array<object>` | no | `` | `` |  | `[{...}]` |
-| `spec.versionPolicy` | `string` | no | `` | `preserve, require-v1, require-v2, require-v3` |  | `preserve` |
+| `spec.createDefault` | `boolean` | no | `true` | `` | Generate a base config with `containerd config default` when the file does not exist. | `true` |
+| `spec.path` | `string` | no | `` | `` | Destination path for the generated `config.toml`. | `/etc/containerd/config.toml` |
+| `spec.rawSettings` | `array<object>` | no | `` | `` | Ordered containerd config edits. | `[{op:set,rawPath:plugins."io.containerd.grpc.v1.cri".registry.config_path,value:/etc/containerd/certs.d}]` |
+| `spec.versionPolicy` | `string` | no | `` | `preserve, require-v1, require-v2, require-v3` | How the step chooses or enforces the containerd config version. | `require-v3` |
+
+### Notes
+
+- Use `WriteContainerdConfig` for the main `config.toml` only.
+- Use `WriteContainerdRegistryHosts` separately when mirrors or trust policy need per-registry `hosts.toml` files.
 
 ## `WriteContainerdRegistryHosts`
 
@@ -60,26 +71,28 @@ Use this when containerd should resolve pulls through explicit registry host con
 ### Example
 
 ```yaml
-apiVersion: deck/v1alpha1
-id: example-writecontainerdregistryhosts
 kind: WriteContainerdRegistryHosts
 spec:
-    path: example
-    registryHosts:
-        - capabilities:
-            - example
-          host: example
-          registry: example
-          server: example
-          skipVerify: true
+
+	path: /etc/containerd/certs.d
+	registryHosts:
+	  - registry: registry.k8s.io
+	    server: https://registry.k8s.io
+	    host: http://registry.local:5000
+	    capabilities: [pull, resolve]
+	    skipVerify: true
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.path` | `string` | yes | `` | `` |  | `example` |
-| `spec.registryHosts` | `array<object>` | yes | `` | `` |  | `[{...}]` |
+| `spec.path` | `string` | yes | `` | `` | Directory where per-registry `hosts.toml` files are written. | `/etc/containerd/certs.d` |
+| `spec.registryHosts` | `array<object>` | yes | `` | `` | Per-registry host entries written as `hosts.toml` files under `path`. | `[{registry:registry.k8s.io,host:http://mirror.local:5000}]` |
+
+### Notes
+
+- Use this step when the runtime should resolve pulls through an internal mirror or custom trust policy.
 
 ## Related
 

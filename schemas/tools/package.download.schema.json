@@ -42,22 +42,38 @@
       "properties": {
         "backend": {
           "additionalProperties": false,
+          "description": "Container-based download backend configuration.",
+          "examples": [
+            "{mode:container,runtime:docker,image:rockylinux:9}"
+          ],
           "properties": {
             "image": {
+              "description": "Container image used for package resolution in download mode.",
+              "examples": [
+                "rockylinux:9"
+              ],
               "minLength": 1,
               "type": "string"
             },
             "mode": {
+              "description": "Download backend mode.",
               "enum": [
+                "container"
+              ],
+              "examples": [
                 "container"
               ],
               "type": "string"
             },
             "runtime": {
+              "description": "Preferred container runtime for the download helper container.",
               "enum": [
                 "auto",
                 "docker",
                 "podman"
+              ],
+              "examples": [
+                "docker"
               ],
               "type": "string"
             }
@@ -70,12 +86,24 @@
         },
         "distro": {
           "additionalProperties": false,
+          "description": "Target distribution hint used to select resolver behavior.",
+          "examples": [
+            "{family:rhel,release:rocky9}"
+          ],
           "properties": {
             "family": {
+              "description": "Distribution family used to resolve package tooling.",
+              "examples": [
+                "rhel"
+              ],
               "minLength": 1,
               "type": "string"
             },
             "release": {
+              "description": "Distribution release used for resolver and repo layout selection.",
+              "examples": [
+                "rocky9"
+              ],
               "minLength": 1,
               "type": "string"
             }
@@ -83,10 +111,18 @@
           "type": "object"
         },
         "outputDir": {
+          "description": "Optional bundle-relative output directory for downloaded package artifacts.",
+          "examples": [
+            "packages/kubernetes"
+          ],
           "minLength": 1,
           "type": "string"
         },
         "packages": {
+          "description": "Package names to download.",
+          "examples": [
+            "[kubelet,kubeadm,kubectl]"
+          ],
           "items": {
             "type": "string"
           },
@@ -95,11 +131,23 @@
         },
         "repo": {
           "additionalProperties": false,
+          "description": "Repository settings applied before download.",
+          "examples": [
+            "{type:rpm,modules:[{name:container-tools,stream:4.0}]}"
+          ],
           "properties": {
             "generate": {
+              "description": "Generate repository metadata after collecting packages.",
+              "examples": [
+                "true"
+              ],
               "type": "boolean"
             },
             "modules": {
+              "description": "RPM module streams to enable before resolving downloads.",
+              "examples": [
+                "[{name:container-tools,stream:4.0}]"
+              ],
               "items": {
                 "additionalProperties": false,
                 "properties": {
@@ -121,12 +169,20 @@
               "type": "array"
             },
             "pkgsDir": {
+              "description": "Subdirectory under the generated repo root where packages are written.",
+              "examples": [
+                "pkgs"
+              ],
               "minLength": 1,
               "type": "string"
             },
             "type": {
+              "description": "Repository output type for download repo mode.",
               "enum": [
                 "deb-flat",
+                "rpm"
+              ],
+              "examples": [
                 "rpm"
               ],
               "type": "string"

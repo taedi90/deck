@@ -26,22 +26,24 @@ Use this for modules that must be present before networking or container runtime
 ### Example
 
 ```yaml
-apiVersion: deck/v1alpha1
-id: example-kernelmodule
 kind: KernelModule
 spec:
-    name: example
+
+	name: br_netfilter
+	load: true
+	persist: true
+	persistFile: /etc/modules-load.d/k8s.conf
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.load` | `boolean` | no | `true` | `` |  | `true` |
-| `spec.name` | `string` | no | `` | `` |  | `example` |
-| `spec.names` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.persist` | `boolean` | no | `true` | `` |  | `true` |
-| `spec.persistFile` | `string` | no | `` | `` |  | `example` |
+| `spec.load` | `boolean` | no | `true` | `` | Run `modprobe` to load the module immediately. | `true` |
+| `spec.name` | `string` | no | `` | `` | Single module name to manage. Use `name` or `names`, not both. | `br_netfilter` |
+| `spec.names` | `array<string>` | no | `` | `` | Multiple module names managed in one step. Use `name` or `names`, not both. | `[overlay,br_netfilter]` |
+| `spec.persist` | `boolean` | no | `true` | `` | Persist the module under `/etc/modules-load.d/`. | `true` |
+| `spec.persistFile` | `string` | no | `` | `` | Path to the persistence file written when `persist` is true. | `/etc/modules-load.d/k8s.conf` |
 
 ### Validation Rules
 

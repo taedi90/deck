@@ -1,6 +1,17 @@
 package workflowschema
 
-import "github.com/Airgap-Castaways/deck/internal/stepspec"
+import (
+	"github.com/Airgap-Castaways/deck/internal/stepmeta"
+	"github.com/Airgap-Castaways/deck/internal/stepspec"
+)
+
+var (
+	_ = stepmeta.MustRegisterSchema[stepspec.ManageService]("ManageService", patchManageServiceToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.Swap]("Swap", patchSwapToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.CreateSymlink]("CreateSymlink", patchCreateSymlinkToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.Sysctl]("Sysctl", patchSysctlToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.WriteSystemdUnit]("WriteSystemdUnit", patchWriteSystemdUnitToolSchema)
+)
 
 func patchManageServiceToolSchema(root map[string]any) {
 	props := propertyMap(root)

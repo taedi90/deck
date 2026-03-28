@@ -41,10 +41,18 @@
       "additionalProperties": false,
       "properties": {
         "mode": {
+          "description": "Directory permissions in octal notation.",
+          "examples": [
+            "0755"
+          ],
           "pattern": "^[0-7]{4}$",
           "type": "string"
         },
         "path": {
+          "description": "Directory path to create if it does not already exist.",
+          "examples": [
+            "/var/lib/deck"
+          ],
           "minLength": 1,
           "type": "string"
         }

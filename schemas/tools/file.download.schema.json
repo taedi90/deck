@@ -54,11 +54,23 @@
       "properties": {
         "fetch": {
           "additionalProperties": false,
+          "description": "Optional transport policy for the download.",
+          "examples": [
+            "{offlineOnly:true}"
+          ],
           "properties": {
             "offlineOnly": {
+              "description": "Restrict fetches to offline-safe sources only.",
+              "examples": [
+                "true"
+              ],
               "type": "boolean"
             },
             "sources": {
+              "description": "Ordered list of source candidates tried for the fetch.",
+              "examples": [
+                "[{type:url,url:https://mirror.example.com/runc}]"
+              ],
               "items": {
                 "additionalProperties": false,
                 "anyOf": [
@@ -103,6 +115,10 @@
           "type": "object"
         },
         "items": {
+          "description": "Optional list form for batching multiple download items in one step.",
+          "examples": [
+            "[{source:{url:https://mirror.example.com/runc},outputPath:files/bin/runc,mode:0755}]"
+          ],
           "items": {
             "additionalProperties": false,
             "properties": {
@@ -229,10 +245,18 @@
           "type": "array"
         },
         "mode": {
+          "description": "File permissions in octal notation applied after the download completes.",
+          "examples": [
+            "0755"
+          ],
           "pattern": "^[0-7]{4}$",
           "type": "string"
         },
         "outputPath": {
+          "description": "Bundle-relative output path for the downloaded artifact.",
+          "examples": [
+            "files/bin/runc"
+          ],
           "minLength": 1,
           "type": "string"
         },
@@ -255,19 +279,35 @@
               ]
             }
           ],
+          "description": "Structured source descriptor for the download.",
+          "examples": [
+            "{url:https://mirror.example.com/runc,sha256:abc123...}"
+          ],
           "properties": {
             "bundle": {
               "additionalProperties": false,
+              "description": "Reference to a file already present in the bundle.",
+              "examples": [
+                "{root:files,path:bin/linux/amd64/runc}"
+              ],
               "properties": {
                 "path": {
+                  "description": "Relative path within the selected bundle root.",
+                  "examples": [
+                    "bin/linux/amd64/runc"
+                  ],
                   "minLength": 1,
                   "type": "string"
                 },
                 "root": {
+                  "description": "Bundle root category to read from (`files`, `images`, or `packages`).",
                   "enum": [
                     "files",
                     "images",
                     "packages"
+                  ],
+                  "examples": [
+                    "files"
                   ],
                   "type": "string"
                 }
@@ -279,14 +319,26 @@
               "type": "object"
             },
             "path": {
+              "description": "Local filesystem path used as the source.",
+              "examples": [
+                "/opt/cache/runc"
+              ],
               "minLength": 1,
               "type": "string"
             },
             "sha256": {
+              "description": "Expected SHA-256 checksum for the fetched or copied file.",
+              "examples": [
+                "abc123..."
+              ],
               "pattern": "^[a-fA-F0-9]{64}$",
               "type": "string"
             },
             "url": {
+              "description": "URL to fetch the file from during prepare.",
+              "examples": [
+                "https://mirror.example.com/runc"
+              ],
               "minLength": 1,
               "type": "string"
             }

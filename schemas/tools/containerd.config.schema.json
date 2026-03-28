@@ -42,13 +42,25 @@
       "properties": {
         "createDefault": {
           "default": true,
+          "description": "Generate a base config with `containerd config default` when the file does not exist.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         },
         "path": {
+          "description": "Destination path for the generated `config.toml`.",
+          "examples": [
+            "/etc/containerd/config.toml"
+          ],
           "minLength": 1,
           "type": "string"
         },
         "rawSettings": {
+          "description": "Ordered containerd config edits.",
+          "examples": [
+            "[{op:set,rawPath:plugins.\"io.containerd.grpc.v1.cri\".registry.config_path,value:/etc/containerd/certs.d}]"
+          ],
           "items": {
             "additionalProperties": false,
             "oneOf": [
@@ -116,10 +128,14 @@
           "type": "array"
         },
         "versionPolicy": {
+          "description": "How the step chooses or enforces the containerd config version.",
           "enum": [
             "preserve",
             "require-v1",
             "require-v2",
+            "require-v3"
+          ],
+          "examples": [
             "require-v3"
           ],
           "type": "string"

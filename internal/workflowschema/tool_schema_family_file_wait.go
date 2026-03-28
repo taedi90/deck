@@ -1,6 +1,26 @@
 package workflowschema
 
-import "github.com/Airgap-Castaways/deck/internal/stepspec"
+import (
+	"github.com/Airgap-Castaways/deck/internal/stepmeta"
+	"github.com/Airgap-Castaways/deck/internal/stepspec"
+)
+
+var (
+	_ = stepmeta.MustRegisterSchema[stepspec.DownloadFile]("DownloadFile", patchDownloadFileToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.WriteFile]("WriteFile", patchWriteFileToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.CopyFile]("CopyFile", patchCopyFileToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.ExtractArchive]("ExtractArchive", patchExtractArchiveToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.EditFile]("EditFile", patchEditFileToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.EditTOML]("EditTOML", patchEditTOMLToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.EditYAML]("EditYAML", patchEditYAMLToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.EditJSON]("EditJSON", patchEditJSONToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.Wait]("WaitForService", patchWaitForServiceToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.Wait]("WaitForCommand", patchWaitForCommandToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.Wait]("WaitForFile", patchWaitForFileToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.Wait]("WaitForMissingFile", patchWaitForMissingFileToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.Wait]("WaitForTCPPort", patchWaitForTCPPortToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.Wait]("WaitForMissingTCPPort", patchWaitForMissingTCPPortToolSchema)
+)
 
 func patchDownloadFileToolSchema(root map[string]any) {
 	props := propertyMap(root)

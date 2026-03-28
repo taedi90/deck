@@ -63,17 +63,33 @@
       ],
       "properties": {
         "content": {
+          "description": "Inline content written verbatim to `path`.",
+          "examples": [
+            "hello"
+          ],
           "type": "string"
         },
         "mode": {
+          "description": "File permissions in octal notation applied after the write completes.",
+          "examples": [
+            "0644"
+          ],
           "pattern": "^[0-7]{4}$",
           "type": "string"
         },
         "path": {
+          "description": "Destination path on the node.",
+          "examples": [
+            "/etc/motd"
+          ],
           "minLength": 1,
           "type": "string"
         },
         "template": {
+          "description": "Inline multi-line content rendered with the current vars before writing.",
+          "examples": [
+            "Hello {{ .vars.name }}"
+          ],
           "type": "string"
         }
       },

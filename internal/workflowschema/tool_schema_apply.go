@@ -1,6 +1,26 @@
 package workflowschema
 
-import "github.com/Airgap-Castaways/deck/internal/stepspec"
+import (
+	"github.com/Airgap-Castaways/deck/internal/stepmeta"
+	"github.com/Airgap-Castaways/deck/internal/stepspec"
+)
+
+var (
+	_ = stepmeta.MustRegisterSchema[stepspec.CheckHost]("CheckHost", patchCheckHostToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.Command]("Command", patchCommandToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.WriteContainerdConfig]("WriteContainerdConfig", patchWriteContainerdConfigToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.WriteContainerdRegistryHosts]("WriteContainerdRegistryHosts", patchWriteContainerdRegistryHostsToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.EnsureDirectory]("EnsureDirectory", patchEnsureDirectoryToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.DownloadImage]("DownloadImage", patchDownloadImageToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.LoadImage]("LoadImage", patchImageLoadToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.VerifyImage]("VerifyImage", patchVerifyImageToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.KernelModule]("KernelModule", patchKernelModuleToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.KubeadmInit]("InitKubeadm", patchInitKubeadmToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.KubeadmJoin]("JoinKubeadm", patchJoinKubeadmToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.KubeadmReset]("ResetKubeadm", patchResetKubeadmToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.KubeadmUpgrade]("UpgradeKubeadm", patchUpgradeKubeadmToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.ClusterCheck]("CheckCluster", patchCheckClusterToolSchema)
+)
 
 func patchCommandToolSchema(root map[string]any) {
 	props := propertyMap(root)

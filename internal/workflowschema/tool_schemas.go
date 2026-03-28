@@ -2,77 +2,25 @@ package workflowschema
 
 import (
 	"fmt"
+	"strings"
 
-	"github.com/Airgap-Castaways/deck/internal/stepspec"
+	"github.com/Airgap-Castaways/deck/internal/stepmeta"
 	"github.com/Airgap-Castaways/deck/internal/workflowexec"
 )
 
-type builtInSchemaEntry struct {
-	Kind     string
-	SpecType any
-	Patch    func(root map[string]any)
-}
-
-var builtInSchemaEntries = []builtInSchemaEntry{
-	{Kind: "CheckHost", SpecType: &stepspec.CheckHost{}, Patch: patchCheckHostToolSchema},
-	{Kind: "Command", SpecType: &stepspec.Command{}, Patch: patchCommandToolSchema},
-	{Kind: "WriteContainerdConfig", SpecType: &stepspec.WriteContainerdConfig{}, Patch: patchWriteContainerdConfigToolSchema},
-	{Kind: "WriteContainerdRegistryHosts", SpecType: &stepspec.WriteContainerdRegistryHosts{}, Patch: patchWriteContainerdRegistryHostsToolSchema},
-	{Kind: "EnsureDirectory", SpecType: &stepspec.EnsureDirectory{}, Patch: patchEnsureDirectoryToolSchema},
-	{Kind: "DownloadFile", SpecType: &stepspec.DownloadFile{}, Patch: patchDownloadFileToolSchema},
-	{Kind: "WriteFile", SpecType: &stepspec.WriteFile{}, Patch: patchWriteFileToolSchema},
-	{Kind: "CopyFile", SpecType: &stepspec.CopyFile{}, Patch: patchCopyFileToolSchema},
-	{Kind: "EditFile", SpecType: &stepspec.EditFile{}, Patch: patchEditFileToolSchema},
-	{Kind: "EditTOML", SpecType: &stepspec.EditTOML{}, Patch: patchEditTOMLToolSchema},
-	{Kind: "EditYAML", SpecType: &stepspec.EditYAML{}, Patch: patchEditYAMLToolSchema},
-	{Kind: "EditJSON", SpecType: &stepspec.EditJSON{}, Patch: patchEditJSONToolSchema},
-	{Kind: "ExtractArchive", SpecType: &stepspec.ExtractArchive{}, Patch: patchExtractArchiveToolSchema},
-	{Kind: "DownloadImage", SpecType: &stepspec.DownloadImage{}, Patch: patchDownloadImageToolSchema},
-	{Kind: "LoadImage", SpecType: &stepspec.LoadImage{}, Patch: patchImageLoadToolSchema},
-	{Kind: "VerifyImage", SpecType: &stepspec.VerifyImage{}, Patch: patchVerifyImageToolSchema},
-	{Kind: "KernelModule", SpecType: &stepspec.KernelModule{}, Patch: patchKernelModuleToolSchema},
-	{Kind: "CheckCluster", SpecType: &stepspec.ClusterCheck{}, Patch: patchCheckClusterToolSchema},
-	{Kind: "InitKubeadm", SpecType: &stepspec.KubeadmInit{}, Patch: patchInitKubeadmToolSchema},
-	{Kind: "JoinKubeadm", SpecType: &stepspec.KubeadmJoin{}, Patch: patchJoinKubeadmToolSchema},
-	{Kind: "ResetKubeadm", SpecType: &stepspec.KubeadmReset{}, Patch: patchResetKubeadmToolSchema},
-	{Kind: "UpgradeKubeadm", SpecType: &stepspec.KubeadmUpgrade{}, Patch: patchUpgradeKubeadmToolSchema},
-	{Kind: "DownloadPackage", SpecType: &stepspec.DownloadPackage{}, Patch: patchDownloadPackageToolSchema},
-	{Kind: "InstallPackage", SpecType: &stepspec.InstallPackage{}, Patch: patchInstallPackageToolSchema},
-	{Kind: "ConfigureRepository", SpecType: &stepspec.ConfigureRepository{}, Patch: patchConfigureRepositoryToolSchema},
-	{Kind: "RefreshRepository", SpecType: &stepspec.RefreshRepository{}, Patch: patchRefreshRepositoryToolSchema},
-	{Kind: "ManageService", SpecType: &stepspec.ManageService{}, Patch: patchManageServiceToolSchema},
-	{Kind: "Swap", SpecType: &stepspec.Swap{}, Patch: patchSwapToolSchema},
-	{Kind: "CreateSymlink", SpecType: &stepspec.CreateSymlink{}, Patch: patchCreateSymlinkToolSchema},
-	{Kind: "Sysctl", SpecType: &stepspec.Sysctl{}, Patch: patchSysctlToolSchema},
-	{Kind: "WriteSystemdUnit", SpecType: &stepspec.WriteSystemdUnit{}, Patch: patchWriteSystemdUnitToolSchema},
-	{Kind: "WaitForService", SpecType: &stepspec.Wait{}, Patch: patchWaitForServiceToolSchema},
-	{Kind: "WaitForCommand", SpecType: &stepspec.Wait{}, Patch: patchWaitForCommandToolSchema},
-	{Kind: "WaitForFile", SpecType: &stepspec.Wait{}, Patch: patchWaitForFileToolSchema},
-	{Kind: "WaitForMissingFile", SpecType: &stepspec.Wait{}, Patch: patchWaitForMissingFileToolSchema},
-	{Kind: "WaitForTCPPort", SpecType: &stepspec.Wait{}, Patch: patchWaitForTCPPortToolSchema},
-	{Kind: "WaitForMissingTCPPort", SpecType: &stepspec.Wait{}, Patch: patchWaitForMissingTCPPortToolSchema},
-}
-
-var builtInSchemaIndex = func() map[string]builtInSchemaEntry {
-	index := make(map[string]builtInSchemaEntry, len(builtInSchemaEntries))
-	for _, entry := range builtInSchemaEntries {
-		if _, exists := index[entry.Kind]; exists {
-			panic(fmt.Sprintf("duplicate built-in schema entry for %s", entry.Kind))
-		}
-		index[entry.Kind] = entry
-	}
-	return index
-}()
-
 func SchemaMetadataForDefinition(def workflowexec.StepDefinition) workflowexec.SchemaMetadata {
-	entry, ok := builtInSchemaIndex[def.Kind]
-	if !ok {
-		panic(fmt.Sprintf("missing declarative schema entry for %s", def.Kind))
+	entry, ok, err := stepmeta.LookupCatalogEntry(def.Kind)
+	if err != nil {
+		panic(err)
 	}
+	if !ok {
+		panic(fmt.Sprintf("missing stepmeta entry for %s", def.Kind))
+	}
+	projection := stepmeta.ProjectSchema(entry)
 	meta := workflowexec.SchemaMetadata{
 		GeneratorName: def.ToolSchemaGenerator,
-		SpecType:      entry.SpecType,
-		Patch:         entry.Patch,
+		SpecType:      projection.SpecType,
+		Patch:         projection.Patch,
 	}
 	if meta.GeneratorName == "" {
 		meta.GeneratorName = def.ToolSchemaGenerator
@@ -81,7 +29,7 @@ func SchemaMetadataForDefinition(def workflowexec.StepDefinition) workflowexec.S
 		meta.GeneratorName = def.Kind
 	}
 	if meta.Patch == nil || meta.SpecType == nil {
-		panic(fmt.Sprintf("missing direct schema patch hook for %s", def.Kind))
+		panic(fmt.Sprintf("missing stepmeta schema metadata for %s", def.Kind))
 	}
 	return meta
 }
@@ -110,5 +58,46 @@ func generateToolSchemaFromRegistry(def workflowexec.BuiltInTypeDefinition) (map
 	}
 	setMap(propertyMap(root), "spec", spec)
 	def.Schema.Patch(root)
+	if entry, ok, err := stepmeta.LookupCatalogEntry(def.Step.Kind); err == nil && ok {
+		applyStepDocs(root, entry)
+	}
 	return root, nil
+}
+
+func applyStepDocs(root map[string]any, entry stepmeta.Entry) {
+	props := propertyMap(root)
+	if spec, ok := props["spec"].(map[string]any); ok {
+		for _, field := range entry.Docs.Fields {
+			name := strings.TrimPrefix(field.Path, "spec.")
+			if name == field.Path {
+				continue
+			}
+			applyFieldDoc(spec, name, field)
+		}
+	}
+}
+
+func applyFieldDoc(spec map[string]any, name string, field stepmeta.FieldDoc) {
+	parts := strings.Split(name, ".")
+	node := spec
+	for idx, part := range parts {
+		props, _ := node["properties"].(map[string]any)
+		if props == nil {
+			return
+		}
+		rawChild, ok := props[part].(map[string]any)
+		if !ok {
+			return
+		}
+		if idx == len(parts)-1 {
+			if strings.TrimSpace(field.Description) != "" {
+				rawChild["description"] = field.Description
+			}
+			if strings.TrimSpace(field.Example) != "" {
+				rawChild["examples"] = []any{field.Example}
+			}
+			return
+		}
+		node = rawChild
+	}
 }

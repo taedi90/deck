@@ -3,6 +3,9 @@ package workflowcontract
 import (
 	"sort"
 	"strings"
+
+	"github.com/Airgap-Castaways/deck/internal/stepmeta"
+	_ "github.com/Airgap-Castaways/deck/internal/stepspec"
 )
 
 type StepDefinition struct {
@@ -29,43 +32,43 @@ type StepTypeKey struct {
 
 func StepDefinitions() []StepDefinition {
 	defs := []StepDefinition{
-		stepDef("CheckHost", "host-check", "HostCheck", "host-check", 10, "host-check.schema.json", "host-check", "public", "system", "Validate host suitability checks on the current node.", "Use this near the start of apply workflows, or optional prepare preflight, to fail early when host prerequisites are not met. Host facts remain available through runtime.host without register.", []string{"apply", "prepare"}, []string{"passed", "failedChecks"}),
-		stepDef("Command", "command", "Command", "command", 10, "command.schema.json", "command", "public", "advanced", "Run an explicit command as an escape hatch.", "Use this only when no typed step expresses the change clearly enough.", []string{"apply"}, nil),
-		stepDef("WriteContainerdConfig", "containerd", "Containerd", "containerd", 10, "containerd.config.schema.json", "containerd.config", "public", "runtime", "Write the containerd config file on the node.", "Use this when the node runtime needs a managed containerd config.toml.", []string{"apply"}, []string{"path"}),
-		stepDef("WriteContainerdRegistryHosts", "containerd", "Containerd", "containerd", 20, "containerd.registry-hosts.schema.json", "containerd.registry-hosts", "public", "runtime", "Write containerd registry host configuration for mirrors and trust policy.", "Use this when containerd should resolve pulls through explicit registry host configuration.", []string{"apply"}, []string{"path"}),
-		stepDef("EnsureDirectory", "directory", "Directory", "directory", 10, "directory.schema.json", "directory", "public", "filesystem", "Ensure a directory exists with an optional mode.", "Use this before writing files or placing extracted content.", []string{"apply"}, []string{"path"}),
-		stepDef("DownloadFile", "file", "File", "file", 10, "file.download.schema.json", "file.download", "public", "filesystem", "Download a file into prepared bundle storage.", "Use this during prepare to stage files into the bundle.", []string{"prepare"}, []string{"outputPath", "outputPaths", "artifacts"}),
-		stepDef("WriteFile", "file", "File", "file", 20, "file.write.schema.json", "file.write", "public", "filesystem", "Write inline or templated file content to a destination path.", "Use this to create or fully replace a managed file on the node.", []string{"apply"}, []string{"path"}),
-		stepDef("CopyFile", "file", "File", "file", 30, "file.copy.schema.json", "file.copy", "public", "filesystem", "Copy a file from a declared source to a destination path.", "Use this to place a prepared or local file at its final location on the node.", []string{"apply"}, []string{"path"}),
-		stepDef("EditFile", "file", "File", "file", 40, "file.edit.schema.json", "file.edit", "public", "filesystem", "Edit an existing file in place using ordered match rules.", "Use this for small in-place configuration edits when full file ownership is unnecessary.", []string{"apply"}, []string{"path"}),
-		stepDef("EditTOML", "file", "File", "file", 50, "file.edit-toml.schema.json", "file.edit-toml", "public", "filesystem", "Edit a TOML file in place using structured path operations.", "Use this when TOML configuration should be updated without brittle string replacement.", []string{"apply"}, []string{"path"}),
-		stepDef("EditYAML", "file", "File", "file", 60, "file.edit-yaml.schema.json", "file.edit-yaml", "public", "filesystem", "Edit a YAML file in place using structured path operations.", "Use this for common map/list YAML updates where direct text replacement is too fragile.", []string{"apply"}, []string{"path"}),
-		stepDef("EditJSON", "file", "File", "file", 70, "file.edit-json.schema.json", "file.edit-json", "public", "filesystem", "Edit a JSON file in place using structured path operations.", "Use this when JSON configuration should be modified by path instead of full rewrites.", []string{"apply"}, []string{"path"}),
-		stepDef("ExtractArchive", "file", "File", "file", 80, "file.extract-archive.schema.json", "file.extract-archive", "public", "filesystem", "Extract an archive from a declared source into a destination directory.", "Use this when prepared tarballs or local archives should be expanded onto the node.", []string{"apply"}, []string{"path"}),
-		stepDef("DownloadImage", "image", "Image", "image", 10, "image.download.schema.json", "image.download", "public", "containers", "Download container images into prepared bundle storage.", "Use this during prepare to collect required images for offline use.", []string{"prepare"}, []string{"artifacts"}),
-		stepDef("LoadImage", "image", "Image", "image", 20, "image.load.schema.json", "image.load", "public", "containers", "Load prepared image archives into the local container runtime.", "Use this during apply before verifying or using images from an offline bundle.", []string{"apply"}, nil),
-		stepDef("VerifyImage", "image", "Image", "image", 30, "image.verify.schema.json", "image.verify", "public", "containers", "Verify that required container images already exist on the node.", "Use this during apply when images should already be present and only need verification.", []string{"apply"}, nil),
-		stepDef("KernelModule", "kernel-module", "KernelModule", "kernel-module", 10, "kernel-module.schema.json", "kernel-module", "public", "system", "Load and persist kernel modules.", "Use this for modules that must be present before networking or container runtime setup.", []string{"apply"}, []string{"name", "names"}),
-		stepDef("CheckCluster", "cluster-check", "ClusterCheck", "cluster-check", 10, "cluster-check.schema.json", "cluster-check", "public", "kubernetes", "Poll and verify Kubernetes cluster health on the local node.", "Use this for typed bootstrap and upgrade verification instead of ad-hoc kubectl shell loops.", []string{"apply"}, nil),
-		stepDef("InitKubeadm", "kubeadm", "Kubeadm", "kubeadm", 10, "kubeadm.init.schema.json", "kubeadm.init", "public", "kubernetes", "Run kubeadm init and write the join command to a file.", "Use this to bootstrap a control-plane node after host prerequisites are ready.", []string{"apply"}, []string{"joinFile"}),
-		stepDef("JoinKubeadm", "kubeadm", "Kubeadm", "kubeadm", 20, "kubeadm.join.schema.json", "kubeadm.join", "public", "kubernetes", "Run kubeadm join for a worker or additional control-plane node.", "Use this after a bootstrap node has produced a valid join file or config.", []string{"apply"}, nil),
-		stepDef("ResetKubeadm", "kubeadm", "Kubeadm", "kubeadm", 30, "kubeadm.reset.schema.json", "kubeadm.reset", "public", "kubernetes", "Run kubeadm reset and optional cleanup steps.", "Use this to tear down an existing kubeadm-managed node safely.", []string{"apply"}, nil),
-		stepDef("UpgradeKubeadm", "kubeadm", "Kubeadm", "kubeadm", 40, "kubeadm.upgrade.schema.json", "kubeadm.upgrade", "public", "kubernetes", "Run kubeadm upgrade apply and optional kubelet restart.", "Use this to upgrade a local kubeadm-managed control-plane node with a typed workflow step.", []string{"apply"}, nil),
-		stepDef("DownloadPackage", "package", "Package", "package", 10, "package.download.schema.json", "package.download", "public", "packages", "Download packages into prepared bundle storage.", "Use this during prepare to collect package-manager content for offline installation.", []string{"prepare"}, []string{"artifacts"}),
-		stepDef("InstallPackage", "package", "Package", "package", 20, "package.install.schema.json", "package.install", "public", "packages", "Install packages on the local node.", "Use this during apply to install packages from configured local or mirrored repositories.", []string{"apply"}, nil),
-		stepDef("ConfigureRepository", "repository", "Repository", "repository", 10, "repository.configure.schema.json", "repository.configure", "public", "packages", "Write deb or rpm repository definitions.", "Use this before refreshing caches or installing packages from a local mirror.", []string{"apply"}, []string{"path"}),
-		stepDef("RefreshRepository", "repository", "Repository", "repository", 20, "repository.refresh.schema.json", "repository.refresh", "public", "packages", "Refresh package metadata with repo filtering.", "Use this after writing repo definitions and before package install steps that depend on fresh metadata.", []string{"apply"}, nil),
-		stepDef("ManageService", "service", "Service", "service", 10, "service.schema.json", "service", "public", "system", "Start, stop, enable, disable, restart, or reload local services.", "Use this after config changes that need a service lifecycle action.", []string{"apply"}, []string{"name", "names"}),
-		stepDef("Swap", "swap", "Swap", "swap", 10, "swap.schema.json", "swap", "public", "system", "Enable or disable swap and its persistence.", "Use this for Kubernetes-oriented host prep where swap policy matters.", []string{"apply"}, nil),
-		stepDef("CreateSymlink", "symlink", "Symlink", "symlink", 10, "symlink.schema.json", "symlink", "public", "filesystem", "Create or replace a symbolic link.", "Use this when tools or runtimes expect a stable path alias.", []string{"apply"}, []string{"path"}),
-		stepDef("Sysctl", "sysctl", "Sysctl", "sysctl", 10, "sysctl.schema.json", "sysctl", "public", "system", "Write and optionally apply sysctl values.", "Use this for kernel tunables that must survive reboot and may need immediate application.", []string{"apply"}, nil),
-		stepDef("WriteSystemdUnit", "systemd-unit", "SystemdUnit", "systemd-unit", 10, "systemd-unit.schema.json", "systemd-unit", "public", "system", "Write a systemd unit file on the node.", "Use this when workflows need to install or override a custom unit definition.", []string{"apply"}, []string{"path"}),
-		stepDef("WaitForService", "wait", "Wait", "wait", 10, "wait.service-active.schema.json", "wait.service-active", "public", "control-flow", "Wait until a systemd service reports active.", "Use this after service restarts or runtime configuration changes that take time to settle.", []string{"apply"}, nil),
-		stepDef("WaitForCommand", "wait", "Wait", "wait", 20, "wait.command.schema.json", "wait.command", "public", "control-flow", "Wait until a command exits successfully.", "Use this when a dependent step should wait for a local command-based condition to succeed.", []string{"apply"}, nil),
-		stepDef("WaitForFile", "wait", "Wait", "wait", 30, "wait.file-exists.schema.json", "wait.file-exists", "public", "control-flow", "Wait until a file or directory exists.", "Use this when a prior step produces a file that later steps depend on.", []string{"apply"}, nil),
-		stepDef("WaitForMissingFile", "wait", "Wait", "wait", 40, "wait.file-absent.schema.json", "wait.file-absent", "public", "control-flow", "Wait until a file or directory is absent.", "Use this when a cleanup step needs to finish before later steps continue.", []string{"apply"}, nil),
-		stepDef("WaitForTCPPort", "wait", "Wait", "wait", 50, "wait.tcp-port-open.schema.json", "wait.tcp-port-open", "public", "control-flow", "Wait until a TCP port opens.", "Use this when a service must become reachable before later steps continue.", []string{"apply"}, nil),
-		stepDef("WaitForMissingTCPPort", "wait", "Wait", "wait", 60, "wait.tcp-port-closed.schema.json", "wait.tcp-port-closed", "public", "control-flow", "Wait until a TCP port closes.", "Use this when a process must fully stop before a later step continues.", []string{"apply"}, nil),
+		stepDefFromMeta("CheckHost", "host-check", "system"),
+		stepDefFromMeta("Command", "command", "advanced"),
+		stepDefFromMeta("WriteContainerdConfig", "containerd.config", "runtime"),
+		stepDefFromMeta("WriteContainerdRegistryHosts", "containerd.registry-hosts", "runtime"),
+		stepDefFromMeta("EnsureDirectory", "directory", "filesystem"),
+		stepDefFromMeta("DownloadFile", "file.download", "filesystem"),
+		stepDefFromMeta("WriteFile", "file.write", "filesystem"),
+		stepDefFromMeta("CopyFile", "file.copy", "filesystem"),
+		stepDefFromMeta("EditFile", "file.edit", "filesystem"),
+		stepDefFromMeta("EditTOML", "file.edit-toml", "filesystem"),
+		stepDefFromMeta("EditYAML", "file.edit-yaml", "filesystem"),
+		stepDefFromMeta("EditJSON", "file.edit-json", "filesystem"),
+		stepDefFromMeta("ExtractArchive", "file.extract-archive", "filesystem"),
+		stepDefFromMeta("DownloadImage", "image.download", "containers"),
+		stepDefFromMeta("LoadImage", "image.load", "containers"),
+		stepDefFromMeta("VerifyImage", "image.verify", "containers"),
+		stepDefFromMeta("KernelModule", "kernel-module", "system"),
+		stepDefFromMeta("CheckCluster", "cluster-check", "kubernetes"),
+		stepDefFromMeta("InitKubeadm", "kubeadm.init", "kubernetes"),
+		stepDefFromMeta("JoinKubeadm", "kubeadm.join", "kubernetes"),
+		stepDefFromMeta("ResetKubeadm", "kubeadm.reset", "kubernetes"),
+		stepDefFromMeta("UpgradeKubeadm", "kubeadm.upgrade", "kubernetes"),
+		stepDefFromMeta("DownloadPackage", "package.download", "packages"),
+		stepDefFromMeta("InstallPackage", "package.install", "packages"),
+		stepDefFromMeta("ConfigureRepository", "repository.configure", "packages"),
+		stepDefFromMeta("RefreshRepository", "repository.refresh", "packages"),
+		stepDefFromMeta("ManageService", "service", "system"),
+		stepDefFromMeta("Swap", "swap", "system"),
+		stepDefFromMeta("CreateSymlink", "symlink", "filesystem"),
+		stepDefFromMeta("Sysctl", "sysctl", "system"),
+		stepDefFromMeta("WriteSystemdUnit", "systemd-unit", "system"),
+		stepDefFromMeta("WaitForService", "wait.service-active", "control-flow"),
+		stepDefFromMeta("WaitForCommand", "wait.command", "control-flow"),
+		stepDefFromMeta("WaitForFile", "wait.file-exists", "control-flow"),
+		stepDefFromMeta("WaitForMissingFile", "wait.file-absent", "control-flow"),
+		stepDefFromMeta("WaitForTCPPort", "wait.tcp-port-open", "control-flow"),
+		stepDefFromMeta("WaitForMissingTCPPort", "wait.tcp-port-closed", "control-flow"),
 	}
 	sort.Slice(defs, func(i, j int) bool { return defs[i].Kind < defs[j].Kind })
 	return defs
@@ -100,4 +103,30 @@ func stepDef(kind, family, familyTitle, docsPage string, docsOrder int, schemaFi
 	sort.Strings(def.Roles)
 	sort.Strings(def.Outputs)
 	return def
+}
+
+func stepDefFromMeta(kind string, generator string, category string) StepDefinition {
+	entry, ok, err := stepmeta.LookupCatalogEntry(kind)
+	if err != nil {
+		panic(err)
+	}
+	if !ok {
+		panic("missing stepmeta registration for " + kind)
+	}
+	projection := stepmeta.ProjectWorkflow(entry, category, generator)
+	return stepDef(
+		projection.Kind,
+		projection.Family,
+		projection.FamilyTitle,
+		projection.DocsPage,
+		projection.DocsOrder,
+		projection.SchemaFile,
+		projection.Generator,
+		projection.Visibility,
+		projection.Category,
+		projection.Summary,
+		projection.WhenToUse,
+		projection.Roles,
+		projection.Outputs,
+	)
 }

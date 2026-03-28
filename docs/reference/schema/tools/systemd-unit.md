@@ -26,27 +26,33 @@ Use this when workflows need to install or override a custom unit definition.
 ### Example
 
 ```yaml
-apiVersion: deck/v1alpha1
-id: example-writesystemdunit
 kind: WriteSystemdUnit
 spec:
-    content: example
-    path: example
+  path: /etc/systemd/system/kubelet.service
+  template: |
+    [Unit]
+    Description=Kubelet
+  daemonReload: true
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.content` | `string` | no | `` | `` |  | `example` |
-| `spec.daemonReload` | `boolean` | no | `` | `` |  | `true` |
-| `spec.mode` | `string` | no | `` | `` |  | `example` |
-| `spec.path` | `string` | yes | `` | `` |  | `example` |
-| `spec.template` | `string` | no | `` | `` |  | `example` |
+| `spec.content` | `string` | no | `` | `` | Inline unit file content written verbatim to `path`. | `[Unit]<br>Description=kubelet` |
+| `spec.daemonReload` | `boolean` | no | `` | `` | Run `systemctl daemon-reload` after writing the unit file. | `true` |
+| `spec.mode` | `string` | no | `` | `` | File permissions applied to the unit file in octal notation. | `0644` |
+| `spec.path` | `string` | yes | `` | `` | Destination path for the unit file on the node. | `/etc/systemd/system/kubelet.service` |
+| `spec.template` | `string` | no | `` | `` | Inline multi-line unit content rendered with the current vars before writing. | `[Service]<br>Environment=NODE_IP={{ .vars.nodeIP }}` |
 
 ### Validation Rules
 
 - Exactly one of `spec.content` or `spec.template` must be set.
+
+### Notes
+
+- `WriteSystemdUnit` only writes the unit file and optionally performs `daemonReload`.
+- Use `ManageService` separately to enable, start, restart, or reload the unit after it is written.
 
 ## Related
 

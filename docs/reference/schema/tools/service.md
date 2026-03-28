@@ -26,24 +26,25 @@ Use this after config changes that need a service lifecycle action.
 ### Example
 
 ```yaml
-apiVersion: deck/v1alpha1
-id: example-manageservice
 kind: ManageService
 spec:
-    name: example
+
+	name: containerd
+	enabled: true
+	state: started
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.daemonReload` | `boolean` | no | `` | `` |  | `true` |
-| `spec.enabled` | `boolean` | no | `` | `` |  | `true` |
-| `spec.ifExists` | `boolean` | no | `` | `` |  | `true` |
-| `spec.ignoreMissing` | `boolean` | no | `` | `` |  | `true` |
-| `spec.name` | `string` | no | `` | `` |  | `example` |
-| `spec.names` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.state` | `string` | no | `` | `unchanged, started, stopped, restarted, reloaded` |  | `unchanged` |
+| `spec.daemonReload` | `boolean` | no | `` | `` | Run `systemctl daemon-reload` before applying state changes. | `true` |
+| `spec.enabled` | `boolean` | no | `` | `` | Whether the service should be enabled on boot. | `true` |
+| `spec.ifExists` | `boolean` | no | `` | `` | Only manage the service if it exists on the host. | `true` |
+| `spec.ignoreMissing` | `boolean` | no | `` | `` | Suppress errors when the service is not found. | `true` |
+| `spec.name` | `string` | no | `` | `` | Single service name to manage. Use `name` or `names`, not both. | `containerd` |
+| `spec.names` | `array<string>` | no | `` | `` | Multiple service names managed in one step. Use `name` or `names`, not both. | `[firewalld,ufw]` |
+| `spec.state` | `string` | no | `` | `unchanged, started, stopped, restarted, reloaded` | Desired service state. | `started` |
 
 ### Validation Rules
 

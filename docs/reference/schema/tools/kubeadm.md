@@ -33,27 +33,32 @@ Use this to bootstrap a control-plane node after host prerequisites are ready.
 ### Example
 
 ```yaml
-apiVersion: deck/v1alpha1
-id: example-initkubeadm
 kind: InitKubeadm
 spec:
-    outputJoinFile: example
+
+	outputJoinFile: /tmp/deck/join.txt
+	podNetworkCIDR: 10.244.0.0/16
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.advertiseAddress` | `string` | no | `` | `` |  | `example` |
-| `spec.configFile` | `string` | no | `` | `` |  | `example` |
-| `spec.configTemplate` | `string` | no | `` | `` |  | `example` |
-| `spec.criSocket` | `string` | no | `` | `` |  | `example` |
-| `spec.extraArgs` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.ignorePreflightErrors` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.kubernetesVersion` | `string` | no | `` | `` |  | `example` |
-| `spec.outputJoinFile` | `string` | yes | `` | `` |  | `example` |
-| `spec.podNetworkCIDR` | `string` | no | `` | `` |  | `example` |
-| `spec.skipIfAdminConfExists` | `boolean` | no | `true` | `` |  | `true` |
+| `spec.advertiseAddress` | `string` | no | `` | `` | API server advertise address or `auto`. | `auto` |
+| `spec.configFile` | `string` | no | `` | `` | Path to an explicit kubeadm config file. | `/tmp/deck/kubeadm.conf` |
+| `spec.configTemplate` | `string` | no | `` | `` | Inline kubeadm config template or `default`. | `default` |
+| `spec.criSocket` | `string` | no | `` | `` | CRI socket path passed to kubeadm. | `unix:///run/containerd/containerd.sock` |
+| `spec.extraArgs` | `array<string>` | no | `` | `` | Additional flags passed directly to kubeadm. | `[--skip-phases=addon/kube-proxy]` |
+| `spec.ignorePreflightErrors` | `array<string>` | no | `` | `` | Preflight checks to suppress. | `[swap]` |
+| `spec.kubernetesVersion` | `string` | no | `` | `` | Kubernetes version string passed to kubeadm. | `v1.30.1` |
+| `spec.outputJoinFile` | `string` | yes | `` | `` | Path where the generated join command is written after init. | `/tmp/deck/join.txt` |
+| `spec.podNetworkCIDR` | `string` | no | `` | `` | CIDR range for the pod network. | `10.244.0.0/16` |
+| `spec.skipIfAdminConfExists` | `boolean` | no | `true` | `` | Skip init if `/etc/kubernetes/admin.conf` already exists. | `true` |
+
+### Notes
+
+- When `skipIfAdminConfExists` skips the step, deck does not create a new join artifact unless the file already exists.
+- Load prepared control-plane images with `LoadImage` before bootstrap rather than relying on kubeadm image pulls.
 
 ## `JoinKubeadm`
 
@@ -68,25 +73,29 @@ Use this after a bootstrap node has produced a valid join file or config.
 ### Example
 
 ```yaml
-apiVersion: deck/v1alpha1
-id: example-joinkubeadm
 kind: JoinKubeadm
 spec:
-    joinFile: example
+
+	configFile: /tmp/deck/kubeadm-join.yaml
+	extraArgs: [--skip-phases=preflight]
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.asControlPlane` | `boolean` | no | `false` | `` |  | `false` |
-| `spec.configFile` | `string` | no | `` | `` |  | `example` |
-| `spec.extraArgs` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.joinFile` | `string` | no | `` | `` |  | `example` |
+| `spec.asControlPlane` | `boolean` | no | `false` | `` | Join as an additional control-plane member instead of a worker. | `false` |
+| `spec.configFile` | `string` | no | `` | `` | Path to an explicit kubeadm join config file. | `/tmp/deck/kubeadm-join.yaml` |
+| `spec.extraArgs` | `array<string>` | no | `` | `` | Additional flags passed directly to kubeadm join. | `[--skip-phases=preflight]` |
+| `spec.joinFile` | `string` | no | `` | `` | Path to the join command file produced by a prior init run. | `/tmp/deck/join.txt` |
 
 ### Validation Rules
 
 - Exactly one of `spec.joinFile` or `spec.configFile` must be set.
+
+### Notes
+
+- Provide exactly one of `joinFile` or `configFile`.
 
 ## `ResetKubeadm`
 
@@ -101,32 +110,37 @@ Use this to tear down an existing kubeadm-managed node safely.
 ### Example
 
 ```yaml
-apiVersion: deck/v1alpha1
-id: example-resetkubeadm
 kind: ResetKubeadm
-spec: {}
+spec:
+
+	force: true
+	removePaths: [/etc/cni/net.d, /var/lib/etcd]
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.cleanupContainers` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.criSocket` | `string` | no | `` | `` |  | `example` |
-| `spec.extraArgs` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.force` | `boolean` | no | `false` | `` |  | `false` |
-| `spec.ignoreErrors` | `boolean` | no | `false` | `` |  | `false` |
-| `spec.removeFiles` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.removePaths` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.reportFile` | `string` | no | `` | `` |  | `example` |
-| `spec.reportResetReason` | `string` | no | `` | `` |  | `example` |
-| `spec.restartRuntimeService` | `string` | no | `` | `` |  | `example` |
-| `spec.stopKubelet` | `boolean` | no | `true` | `` |  | `true` |
-| `spec.stopKubeletAfterReset` | `boolean` | no | `` | `` |  | `true` |
-| `spec.verifyContainersAbsent` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.waitForMissingManifestsGlob` | `string` | no | `` | `` |  | `example` |
-| `spec.waitForRuntimeReady` | `boolean` | no | `` | `` |  | `true` |
-| `spec.waitForRuntimeService` | `boolean` | no | `` | `` |  | `true` |
+| `spec.cleanupContainers` | `array<string>` | no | `` | `` | Containers to stop and remove during cleanup. | `[kube-apiserver,etcd]` |
+| `spec.criSocket` | `string` | no | `` | `` | CRI socket path passed to kubeadm. | `unix:///run/containerd/containerd.sock` |
+| `spec.extraArgs` | `array<string>` | no | `` | `` | Additional flags passed directly to kubeadm reset. | `[--skip-phases=preflight]` |
+| `spec.force` | `boolean` | no | `false` | `` | Pass `--force` to kubeadm reset. | `true` |
+| `spec.ignoreErrors` | `boolean` | no | `false` | `` | Continue with cleanup even if kubeadm reset itself fails. | `true` |
+| `spec.removeFiles` | `array<string>` | no | `` | `` | Files to delete during cleanup. | `[/etc/kubernetes/admin.conf]` |
+| `spec.removePaths` | `array<string>` | no | `` | `` | Directories to delete during cleanup. | `[/etc/cni/net.d,/var/lib/etcd]` |
+| `spec.reportFile` | `string` | no | `` | `` | Optional reset report file written after cleanup. | `/tmp/deck/reports/reset-state.txt` |
+| `spec.reportResetReason` | `string` | no | `` | `` | Value written into the reset report as `resetReason`. | `node-reset-acceptance` |
+| `spec.restartRuntimeService` | `string` | no | `` | `` | Runtime service to restart after cleanup. | `containerd` |
+| `spec.stopKubelet` | `boolean` | no | `true` | `` | Stop kubelet before running reset. | `true` |
+| `spec.stopKubeletAfterReset` | `boolean` | no | `` | `` | Stop kubelet again after runtime verification completes. | `true` |
+| `spec.verifyContainersAbsent` | `array<string>` | no | `` | `` | Containers that must no longer exist after cleanup. | `[kube-apiserver,etcd]` |
+| `spec.waitForMissingManifestsGlob` | `string` | no | `` | `` | Glob that must resolve to zero matches before the step succeeds. | `/etc/kubernetes/manifests/*.yaml` |
+| `spec.waitForRuntimeReady` | `boolean` | no | `` | `` | Poll runtime readiness after cleanup. | `true` |
+| `spec.waitForRuntimeService` | `boolean` | no | `` | `` | Wait until the runtime service reports active. | `true` |
+
+### Notes
+
+- This step focuses on cleanup and convergence after kubeadm reset.
 
 ## `UpgradeKubeadm`
 
@@ -141,22 +155,26 @@ Use this to upgrade a local kubeadm-managed control-plane node with a typed work
 ### Example
 
 ```yaml
-apiVersion: deck/v1alpha1
-id: example-upgradekubeadm
 kind: UpgradeKubeadm
 spec:
-    kubernetesVersion: example
+
+	kubernetesVersion: v1.31.0
+	ignorePreflightErrors: [Swap]
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.extraArgs` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.ignorePreflightErrors` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.kubeletService` | `string` | no | `` | `` |  | `example` |
-| `spec.kubernetesVersion` | `string` | yes | `` | `` |  | `example` |
-| `spec.restartKubelet` | `boolean` | no | `true` | `` |  | `true` |
+| `spec.extraArgs` | `array<string>` | no | `` | `` | Additional flags passed directly to kubeadm upgrade. | `[--allow-experimental-upgrades]` |
+| `spec.ignorePreflightErrors` | `array<string>` | no | `` | `` | Preflight checks to suppress during upgrade. | `[Swap]` |
+| `spec.kubeletService` | `string` | no | `` | `` | Service name restarted after a successful upgrade. | `kubelet` |
+| `spec.kubernetesVersion` | `string` | yes | `` | `` | Kubernetes version string passed to kubeadm upgrade. | `v1.31.0` |
+| `spec.restartKubelet` | `boolean` | no | `true` | `` | Restart kubelet after a successful upgrade. | `true` |
+
+### Notes
+
+- Restart kubelet after a successful upgrade unless a separate service step owns that lifecycle.
 
 ## Related
 

@@ -41,6 +41,10 @@
       "additionalProperties": false,
       "properties": {
         "fileAssertions": {
+          "description": "Optional file-content assertions evaluated on every poll attempt.",
+          "examples": [
+            "[{path:/etc/containerd/config.toml,contains:[registry.k8s.io/pause:3.10]}]"
+          ],
           "items": {
             "additionalProperties": false,
             "properties": {
@@ -65,27 +69,51 @@
           "type": "array"
         },
         "initialDelay": {
+          "description": "Optional delay before the first poll attempt.",
+          "examples": [
+            "10s"
+          ],
           "pattern": "^[0-9]+(ms|s|m|h)$",
           "type": "string"
         },
         "interval": {
+          "description": "Duration between poll attempts while waiting for cluster state to converge.",
+          "examples": [
+            "5s"
+          ],
           "pattern": "^[0-9]+(ms|s|m|h)$",
           "type": "string"
         },
         "kubeSystem": {
           "additionalProperties": false,
+          "description": "Optional checks for kube-system pod readiness.",
+          "examples": [
+            "{readyNames:[etcd-control-plane]}"
+          ],
           "properties": {
             "jsonReportPath": {
+              "description": "Optional JSON report path for `kubectl get pods -n kube-system -o json`.",
+              "examples": [
+                "/tmp/deck/reports/kube-system-pods.json"
+              ],
               "minLength": 1,
               "type": "string"
             },
             "readyNames": {
+              "description": "Exact kube-system pod names that must be present and fully Ready.",
+              "examples": [
+                "[etcd-control-plane,kube-apiserver-control-plane]"
+              ],
               "items": {
                 "type": "string"
               },
               "type": "array"
             },
             "readyPrefixMinimums": {
+              "description": "Prefix-based readiness requirements with minimum Ready pod counts.",
+              "examples": [
+                "[{prefix:coredns-,minReady:2}]"
+              ],
               "items": {
                 "additionalProperties": false,
                 "properties": {
@@ -107,12 +135,20 @@
               "type": "array"
             },
             "readyPrefixes": {
+              "description": "Pod-name prefixes for which at least one matching Ready pod must exist.",
+              "examples": [
+                "[kube-proxy-]"
+              ],
               "items": {
                 "type": "string"
               },
               "type": "array"
             },
             "reportPath": {
+              "description": "Optional text report path for `kubectl get pods -n kube-system`.",
+              "examples": [
+                "/tmp/deck/reports/kube-system-pods.txt"
+              ],
               "minLength": 1,
               "type": "string"
             }
@@ -120,21 +156,41 @@
           "type": "object"
         },
         "kubeconfig": {
+          "description": "Kubeconfig path used for kubectl-based checks.",
+          "examples": [
+            "/etc/kubernetes/admin.conf"
+          ],
           "minLength": 1,
           "type": "string"
         },
         "nodes": {
           "additionalProperties": false,
+          "description": "Optional checks for cluster node count and readiness.",
+          "examples": [
+            "{total:1,ready:1,controlPlaneReady:1}"
+          ],
           "properties": {
             "controlPlaneReady": {
+              "description": "Expected count of Ready control-plane nodes.",
+              "examples": [
+                "1"
+              ],
               "minimum": 0,
               "type": "integer"
             },
             "ready": {
+              "description": "Expected count of Ready nodes.",
+              "examples": [
+                "1"
+              ],
               "minimum": 0,
               "type": "integer"
             },
             "total": {
+              "description": "Expected total node count returned by `kubectl get nodes`.",
+              "examples": [
+                "1"
+              ],
               "minimum": 0,
               "type": "integer"
             }
@@ -143,12 +199,24 @@
         },
         "reports": {
           "additionalProperties": false,
+          "description": "Optional paths for writing node and cluster state reports.",
+          "examples": [
+            "{nodesPath:/tmp/deck/reports/bootstrap-nodes.txt}"
+          ],
           "properties": {
             "clusterNodesPath": {
+              "description": "Optional second node report path for shared cluster node reports.",
+              "examples": [
+                "/tmp/deck/reports/cluster-nodes.txt"
+              ],
               "minLength": 1,
               "type": "string"
             },
             "nodesPath": {
+              "description": "Optional report file path for `kubectl get nodes` output.",
+              "examples": [
+                "/tmp/deck/reports/bootstrap-nodes.txt"
+              ],
               "minLength": 1,
               "type": "string"
             }
@@ -156,33 +224,65 @@
           "type": "object"
         },
         "timeout": {
+          "description": "Maximum total duration to keep polling before the step fails.",
+          "examples": [
+            "10m"
+          ],
           "pattern": "^[0-9]+(ms|s|m|h)$",
           "type": "string"
         },
         "versions": {
           "additionalProperties": false,
+          "description": "Optional checks for Kubernetes component versions.",
+          "examples": [
+            "{server:v1.31.0,kubelet:v1.31.0}"
+          ],
           "properties": {
             "kubeadm": {
+              "description": "Expected local kubeadm version from `kubeadm version -o short`.",
+              "examples": [
+                "v1.31.0"
+              ],
               "minLength": 1,
               "type": "string"
             },
             "kubelet": {
+              "description": "Expected kubelet version for the selected node.",
+              "examples": [
+                "v1.31.0"
+              ],
               "minLength": 1,
               "type": "string"
             },
             "nodeName": {
+              "description": "Node name used when reading kubelet version.",
+              "examples": [
+                "control-plane"
+              ],
               "minLength": 1,
               "type": "string"
             },
             "reportPath": {
+              "description": "Optional report file that records target, server, kubelet, and kubeadm versions.",
+              "examples": [
+                "/tmp/deck/reports/upgrade-version.txt"
+              ],
               "minLength": 1,
               "type": "string"
             },
             "server": {
+              "description": "Expected API server version from `kubectl version -o json`.",
+              "examples": [
+                "v1.31.0"
+              ],
               "minLength": 1,
               "type": "string"
             },
             "targetVersion": {
+              "description": "Target Kubernetes version written into the optional version report file.",
+              "examples": [
+                "v1.31.0"
+              ],
               "minLength": 1,
               "type": "string"
             }

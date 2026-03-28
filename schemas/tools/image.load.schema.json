@@ -41,6 +41,10 @@
       "additionalProperties": false,
       "properties": {
         "command": {
+          "description": "Optional runtime command override.",
+          "examples": [
+            "[ctr,-n,k8s.io,images,import,{archive}]"
+          ],
           "items": {
             "type": "string"
           },
@@ -48,6 +52,10 @@
           "type": "array"
         },
         "images": {
+          "description": "Image references to load from the prepared archives.",
+          "examples": [
+            "[registry.k8s.io/kube-apiserver:v1.30.1]"
+          ],
           "items": {
             "type": "string"
           },
@@ -55,15 +63,23 @@
           "type": "array"
         },
         "runtime": {
+          "description": "Runtime loader to use for imports.",
           "enum": [
             "auto",
             "ctr",
             "docker",
             "podman"
           ],
+          "examples": [
+            "ctr"
+          ],
           "type": "string"
         },
         "sourceDir": {
+          "description": "Directory containing prepared image archives.",
+          "examples": [
+            "images/control-plane"
+          ],
           "minLength": 1,
           "type": "string"
         }

@@ -8,15 +8,13 @@ type FieldDoc struct {
 }
 
 type ToolMetadata struct {
-	Kind           string
-	Category       string
-	Summary        string
-	WhenToUse      string
-	Example        string
-	ActionNotes    map[string]string
-	ActionExamples map[string]string
-	FieldDocs      map[string]FieldDoc
-	Notes          []string
+	Kind      string
+	Category  string
+	Summary   string
+	WhenToUse string
+	Example   string
+	FieldDocs map[string]FieldDoc
+	Notes     []string
 }
 
 type SchemaMetadata struct {
@@ -90,12 +88,6 @@ func BuiltInTypeDefinitionForKeyWith(key StepTypeKey, toolBuilder func(StepDefin
 
 func cloneToolMetadata(meta ToolMetadata) ToolMetadata {
 	cloned := meta
-	if meta.ActionNotes != nil {
-		cloned.ActionNotes = maps.Clone(meta.ActionNotes)
-	}
-	if meta.ActionExamples != nil {
-		cloned.ActionExamples = maps.Clone(meta.ActionExamples)
-	}
 	if meta.FieldDocs != nil {
 		cloned.FieldDocs = maps.Clone(meta.FieldDocs)
 	}

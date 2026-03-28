@@ -31,26 +31,33 @@ Use this before refreshing caches or installing packages from a local mirror.
 ### Example
 
 ```yaml
-apiVersion: deck/v1alpha1
-id: example-configurerepository
 kind: ConfigureRepository
 spec:
-    repositories:
-        - {}
+
+	format: deb
+	path: /etc/apt/sources.list.d/offline.list
+	repositories:
+	  - baseurl: http://repo.local/debian
+	    trusted: true
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.backupPaths` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.cleanupPaths` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.disableExisting` | `boolean` | no | `` | `` |  | `true` |
-| `spec.format` | `string` | no | `` | `auto, deb, rpm` |  | `auto` |
-| `spec.mode` | `string` | no | `` | `` |  | `example` |
-| `spec.path` | `string` | no | `` | `` |  | `example` |
-| `spec.replaceExisting` | `boolean` | no | `` | `` |  | `true` |
-| `spec.repositories` | `array<object>` | yes | `` | `` |  | `[{...}]` |
+| `spec.backupPaths` | `array<string>` | no | `` | `` | Paths to back up before modifying. | `[/etc/apt/sources.list]` |
+| `spec.cleanupPaths` | `array<string>` | no | `` | `` | Paths to remove before writing the new definition. | `[/etc/apt/sources.list.d/ubuntu.list]` |
+| `spec.disableExisting` | `boolean` | no | `` | `` | Disable all existing repository definitions before writing the new one. | `true` |
+| `spec.format` | `string` | no | `` | `auto, deb, rpm` | Repository file format to write. | `deb` |
+| `spec.mode` | `string` | no | `` | `` | File permissions applied to the generated repository file. | `0644` |
+| `spec.path` | `string` | no | `` | `` | Explicit output path for the generated repository file. | `/etc/apt/sources.list.d/offline.list` |
+| `spec.replaceExisting` | `boolean` | no | `` | `` | Replace an existing repository file at the target path. | `true` |
+| `spec.repositories` | `array<object>` | yes | `` | `` | Repository entries to write. | `[{baseurl:http://repo.local/debian,trusted:true}]` |
+
+### Notes
+
+- `ConfigureRepository` only writes repository definition files. Use `RefreshRepository` when the package manager needs an explicit metadata refresh.
+- Keep repository definitions mirror-specific rather than mutating the host's default online sources.
 
 ## `RefreshRepository`
 
@@ -65,22 +72,25 @@ Use this after writing repo definitions and before package install steps that de
 ### Example
 
 ```yaml
-apiVersion: deck/v1alpha1
-id: example-refreshrepository
 kind: RefreshRepository
 spec:
-    clean: true
+
+	manager: apt
+	clean: true
+	update: true
+	restrictToRepos:
+	  - /etc/apt/sources.list.d/offline.list
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.clean` | `boolean` | no | `` | `` |  | `true` |
-| `spec.excludeRepos` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.manager` | `string` | no | `` | `auto, apt, dnf` |  | `auto` |
-| `spec.restrictToRepos` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.update` | `boolean` | no | `` | `` |  | `true` |
+| `spec.clean` | `boolean` | no | `` | `` | Run a cache clean before updating metadata. | `true` |
+| `spec.excludeRepos` | `array<string>` | no | `` | `` | Repository selectors to skip during metadata update. | `[updates]` |
+| `spec.manager` | `string` | no | `` | `auto, apt, dnf` | Package manager to use. | `apt` |
+| `spec.restrictToRepos` | `array<string>` | no | `` | `` | Limit the metadata update to these repository selectors. | `[/etc/apt/sources.list.d/offline.list]` |
+| `spec.update` | `boolean` | no | `` | `` | Fetch fresh package metadata from the configured repositories. | `true` |
 
 ### Validation Rules
 

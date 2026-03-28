@@ -41,6 +41,10 @@
       "additionalProperties": false,
       "properties": {
         "excludeRepos": {
+          "description": "Repository selectors to exclude from package resolution.",
+          "examples": [
+            "[updates]"
+          ],
           "items": {
             "minLength": 1,
             "type": "string"
@@ -48,6 +52,10 @@
           "type": "array"
         },
         "packages": {
+          "description": "Package names to install.",
+          "examples": [
+            "[kubelet,kubeadm,kubectl]"
+          ],
           "items": {
             "type": "string"
           },
@@ -55,6 +63,10 @@
           "type": "array"
         },
         "restrictToRepos": {
+          "description": "Limit package manager visibility to these repository selectors.",
+          "examples": [
+            "[offline-kubernetes]"
+          ],
           "items": {
             "minLength": 1,
             "type": "string"
@@ -63,13 +75,25 @@
         },
         "source": {
           "additionalProperties": false,
+          "description": "Local repository source used for the installation.",
+          "examples": [
+            "{type:local-repo,path:/opt/deck/repos/kubernetes}"
+          ],
           "properties": {
             "path": {
+              "description": "Filesystem path to the pre-prepared local package repository.",
+              "examples": [
+                "/opt/deck/repos/kubernetes"
+              ],
               "minLength": 1,
               "type": "string"
             },
             "type": {
-              "const": "local-repo"
+              "const": "local-repo",
+              "description": "Source type. Currently only `local-repo` is supported.",
+              "examples": [
+                "local-repo"
+              ]
             }
           },
           "required": [

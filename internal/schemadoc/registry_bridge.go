@@ -1,22 +1,16 @@
 package schemadoc
 
-import (
-	"maps"
-
-	"github.com/Airgap-Castaways/deck/internal/workflowcontract"
-)
+import "github.com/Airgap-Castaways/deck/internal/workflowcontract"
 
 func ToolMetadataFromRegistry(meta workflowcontract.ToolMetadata) ToolMetadata {
 	return ToolMetadata{
-		Kind:           meta.Kind,
-		Category:       meta.Category,
-		Summary:        meta.Summary,
-		WhenToUse:      meta.WhenToUse,
-		Example:        meta.Example,
-		ActionNotes:    maps.Clone(meta.ActionNotes),
-		ActionExamples: maps.Clone(meta.ActionExamples),
-		FieldDocs:      fromRegistryFieldDocs(meta.FieldDocs),
-		Notes:          append([]string(nil), meta.Notes...),
+		Kind:      meta.Kind,
+		Category:  meta.Category,
+		Summary:   meta.Summary,
+		WhenToUse: meta.WhenToUse,
+		Example:   meta.Example,
+		FieldDocs: fromRegistryFieldDocs(meta.FieldDocs),
+		Notes:     append([]string(nil), meta.Notes...),
 	}
 }
 

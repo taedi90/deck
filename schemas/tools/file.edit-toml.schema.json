@@ -42,9 +42,17 @@
       "properties": {
         "createIfMissing": {
           "default": false,
+          "description": "Create a new empty TOML document when the file does not exist.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         },
         "edits": {
+          "description": "Ordered list of structured edits applied sequentially.",
+          "examples": [
+            "[{op:set,rawPath:plugins.\"io.containerd.grpc.v1.cri\".registry.config_path,value:/etc/containerd/certs.d}]"
+          ],
           "items": {
             "additionalProperties": false,
             "properties": {
@@ -106,10 +114,18 @@
           "type": "array"
         },
         "mode": {
+          "description": "Optional file permissions to apply after the edit completes.",
+          "examples": [
+            "0644"
+          ],
           "pattern": "^[0-7]{4}$",
           "type": "string"
         },
         "path": {
+          "description": "TOML file path to edit in place.",
+          "examples": [
+            "/etc/containerd/config.toml"
+          ],
           "minLength": 1,
           "type": "string"
         }

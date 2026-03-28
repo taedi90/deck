@@ -32,22 +32,27 @@ Use this during prepare to collect required images for offline use.
 ### Example
 
 ```yaml
-apiVersion: deck/v1alpha1
-id: example-downloadimage
 kind: DownloadImage
 spec:
-    images:
-        - example
+
+	images:
+	  - registry.k8s.io/kube-apiserver:v1.30.1
+	  - registry.example.com/platform/pause:3.9
+	auth:
+	  - registry: registry.example.com
+	    basic:
+	      username: "{{ .vars.registryUser }}"
+	      password: "{{ .vars.registryPassword }}"
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.auth` | `array<object>` | no | `` | `` |  | `[{...}]` |
-| `spec.backend` | `object` | no | `` | `` |  | `{...}` |
-| `spec.images` | `array<string>` | yes | `` | `` |  | `[example]` |
-| `spec.outputDir` | `string` | no | `` | `` |  | `example` |
+| `spec.auth` | `array<object>` | no | `` | `` | Optional registry authentication entries used during download. | `[{registry:registry.example.com,basic:{username:robot,password:${REGISTRY_PASSWORD}}}]` |
+| `spec.backend` | `object` | no | `` | `` | Backend-specific download settings. | `{engine:go-containerregistry}` |
+| `spec.images` | `array<string>` | yes | `` | `` | Fully qualified image references to download. | `[registry.k8s.io/pause:3.9]` |
+| `spec.outputDir` | `string` | no | `` | `` | Optional bundle-relative directory for per-image tar archives. | `images/control-plane` |
 
 ### Nested Objects
 
@@ -55,15 +60,20 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.auth[].basic.password` | `string` | yes | `` | `` |  | `example` |
-| `spec.auth[].basic.username` | `string` | yes | `` | `` |  | `example` |
+| `spec.auth[].basic.password` | `string` | yes | `` | `` | Registry password or access token paired with `username`. | `${REGISTRY_PASSWORD}` |
+| `spec.auth[].basic.username` | `string` | yes | `` | `` | Registry username used for basic authentication. | `robot` |
 
 ### `spec.backend`
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.backend.engine` | `string` | no | `` | `go-containerregistry` |  | `go-containerregistry` |
+| `spec.backend.engine` | `string` | no | `` | `go-containerregistry` | Image download engine implementation. | `go-containerregistry` |
 
+
+### Notes
+
+- Omit `outputDir` unless you need a dedicated image subdirectory; deck writes to `images/` by default.
+- `spec.auth` is optional and only applies to `DownloadImage`.
 
 ## `LoadImage`
 
@@ -78,22 +88,27 @@ Use this during apply before verifying or using images from an offline bundle.
 ### Example
 
 ```yaml
-apiVersion: deck/v1alpha1
-id: example-loadimage
 kind: LoadImage
 spec:
-    images:
-        - example
+
+	sourceDir: images/control-plane
+	runtime: ctr
+	images:
+	  - registry.k8s.io/kube-apiserver:v1.30.1
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.command` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.images` | `array<string>` | yes | `` | `` |  | `[example]` |
-| `spec.runtime` | `string` | no | `` | `auto, ctr, docker, podman` |  | `auto` |
-| `spec.sourceDir` | `string` | no | `` | `` |  | `example` |
+| `spec.command` | `array<string>` | no | `` | `` | Optional runtime command override. | `[ctr,-n,k8s.io,images,import,{archive}]` |
+| `spec.images` | `array<string>` | yes | `` | `` | Image references to load from the prepared archives. | `[registry.k8s.io/kube-apiserver:v1.30.1]` |
+| `spec.runtime` | `string` | no | `` | `auto, ctr, docker, podman` | Runtime loader to use for imports. | `ctr` |
+| `spec.sourceDir` | `string` | no | `` | `` | Directory containing prepared image archives. | `images/control-plane` |
+
+### Notes
+
+- `command` may include `{archive}` placeholders that deck substitutes per image archive.
 
 ## `VerifyImage`
 
@@ -108,20 +123,24 @@ Use this during apply when images should already be present and only need verifi
 ### Example
 
 ```yaml
-apiVersion: deck/v1alpha1
-id: example-verifyimage
 kind: VerifyImage
 spec:
-    images:
-        - example
+
+	command: [ctr, -n, k8s.io, images, list, -q]
+	images:
+	  - registry.k8s.io/kube-apiserver:v1.30.1
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.command` | `array<string>` | no | `` | `` |  | `[example]` |
-| `spec.images` | `array<string>` | yes | `` | `` |  | `[example]` |
+| `spec.command` | `array<string>` | no | `` | `` | Optional image-listing command override. | `[ctr,-n,k8s.io,images,list,-q]` |
+| `spec.images` | `array<string>` | yes | `` | `` | Image references that must already exist in the runtime. | `[registry.k8s.io/kube-apiserver:v1.30.1]` |
+
+### Notes
+
+- Use this instead of `LoadImage` when the runtime is expected to be pre-populated.
 
 ## Related
 
