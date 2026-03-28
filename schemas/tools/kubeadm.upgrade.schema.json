@@ -41,27 +41,47 @@
       "additionalProperties": false,
       "properties": {
         "extraArgs": {
+          "description": "Additional flags passed directly to kubeadm upgrade.",
+          "examples": [
+            "[--allow-experimental-upgrades]"
+          ],
           "items": {
             "type": "string"
           },
           "type": "array"
         },
         "ignorePreflightErrors": {
+          "description": "Preflight checks to suppress during upgrade.",
+          "examples": [
+            "[Swap]"
+          ],
           "items": {
             "type": "string"
           },
           "type": "array"
         },
         "kubeletService": {
+          "description": "Service name restarted after a successful upgrade.",
+          "examples": [
+            "kubelet"
+          ],
           "minLength": 1,
           "type": "string"
         },
         "kubernetesVersion": {
+          "description": "Kubernetes version string passed to kubeadm upgrade.",
+          "examples": [
+            "v1.31.0"
+          ],
           "minLength": 1,
           "type": "string"
         },
         "restartKubelet": {
           "default": true,
+          "description": "Restart kubelet after a successful upgrade.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         }
       },

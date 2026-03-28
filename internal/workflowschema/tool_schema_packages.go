@@ -1,6 +1,16 @@
-package main
+package workflowschema
 
-import "github.com/Airgap-Castaways/deck/internal/stepspec"
+import (
+	"github.com/Airgap-Castaways/deck/internal/stepmeta"
+	"github.com/Airgap-Castaways/deck/internal/stepspec"
+)
+
+var (
+	_ = stepmeta.MustRegisterSchema[stepspec.RefreshRepository]("RefreshRepository", patchRefreshRepositoryToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.DownloadPackage]("DownloadPackage", patchDownloadPackageToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.InstallPackage]("InstallPackage", patchInstallPackageToolSchema)
+	_ = stepmeta.MustRegisterSchema[stepspec.ConfigureRepository]("ConfigureRepository", patchConfigureRepositoryToolSchema)
+)
 
 func patchRefreshRepositoryToolSchema(root map[string]any) {
 	props := propertyMap(root)

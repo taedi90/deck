@@ -1,5 +1,7 @@
 package askcontext
 
+import "github.com/Airgap-Castaways/deck/internal/askcommandspec"
+
 type AskCommandMetadata struct {
 	Short  string
 	Plan   AskPlanCommandMetadata
@@ -18,23 +20,23 @@ type AskConfigCommandMetadata struct {
 }
 
 func AskCommandMeta() AskCommandMetadata {
+	spec := askcommandspec.Current()
+	planFlags := make([]CLIFlag, 0, len(spec.Plan.Flags))
+	for _, flag := range spec.Plan.Flags {
+		planFlags = append(planFlags, CLIFlag{Name: flag.Name, Description: flag.Description})
+	}
+	rootFlags := make([]CLIFlag, 0, len(spec.Root.Flags))
+	for _, flag := range spec.Root.Flags {
+		rootFlags = append(rootFlags, CLIFlag{Name: flag.Name, Description: flag.Description})
+	}
 	return AskCommandMetadata{
-		Short: "(Experimental) AI helper for drafting and reviewing workflows",
+		Short: spec.Root.Short,
 		Plan: AskPlanCommandMetadata{
-			Short: "Generate an ask plan artifact without writing workflow files",
-			Long:  "Generate a reusable planning artifact under .deck/plan without writing workflow files. This mode is intended for draft/refine style authoring requests.",
-			Flags: []CLIFlag{
-				{Name: "--from", Description: "Load additional request details from a text or markdown file."},
-				{Name: "--plan-name", Description: "Optional plan artifact name."},
-				{Name: "--plan-dir", Description: "EnsureDirectory for ask plan artifacts."},
-			},
+			Short: spec.Plan.Short,
+			Long:  spec.Plan.Long,
+			Flags: planFlags,
 		},
-		Config: AskConfigCommandMetadata{Short: "Manage global ask config defaults and API credentials"},
-		Flags: []CLIFlag{
-			{Name: "--write", Description: "Write generated workflow files into the current workspace."},
-			{Name: "--from", Description: "Load additional request details from a text or markdown file."},
-			{Name: "--plan-name", Description: "Optional plan artifact name used by ask plan."},
-			{Name: "--plan-dir", Description: "EnsureDirectory for ask plan artifacts."},
-		},
+		Config: AskConfigCommandMetadata{Short: spec.Config.Short},
+		Flags:  rootFlags,
 	}
 }

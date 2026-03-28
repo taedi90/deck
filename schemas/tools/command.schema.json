@@ -41,6 +41,10 @@
       "additionalProperties": false,
       "properties": {
         "command": {
+          "description": "Command vector to execute. The first element is the binary and the rest are arguments.",
+          "examples": [
+            "[systemctl,restart,containerd]"
+          ],
           "items": {
             "type": "string"
           },
@@ -51,13 +55,25 @@
           "additionalProperties": {
             "type": "string"
           },
+          "description": "Additional environment variables passed to the command process as key-value pairs.",
+          "examples": [
+            "{KUBECONFIG:/etc/kubernetes/admin.conf}"
+          ],
           "type": "object"
         },
         "sudo": {
           "default": false,
+          "description": "Prepend `sudo` before the command vector. Defaults to `false`.",
+          "examples": [
+            "false"
+          ],
           "type": "boolean"
         },
         "timeout": {
+          "description": "Maximum duration for the command before it is killed. Overrides the step-level `timeout`.",
+          "examples": [
+            "30s"
+          ],
           "pattern": "^[0-9]+(ms|s|m|h)$",
           "type": "string"
         }

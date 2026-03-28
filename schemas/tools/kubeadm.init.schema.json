@@ -41,41 +41,81 @@
       "additionalProperties": false,
       "properties": {
         "advertiseAddress": {
+          "description": "API server advertise address or `auto`.",
+          "examples": [
+            "auto"
+          ],
           "type": "string"
         },
         "configFile": {
+          "description": "Path to an explicit kubeadm config file.",
+          "examples": [
+            "/tmp/deck/kubeadm.conf"
+          ],
           "type": "string"
         },
         "configTemplate": {
+          "description": "Inline kubeadm config template or `default`.",
+          "examples": [
+            "default"
+          ],
           "type": "string"
         },
         "criSocket": {
+          "description": "CRI socket path passed to kubeadm.",
+          "examples": [
+            "unix:///run/containerd/containerd.sock"
+          ],
           "type": "string"
         },
         "extraArgs": {
+          "description": "Additional flags passed directly to kubeadm.",
+          "examples": [
+            "[--skip-phases=addon/kube-proxy]"
+          ],
           "items": {
             "type": "string"
           },
           "type": "array"
         },
         "ignorePreflightErrors": {
+          "description": "Preflight checks to suppress.",
+          "examples": [
+            "[swap]"
+          ],
           "items": {
             "type": "string"
           },
           "type": "array"
         },
         "kubernetesVersion": {
+          "description": "Kubernetes version string passed to kubeadm.",
+          "examples": [
+            "v1.30.1"
+          ],
           "type": "string"
         },
         "outputJoinFile": {
+          "description": "Path where the generated join command is written after init.",
+          "examples": [
+            "/tmp/deck/join.txt"
+          ],
           "minLength": 1,
           "type": "string"
         },
         "podNetworkCIDR": {
+          "description": "CIDR range for the pod network.",
+          "examples": [
+            "10.244.0.0/16"
+          ],
           "type": "string"
         },
         "skipIfAdminConfExists": {
           "default": true,
+          "description": "Skip init if `/etc/kubernetes/admin.conf` already exists.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         }
       },

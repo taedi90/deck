@@ -7,8 +7,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Airgap-Castaways/deck/internal/askcli"
+	"github.com/Airgap-Castaways/deck/internal/askcommandspec"
 	"github.com/Airgap-Castaways/deck/internal/askconfig"
-	"github.com/Airgap-Castaways/deck/internal/askcontext"
 	"github.com/Airgap-Castaways/deck/internal/askprovider"
 	openaiprovider "github.com/Airgap-Castaways/deck/internal/askprovider/openai"
 )
@@ -27,11 +27,11 @@ func newAskCommand() *cobra.Command {
 	var provider string
 	var model string
 	var endpoint string
-	meta := askcontext.AskCommandMeta()
+	spec := askcommandspec.Current()
 
 	cmd := &cobra.Command{
-		Use:   "ask [request]",
-		Short: meta.Short,
+		Use:   spec.Root.Use,
+		Short: spec.Root.Short,
 		Example: strings.Join([]string{
 			`  deck ask "explain what workflows/scenarios/apply.yaml does"`,
 			`  deck ask --write "create an air-gapped rhel9 single-node kubeadm workflow"`,
@@ -80,11 +80,11 @@ func newAskPlanCommand() *cobra.Command {
 	var provider string
 	var model string
 	var endpoint string
-	meta := askcontext.AskCommandMeta()
+	spec := askcommandspec.Current()
 	cmd := &cobra.Command{
-		Use:   "plan [request]",
-		Short: meta.Plan.Short,
-		Long:  meta.Plan.Long,
+		Use:   spec.Plan.Use,
+		Short: spec.Plan.Short,
+		Long:  spec.Plan.Long,
 		Example: strings.Join([]string{
 			`  deck ask plan "create an air-gapped rhel9 single-node kubeadm workflow"`,
 			`  deck ask plan --plan-name kubeadm-ha "create a 3-node kubeadm workflow"`,
@@ -118,8 +118,8 @@ func newAskPlanCommand() *cobra.Command {
 
 func newAskConfigCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "config",
-		Short: askcontext.AskCommandMeta().Config.Short,
+		Use:   askcommandspec.Current().Config.Use,
+		Short: askcommandspec.Current().Config.Short,
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return cmd.Help()

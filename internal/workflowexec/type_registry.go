@@ -9,22 +9,34 @@ type (
 	BuiltInTypeDefinition = workflowcontract.BuiltInTypeDefinition
 )
 
-func RegisterToolMetadataBuilder(builder func(StepDefinition) ToolMetadata) struct{} {
-	return workflowcontract.RegisterToolMetadataBuilder(func(def workflowcontract.StepDefinition) workflowcontract.ToolMetadata {
-		return builder(def)
-	})
-}
-
-func RegisterSchemaMetadataBuilder(builder func(StepDefinition) SchemaMetadata) struct{} {
-	return workflowcontract.RegisterSchemaMetadataBuilder(func(def workflowcontract.StepDefinition) workflowcontract.SchemaMetadata {
-		return builder(def)
-	})
-}
-
 func BuiltInTypeDefinitions() []BuiltInTypeDefinition {
 	return workflowcontract.BuiltInTypeDefinitions()
 }
 
+func BuiltInTypeDefinitionsWith(toolBuilder func(StepDefinition) ToolMetadata, schemaBuilder func(StepDefinition) SchemaMetadata) []BuiltInTypeDefinition {
+	var tb func(workflowcontract.StepDefinition) workflowcontract.ToolMetadata
+	if toolBuilder != nil {
+		tb = func(def workflowcontract.StepDefinition) workflowcontract.ToolMetadata { return toolBuilder(def) }
+	}
+	var sb func(workflowcontract.StepDefinition) workflowcontract.SchemaMetadata
+	if schemaBuilder != nil {
+		sb = func(def workflowcontract.StepDefinition) workflowcontract.SchemaMetadata { return schemaBuilder(def) }
+	}
+	return workflowcontract.BuiltInTypeDefinitionsWith(tb, sb)
+}
+
 func BuiltInTypeDefinitionForKey(key StepTypeKey) (BuiltInTypeDefinition, bool) {
 	return workflowcontract.BuiltInTypeDefinitionForKey(workflowcontract.StepTypeKey(key))
+}
+
+func BuiltInTypeDefinitionForKeyWith(key StepTypeKey, toolBuilder func(StepDefinition) ToolMetadata, schemaBuilder func(StepDefinition) SchemaMetadata) (BuiltInTypeDefinition, bool) {
+	var tb func(workflowcontract.StepDefinition) workflowcontract.ToolMetadata
+	if toolBuilder != nil {
+		tb = func(def workflowcontract.StepDefinition) workflowcontract.ToolMetadata { return toolBuilder(def) }
+	}
+	var sb func(workflowcontract.StepDefinition) workflowcontract.SchemaMetadata
+	if schemaBuilder != nil {
+		sb = func(def workflowcontract.StepDefinition) workflowcontract.SchemaMetadata { return schemaBuilder(def) }
+	}
+	return workflowcontract.BuiltInTypeDefinitionForKeyWith(workflowcontract.StepTypeKey(key), tb, sb)
 }

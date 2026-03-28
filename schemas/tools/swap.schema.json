@@ -42,13 +42,25 @@
       "properties": {
         "disable": {
           "default": true,
+          "description": "Disable all active swap devices with `swapoff -a`.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         },
         "fstabPath": {
+          "description": "Path to the fstab file.",
+          "examples": [
+            "/etc/fstab"
+          ],
           "type": "string"
         },
         "persist": {
           "default": true,
+          "description": "Comment out swap entries in fstab so swap stays off after reboot.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         }
       },

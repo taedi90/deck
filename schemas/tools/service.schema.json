@@ -63,22 +63,46 @@
       ],
       "properties": {
         "daemonReload": {
+          "description": "Run `systemctl daemon-reload` before applying state changes.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         },
         "enabled": {
+          "description": "Whether the service should be enabled on boot.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         },
         "ifExists": {
+          "description": "Only manage the service if it exists on the host.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         },
         "ignoreMissing": {
+          "description": "Suppress errors when the service is not found.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         },
         "name": {
+          "description": "Single service name to manage. Use `name` or `names`, not both.",
+          "examples": [
+            "containerd"
+          ],
           "minLength": 1,
           "type": "string"
         },
         "names": {
+          "description": "Multiple service names managed in one step. Use `name` or `names`, not both.",
+          "examples": [
+            "[firewalld,ufw]"
+          ],
           "items": {
             "minLength": 1,
             "type": "string"
@@ -87,12 +111,16 @@
           "type": "array"
         },
         "state": {
+          "description": "Desired service state.",
           "enum": [
             "unchanged",
             "started",
             "stopped",
             "restarted",
             "reloaded"
+          ],
+          "examples": [
+            "started"
           ],
           "type": "string"
         }

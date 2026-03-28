@@ -28,20 +28,21 @@ Use this when tools or runtimes expect a stable path alias.
 ```yaml
 kind: CreateSymlink
 spec:
-  path: /usr/bin/runc
-  target: /usr/local/sbin/runc
-  force: true
+
+	path: /usr/bin/runc
+	target: /usr/local/sbin/runc
+	force: true
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.createParent` | `boolean` | no | `false` | `` | Create parent directories for `path` if they do not exist. Defaults to `false`. | `true` |
-| `spec.force` | `boolean` | no | `false` | `` | Remove an existing file or link at `path` before creating the new link. Defaults to `false`. | `true` |
-| `spec.ignoreMissingTarget` | `boolean` | no | `false` | `` | Treat a missing target as a no-op instead of an error. Useful when a compatibility symlink should only be created if the target path exists. | `true` |
+| `spec.createParent` | `boolean` | no | `false` | `` | Create parent directories for `path` if needed. | `true` |
+| `spec.force` | `boolean` | no | `false` | `` | Remove an existing file or link at `path` before creating the new link. | `true` |
+| `spec.ignoreMissingTarget` | `boolean` | no | `false` | `` | Treat a missing target as a no-op instead of an error. | `true` |
 | `spec.path` | `string` | yes | `` | `` | Path where the symbolic link will be created. | `/usr/bin/runc` |
-| `spec.requireTarget` | `boolean` | no | `false` | `` | Fail the step if `target` does not exist at the time the link is created. Defaults to `false`. | `true` |
+| `spec.requireTarget` | `boolean` | no | `false` | `` | Fail if `target` does not exist when the link is created. | `true` |
 | `spec.target` | `string` | yes | `` | `` | Path that the symbolic link points to. | `/usr/local/sbin/runc` |
 
 ## Related

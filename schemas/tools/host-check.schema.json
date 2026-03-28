@@ -41,12 +41,20 @@
       "additionalProperties": false,
       "properties": {
         "binaries": {
+          "description": "Binary names to verify are present in `PATH`.",
+          "examples": [
+            "[kubeadm,kubelet,kubectl]"
+          ],
           "items": {
             "type": "string"
           },
           "type": "array"
         },
         "checks": {
+          "description": "Named checks to run against the local host.",
+          "examples": [
+            "[os,arch,swap]"
+          ],
           "items": {
             "enum": [
               "os",
@@ -62,6 +70,10 @@
         },
         "failFast": {
           "default": true,
+          "description": "Stop on the first failing check rather than running all checks.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         }
       },

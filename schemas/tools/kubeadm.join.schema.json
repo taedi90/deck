@@ -54,19 +54,35 @@
       "properties": {
         "asControlPlane": {
           "default": false,
+          "description": "Join as an additional control-plane member instead of a worker.",
+          "examples": [
+            "false"
+          ],
           "type": "boolean"
         },
         "configFile": {
+          "description": "Path to an explicit kubeadm join config file.",
+          "examples": [
+            "/tmp/deck/kubeadm-join.yaml"
+          ],
           "minLength": 1,
           "type": "string"
         },
         "extraArgs": {
+          "description": "Additional flags passed directly to kubeadm join.",
+          "examples": [
+            "[--skip-phases=preflight]"
+          ],
           "items": {
             "type": "string"
           },
           "type": "array"
         },
         "joinFile": {
+          "description": "Path to the join command file produced by a prior init run.",
+          "examples": [
+            "/tmp/deck/join.txt"
+          ],
           "minLength": 1,
           "type": "string"
         }

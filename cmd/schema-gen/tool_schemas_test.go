@@ -7,7 +7,7 @@ import (
 )
 
 func TestToolSchemaGeneratorsCoverStepDefinitions(t *testing.T) {
-	for _, def := range workflowexec.BuiltInTypeDefinitions() {
+	for _, def := range workflowexec.BuiltInTypeDefinitionsWith(nil, schemaMetadataForDefinition) {
 		generatorName := def.Schema.GeneratorName
 		if generatorName == "" {
 			generatorName = def.Step.Kind
@@ -29,13 +29,14 @@ func TestToolSchemaDefinitionsUseRegistrySchemaFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("toolSchemaDefinitions: %v", err)
 	}
-	for _, def := range workflowexec.BuiltInTypeDefinitions() {
+	registryDefs := workflowexec.BuiltInTypeDefinitionsWith(nil, schemaMetadataForDefinition)
+	for _, def := range registryDefs {
 		if _, ok := defs[def.Step.SchemaFile]; !ok {
 			t.Fatalf("generated schemas missing %s for %s", def.Step.SchemaFile, def.Step.Kind)
 		}
 	}
-	if len(defs) != len(workflowexec.BuiltInTypeDefinitions()) {
-		t.Fatalf("expected %d generated tool schemas, got %d", len(workflowexec.BuiltInTypeDefinitions()), len(defs))
+	if len(defs) != len(registryDefs) {
+		t.Fatalf("expected %d generated tool schemas, got %d", len(registryDefs), len(defs))
 	}
 }
 
@@ -44,7 +45,7 @@ func TestGeneratedToolSchemasTreatAPIVersionAsOptional(t *testing.T) {
 	if err != nil {
 		t.Fatalf("toolSchemaDefinitions: %v", err)
 	}
-	for _, def := range workflowexec.BuiltInTypeDefinitions() {
+	for _, def := range workflowexec.BuiltInTypeDefinitionsWith(nil, schemaMetadataForDefinition) {
 		schema, ok := defs[def.Step.SchemaFile]
 		if !ok {
 			t.Fatalf("missing schema for %s", def.Step.Kind)

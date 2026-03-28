@@ -10,8 +10,11 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
+
+	"github.com/Airgap-Castaways/deck/internal/httpfetch"
 )
 
 const (
@@ -19,6 +22,8 @@ const (
 	scenarioSourceServer = "server"
 	scenarioSourceAll    = "all"
 )
+
+var scenarioHTTPClient = httpfetch.Client(10 * time.Second)
 
 type scenarioEntry struct {
 	Name     string `json:"name"`
@@ -279,13 +284,9 @@ func fetchScenarioIndexFromServer(ctx context.Context, server string) ([]string,
 	}
 	trimmed := strings.TrimRight(server, "/")
 	indexURL := trimmed + "/workflows/index.json"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, indexURL, nil)
+	resp, err := httpfetch.Do(ctx, scenarioHTTPClient, http.MethodGet, indexURL, nil, "scenario list request")
 	if err != nil {
-		return nil, fmt.Errorf("scenario list: build request: %w", err)
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("scenario list: request failed: %w", err)
+		return nil, err
 	}
 	defer closeSilently(resp.Body)
 	if resp.StatusCode == http.StatusNotFound {

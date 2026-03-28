@@ -42,25 +42,49 @@
       "properties": {
         "createParent": {
           "default": false,
+          "description": "Create parent directories for `path` if needed.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         },
         "force": {
           "default": false,
+          "description": "Remove an existing file or link at `path` before creating the new link.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         },
         "ignoreMissingTarget": {
           "default": false,
+          "description": "Treat a missing target as a no-op instead of an error.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         },
         "path": {
+          "description": "Path where the symbolic link will be created.",
+          "examples": [
+            "/usr/bin/runc"
+          ],
           "minLength": 1,
           "type": "string"
         },
         "requireTarget": {
           "default": false,
+          "description": "Fail if `target` does not exist when the link is created.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         },
         "target": {
+          "description": "Path that the symbolic link points to.",
+          "examples": [
+            "/usr/local/sbin/runc"
+          ],
           "minLength": 1,
           "type": "string"
         }

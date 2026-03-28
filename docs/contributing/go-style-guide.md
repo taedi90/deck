@@ -105,6 +105,7 @@ It is based on the [Uber Go Style Guide](https://github.com/uber-go/guide/blob/m
 - When a `gosec` suppression is unavoidable, keep it helper-local and document it in `.golangci.yml` rather than scattering suppressions through feature code.
 - In CLI code, prefer `run`-style functions that return errors and keep process exit in `cmd/.../main.go`.
 - In docs, logs, and comments, do not use emojis.
+- Public workflow steps follow the comment-driven metadata contract documented in `docs/contributing/comment-driven-step-metadata.md`.
 
 ## Lint policy
 
@@ -153,6 +154,7 @@ When reviewing Go code in `deck`, check the following first:
 - Are trust-boundary operations kept in the right helper layer?
 - Does concurrency have a clear lifecycle and shutdown path?
 - Are new globals or `init()` usage really necessary?
+- If a public step changed, does it still satisfy the comment-driven metadata contract and pass `make generate && git diff --exit-code`?
 
 ## Updating this guide
 

@@ -27,13 +27,14 @@ Use this for typed bootstrap and upgrade verification instead of ad-hoc kubectl 
 ```yaml
 kind: CheckCluster
 spec:
-  interval: 5s
-  nodes:
-    total: 1
-    ready: 1
-    controlPlaneReady: 1
-  reports:
-    nodesPath: /tmp/deck/reports/bootstrap-nodes.txt
+
+	interval: 5s
+	nodes:
+	  total: 1
+	  ready: 1
+	  controlPlaneReady: 1
+	reports:
+	  nodesPath: /tmp/deck/reports/bootstrap-nodes.txt
 ```
 
 ### Spec Fields
@@ -43,12 +44,12 @@ spec:
 | `spec.fileAssertions` | `array<object>` | no | `` | `` | Optional file-content assertions evaluated on every poll attempt. | `[{path:/etc/containerd/config.toml,contains:[registry.k8s.io/pause:3.10]}]` |
 | `spec.initialDelay` | `string` | no | `` | `` | Optional delay before the first poll attempt. | `10s` |
 | `spec.interval` | `string` | no | `` | `` | Duration between poll attempts while waiting for cluster state to converge. | `5s` |
-| `spec.kubeSystem` | `object` | no | `` | `` | Optional checks for `kube-system` pod readiness and optional pod state reports. | `{readyNames:[etcd-control-plane]}` |
-| `spec.kubeconfig` | `string` | no | `` | `` | Kubeconfig path used for kubectl-based checks. Defaults to `/etc/kubernetes/admin.conf`. | `/etc/kubernetes/admin.conf` |
+| `spec.kubeSystem` | `object` | no | `` | `` | Optional checks for kube-system pod readiness. | `{readyNames:[etcd-control-plane]}` |
+| `spec.kubeconfig` | `string` | no | `` | `` | Kubeconfig path used for kubectl-based checks. | `/etc/kubernetes/admin.conf` |
 | `spec.nodes` | `object` | no | `` | `` | Optional checks for cluster node count and readiness. | `{total:1,ready:1,controlPlaneReady:1}` |
-| `spec.reports` | `object` | no | `` | `` | Optional paths for writing node and cluster state reports during verification. | `{nodesPath:/tmp/deck/reports/bootstrap-nodes.txt}` |
+| `spec.reports` | `object` | no | `` | `` | Optional paths for writing node and cluster state reports. | `{nodesPath:/tmp/deck/reports/bootstrap-nodes.txt}` |
 | `spec.timeout` | `string` | no | `` | `` | Maximum total duration to keep polling before the step fails. | `10m` |
-| `spec.versions` | `object` | no | `` | `` | Optional checks for Kubernetes component versions and an optional version report. | `{server:v1.31.0,kubelet:v1.31.0}` |
+| `spec.versions` | `object` | no | `` | `` | Optional checks for Kubernetes component versions. | `{server:v1.31.0,kubelet:v1.31.0}` |
 
 ### Nested Objects
 
@@ -74,7 +75,7 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.reports.clusterNodesPath` | `string` | no | `` | `` | Optional second node report path when the workflow wants both scenario-specific and shared cluster node reports. | `/tmp/deck/reports/cluster-nodes.txt` |
+| `spec.reports.clusterNodesPath` | `string` | no | `` | `` | Optional second node report path for shared cluster node reports. | `/tmp/deck/reports/cluster-nodes.txt` |
 | `spec.reports.nodesPath` | `string` | no | `` | `` | Optional report file path for `kubectl get nodes` output. | `/tmp/deck/reports/bootstrap-nodes.txt` |
 
 ### `spec.versions`
@@ -83,7 +84,7 @@ spec:
 |---|---|---:|---|---|---|---|
 | `spec.versions.kubeadm` | `string` | no | `` | `` | Expected local kubeadm version from `kubeadm version -o short`. | `v1.31.0` |
 | `spec.versions.kubelet` | `string` | no | `` | `` | Expected kubelet version for the selected node. | `v1.31.0` |
-| `spec.versions.nodeName` | `string` | no | `` | `` | Node name used when reading kubelet version. Defaults to `control-plane`. | `control-plane` |
+| `spec.versions.nodeName` | `string` | no | `` | `` | Node name used when reading kubelet version. | `control-plane` |
 | `spec.versions.reportPath` | `string` | no | `` | `` | Optional report file that records target, server, kubelet, and kubeadm versions. | `/tmp/deck/reports/upgrade-version.txt` |
 | `spec.versions.server` | `string` | no | `` | `` | Expected API server version from `kubectl version -o json`. | `v1.31.0` |
 | `spec.versions.targetVersion` | `string` | no | `` | `` | Target Kubernetes version written into the optional version report file. | `v1.31.0` |

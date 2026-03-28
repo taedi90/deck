@@ -41,15 +41,27 @@
       "additionalProperties": false,
       "properties": {
         "cleanupContainers": {
+          "description": "Containers to stop and remove during cleanup.",
+          "examples": [
+            "[kube-apiserver,etcd]"
+          ],
           "items": {
             "type": "string"
           },
           "type": "array"
         },
         "criSocket": {
+          "description": "CRI socket path passed to kubeadm.",
+          "examples": [
+            "unix:///run/containerd/containerd.sock"
+          ],
           "type": "string"
         },
         "extraArgs": {
+          "description": "Additional flags passed directly to kubeadm reset.",
+          "examples": [
+            "[--skip-phases=preflight]"
+          ],
           "items": {
             "type": "string"
           },
@@ -57,53 +69,105 @@
         },
         "force": {
           "default": false,
+          "description": "Pass `--force` to kubeadm reset.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         },
         "ignoreErrors": {
           "default": false,
+          "description": "Continue with cleanup even if kubeadm reset itself fails.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         },
         "removeFiles": {
+          "description": "Files to delete during cleanup.",
+          "examples": [
+            "[/etc/kubernetes/admin.conf]"
+          ],
           "items": {
             "type": "string"
           },
           "type": "array"
         },
         "removePaths": {
+          "description": "Directories to delete during cleanup.",
+          "examples": [
+            "[/etc/cni/net.d,/var/lib/etcd]"
+          ],
           "items": {
             "type": "string"
           },
           "type": "array"
         },
         "reportFile": {
+          "description": "Optional reset report file written after cleanup.",
+          "examples": [
+            "/tmp/deck/reports/reset-state.txt"
+          ],
           "type": "string"
         },
         "reportResetReason": {
+          "description": "Value written into the reset report as `resetReason`.",
+          "examples": [
+            "node-reset-acceptance"
+          ],
           "type": "string"
         },
         "restartRuntimeService": {
+          "description": "Runtime service to restart after cleanup.",
+          "examples": [
+            "containerd"
+          ],
           "type": "string"
         },
         "stopKubelet": {
           "default": true,
+          "description": "Stop kubelet before running reset.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         },
         "stopKubeletAfterReset": {
+          "description": "Stop kubelet again after runtime verification completes.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         },
         "verifyContainersAbsent": {
+          "description": "Containers that must no longer exist after cleanup.",
+          "examples": [
+            "[kube-apiserver,etcd]"
+          ],
           "items": {
             "type": "string"
           },
           "type": "array"
         },
         "waitForMissingManifestsGlob": {
+          "description": "Glob that must resolve to zero matches before the step succeeds.",
+          "examples": [
+            "/etc/kubernetes/manifests/*.yaml"
+          ],
           "type": "string"
         },
         "waitForRuntimeReady": {
+          "description": "Poll runtime readiness after cleanup.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         },
         "waitForRuntimeService": {
+          "description": "Wait until the runtime service reports active.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         }
       },

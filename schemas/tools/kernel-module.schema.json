@@ -64,13 +64,25 @@
       "properties": {
         "load": {
           "default": true,
+          "description": "Run `modprobe` to load the module immediately.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         },
         "name": {
+          "description": "Single module name to manage. Use `name` or `names`, not both.",
+          "examples": [
+            "br_netfilter"
+          ],
           "minLength": 1,
           "type": "string"
         },
         "names": {
+          "description": "Multiple module names managed in one step. Use `name` or `names`, not both.",
+          "examples": [
+            "[overlay,br_netfilter]"
+          ],
           "items": {
             "minLength": 1,
             "type": "string"
@@ -80,9 +92,17 @@
         },
         "persist": {
           "default": true,
+          "description": "Persist the module under `/etc/modules-load.d/`.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         },
         "persistFile": {
+          "description": "Path to the persistence file written when `persist` is true.",
+          "examples": [
+            "/etc/modules-load.d/k8s.conf"
+          ],
           "type": "string"
         }
       },

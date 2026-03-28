@@ -100,22 +100,42 @@
       ],
       "properties": {
         "glob": {
+          "description": "Glob pattern that must resolve to zero matches before the step succeeds.",
+          "examples": [
+            "/etc/kubernetes/manifests/*.yaml"
+          ],
           "minLength": 1,
           "type": "string"
         },
         "initialDelay": {
+          "description": "Duration to wait before the first poll attempt.",
+          "examples": [
+            "1s"
+          ],
           "pattern": "^[0-9]+(ms|s|m|h)$",
           "type": "string"
         },
         "interval": {
+          "description": "Duration between poll attempts.",
+          "examples": [
+            "2s"
+          ],
           "pattern": "^[0-9]+(ms|s|m|h)$",
           "type": "string"
         },
         "path": {
+          "description": "Filesystem path to check.",
+          "examples": [
+            "/etc/kubernetes/admin.conf"
+          ],
           "minLength": 1,
           "type": "string"
         },
         "paths": {
+          "description": "List of paths that must all be absent before the step succeeds.",
+          "examples": [
+            "[/etc/kubernetes/manifests/a.yaml,/etc/kubernetes/manifests/b.yaml]"
+          ],
           "items": {
             "type": "string"
           },
@@ -123,18 +143,30 @@
           "type": "array"
         },
         "pollInterval": {
+          "description": "Deprecated alias for `interval`. Prefer `interval`.",
+          "examples": [
+            "2s"
+          ],
           "pattern": "^[0-9]+(ms|s|m|h)$",
           "type": "string"
         },
         "timeout": {
+          "description": "Maximum total duration to wait before the step fails.",
+          "examples": [
+            "5m"
+          ],
           "pattern": "^[0-9]+(ms|s|m|h)$",
           "type": "string"
         },
         "type": {
+          "description": "Filesystem entry type restriction for path checks.",
           "enum": [
             "any",
             "file",
             "dir"
+          ],
+          "examples": [
+            "file"
           ],
           "type": "string"
         }

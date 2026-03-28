@@ -42,11 +42,23 @@
       "properties": {
         "fetch": {
           "additionalProperties": false,
+          "description": "Optional transport policy when the archive must be fetched first.",
+          "examples": [
+            "{offlineOnly:true}"
+          ],
           "properties": {
             "offlineOnly": {
+              "description": "Restrict fetches to offline-safe sources only.",
+              "examples": [
+                "true"
+              ],
               "type": "boolean"
             },
             "sources": {
+              "description": "Ordered list of source candidates tried for the fetch.",
+              "examples": [
+                "[{type:url,url:https://mirror.example.com/runc}]"
+              ],
               "items": {
                 "additionalProperties": false,
                 "anyOf": [
@@ -91,16 +103,28 @@
           "type": "object"
         },
         "include": {
+          "description": "Optional archive members to extract.",
+          "examples": [
+            "[bridge,loopback]"
+          ],
           "items": {
             "type": "string"
           },
           "type": "array"
         },
         "mode": {
+          "description": "File permissions in octal notation applied to extracted files when supported.",
+          "examples": [
+            "0755"
+          ],
           "pattern": "^[0-7]{4}$",
           "type": "string"
         },
         "path": {
+          "description": "Destination directory on the node.",
+          "examples": [
+            "/opt/cni/bin"
+          ],
           "minLength": 1,
           "type": "string"
         },
@@ -123,19 +147,35 @@
               ]
             }
           ],
+          "description": "Structured source descriptor for the archive to extract.",
+          "examples": [
+            "{path:/tmp/cni-plugins.tgz}"
+          ],
           "properties": {
             "bundle": {
               "additionalProperties": false,
+              "description": "Reference to a file already present in the bundle.",
+              "examples": [
+                "{root:files,path:bin/linux/amd64/runc}"
+              ],
               "properties": {
                 "path": {
+                  "description": "Relative path within the selected bundle root.",
+                  "examples": [
+                    "bin/linux/amd64/runc"
+                  ],
                   "minLength": 1,
                   "type": "string"
                 },
                 "root": {
+                  "description": "Bundle root category to read from (`files`, `images`, or `packages`).",
                   "enum": [
                     "files",
                     "images",
                     "packages"
+                  ],
+                  "examples": [
+                    "files"
                   ],
                   "type": "string"
                 }
@@ -147,14 +187,26 @@
               "type": "object"
             },
             "path": {
+              "description": "Local filesystem path used as the source.",
+              "examples": [
+                "/opt/cache/runc"
+              ],
               "minLength": 1,
               "type": "string"
             },
             "sha256": {
+              "description": "Expected SHA-256 checksum for the fetched or copied file.",
+              "examples": [
+                "abc123..."
+              ],
               "pattern": "^[a-fA-F0-9]{64}$",
               "type": "string"
             },
             "url": {
+              "description": "URL to fetch the file from during prepare.",
+              "examples": [
+                "https://mirror.example.com/runc"
+              ],
               "minLength": 1,
               "type": "string"
             }

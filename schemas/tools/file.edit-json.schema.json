@@ -42,9 +42,17 @@
       "properties": {
         "createIfMissing": {
           "default": false,
+          "description": "Create a new empty JSON object when the file does not exist.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         },
         "edits": {
+          "description": "Ordered list of structured edits applied sequentially.",
+          "examples": [
+            "[{op:set,rawPath:plugins.0.type,value:bridge}]"
+          ],
           "items": {
             "additionalProperties": false,
             "properties": {
@@ -106,10 +114,18 @@
           "type": "array"
         },
         "mode": {
+          "description": "Optional file permissions to apply after the edit completes.",
+          "examples": [
+            "0644"
+          ],
           "pattern": "^[0-7]{4}$",
           "type": "string"
         },
         "path": {
+          "description": "JSON file path to edit in place.",
+          "examples": [
+            "/etc/cni/net.d/10-custom.conflist"
+          ],
           "minLength": 1,
           "type": "string"
         }

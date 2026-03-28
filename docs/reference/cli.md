@@ -209,7 +209,7 @@ Optional ask augmentation config example:
 - `bundle build` archives the canonical workspace bundle inputs: the root `deck` launcher, `workflows/`, `outputs/`, and `.deck/manifest.json`, and respects `.deckignore` within those paths.
 - Help text is shown on stdout only when you request it with `--help` or `help`.
 - Command and flag errors are written to stderr without automatic usage output.
-- `version` prints `deck <version>` by default and supports `--json` for machine-readable metadata.
+- `version` prints `deck <version>` by default and supports `-o json` for machine-readable metadata.
 - Prefer typed step kinds for common host changes.
 - Keep `Command` for cases where the clearer typed form does not exist yet.
 - `deck ask` previews changes by default and only writes workflow files when `--write` is present.

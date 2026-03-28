@@ -28,20 +28,21 @@ Use this for modules that must be present before networking or container runtime
 ```yaml
 kind: KernelModule
 spec:
-  name: br_netfilter
-  load: true
-  persist: true
-  persistFile: /etc/modules-load.d/k8s.conf
+
+	name: br_netfilter
+	load: true
+	persist: true
+	persistFile: /etc/modules-load.d/k8s.conf
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.load` | `boolean` | no | `true` | `` | Run `modprobe` to load the module immediately. Defaults to `true`. | `true` |
-| `spec.name` | `string` | no | `` | `` | Single module name to load. Use `name` or `names`, not both. | `br_netfilter` |
-| `spec.names` | `array<string>` | no | `` | `` | Multiple module names to load in a single step. Use `name` or `names`, not both. | `[overlay,br_netfilter]` |
-| `spec.persist` | `boolean` | no | `true` | `` | Write the module name to a file under `/etc/modules-load.d/` so it is loaded on every boot. Defaults to `true`. | `true` |
+| `spec.load` | `boolean` | no | `true` | `` | Run `modprobe` to load the module immediately. | `true` |
+| `spec.name` | `string` | no | `` | `` | Single module name to manage. Use `name` or `names`, not both. | `br_netfilter` |
+| `spec.names` | `array<string>` | no | `` | `` | Multiple module names managed in one step. Use `name` or `names`, not both. | `[overlay,br_netfilter]` |
+| `spec.persist` | `boolean` | no | `true` | `` | Persist the module under `/etc/modules-load.d/`. | `true` |
 | `spec.persistFile` | `string` | no | `` | `` | Path to the persistence file written when `persist` is true. | `/etc/modules-load.d/k8s.conf` |
 
 ### Validation Rules

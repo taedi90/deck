@@ -40,7 +40,7 @@ func TestDocsReferenceCLIIncludesSyncedAskContextBlocks(t *testing.T) {
 func TestManifestWorkflowRulesMatchSchemaDoc(t *testing.T) {
 	manifest := Current()
 	for _, note := range validate.WorkflowInvariantNotes() {
-		if !contains(manifest.Workflow.Notes, note) {
+		if !containsString(manifest.Workflow.Notes, note) {
 			t.Fatalf("missing workflow note %q", note)
 		}
 	}
@@ -78,7 +78,7 @@ func TestManifestWorkflowRulesMatchValidatorAndSchema(t *testing.T) {
 			t.Fatalf("schema anyOf missing top-level mode %q", mode)
 		}
 	}
-	if !contains(manifest.Workflow.RequiredFields, "version") {
+	if !containsString(manifest.Workflow.RequiredFields, "version") {
 		t.Fatalf("workflow rules should require version")
 	}
 	if !manifest.Policy.AssumeOfflineByDefault {
@@ -97,7 +97,7 @@ func TestManifestCLIParity(t *testing.T) {
 		flagNames = append(flagNames, flag.Name)
 	}
 	for _, want := range []string{"--write", "--from", "--plan-name", "--plan-dir"} {
-		if !contains(flagNames, want) {
+		if !containsString(flagNames, want) {
 			t.Fatalf("missing cli flag %s", want)
 		}
 	}
@@ -142,10 +142,10 @@ func TestRelevantStepKindsMatchesDockerRequest(t *testing.T) {
 	for _, step := range relevant {
 		joined = append(joined, step.Kind)
 	}
-	if !contains(joined, "InstallPackage") {
-		t.Fatalf("expected packages.install in relevant steps, got %v", joined)
+	if !containsString(joined, "InstallPackage") {
+		t.Fatalf("expected InstallPackage in relevant steps, got %v", joined)
 	}
-	if !contains(joined, "ConfigureRepository") {
+	if !containsString(joined, "ConfigureRepository") {
 		t.Fatalf("expected ConfigureRepository in relevant steps, got %v", joined)
 	}
 }
@@ -234,7 +234,7 @@ func TestRelevantStepKindsMatchesKubeadmAirGapRequest(t *testing.T) {
 		joined = append(joined, step.Kind)
 	}
 	for _, want := range []string{"CheckHost", "LoadImage", "CheckCluster"} {
-		if !contains(joined, want) {
+		if !containsString(joined, want) {
 			t.Fatalf("expected %s in relevant steps, got %v", want, joined)
 		}
 	}
@@ -246,10 +246,10 @@ func TestRelevantStepKindsWithOptionsPrefersJoinForMultiNodeCapability(t *testin
 	for _, step := range relevant {
 		joined = append(joined, step.Kind)
 	}
-	if !contains(joined, "JoinKubeadm") {
+	if !containsString(joined, "JoinKubeadm") {
 		t.Fatalf("expected JoinKubeadm in relevant steps, got %v", joined)
 	}
-	if !contains(joined, "CheckCluster") {
+	if !containsString(joined, "CheckCluster") {
 		t.Fatalf("expected CheckCluster in relevant steps, got %v", joined)
 	}
 }
@@ -284,7 +284,33 @@ func TestDocBlocksExposeAskContext(t *testing.T) {
 	}
 }
 
-func contains(values []string, want string) bool {
+func TestBuildStepKindsUsesStepmetaAskMetadata(t *testing.T) {
+	manifest := Current()
+	var command StepKindContext
+	var downloadImage StepKindContext
+	for _, kind := range manifest.StepKinds {
+		switch kind.Kind {
+		case "Command":
+			command = kind
+		case "DownloadImage":
+			downloadImage = kind
+		}
+	}
+	if len(command.MatchSignals) == 0 || command.MatchSignals[0] != "shell" {
+		t.Fatalf("expected command match signals from stepmeta, got %+v", command.MatchSignals)
+	}
+	if len(command.QualityRules) == 0 || command.QualityRules[0].Trigger != "typed-preferred" {
+		t.Fatalf("expected command quality rules from stepmeta, got %+v", command.QualityRules)
+	}
+	if len(command.AntiSignals) == 0 || command.AntiSignals[0] != "typed" {
+		t.Fatalf("expected command anti-signals from stepmeta, got %+v", command.AntiSignals)
+	}
+	if len(downloadImage.ConstrainedLiteralFields) == 0 || downloadImage.ConstrainedLiteralFields[0].Path != "spec.backend.engine" {
+		t.Fatalf("expected download image constrained field from stepmeta, got %+v", downloadImage.ConstrainedLiteralFields)
+	}
+}
+
+func containsString(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
 			return true

@@ -41,39 +41,71 @@
       "additionalProperties": false,
       "properties": {
         "backupPaths": {
+          "description": "Paths to back up before modifying.",
+          "examples": [
+            "[/etc/apt/sources.list]"
+          ],
           "items": {
             "type": "string"
           },
           "type": "array"
         },
         "cleanupPaths": {
+          "description": "Paths to remove before writing the new definition.",
+          "examples": [
+            "[/etc/apt/sources.list.d/ubuntu.list]"
+          ],
           "items": {
             "type": "string"
           },
           "type": "array"
         },
         "disableExisting": {
+          "description": "Disable all existing repository definitions before writing the new one.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         },
         "format": {
+          "description": "Repository file format to write.",
           "enum": [
             "auto",
             "deb",
             "rpm"
           ],
+          "examples": [
+            "deb"
+          ],
           "type": "string"
         },
         "mode": {
+          "description": "File permissions applied to the generated repository file.",
+          "examples": [
+            "0644"
+          ],
           "pattern": "^[0-7]{4}$",
           "type": "string"
         },
         "path": {
+          "description": "Explicit output path for the generated repository file.",
+          "examples": [
+            "/etc/apt/sources.list.d/offline.list"
+          ],
           "type": "string"
         },
         "replaceExisting": {
+          "description": "Replace an existing repository file at the target path.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         },
         "repositories": {
+          "description": "Repository entries to write.",
+          "examples": [
+            "[{baseurl:http://repo.local/debian,trusted:true}]"
+          ],
           "items": {
             "additionalProperties": false,
             "properties": {

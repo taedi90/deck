@@ -41,10 +41,18 @@
       "additionalProperties": false,
       "properties": {
         "path": {
+          "description": "Directory where per-registry `hosts.toml` files are written.",
+          "examples": [
+            "/etc/containerd/certs.d"
+          ],
           "minLength": 1,
           "type": "string"
         },
         "registryHosts": {
+          "description": "Per-registry host entries written as `hosts.toml` files under `path`.",
+          "examples": [
+            "[{registry:registry.k8s.io,host:http://mirror.local:5000}]"
+          ],
           "items": {
             "additionalProperties": false,
             "properties": {

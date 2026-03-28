@@ -14,15 +14,15 @@ This tutorial walks through the default `deck` path:
 deck init --out ./demo
 ```
 
-This creates a starter layout with two entry workflows and a set of empty output source directories:
+This creates a starter layout with two entry workflows and a prepared output tree scaffold:
 
 - `./demo/workflows/prepare.yaml`
 - `./demo/workflows/scenarios/apply.yaml`
 - `./demo/workflows/vars.yaml`
 - `./demo/workflows/components/example-apply.yaml`
-- `./demo/files/`
-- `./demo/packages/`
-- `./demo/images/`
+- `./demo/outputs/files/`
+- `./demo/outputs/packages/`
+- `./demo/outputs/images/`
 
 ## 2. Add or edit steps
 

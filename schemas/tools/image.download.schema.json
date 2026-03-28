@@ -41,6 +41,10 @@
       "additionalProperties": false,
       "properties": {
         "auth": {
+          "description": "Optional registry authentication entries used during download.",
+          "examples": [
+            "[{registry:registry.example.com,basic:{username:robot,password:${REGISTRY_PASSWORD}}}]"
+          ],
           "items": {
             "additionalProperties": false,
             "properties": {
@@ -76,9 +80,17 @@
         },
         "backend": {
           "additionalProperties": false,
+          "description": "Backend-specific download settings.",
+          "examples": [
+            "{engine:go-containerregistry}"
+          ],
           "properties": {
             "engine": {
+              "description": "Image download engine implementation.",
               "enum": [
+                "go-containerregistry"
+              ],
+              "examples": [
                 "go-containerregistry"
               ],
               "type": "string"
@@ -87,6 +99,10 @@
           "type": "object"
         },
         "images": {
+          "description": "Fully qualified image references to download.",
+          "examples": [
+            "[registry.k8s.io/pause:3.9]"
+          ],
           "items": {
             "type": "string"
           },
@@ -94,6 +110,10 @@
           "type": "array"
         },
         "outputDir": {
+          "description": "Optional bundle-relative directory for per-image tar archives.",
+          "examples": [
+            "images/control-plane"
+          ],
           "minLength": 1,
           "type": "string"
         }

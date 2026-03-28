@@ -41,9 +41,17 @@
       "additionalProperties": false,
       "properties": {
         "backup": {
+          "description": "Create a `.bak` copy before overwriting the original file.",
+          "examples": [
+            "true"
+          ],
           "type": "boolean"
         },
         "edits": {
+          "description": "Ordered match/replace rules applied sequentially.",
+          "examples": [
+            "[{match:SystemdCgroup = false,replaceWith:SystemdCgroup = true}]"
+          ],
           "items": {
             "additionalProperties": false,
             "properties": {
@@ -70,10 +78,18 @@
           "type": "array"
         },
         "mode": {
+          "description": "File permissions in octal notation applied after the edit completes.",
+          "examples": [
+            "0644"
+          ],
           "pattern": "^[0-7]{4}$",
           "type": "string"
         },
         "path": {
+          "description": "File path to edit in place.",
+          "examples": [
+            "/etc/containerd/config.toml"
+          ],
           "minLength": 1,
           "type": "string"
         }

@@ -96,7 +96,7 @@ func loadToolPageInputs(dir string) ([]schemadoc.PageInput, error) {
 			Description: doc.Description,
 			SchemaPath:  filepath.ToSlash(filepath.Join("schemas", "tools", def.SchemaFile)),
 			Schema:      raw,
-			Meta:        schemadoc.ToolMetadataFromRegistry(typedDef.Docs),
+			Meta:        schemadoc.ToolMetaForDefinition(def),
 			Required:    nestedRequired(doc.Properties, "spec"),
 			Spec:        spec,
 			Outputs:     append([]string(nil), def.Outputs...),

@@ -2,14 +2,10 @@ package preparecli
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/Airgap-Castaways/deck/internal/config"
@@ -187,7 +183,7 @@ func Run(ctx context.Context, opts Options) error {
 	}
 
 	preparedWorkspaceRoot := filepath.Dir(preparedRoot.Abs())
-	if err := stageRuntimeBinaries(preparedRoot.Abs(), opts); err != nil {
+	if err := stageRuntimeBinariesWithContext(ctx, preparedRoot.Abs(), opts); err != nil {
 		return err
 	}
 	if err := writeBytes(filepath.Join(preparedWorkspaceRoot, "deck"), []byte(renderLauncherScript()), 0o755); err != nil {
@@ -291,89 +287,4 @@ func writeBytes(path string, data []byte, mode os.FileMode) error {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 	return nil
-}
-
-func buildPreparedManifest(bundleRoot fsutil.PreparedRoot) (preparedManifest, error) {
-	entries := make([]preparedManifestEntry, 0)
-	workspaceRoot := filepath.Dir(bundleRoot.Abs())
-	for _, root := range []string{"packages", "images", "files", "bin"} {
-		if _, _, err := bundleRoot.Stat(root); err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return preparedManifest{}, err
-		}
-		if err := bundleRoot.WalkFiles(func(path string, d os.DirEntry) error {
-			if d.IsDir() {
-				return nil
-			}
-			raw, err := fsutil.ReadFile(path)
-			if err != nil {
-				return err
-			}
-			info, err := os.Stat(path)
-			if err != nil {
-				return err
-			}
-			rel, err := filepath.Rel(workspaceRoot, path)
-			if err != nil {
-				return err
-			}
-			sum := sha256.Sum256(raw)
-			entries = append(entries, preparedManifestEntry{Path: filepath.ToSlash(rel), SHA256: hex.EncodeToString(sum[:]), Size: info.Size()})
-			return nil
-		}, root); err != nil {
-			return preparedManifest{}, err
-		}
-	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Path < entries[j].Path })
-	return preparedManifest{Entries: entries}, nil
-}
-
-func renderLauncherScript() string {
-	return strings.TrimSpace(`#!/bin/sh
-set -eu
-
-os_name="$(uname -s)"
-arch_name="$(uname -m)"
-
-case "$os_name" in
-	Linux) deck_os="linux" ;;
-	Darwin) deck_os="darwin" ;;
-	*)
-		echo "deck: unsupported OS: $os_name" >&2
-		exit 1
-		;;
-esac
-
-case "$arch_name" in
-	x86_64|amd64) deck_arch="amd64" ;;
-	aarch64|arm64) deck_arch="arm64" ;;
-	*)
-		echo "deck: unsupported architecture: $arch_name" >&2
-		exit 1
-		;;
-esac
-
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-runtime_bin="$script_dir/outputs/bin/$deck_os/$deck_arch/deck"
-
-if [ ! -x "$runtime_bin" ]; then
-	if [ -e "$runtime_bin" ]; then
-		echo "deck: runtime binary is not executable: outputs/bin/$deck_os/$deck_arch/deck" >&2
-	else
-		echo "deck: bundle does not include a runtime binary for $deck_os/$deck_arch" >&2
-	fi
-	exit 1
-fi
-
-exec "$runtime_bin" "$@"`)
-}
-
-func writePreparedManifest(path string, manifest preparedManifest) error {
-	raw, err := json.MarshalIndent(manifest, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode prepare manifest: %w", err)
-	}
-	return writeBytes(path, raw, 0o644)
 }

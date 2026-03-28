@@ -43,4 +43,4 @@ This directory contains JSON Schema files for typed workflow steps.
 - `file.write.schema.json`: `WriteFile` (`public`)
 - `systemd-unit.schema.json`: `WriteSystemdUnit` (`public`)
 
-Use `../../docs/reference/schema/index.md` for the generated reference view.
+Use `../../docs/reference/schema/README.md` for the generated reference view.

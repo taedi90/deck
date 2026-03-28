@@ -27,23 +27,24 @@ Use this only when no typed step expresses the change clearly enough.
 ```yaml
 kind: Command
 spec:
-  command: ["systemctl", "status", "containerd"]
-  timeout: 30s
+
+	command: [systemctl, status, containerd]
+	timeout: 30s
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.command` | `array<string>` | yes | `` | `` | Command vector to execute. The first element is the binary; remaining elements are arguments. | `[systemctl,restart,containerd]` |
+| `spec.command` | `array<string>` | yes | `` | `` | Command vector to execute. The first element is the binary and the rest are arguments. | `[systemctl,restart,containerd]` |
 | `spec.env` | `object` | no | `` | `` | Additional environment variables passed to the command process as key-value pairs. | `{KUBECONFIG:/etc/kubernetes/admin.conf}` |
 | `spec.sudo` | `boolean` | no | `false` | `` | Prepend `sudo` before the command vector. Defaults to `false`. | `false` |
 | `spec.timeout` | `string` | no | `` | `` | Maximum duration for the command before it is killed. Overrides the step-level `timeout`. | `30s` |
 
 ### Notes
 
-- Prefer a typed step kind over `Command` whenever one is available — typed steps are easier to lint, review, and evolve.
-- Use `spec.timeout` to bound commands that may hang rather than relying on the outer step timeout.
+- Prefer a typed step kind over `Command` whenever one is available.
+- Use `spec.timeout` to bound commands that may hang instead of relying only on the outer step timeout.
 
 ## Related
 
