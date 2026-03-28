@@ -20,6 +20,8 @@ import (
 	"github.com/Airgap-Castaways/deck/internal/workflowexec"
 )
 
+var artifactDownloadHTTPClient = httpfetch.Client(0)
+
 type prepareDownloadFileBundleSpec struct {
 	Root string `json:"root"`
 	Path string `json:"path"`
@@ -183,7 +185,7 @@ func downloadURLToFile(ctx context.Context, target *os.File, url string) error {
 	if ctx == nil {
 		return fmt.Errorf("context is nil")
 	}
-	resp, err := httpfetch.Do(ctx, nil, "GET", url, nil, "download "+url)
+	resp, err := httpfetch.Do(ctx, artifactDownloadHTTPClient, "GET", url, nil, "download "+url)
 	if err != nil {
 		return err
 	}

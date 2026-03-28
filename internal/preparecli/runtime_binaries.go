@@ -19,6 +19,8 @@ import (
 	"github.com/Airgap-Castaways/deck/internal/workspacepaths"
 )
 
+var runtimeBinaryDownloadHTTPClient = httpfetch.Client(0)
+
 const (
 	binarySourceAuto    = "auto"
 	binarySourceLocal   = "local"
@@ -243,7 +245,7 @@ func downloadArchiveDeckBinary(ctx context.Context, url string) ([]byte, error) 
 	if err != nil {
 		return nil, err
 	}
-	resp, err := httpfetch.Do(ctx, nil, http.MethodGet, parsed.String(), nil, "download release archive "+parsed.String())
+	resp, err := httpfetch.Do(ctx, runtimeBinaryDownloadHTTPClient, http.MethodGet, parsed.String(), nil, "download release archive "+parsed.String())
 	if err != nil {
 		return nil, err
 	}

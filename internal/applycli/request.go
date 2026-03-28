@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/Airgap-Castaways/deck/internal/bundle"
 	"github.com/Airgap-Castaways/deck/internal/config"
@@ -22,6 +23,8 @@ import (
 	"github.com/Airgap-Castaways/deck/internal/validate"
 	"github.com/Airgap-Castaways/deck/internal/workspacepaths"
 )
+
+var workflowFetchHTTPClient = httpfetch.Client(30 * time.Second)
 
 type ExecutionRequestOptions struct {
 	CommandName                  string
@@ -164,7 +167,7 @@ func FetchWorkflowForValidation(ctx context.Context, rawURL string) ([]byte, err
 	if ctx == nil {
 		return nil, fmt.Errorf("context is nil")
 	}
-	return httpfetch.GetBytes(ctx, nil, rawURL, "get workflow url")
+	return httpfetch.GetBytes(ctx, workflowFetchHTTPClient, rawURL, "get workflow url")
 }
 
 func ResolveBundleRoot(positionalBundle string) (string, error) {
