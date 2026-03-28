@@ -33,20 +33,19 @@ Use this during prepare to collect package-manager content for offline installat
 ```yaml
 kind: DownloadPackage
 spec:
-
-	packages: [podman]
-	distro:
-	  family: rhel
-	  release: rocky9
-	repo:
-	  type: rpm
-	  modules:
-	    - name: container-tools
-	      stream: "4.0"
-	backend:
-	  mode: container
-	  runtime: docker
-	  image: rockylinux:9
+  packages: [podman]
+  distro:
+    family: rhel
+    release: rocky9
+  repo:
+    type: rpm
+    modules:
+      - name: container-tools
+        stream: "4.0"
+  backend:
+    mode: container
+    runtime: docker
+    image: rockylinux:9
 ```
 
 ### Spec Fields
@@ -88,12 +87,9 @@ spec:
 
 ### Notes
 
-- Use `DownloadPackage` and `InstallPackage` with `ConfigureRepository` and `RefreshRepository` for a complete typed package-management flow.
-- Omit `outputDir` unless you need a custom package location; deck uses `packages/` by default, or `packages/deb/<release>` and `packages/rpm/<release>` when `repo.type` is set.
-- Keeping the same package list across `download` and `install` helps maintain offline parity.
-- Use `restrictToRepos` on the `InstallPackage` step to prevent the node's default online repos from being consulted during an offline apply.
-- When `repo` is set for `DownloadPackage`, deck expects `repo.type` and `distro.release` so it can build a `deb-flat` or `rpm` repository layout.
-- Container-backed `DownloadPackage` exports completed artifacts into a host-owned cache and does not bind-mount deb/rpm package-manager cache directories.
+- Use `DownloadPackage` during prepare to stage offline package-manager content.
+- Omit `outputDir` unless you need a custom package location.
+- Container-backed `DownloadPackage` exports completed artifacts into a host-owned cache and does not bind-mount package-manager cache directories.
 
 ## `InstallPackage`
 
@@ -110,11 +106,10 @@ Use this during apply to install packages from configured local or mirrored repo
 ```yaml
 kind: InstallPackage
 spec:
-
-	packages: [kubelet, kubeadm, kubectl]
-	source:
-	  type: local-repo
-	  path: /opt/deck/repos/kubernetes
+  packages: [kubelet, kubeadm, kubectl]
+  source:
+    type: local-repo
+    path: /opt/deck/repos/kubernetes
 ```
 
 ### Spec Fields
@@ -135,6 +130,10 @@ spec:
 | `spec.source.path` | `string` | yes | `` | `` | Filesystem path to the pre-prepared local package repository. | `/opt/deck/repos/kubernetes` |
 | `spec.source.type` | `string` | yes | `` | `` | Source type. Currently only `local-repo` is supported. | `local-repo` |
 
+
+### Notes
+
+- Use `InstallPackage` during apply to install packages from configured local or mirrored repositories.
 
 ## Related
 

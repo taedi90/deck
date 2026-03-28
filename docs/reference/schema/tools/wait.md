@@ -48,8 +48,8 @@ spec:
 | `spec.initialDelay` | `string` | no | `` | `` | Duration to wait before the first poll attempt. | `1s` |
 | `spec.interval` | `string` | no | `` | `` | Duration between poll attempts. | `2s` |
 | `spec.name` | `string` | yes | `` | `` | Service name to check. | `containerd` |
-| `spec.pollInterval` | `string` | no | `` | `` | Deprecated alias for `interval`. Prefer `interval`. | `2s` |
-| `spec.timeout` | `string` | no | `` | `` | Maximum total duration to wait before the step fails. | `5m` |
+| `spec.pollInterval` | `string` | no | `` | `` | Deprecated alias for `interval`. Use `interval` instead. | `2s` |
+| `spec.timeout` | `string` | no | `` | `` | Maximum total duration to wait before failing the step. | `5m` |
 
 ### Notes
 
@@ -81,16 +81,17 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.command` | `array<string>` | yes | `` | `` | Command vector to run on each poll attempt. | `[test,-f,/etc/kubernetes/admin.conf]` |
+| `spec.command` | `array<string>` | yes | `` | `` | Command vector to run on each poll attempt. The step succeeds when the command exits 0. | `[test,-f,/etc/kubernetes/admin.conf]` |
 | `spec.initialDelay` | `string` | no | `` | `` | Duration to wait before the first poll attempt. | `1s` |
 | `spec.interval` | `string` | no | `` | `` | Duration between poll attempts. | `2s` |
-| `spec.pollInterval` | `string` | no | `` | `` | Deprecated alias for `interval`. Prefer `interval`. | `2s` |
-| `spec.timeout` | `string` | no | `` | `` | Maximum total duration to wait before the step fails. | `5m` |
+| `spec.pollInterval` | `string` | no | `` | `` | Deprecated alias for `interval`. Use `interval` instead. | `2s` |
+| `spec.timeout` | `string` | no | `` | `` | Maximum total duration to wait before failing the step. | `5m` |
 
 ### Notes
 
 - `Wait` bridges convergence gaps between steps. It should not replace the configuration action itself.
 - Keep waits specific so failures identify exactly which dependency did not become ready within the timeout.
+- Use `initialDelay` when a service emits a transient non-active state immediately after being started.
 
 ## `WaitForFile`
 
@@ -122,13 +123,14 @@ spec:
 | `spec.interval` | `string` | no | `` | `` | Duration between poll attempts. | `2s` |
 | `spec.nonEmpty` | `boolean` | no | `` | `` | Require the matched file to have non-zero size. | `true` |
 | `spec.path` | `string` | yes | `` | `` | Filesystem path to check. | `/etc/kubernetes/admin.conf` |
-| `spec.pollInterval` | `string` | no | `` | `` | Deprecated alias for `interval`. Prefer `interval`. | `2s` |
-| `spec.timeout` | `string` | no | `` | `` | Maximum total duration to wait before the step fails. | `5m` |
+| `spec.pollInterval` | `string` | no | `` | `` | Deprecated alias for `interval`. Use `interval` instead. | `2s` |
+| `spec.timeout` | `string` | no | `` | `` | Maximum total duration to wait before failing the step. | `5m` |
 | `spec.type` | `string` | no | `` | `any, file, dir` | Filesystem entry type restriction for path checks. | `file` |
 
 ### Notes
 
 - `Wait` bridges convergence gaps between steps. It should not replace the configuration action itself.
+- Keep waits specific so failures identify exactly which dependency did not become ready within the timeout.
 - Use `nonEmpty` when waiting on a file that is written progressively.
 
 ## `WaitForMissingFile`
@@ -160,8 +162,8 @@ spec:
 | `spec.interval` | `string` | no | `` | `` | Duration between poll attempts. | `2s` |
 | `spec.path` | `string` | no | `` | `` | Filesystem path to check. | `/etc/kubernetes/admin.conf` |
 | `spec.paths` | `array<string>` | no | `` | `` | List of paths that must all be absent before the step succeeds. | `[/etc/kubernetes/manifests/a.yaml,/etc/kubernetes/manifests/b.yaml]` |
-| `spec.pollInterval` | `string` | no | `` | `` | Deprecated alias for `interval`. Prefer `interval`. | `2s` |
-| `spec.timeout` | `string` | no | `` | `` | Maximum total duration to wait before the step fails. | `5m` |
+| `spec.pollInterval` | `string` | no | `` | `` | Deprecated alias for `interval`. Use `interval` instead. | `2s` |
+| `spec.timeout` | `string` | no | `` | `` | Maximum total duration to wait before failing the step. | `5m` |
 | `spec.type` | `string` | no | `` | `any, file, dir` | Filesystem entry type restriction for path checks. | `file` |
 
 ### Validation Rules
@@ -199,14 +201,14 @@ spec:
 | `spec.address` | `string` | no | `` | `` | Host or IP address for TCP port checks. | `127.0.0.1` |
 | `spec.initialDelay` | `string` | no | `` | `` | Duration to wait before the first poll attempt. | `1s` |
 | `spec.interval` | `string` | no | `` | `` | Duration between poll attempts. | `2s` |
-| `spec.pollInterval` | `string` | no | `` | `` | Deprecated alias for `interval`. Prefer `interval`. | `2s` |
+| `spec.pollInterval` | `string` | no | `` | `` | Deprecated alias for `interval`. Use `interval` instead. | `2s` |
 | `spec.port` | `string` | yes | `` | `` | TCP port number to check. | `6443` |
-| `spec.timeout` | `string` | no | `` | `` | Maximum total duration to wait before the step fails. | `5m` |
+| `spec.timeout` | `string` | no | `` | `` | Maximum total duration to wait before failing the step. | `5m` |
 
 ### Notes
 
+- `Wait` bridges convergence gaps between steps. It should not replace the configuration action itself.
 - Keep waits specific so failures identify exactly which dependency did not become ready within the timeout.
-- Use `initialDelay` when a service emits a transient non-active state immediately after being started.
 
 ## `WaitForMissingTCPPort`
 
@@ -235,14 +237,13 @@ spec:
 | `spec.address` | `string` | no | `` | `` | Host or IP address for TCP port checks. | `127.0.0.1` |
 | `spec.initialDelay` | `string` | no | `` | `` | Duration to wait before the first poll attempt. | `1s` |
 | `spec.interval` | `string` | no | `` | `` | Duration between poll attempts. | `2s` |
-| `spec.pollInterval` | `string` | no | `` | `` | Deprecated alias for `interval`. Prefer `interval`. | `2s` |
+| `spec.pollInterval` | `string` | no | `` | `` | Deprecated alias for `interval`. Use `interval` instead. | `2s` |
 | `spec.port` | `string` | yes | `` | `` | TCP port number to check. | `6443` |
-| `spec.timeout` | `string` | no | `` | `` | Maximum total duration to wait before the step fails. | `5m` |
+| `spec.timeout` | `string` | no | `` | `` | Maximum total duration to wait before failing the step. | `5m` |
 
 ### Notes
 
-- Keep waits specific so failures identify exactly which dependency did not become ready within the timeout.
-- Use `initialDelay` when a service emits a transient non-active state immediately after being started.
+- Use this when a process must fully stop before a later step continues.
 
 ## Related
 
