@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Airgap-Castaways/deck/internal/stepspec"
 	"github.com/Airgap-Castaways/deck/internal/workflowcontract"
 )
 
@@ -489,6 +490,9 @@ var toolMetadata = map[string]ToolMetadata{
 
 func ToolMetaForDefinition(def workflowcontract.StepDefinition) ToolMetadata {
 	kind := def.Kind
+	if meta, ok := stepspec.LookupToolDoc(kind); ok {
+		return toolMetaFromStepspec(kind, def, meta)
+	}
 	meta, ok := toolMetadata[kind]
 	if !ok {
 		meta, ok = toolMetadata[def.FamilyTitle]
@@ -508,6 +512,26 @@ func ToolMetaForDefinition(def workflowcontract.StepDefinition) ToolMetadata {
 	delete(merged, "spec.action")
 	meta.FieldDocs = merged
 	return meta
+}
+
+func toolMetaFromStepspec(kind string, def workflowcontract.StepDefinition, meta stepspec.ToolDocMetadata) ToolMetadata {
+	tool := ToolMetadata{
+		Kind:      kind,
+		Category:  def.Category,
+		Summary:   def.Summary,
+		WhenToUse: def.WhenToUse,
+		Example:   strings.TrimSpace(meta.Example),
+		Notes:     append([]string(nil), meta.Notes...),
+		FieldDocs: make(map[string]FieldDoc, len(commonFieldDocs)+len(meta.FieldDocs)),
+	}
+	maps.Copy(tool.FieldDocs, commonFieldDocs)
+	for path, field := range meta.FieldDocs {
+		tool.FieldDocs[path] = FieldDoc{Description: field.Description, Example: field.Example}
+	}
+	if tool.Example != "" {
+		tool.Example += "\n"
+	}
+	return tool
 }
 
 func normalizedToolExample(kind string, def workflowcontract.StepDefinition, meta ToolMetadata) string {

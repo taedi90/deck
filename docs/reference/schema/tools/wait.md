@@ -45,9 +45,9 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.initialDelay` | `string` | no | `` | `` | Duration to wait before the first poll attempt. Useful when a service needs a moment before it becomes checkable. | `1s` |
-| `spec.interval` | `string` | no | `` | `` | Duration between poll attempts. Accepts Go duration strings. | `2s` |
-| `spec.name` | `string` | yes | `` | `` | Service name to check. Required for `WaitForService`. | `containerd` |
+| `spec.initialDelay` | `string` | no | `` | `` | Duration to wait before the first poll attempt. | `1s` |
+| `spec.interval` | `string` | no | `` | `` | Duration between poll attempts. | `2s` |
+| `spec.name` | `string` | yes | `` | `` | Service name to check. | `containerd` |
 | `spec.pollInterval` | `string` | no | `` | `` | Deprecated alias for `interval`. Use `interval` instead. | `2s` |
 | `spec.timeout` | `string` | no | `` | `` | Maximum total duration to wait before failing the step. | `5m` |
 
@@ -70,21 +70,20 @@ Use this when a dependent step should wait for a local command-based condition t
 ### Example
 
 ```yaml
-apiVersion: deck/v1alpha1
-id: example-waitforcommand
 kind: WaitForCommand
 spec:
-    command:
-        - example
+  command: [test, -f, /etc/kubernetes/admin.conf]
+  interval: 2s
+  timeout: 2m
 ```
 
 ### Spec Fields
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.command` | `array<string>` | yes | `` | `` | Command vector to run on each poll attempt. Required for `WaitForCommand`. The step succeeds when the command exits 0. | `[test,-f,/etc/kubernetes/admin.conf]` |
-| `spec.initialDelay` | `string` | no | `` | `` | Duration to wait before the first poll attempt. Useful when a service needs a moment before it becomes checkable. | `1s` |
-| `spec.interval` | `string` | no | `` | `` | Duration between poll attempts. Accepts Go duration strings. | `2s` |
+| `spec.command` | `array<string>` | yes | `` | `` | Command vector to run on each poll attempt. The step succeeds when the command exits 0. | `[test,-f,/etc/kubernetes/admin.conf]` |
+| `spec.initialDelay` | `string` | no | `` | `` | Duration to wait before the first poll attempt. | `1s` |
+| `spec.interval` | `string` | no | `` | `` | Duration between poll attempts. | `2s` |
 | `spec.pollInterval` | `string` | no | `` | `` | Deprecated alias for `interval`. Use `interval` instead. | `2s` |
 | `spec.timeout` | `string` | no | `` | `` | Maximum total duration to wait before failing the step. | `5m` |
 
@@ -120,19 +119,19 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.initialDelay` | `string` | no | `` | `` | Duration to wait before the first poll attempt. Useful when a service needs a moment before it becomes checkable. | `1s` |
-| `spec.interval` | `string` | no | `` | `` | Duration between poll attempts. Accepts Go duration strings. | `2s` |
-| `spec.nonEmpty` | `boolean` | no | `` | `` | For `WaitForFile`, also assert that the file has non-zero size. Useful when waiting for a file that is written progressively. | `true` |
-| `spec.path` | `string` | yes | `` | `` | Filesystem path to check. Required for `WaitForFile` and `WaitForMissingFile`. | `/etc/kubernetes/admin.conf` |
+| `spec.initialDelay` | `string` | no | `` | `` | Duration to wait before the first poll attempt. | `1s` |
+| `spec.interval` | `string` | no | `` | `` | Duration between poll attempts. | `2s` |
+| `spec.nonEmpty` | `boolean` | no | `` | `` | Require the matched file to have non-zero size. | `true` |
+| `spec.path` | `string` | yes | `` | `` | Filesystem path to check. | `/etc/kubernetes/admin.conf` |
 | `spec.pollInterval` | `string` | no | `` | `` | Deprecated alias for `interval`. Use `interval` instead. | `2s` |
 | `spec.timeout` | `string` | no | `` | `` | Maximum total duration to wait before failing the step. | `5m` |
-| `spec.type` | `string` | no | `` | `any, file, dir` | Restricts the path check to a specific filesystem entry type. `file` matches regular files only, `dir` matches directories, `any` matches either. Defaults to `any`. | `file` |
+| `spec.type` | `string` | no | `` | `any, file, dir` | Filesystem entry type restriction for path checks. | `file` |
 
 ### Notes
 
 - `Wait` bridges convergence gaps between steps. It should not replace the configuration action itself.
 - Keep waits specific so failures identify exactly which dependency did not become ready within the timeout.
-- Use `initialDelay` when a service emits a transient non-active state immediately after being started.
+- Use `nonEmpty` when waiting on a file that is written progressively.
 
 ## `WaitForMissingFile`
 
@@ -158,14 +157,14 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.glob` | `string` | no | `` | `` | For `WaitForMissingFile`, require the glob to resolve to zero matches before the step succeeds. | `/etc/kubernetes/manifests/*.yaml` |
-| `spec.initialDelay` | `string` | no | `` | `` | Duration to wait before the first poll attempt. Useful when a service needs a moment before it becomes checkable. | `1s` |
-| `spec.interval` | `string` | no | `` | `` | Duration between poll attempts. Accepts Go duration strings. | `2s` |
-| `spec.path` | `string` | no | `` | `` | Filesystem path to check. Required for `WaitForFile` and `WaitForMissingFile`. | `/etc/kubernetes/admin.conf` |
-| `spec.paths` | `array<string>` | no | `` | `` | For `WaitForMissingFile`, require every listed path to be absent before the step succeeds. | `[/etc/kubernetes/manifests/a.yaml,/etc/kubernetes/manifests/b.yaml]` |
+| `spec.glob` | `string` | no | `` | `` | Glob pattern that must resolve to zero matches before the step succeeds. | `/etc/kubernetes/manifests/*.yaml` |
+| `spec.initialDelay` | `string` | no | `` | `` | Duration to wait before the first poll attempt. | `1s` |
+| `spec.interval` | `string` | no | `` | `` | Duration between poll attempts. | `2s` |
+| `spec.path` | `string` | no | `` | `` | Filesystem path to check. | `/etc/kubernetes/admin.conf` |
+| `spec.paths` | `array<string>` | no | `` | `` | List of paths that must all be absent before the step succeeds. | `[/etc/kubernetes/manifests/a.yaml,/etc/kubernetes/manifests/b.yaml]` |
 | `spec.pollInterval` | `string` | no | `` | `` | Deprecated alias for `interval`. Use `interval` instead. | `2s` |
 | `spec.timeout` | `string` | no | `` | `` | Maximum total duration to wait before failing the step. | `5m` |
-| `spec.type` | `string` | no | `` | `any, file, dir` | Restricts the path check to a specific filesystem entry type. `file` matches regular files only, `dir` matches directories, `any` matches either. Defaults to `any`. | `file` |
+| `spec.type` | `string` | no | `` | `any, file, dir` | Filesystem entry type restriction for path checks. | `file` |
 
 ### Validation Rules
 
@@ -173,9 +172,7 @@ spec:
 
 ### Notes
 
-- `Wait` bridges convergence gaps between steps. It should not replace the configuration action itself.
-- Keep waits specific so failures identify exactly which dependency did not become ready within the timeout.
-- Use `initialDelay` when a service emits a transient non-active state immediately after being started.
+- Use `paths` or `glob` when multiple files must disappear before the step can succeed.
 
 ## `WaitForTCPPort`
 
@@ -201,18 +198,17 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.address` | `string` | no | `` | `` | Host or IP address for TCP port checks. Defaults to `127.0.0.1` when omitted. | `127.0.0.1` |
-| `spec.initialDelay` | `string` | no | `` | `` | Duration to wait before the first poll attempt. Useful when a service needs a moment before it becomes checkable. | `1s` |
-| `spec.interval` | `string` | no | `` | `` | Duration between poll attempts. Accepts Go duration strings. | `2s` |
+| `spec.address` | `string` | no | `` | `` | Host or IP address for TCP port checks. | `127.0.0.1` |
+| `spec.initialDelay` | `string` | no | `` | `` | Duration to wait before the first poll attempt. | `1s` |
+| `spec.interval` | `string` | no | `` | `` | Duration between poll attempts. | `2s` |
 | `spec.pollInterval` | `string` | no | `` | `` | Deprecated alias for `interval`. Use `interval` instead. | `2s` |
-| `spec.port` | `string` | yes | `` | `` | TCP port number to check. Required for `WaitForTCPPort` and `WaitForMissingTCPPort`. | `6443` |
+| `spec.port` | `string` | yes | `` | `` | TCP port number to check. | `6443` |
 | `spec.timeout` | `string` | no | `` | `` | Maximum total duration to wait before failing the step. | `5m` |
 
 ### Notes
 
 - `Wait` bridges convergence gaps between steps. It should not replace the configuration action itself.
 - Keep waits specific so failures identify exactly which dependency did not become ready within the timeout.
-- Use `initialDelay` when a service emits a transient non-active state immediately after being started.
 
 ## `WaitForMissingTCPPort`
 
@@ -238,18 +234,16 @@ spec:
 
 | Key | Type | Required | Default | Enum | Description | Example |
 |---|---|---:|---|---|---|---|
-| `spec.address` | `string` | no | `` | `` | Host or IP address for TCP port checks. Defaults to `127.0.0.1` when omitted. | `127.0.0.1` |
-| `spec.initialDelay` | `string` | no | `` | `` | Duration to wait before the first poll attempt. Useful when a service needs a moment before it becomes checkable. | `1s` |
-| `spec.interval` | `string` | no | `` | `` | Duration between poll attempts. Accepts Go duration strings. | `2s` |
+| `spec.address` | `string` | no | `` | `` | Host or IP address for TCP port checks. | `127.0.0.1` |
+| `spec.initialDelay` | `string` | no | `` | `` | Duration to wait before the first poll attempt. | `1s` |
+| `spec.interval` | `string` | no | `` | `` | Duration between poll attempts. | `2s` |
 | `spec.pollInterval` | `string` | no | `` | `` | Deprecated alias for `interval`. Use `interval` instead. | `2s` |
-| `spec.port` | `string` | yes | `` | `` | TCP port number to check. Required for `WaitForTCPPort` and `WaitForMissingTCPPort`. | `6443` |
+| `spec.port` | `string` | yes | `` | `` | TCP port number to check. | `6443` |
 | `spec.timeout` | `string` | no | `` | `` | Maximum total duration to wait before failing the step. | `5m` |
 
 ### Notes
 
-- `Wait` bridges convergence gaps between steps. It should not replace the configuration action itself.
-- Keep waits specific so failures identify exactly which dependency did not become ready within the timeout.
-- Use `initialDelay` when a service emits a transient non-active state immediately after being started.
+- Use this when a process must fully stop before a later step continues.
 
 ## Related
 
