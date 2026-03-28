@@ -175,20 +175,25 @@ func generationRetrievalPromptBlock(retrieval askretrieve.RetrievalResult) strin
 
 func compactStepGuidancePromptBlock(route askintent.Route, prompt string, brief askcontract.AuthoringBrief) string {
 	options := askcontext.StepGuidanceOptions{ModeIntent: brief.ModeIntent, Topology: brief.Topology, RequiredCapabilities: brief.RequiredCapabilities}
-	selected := askcontext.SelectStepGuidanceWithOptions(prompt, options)
+	selected := askcontext.DiscoverCandidateStepsWithOptions(prompt, options)
 	if len(selected) == 0 {
 		return ""
 	}
-	if len(selected) > 3 {
-		selected = selected[:3]
+	if len(selected) > 5 {
+		selected = selected[:5]
 	}
 	b := &strings.Builder{}
-	b.WriteString("Relevant typed steps:\n")
+	b.WriteString("Candidate typed steps you may choose from:\n")
+	b.WriteString("- These are hints, not required selections. You do not need to use every candidate. Choose the smallest valid typed-step set that satisfies the request.\n")
 	for _, item := range selected {
 		b.WriteString("- ")
 		b.WriteString(item.Step.Kind)
 		b.WriteString(": ")
 		b.WriteString(item.Step.Summary)
+		if strings.TrimSpace(item.Confidence) != "" {
+			b.WriteString(" Confidence: ")
+			b.WriteString(item.Confidence)
+		}
 		if item.WhyRelevant != "" {
 			b.WriteString(" Relevant because: ")
 			b.WriteString(item.WhyRelevant)
@@ -218,10 +223,11 @@ func compactStepGuidancePromptBlock(route askintent.Route, prompt string, brief 
 			b.WriteString("\n  - rule: ")
 			b.WriteString(strings.TrimSpace(rule))
 		}
-		if len(item.Step.PromptExamples) > 0 && strings.Contains(strings.ToLower(prompt), strings.ToLower(item.Step.Kind)) {
+		showExample := item.Confidence == "high" || strings.Contains(strings.ToLower(item.WhyRelevant), "supports ")
+		if len(item.Step.PromptExamples) > 0 && showExample {
 			example := strings.TrimSpace(item.Step.PromptExamples[0].YAML)
 			if example != "" {
-				b.WriteString("\n  - compact shape:\n")
+				b.WriteString("\n  - minimal valid shape:\n")
 				for _, line := range strings.Split(example, "\n") {
 					b.WriteString("      ")
 					b.WriteString(strings.TrimRight(line, " "))
@@ -232,7 +238,7 @@ func compactStepGuidancePromptBlock(route askintent.Route, prompt string, brief 
 		b.WriteString("\n")
 	}
 	if route == askintent.RouteDraft && strings.TrimSpace(brief.ModeIntent) == "prepare+apply" {
-		b.WriteString("- Keep prepare focused on staged artifact collection and apply focused on local host changes that consume those artifacts.\n")
+		b.WriteString("- In prepare+apply requests, a common split is to keep prepare focused on staged artifact collection and keep apply focused on local host changes that consume those artifacts.\n")
 	}
 	return strings.TrimSpace(b.String())
 }

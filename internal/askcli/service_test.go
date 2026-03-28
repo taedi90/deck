@@ -824,7 +824,18 @@ func TestGenerationSystemPromptCarriesExplicitStepFieldRequirements(t *testing.T
 	req := askpolicy.ScenarioRequirements{Connectivity: "unspecified", RequiredFiles: []string{"workflows/prepare.yaml"}, NeedsPrepare: true}
 	scaffold := askscaffold.Build(req, askretrieve.WorkspaceSummary{}, askintent.Decision{Route: askintent.RouteDraft, Target: askintent.Target{Kind: "scenario", Path: "workflows/prepare.yaml"}}, askcontract.PlanResponse{}, askknowledge.Current())
 	prompt := generationSystemPrompt(askintent.RouteDraft, askintent.Target{Kind: "scenario", Path: "workflows/prepare.yaml"}, "create a prepare workflow using DownloadFile and default output location", askretrieve.RetrievalResult{}, req, askcontract.AuthoringBrief{ModeIntent: "prepare-only", CompletenessTarget: "complete"}, askcontract.ExecutionModel{}, scaffold)
-	for _, want := range []string{"DownloadFile", "spec.source [conditional]", "spec.fetch [optional]", "spec.mode [optional]", "rule: At least one of `spec.source` or `spec.items` must be set.", "compact shape:"} {
+	for _, want := range []string{"Candidate typed steps you may choose from:", "DownloadFile", "spec.source [conditional]", "spec.fetch [optional]", "spec.mode [optional]", "rule: At least one of `spec.source` or `spec.items` must be set.", "minimal valid shape:"} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("expected %q in generation prompt, got %q", want, prompt)
+		}
+	}
+}
+
+func TestGenerationSystemPromptTreatsTypedStepsAsCandidatesAndShowsBootstrapShape(t *testing.T) {
+	req := askpolicy.ScenarioRequirements{Connectivity: "offline", RequiredFiles: []string{"workflows/scenarios/apply.yaml"}}
+	scaffold := askscaffold.Build(req, askretrieve.WorkspaceSummary{}, askintent.Decision{Route: askintent.RouteDraft}, askcontract.PlanResponse{}, askknowledge.Current())
+	prompt := generationSystemPrompt(askintent.RouteDraft, askintent.Target{Kind: "workspace"}, "create an air-gapped rhel9 single-node kubeadm workflow", askretrieve.RetrievalResult{}, req, askcontract.AuthoringBrief{ModeIntent: "apply-only", Connectivity: "offline", CompletenessTarget: "starter", Topology: "single-node", RequiredCapabilities: []string{"kubeadm-bootstrap", "cluster-verification"}}, askcontract.ExecutionModel{}, scaffold)
+	for _, want := range []string{"Candidate typed steps you may choose from:", "These are hints, not required selections.", "InitKubeadm", "CheckHost", "minimal valid shape:"} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("expected %q in generation prompt, got %q", want, prompt)
 		}

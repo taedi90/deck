@@ -232,27 +232,27 @@ func StepCompositionGuidanceBlock(prompt string, options StepGuidanceOptions) st
 	b := &strings.Builder{}
 	b.WriteString("Step composition guidance:\n")
 	if capabilities["package-staging"] || capabilities["prepare-artifacts"] || strings.Contains(lower, "package") {
-		b.WriteString("- Offline package flow: use `DownloadPackage` in prepare to collect repository content, then `InstallPackage` in apply from a local repo path instead of downloading again.\n")
+		b.WriteString("- Offline package flow: a common pattern is `DownloadPackage` in prepare to collect repository content, then `InstallPackage` in apply from a local repo path instead of downloading again.\n")
 	}
 	if capabilities["image-staging"] || capabilities["prepare-artifacts"] || strings.Contains(lower, "image") {
-		b.WriteString("- Offline image flow: use `DownloadImage` in prepare, then `LoadImage` in apply from the prepared image directory before cluster/bootstrap checks.\n")
+		b.WriteString("- Offline image flow: a common pattern is `DownloadImage` in prepare, then `LoadImage` in apply from the prepared image directory before cluster/bootstrap checks.\n")
 	}
 	if capabilities["repository-setup"] || strings.Contains(lower, "repo") || strings.Contains(lower, "repository") {
-		b.WriteString("- Repository flow: prefer `ConfigureRepository` followed by `RefreshRepository` before package installation when apply should consume an on-node mirror configuration.\n")
+		b.WriteString("- Repository flow: authors often pair `ConfigureRepository` with `RefreshRepository` before package installation when apply should consume an on-node mirror configuration.\n")
 	}
 	if capabilities["kubeadm-bootstrap"] || chosen["InitKubeadm"] || strings.Contains(lower, "kubeadm") || strings.Contains(lower, "cluster") {
-		b.WriteString("- Kubeadm bootstrap flow: start with `CheckHost`, converge runtime/package/image prerequisites, then `InitKubeadm`, and finish with `CheckCluster` instead of ad-hoc shell polling.\n")
+		b.WriteString("- Kubeadm bootstrap flow: a common pattern is `CheckHost`, then runtime/package/image convergence, followed by `InitKubeadm`, with `CheckCluster` for final verification instead of ad-hoc shell polling.\n")
 	}
 	if capabilities["kubeadm-join"] || chosen["JoinKubeadm"] || strings.Contains(lower, "join") || strings.Contains(lower, "worker") || strings.Contains(lower, "multi-node") || strings.Contains(lower, "3-node") {
-		b.WriteString("- Multi-node kubeadm flow: keep control-plane bootstrap and worker join as separate phases; use `JoinKubeadm` explicitly and follow it with cluster-wide `CheckCluster` expectations.\n")
-		b.WriteString("- Join handoff: when workers depend on join data from the control-plane, model an explicit publication step such as `EnsureDirectory` plus `CopyFile`, or make the shared join artifact path contract unambiguous before `JoinKubeadm`.\n")
-		b.WriteString("- Final verification placement: prefer the final `CheckCluster` on the control-plane role after worker joins complete; worker roles should not be the only place that verifies final cluster-wide readiness.\n")
+		b.WriteString("- Multi-node kubeadm flow: authors usually keep control-plane bootstrap and worker join as separate phases, often using `JoinKubeadm` explicitly with cluster-wide `CheckCluster` expectations afterward.\n")
+		b.WriteString("- Join handoff: when workers depend on join data from the control-plane, it helps to model an explicit publication step such as `EnsureDirectory` plus `CopyFile`, or another unambiguous shared join artifact path, before `JoinKubeadm`.\n")
+		b.WriteString("- Final verification placement: many workflows keep the final `CheckCluster` on the control-plane role after worker joins complete so cluster-wide readiness is checked in one place.\n")
 	}
 	if strings.TrimSpace(options.Topology) == "ha" || strings.Contains(lower, "ha") || strings.Contains(lower, "high availability") {
 		b.WriteString("- HA topology: model control-plane readiness separately from total node readiness so verification reflects the intended control-plane count.\n")
 	}
 	if strings.TrimSpace(options.ModeIntent) == "prepare+apply" || strings.Contains(lower, "prepare and apply") || (strings.Contains(lower, "prepare") && strings.Contains(lower, "apply")) {
-		b.WriteString("- Prepare/apply split: keep all downloads in `workflows/prepare.yaml` and keep `workflows/scenarios/apply.yaml` limited to local host changes that consume prepared artifacts.\n")
+		b.WriteString("- Prepare/apply split: many workflows keep downloads in `workflows/prepare.yaml` and keep `workflows/scenarios/apply.yaml` focused on local host changes that consume prepared artifacts.\n")
 	}
 	if strings.Contains(b.String(), "\n-") {
 		return strings.TrimSpace(b.String())

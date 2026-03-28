@@ -170,5 +170,7 @@ type QualityRule struct {
 
 type SelectedStepGuidance struct {
 	Step        StepKindContext
+	Confidence  string
+	Reasons     []string
 	WhyRelevant string
 }

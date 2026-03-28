@@ -14,6 +14,19 @@ type StepGuidanceOptions struct {
 	RequiredCapabilities []string
 }
 
+const (
+	confidenceHigh   = "high"
+	confidenceMedium = "medium"
+	confidenceLow    = "low"
+)
+
+type candidateScore struct {
+	step       StepKindContext
+	score      int
+	confidence string
+	why        []string
+}
+
 func StepKind(kind string) (StepKindContext, bool) {
 	for _, step := range Current().StepKinds {
 		if step.Kind == strings.TrimSpace(kind) {
@@ -81,12 +94,56 @@ func RepairGuidanceBlock(prompt string, validationError string) string {
 			b.WriteString(hint)
 			b.WriteString("\n")
 		}
+		if shape := repairShapeForStep(item.Step); shape != "" {
+			b.WriteString("  - minimal valid shape:\n")
+			for _, line := range strings.Split(shape, "\n") {
+				b.WriteString("      ")
+				b.WriteString(strings.TrimRight(line, " "))
+				b.WriteString("\n")
+			}
+		}
+	}
+	if rules := documentKindRepairRules(validationError); len(rules) > 0 {
+		b.WriteString("Document-kind exact fixes:\n")
+		for _, rule := range rules {
+			b.WriteString("- ")
+			b.WriteString(rule)
+			b.WriteString("\n")
+		}
 	}
 	return strings.TrimSpace(b.String())
 }
 
+func repairShapeForStep(step StepKindContext) string {
+	if strings.TrimSpace(step.MinimalShape) != "" {
+		return strings.TrimSpace(step.MinimalShape)
+	}
+	if len(step.PromptExamples) > 0 {
+		return strings.TrimSpace(step.PromptExamples[0].YAML)
+	}
+	return ""
+}
+
+func documentKindRepairRules(validationError string) []string {
+	lower := strings.ToLower(strings.TrimSpace(validationError))
+	rules := make([]string, 0, 4)
+	if strings.Contains(lower, "workflows/components/") {
+		if strings.Contains(lower, "additional property version is not allowed") || strings.Contains(lower, "additional property phases is not allowed") || strings.Contains(lower, "expected: object, given: array") {
+			rules = append(rules,
+				"component fragments must not contain top-level version or phases",
+				"component fragments usually contain only `steps:` with step items beneath it",
+				"if you revise a component, keep it as a YAML object, not a bare array",
+			)
+		}
+	}
+	if strings.Contains(lower, "spec is required") {
+		rules = append(rules, "every generated step item must include a non-empty `spec` mapping, even when only one field is needed")
+	}
+	return dedupeStrings(rules)
+}
+
 func StrongTypedAlternatives(prompt string) []StepKindContext {
-	selected := SelectStepGuidance(prompt)
+	selected := DiscoverCandidateSteps(prompt)
 	out := make([]StepKindContext, 0, len(selected))
 	for _, item := range selected {
 		if item.Step.Kind == "Command" {
@@ -98,7 +155,7 @@ func StrongTypedAlternatives(prompt string) []StepKindContext {
 }
 
 func StrongTypedAlternativesWithOptions(prompt string, options StepGuidanceOptions) []StepKindContext {
-	selected := SelectStepGuidanceWithOptions(prompt, options)
+	selected := DiscoverCandidateStepsWithOptions(prompt, options)
 	out := make([]StepKindContext, 0, len(selected))
 	for _, item := range selected {
 		if item.Step.Kind == "Command" {
@@ -110,10 +167,18 @@ func StrongTypedAlternativesWithOptions(prompt string, options StepGuidanceOptio
 }
 
 func SelectStepGuidance(prompt string) []SelectedStepGuidance {
-	return SelectStepGuidanceWithOptions(prompt, StepGuidanceOptions{})
+	return DiscoverCandidateSteps(prompt)
 }
 
 func SelectStepGuidanceWithOptions(prompt string, options StepGuidanceOptions) []SelectedStepGuidance {
+	return DiscoverCandidateStepsWithOptions(prompt, options)
+}
+
+func DiscoverCandidateSteps(prompt string) []SelectedStepGuidance {
+	return DiscoverCandidateStepsWithOptions(prompt, StepGuidanceOptions{})
+}
+
+func DiscoverCandidateStepsWithOptions(prompt string, options StepGuidanceOptions) []SelectedStepGuidance {
 	manifest := Current()
 	lower := strings.ToLower(strings.TrimSpace(prompt))
 	capabilities := map[string]bool{}
@@ -125,12 +190,7 @@ func SelectStepGuidanceWithOptions(prompt string, options StepGuidanceOptions) [
 	}
 	modeIntent := strings.ToLower(strings.TrimSpace(options.ModeIntent))
 	topology := strings.ToLower(strings.TrimSpace(options.Topology))
-	type scored struct {
-		step  StepKindContext
-		score int
-		why   []string
-	}
-	scoredKinds := make([]scored, 0, len(manifest.StepKinds))
+	scoredKinds := make([]candidateScore, 0, len(manifest.StepKinds))
 	for _, step := range manifest.StepKinds {
 		score := 0
 		why := make([]string, 0, 4)
@@ -209,7 +269,7 @@ func SelectStepGuidanceWithOptions(prompt string, options StepGuidanceOptions) [
 		}
 		applyCapabilityScore(&score, &why, step, capabilities, modeIntent, topology)
 		if score > 0 {
-			scoredKinds = append(scoredKinds, scored{step: step, score: score, why: why})
+			scoredKinds = append(scoredKinds, candidateScore{step: step, score: score, confidence: confidenceForScore(score), why: dedupeStrings(why)})
 		}
 	}
 	sort.Slice(scoredKinds, func(i, j int) bool {
@@ -218,28 +278,21 @@ func SelectStepGuidanceWithOptions(prompt string, options StepGuidanceOptions) [
 		}
 		return scoredKinds[i].score > scoredKinds[j].score
 	})
-	limit := 5
-	if len(scoredKinds) < limit {
-		limit = len(scoredKinds)
-	}
-	out := make([]SelectedStepGuidance, 0, limit)
-	for i := 0; i < limit; i++ {
-		out = append(out, SelectedStepGuidance{Step: scoredKinds[i].step, WhyRelevant: strings.Join(dedupeStrings(scoredKinds[i].why), "; ")})
-	}
-	if len(out) == 0 {
+	selected := selectCandidateSteps(scoredKinds, capabilities)
+	if len(selected) == 0 {
 		for _, kind := range manifest.StepKinds {
 			if kind.Kind == "WriteFile" || kind.Kind == "ConfigureRepository" || kind.Kind == "ManageService" || kind.Kind == "Command" {
-				out = append(out, SelectedStepGuidance{Step: kind, WhyRelevant: "fallback guidance"})
+				selected = append(selected, SelectedStepGuidance{Step: kind, Confidence: confidenceLow, Reasons: []string{"fallback guidance"}, WhyRelevant: "fallback guidance"})
 			}
 		}
 	}
-	return out
+	return selected
 }
 
 func selectRepairGuidance(prompt string, validationError string) []SelectedStepGuidance {
 	validationLower := strings.ToLower(strings.TrimSpace(validationError))
 	selected := make([]SelectedStepGuidance, 0)
-	for _, item := range SelectStepGuidance(prompt) {
+	for _, item := range DiscoverCandidateSteps(prompt) {
 		matched := false
 		if strings.Contains(validationLower, strings.ToLower(item.Step.Kind)) {
 			matched = true
@@ -264,7 +317,7 @@ func selectRepairGuidance(prompt string, validationError string) []SelectedStepG
 			if needle == "" || !strings.Contains(validationLower, needle) {
 				continue
 			}
-			selected = append(selected, SelectedStepGuidance{Step: step, WhyRelevant: "validator output matches known step repair hint"})
+			selected = append(selected, SelectedStepGuidance{Step: step, Confidence: confidenceHigh, Reasons: []string{"validator output matches known step repair hint"}, WhyRelevant: "validator output matches known step repair hint"})
 			break
 		}
 	}
@@ -272,7 +325,7 @@ func selectRepairGuidance(prompt string, validationError string) []SelectedStepG
 }
 
 func RelevantStepKinds(prompt string) []StepKindContext {
-	selected := SelectStepGuidance(prompt)
+	selected := DiscoverCandidateSteps(prompt)
 	out := make([]StepKindContext, 0, len(selected))
 	for _, item := range selected {
 		out = append(out, item.Step)
@@ -281,7 +334,7 @@ func RelevantStepKinds(prompt string) []StepKindContext {
 }
 
 func RelevantStepKindsWithOptions(prompt string, options StepGuidanceOptions) []StepKindContext {
-	selected := SelectStepGuidanceWithOptions(prompt, options)
+	selected := DiscoverCandidateStepsWithOptions(prompt, options)
 	out := make([]StepKindContext, 0, len(selected))
 	for _, item := range selected {
 		out = append(out, item.Step)
@@ -294,19 +347,23 @@ func StepGuidanceBlock(route askintent.Route, prompt string) string {
 }
 
 func StepGuidanceBlockWithOptions(route askintent.Route, prompt string, options StepGuidanceOptions) string {
-	selected := SelectStepGuidanceWithOptions(prompt, options)
+	selected := DiscoverCandidateStepsWithOptions(prompt, options)
 	if len(selected) == 0 {
 		return ""
 	}
 	b := &strings.Builder{}
 	switch route {
 	case askintent.RouteReview, askintent.RouteExplain, askintent.RouteQuestion:
-		b.WriteString("Relevant typed steps:\n")
+		b.WriteString("Candidate typed steps:\n")
 		for _, item := range selected {
 			b.WriteString("- ")
 			b.WriteString(item.Step.Kind)
 			b.WriteString(": ")
 			b.WriteString(item.Step.Summary)
+			if strings.TrimSpace(item.Confidence) != "" {
+				b.WriteString(" Confidence: ")
+				b.WriteString(item.Confidence)
+			}
 			if item.Step.WhenToUse != "" {
 				b.WriteString(" When to use: ")
 				b.WriteString(item.Step.WhenToUse)
@@ -326,13 +383,18 @@ func StepGuidanceBlockWithOptions(route askintent.Route, prompt string, options 
 			}
 		}
 	default:
-		b.WriteString("Relevant typed steps:\n")
-		b.WriteString("- Key fields below are high-signal schema fields. `required` fields must always be present, `optional` fields can be omitted, and `conditional` fields are only needed when that branch of the schema is used.\n")
+		b.WriteString("Candidate typed steps you may choose from:\n")
+		b.WriteString("- These are hints, not required selections. You do not need to use every candidate. Choose the smallest valid typed-step set that satisfies the request.\n")
+		b.WriteString("- If you use a candidate, follow its exact schema shape. `required` fields must always be present, `optional` fields can be omitted, and `conditional` fields are only needed when that branch of the schema is used.\n")
 		for _, item := range selected {
 			b.WriteString("- ")
 			b.WriteString(item.Step.Kind)
 			b.WriteString(": ")
 			b.WriteString(item.Step.Summary)
+			if strings.TrimSpace(item.Confidence) != "" {
+				b.WriteString(" Confidence: ")
+				b.WriteString(item.Confidence)
+			}
 			if item.Step.WhenToUse != "" {
 				b.WriteString(" When to use: ")
 				b.WriteString(item.Step.WhenToUse)
@@ -368,7 +430,11 @@ func StepGuidanceBlockWithOptions(route askintent.Route, prompt string, options 
 				b.WriteString(strings.TrimSpace(rule))
 				b.WriteString("\n")
 			}
+			showExamples := item.Confidence == confidenceHigh || (item.Confidence == confidenceMedium && strings.Contains(strings.ToLower(prompt), strings.ToLower(item.Step.Kind)))
 			for _, example := range item.Step.PromptExamples {
+				if !showExamples {
+					continue
+				}
 				if strings.TrimSpace(example.YAML) == "" {
 					continue
 				}
@@ -378,6 +444,7 @@ func StepGuidanceBlockWithOptions(route askintent.Route, prompt string, options 
 					b.WriteString(example.Purpose)
 					b.WriteString(")")
 				}
+				b.WriteString(" [minimal valid shape]")
 				b.WriteString(":\n")
 				for _, line := range strings.Split(strings.TrimSpace(example.YAML), "\n") {
 					b.WriteString("      ")
@@ -412,6 +479,87 @@ func StepGuidanceBlockWithOptions(route askintent.Route, prompt string, options 
 
 func RelevantStepKindsBlock(prompt string) string {
 	return StepGuidanceBlock(askintent.RouteDraft, prompt)
+}
+
+func confidenceForScore(score int) string {
+	switch {
+	case score >= 70:
+		return confidenceHigh
+	case score >= 35:
+		return confidenceMedium
+	default:
+		return confidenceLow
+	}
+}
+
+func selectCandidateSteps(scoredKinds []candidateScore, capabilities map[string]bool) []SelectedStepGuidance {
+	selectedKinds := map[string]bool{}
+	out := make([]SelectedStepGuidance, 0, 6)
+	appendCandidate := func(item candidateScore) {
+		if selectedKinds[item.step.Kind] {
+			return
+		}
+		selectedKinds[item.step.Kind] = true
+		out = append(out, SelectedStepGuidance{Step: item.step, Confidence: item.confidence, Reasons: append([]string(nil), item.why...), WhyRelevant: strings.Join(item.why, "; ")})
+	}
+	for _, item := range scoredKinds {
+		if item.confidence == confidenceHigh {
+			appendCandidate(item)
+		}
+	}
+	ensureCapabilityCandidate(&out, selectedKinds, scoredKinds, capabilities, "kubeadm-bootstrap", []string{"InitKubeadm", "CheckHost", "LoadImage", "CheckCluster"})
+	ensureCapabilityCandidate(&out, selectedKinds, scoredKinds, capabilities, "kubeadm-join", []string{"JoinKubeadm"})
+	ensureCapabilityCandidate(&out, selectedKinds, scoredKinds, capabilities, "cluster-verification", []string{"CheckCluster"})
+	ensureCapabilityCandidate(&out, selectedKinds, scoredKinds, capabilities, "package-staging", []string{"DownloadPackage", "InstallPackage"})
+	ensureCapabilityCandidate(&out, selectedKinds, scoredKinds, capabilities, "image-staging", []string{"DownloadImage", "LoadImage"})
+	ensureCapabilityCandidate(&out, selectedKinds, scoredKinds, capabilities, "repository-setup", []string{"ConfigureRepository", "RefreshRepository"})
+	for _, item := range scoredKinds {
+		if len(out) >= 6 {
+			break
+		}
+		if item.confidence == confidenceMedium {
+			appendCandidate(item)
+		}
+	}
+	for _, item := range scoredKinds {
+		if len(out) >= 6 {
+			break
+		}
+		if item.confidence == confidenceLow {
+			appendCandidate(item)
+		}
+	}
+	return out
+}
+
+func ensureCapabilityCandidate(out *[]SelectedStepGuidance, selectedKinds map[string]bool, scoredKinds []candidateScore, capabilities map[string]bool, capability string, preferredKinds []string) {
+	if !capabilities[capability] {
+		return
+	}
+	for _, selected := range *out {
+		if containsGuidanceString(preferredKinds, selected.Step.Kind) {
+			return
+		}
+	}
+	for _, item := range scoredKinds {
+		if containsGuidanceString(preferredKinds, item.step.Kind) {
+			if !selectedKinds[item.step.Kind] {
+				selectedKinds[item.step.Kind] = true
+				*out = append(*out, SelectedStepGuidance{Step: item.step, Confidence: item.confidence, Reasons: append([]string(nil), item.why...), WhyRelevant: strings.Join(item.why, "; ")})
+			}
+			return
+		}
+	}
+}
+
+func containsGuidanceString(values []string, want string) bool {
+	want = strings.TrimSpace(want)
+	for _, value := range values {
+		if strings.TrimSpace(value) == want {
+			return true
+		}
+	}
+	return false
 }
 
 func applyCapabilityScore(score *int, why *[]string, step StepKindContext, capabilities map[string]bool, modeIntent string, topology string) {
